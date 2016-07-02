@@ -125,6 +125,7 @@ begin
  SetTextCodePage(Output,CP_UTF8);
  SetConsoleOutputCP(CP_UTF8);
 {$endif}
+ Randomize;
  Arguments:=nil;
  if FindCmdLineSwitch('/h',true) then begin
   writeln('Usage: '+ExtractFileName(ParamStr(0))+' file.poca [parameters...]');
