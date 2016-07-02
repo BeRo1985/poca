@@ -1,0 +1,15 @@
+
+function testcoroutinefunction(i){
+  while(1){                             
+    Coroutine.yield(i += Coroutine.get());
+  }
+}
+
+var testcoroutine = new Coroutine(testcoroutinefunction, 1000);
+print("Go!\r\n");
+print(testcoroutine.resume(100), "\r\n");
+print(testcoroutine.resume(10), "\r\n");
+print(testcoroutine.resume(1)," \r\n");
+readLine();
+
+

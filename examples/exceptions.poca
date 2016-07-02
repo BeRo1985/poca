@@ -1,0 +1,10 @@
+
+try{
+  print("Hallo ");
+}catch(c){
+  print("boese ");
+}finally{
+  print("Welt\r\n");
+}
+readLine();
+

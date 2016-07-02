@@ -1,0 +1,10 @@
+
+var (a,b)=(0,1);
+
+(a,b)=(b,a);
+
+let Test={a:246};
+let bla={prototype:Test};
+puts(bla.a);
+
+readLine();

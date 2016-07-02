@@ -1,0 +1,29 @@
+
+function bla(){
+}
+
+y(x)->x*x;
+
+puts(y(4));
+
+let z=(x)=>x+x;
+
+puts(z(4));
+
+let w=function(x)(x*x)-x;
+
+puts(w(4));
+
+let a=function(x){
+ return (x*x)-x;
+}
+
+puts(a(4));
+
+let function b(x){
+ return (x*x)-x;
+}
+
+puts(b(4));
+
+readLine();

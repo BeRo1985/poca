@@ -1,0 +1,29 @@
+
+var terminated=0;
+
+function thread1function(){
+ while(!terminated){
+  puts("Thread 1");
+ }
+}
+
+function thread2function(){
+ while(!terminated){
+  puts("Thread 2");
+ }
+}
+
+var thread1=new Thread(thread1function);
+var thread2=new Thread(thread2function);
+
+thread1.start();
+readLine();
+
+thread2.start();
+readLine();
+
+terminated=1;
+
+thread1.wait();
+thread2.wait();
+
