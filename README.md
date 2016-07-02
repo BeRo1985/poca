@@ -1,6 +1,6 @@
 # POCA
 
-A yet another scripting language, which's still in the in-progress phase, i.e. the syntax and the builtin standard library objects aren't finalized yet.
+Yet another scripting language, which's still in the in-progress phase, i.e. the syntax and the builtin standard library objects aren't finalized yet.
 
 ## License
 
