@@ -1,7 +1,7 @@
 (******************************************************************************
  *                                     POCA                                   *
  ******************************************************************************
- *                        Version 2016-07-01-10-05-0000                       *
+ *                        Version 2016-07-01-10-11-0000                       *
  ******************************************************************************
  *                                zlib license                                *
  *============================================================================*
@@ -301,7 +301,7 @@ interface
 
 uses {$ifdef unix}BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2016-07-01-10-05-0000';
+const POCAVersion='2016-07-01-10-11-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -10059,6 +10059,14 @@ begin
  result.Num:=ln(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
+function POCAMathFunctionLOG(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "Math.log"');
+ end;
+ result.Num:=ln(POCAGetNumberValue(Context,Arguments^[0]));
+end;
+
 function POCAMathFunctionSQR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
@@ -10423,6 +10431,7 @@ begin
  POCAAddNativeFunction(Context,result,'tan',POCAMathFunctionTAN);
  POCAAddNativeFunction(Context,result,'exp',POCAMathFunctionEXP);
  POCAAddNativeFunction(Context,result,'ln',POCAMathFunctionLN);
+ POCAAddNativeFunction(Context,result,'log',POCAMathFunctionLOG);
  POCAAddNativeFunction(Context,result,'sqr',POCAMathFunctionSQR);
  POCAAddNativeFunction(Context,result,'sqrt',POCAMathFunctionSQRT);
  POCAAddNativeFunction(Context,result,'atan2',POCAMathFunctionATAN2);
