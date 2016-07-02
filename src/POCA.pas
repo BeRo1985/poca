@@ -1,7 +1,7 @@
 (******************************************************************************
  *                                     POCA                                   *
  ******************************************************************************
- *                        Version 2016-07-01-05-35-0000                       *
+ *                        Version 2016-07-01-10-05-0000                       *
  ******************************************************************************
  *                                zlib license                                *
  *============================================================================*
@@ -301,7 +301,7 @@ interface
 
 uses {$ifdef unix}BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2016-07-01-05-35-0000';
+const POCAVersion='2016-07-01-10-05-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -2605,6 +2605,7 @@ end;}
 procedure POCAGarbageCollectorLinkedListMoveMark(FromList,ToList:PPOCAGarbageCollectorLinkedList;BitsToAdd:longword); //{$ifdef caninline}inline;{$endif}
 var Obj:PPOCAObject;
 begin
+ Obj:=nil;
  while POCAGarbageCollectorLinkedListPop(FromList,Obj) do begin
   POCAGarbageCollectorLinkedListPush(ToList,Obj);
   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or BitsToAdd;
@@ -10010,6 +10011,14 @@ begin
  POCAAddNativeFunction(Context,result,'free',POCAGarbageCollectorFunctionFREE);
 end;
 
+function POCAMathFunctionABS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "Math.abs"');
+ end;
+ result.Num:=abs(POCAGetNumberValue(Context,Arguments^[0]));
+end;
+
 function POCAMathFunctionSIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
@@ -10398,14 +10407,17 @@ end;
 function POCAInitMathNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
- POCAHashSetString(Context,result,'pi',POCANumber(3.14159265358979323846));
- POCAHashSetString(Context,result,'e',POCANumber(2.7182818284590452354));
+ POCAHashSetString(Context,result,'PI',POCANumber(3.14159265358979323846));
+ POCAHashSetString(Context,result,'E',POCANumber(2.7182818284590452354));
+ POCAHashSetString(Context,result,'LN2',POCANumber(ln(2)));
+ POCAHashSetString(Context,result,'LN10',POCANumber(ln(10)));
+ POCAHashSetString(Context,result,'LOG10E',POCANumber(log10(2.7182818284590452354)));
+ POCAHashSetString(Context,result,'LOG2E',POCANumber(log2(2.7182818284590452354)));
+ POCAHashSetString(Context,result,'SQRT1_2',POCANumber(sqrt(0.5)));
+ POCAHashSetString(Context,result,'SQRT2',POCANumber(sqrt(2)));
  POCAHashSetString(Context,result,'NaN',POCANumber(NaN));
- POCAHashSetString(Context,result,'inf',POCANumber(Infinity));
- POCAHashSetString(Context,result,'posInf',POCANumber(Infinity));
- POCAHashSetString(Context,result,'negInf',POCANumber(NegInfinity));
- POCAHashSetString(Context,result,'ln2',POCANumber(ln(2)));
- POCAHashSetString(Context,result,'ln10',POCANumber(ln(10)));
+ POCAHashSetString(Context,result,'Infinity',POCANumber(Infinity));
+ POCAAddNativeFunction(Context,result,'abs',POCAMathFunctionABS);
  POCAAddNativeFunction(Context,result,'sin',POCAMathFunctionSIN);
  POCAAddNativeFunction(Context,result,'cos',POCAMathFunctionCOS);
  POCAAddNativeFunction(Context,result,'tan',POCAMathFunctionTAN);
