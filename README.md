@@ -18,7 +18,7 @@ You need for to build POCA following dependencies:
 
 You need for to build POCA either Delphi >= 7 or FreePascal >= 3.0 as the compiler.
 
-And here a example how you can build POCA with the FreePascal compiler:#
+And here a example how you can build POCA with the FreePascal compiler:
 
     fpc -B -O3 -g -gl pocarun.dpr
     
