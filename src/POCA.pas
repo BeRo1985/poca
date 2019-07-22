@@ -1,12 +1,12 @@
 (******************************************************************************
  *                                     POCA                                   *
  ******************************************************************************
- *                        Version 2016-07-01-10-26-0000                       *
+ *                        Version 2019-07-22-09-20-0000                       *
  ******************************************************************************
  *                                zlib license                                *
  *============================================================================*
  *                                                                            *
- * Copyright (C) 2011-2016, Benjamin Rosseaux (benjamin@rosseaux.com)         *
+ * Copyright (C) 2011-2019, Benjamin Rosseaux (benjamin@rosseaux.com)         *
  *                                                                            *
  * This software is provided 'as-is', without any express or implied          *
  * warranty. In no event will the authors be held liable for any damages      *
@@ -301,7 +301,7 @@ interface
 
 uses {$ifdef unix}BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2016-07-01-10-26-0000';
+const POCAVersion='2019-07-22-09-20-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -2794,7 +2794,7 @@ asm
 end;
 {$else}
 begin
- TPasMPInterlocked.ExchangeAdd(MRSWLock^.State,-2);
+ TPasMPInterlocked.Add(MRSWLock^.State,-2);
 end;
 {$endif}
 
@@ -32380,7 +32380,7 @@ begin
 end;
 
 procedure InitializePOCA;
-const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright (C) 2011-2016, Benjamin ''BeRo'' Rosseaux - benjamin@rosseaux.com - http://www.rosseaux.com ';
+const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright (C) 2011-2019, Benjamin ''BeRo'' Rosseaux - benjamin@rosseaux.com - http://www.rosseaux.com ';
       FPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
       FPURoundingMode:TFPURoundingMode=rmNearest;
       FPUPrecisionMode:TFPUPrecisionMode={$ifdef HAS_TYPE_EXTENDED}pmEXTENDED{$else}pmDOUBLE{$endif};
