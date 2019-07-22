@@ -1,7 +1,7 @@
 (******************************************************************************
  *                                     POCA                                   *
  ******************************************************************************
- *                        Version 2019-07-22-09-20-0000                       *
+ *                        Version 2019-07-22-23-19-0000                       *
  ******************************************************************************
  *                                zlib license                                *
  *============================================================================*
@@ -53,12 +53,15 @@
  {$mode delphi}
  {$ifdef cpui386}
   {$define cpu386}
+  {$define cpu32}
  {$endif}
  {$ifdef cpu386}
   {$asmmode intel}
+  {$define cpu32}
  {$endif}
  {$ifdef cpuamd64}
   {$asmmode intel}
+  {$define cpu64}
  {$endif}
  {$ifdef FPC_LITTLE_ENDIAN}
   {$define LITTLE_ENDIAN}
@@ -88,9 +91,15 @@
  {$realcompatibility off}
  {$localsymbols on}
  {$define LITTLE_ENDIAN}
- {$ifndef cpu64}
+ {$if defined(cpux64)}
+  {$define cpu64}
+ {$elseif defined(cpu386)}
   {$define cpu32}
- {$endif}
+ {$else}
+  {$ifndef cpu64}
+   {$define cpu32}
+  {$endif}
+ {$ifend}
  {$define HAS_TYPE_EXTENDED}
  {$define HAS_TYPE_DOUBLE}
  {$define HAS_TYPE_SINGLE}
@@ -229,6 +238,18 @@
    {$ifend}
    {$define Delphi10BerlinAndUp}
   {$ifend}
+  {$if CompilerVersion>=32.0}
+   {$if CompilerVersion=32.0}
+    {$define Delphi10Tokyo}
+   {$ifend}
+   {$define Delphi10TokyoAndUp}
+  {$ifend}
+  {$if CompilerVersion>=33.0}
+   {$if CompilerVersion=33.0}
+    {$define Delphi10Rio}
+   {$ifend}
+   {$define Delphi10RioAndUp}
+  {$ifend}
  {$endif}
  {$ifndef Delphi4or5}
   {$ifndef BCB}
@@ -301,7 +322,7 @@ interface
 
 uses {$ifdef unix}BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2019-07-22-09-20-0000';
+const POCAVersion='2019-07-22-23-19-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -4476,8 +4497,8 @@ type PPOCAThreadData=^TPOCAThreadData;
      TPOCAThreadData=record
       Handle:THandle;
       StartSemaphore:pointer;
-      Started:longbool;
-      Terminated:longbool;
+      Started:TPasMPBool32;
+      Terminated:TPasMPBool32;
       ThreadID:{$ifdef fpc}TThreadID{$else}Cardinal{$endif};
       Context:PPOCAContext;
       Data:TPOCAValue;
@@ -4494,7 +4515,7 @@ begin
  result:=0;
  try
   POCASemaphoreDown(ThreadData^.StartSemaphore);
-  ThreadData^.Started:=true;
+  TPasMPInterlocked.Write(ThreadData^.Started,true);
   try
    if length(ThreadData^.Arguments)>0 then begin
     POCACall(ThreadData^.Context,ThreadData^.Func,@ThreadData^.Arguments[0],length(ThreadData^.Arguments),POCAValueNull,POCAValueNull);
@@ -4503,7 +4524,7 @@ begin
    end;
   except
   end;
-  ThreadData^.Terminated:=true;
+  TPasMPInterlocked.Write(ThreadData^.Terminated,true);
   POCAContextDestroy(ThreadData^.Context);
   ThreadData^.Context:=nil;
  finally
@@ -8747,7 +8768,7 @@ begin
 {$ifdef cpu32}
     Str:=Sym.Reference.StringObject;
 {$else}
-    Str:=PPOCAString(pointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask));
+    Str:=PPOCAString(pointer(TPOCAPtrUInt(Sym.Reference.Ptr) and POCAValueReferenceMask));
 {$endif}
 /// Str:=PPOCAString(POCAGetValueReferencePointer(Sym));
     HashCode:=Str^.HashCode;
@@ -11193,7 +11214,7 @@ begin
 {$endif}
     except
     end;
-    DataCasted^.Terminated:=true;
+    TPasMPInterlocked.Write(DataCasted^.Terminated,true);
    end;
 {$ifdef fpc}
    CloseThread(DataCasted^.Handle);
@@ -11213,7 +11234,7 @@ begin
    POCASemaphoreDestroy(DataCasted^.StartSemaphore);
    DataCasted^.StartSemaphore:=nil;
   end;
-  DataCasted^.Started:=true;
+  TPasMPInterlocked.Write(DataCasted^.Started,true);
   DataCasted^.Data.Num:=0;
   DataCasted^.Func.Num:=0;
   SetLength(DataCasted^.Arguments,0);
@@ -11287,10 +11308,10 @@ begin
    end;
   end;
   POCATemporarySave(Context,ThreadData^.Func);
-  ThreadData^.Terminated:=false;
+  TPasMPInterlocked.Write(ThreadData^.Terminated,false);
   ThreadData^.StartSemaphore:=POCASemaphoreCreate;
-  ThreadData^.Started:=false;
-  ThreadData^.Handle:=BeginThread(nil,0,pointer(@POCAThreadProc),ThreadData,CREATE_SUSPENDED,ThreadData^.ThreadID);
+  TPasMPInterlocked.Write(ThreadData^.Started,false);
+  ThreadData^.Handle:=BeginThread(nil,0,pointer(@POCAThreadProc),ThreadData,{$ifdef Windows}CREATE_SUSPENDED{$else}0{$endif},ThreadData^.ThreadID);
   if ThreadData^.Handle=0 then begin
    POCARuntimeError(Context,'Thread creation failed');
   end;
@@ -11310,11 +11331,12 @@ begin
   ThreadData:=PPOCAThreadData(POCAGhostGetPointer(This));
   POCAGarbageCollectorUnlock(Context);
   try
-   if not ThreadData^.Started then begin
-    ThreadData^.Started:=true;
+   if not TPasMPInterlocked.CompareExchange(ThreadData^.Started,true,false) then begin
     POCASemaphoreUp(ThreadData^.StartSemaphore,1);
    end;
+{$ifdef Windows}
    ResumeThread(ThreadData^.Handle);
+{$endif}
   finally
    POCAGarbageCollectorLock(Context);
   end;
@@ -11331,7 +11353,9 @@ begin
   ThreadData:=PPOCAThreadData(POCAGhostGetPointer(This));
   POCAGarbageCollectorUnlock(Context);
   try
+{$ifdef Windows}
    SuspendThread(ThreadData^.Handle);
+{$endif}
   finally
    POCAGarbageCollectorLock(Context);
   end;
@@ -11404,7 +11428,7 @@ begin
     WaitForSingleObject(ThreadData^.Handle,longword(-1));
 {$endif}
 {$endif}
-    ThreadData^.Terminated:=true;
+    TPasMPInterlocked.Write(ThreadData^.Terminated,true);
    end else begin
     ms:=trunc(POCAGetNumberValue(Context,Arguments^[0]));
 {$ifdef fpc}
