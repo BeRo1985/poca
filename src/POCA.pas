@@ -1,12 +1,12 @@
 (******************************************************************************
  *                                     POCA                                   *
  ******************************************************************************
- *                        Version 2019-07-22-23-19-0000                       *
+ *                        Version 2022-10-05-02-20-0000                       *
  ******************************************************************************
  *                                zlib license                                *
  *============================================================================*
  *                                                                            *
- * Copyright (C) 2011-2019, Benjamin Rosseaux (benjamin@rosseaux.com)         *
+ * Copyright (C) 2011-2022, Benjamin Rosseaux (benjamin@rosseaux.com)         *
  *                                                                            *
  * This software is provided 'as-is', without any express or implied          *
  * warranty. In no event will the authors be held liable for any damages      *
@@ -93,6 +93,7 @@
  {$define LITTLE_ENDIAN}
  {$if defined(cpux64)}
   {$define cpu64}
+  {$define cpuamd64}
  {$elseif defined(cpu386)}
   {$define cpu32}
  {$else}
@@ -2730,6 +2731,16 @@ begin
  end;
 end;
 
+{$if defined(cpuamd64) and not defined(fpc)}
+procedure POCA_x86_64_Pause; assembler; {$ifdef fpc}nostackframe;{$endif}
+asm
+{$ifndef fpc}
+ .noframe
+{$endif}
+ rep nop
+end;
+{$ifend}
+
 procedure POCAWait; {$ifdef cpu386}register;{$endif}
 {$ifdef unix}
 {$ifndef usecthreads}
@@ -2755,9 +2766,13 @@ begin
  end;
 {$else}
 {$ifdef cpuamd64}
+{$ifdef fpc}
  asm
   rep nop // aka PAUSE instruction
  end;
+{$else}
+ POCA_x86_64_Pause;
+{$endif}
 {$endif}
 {$endif}
 {$endif}
@@ -3512,7 +3527,7 @@ begin
 {$else}
 {$ifdef windows}
     Current:=GetCurrentFiber;
-    if (not assigned(Current)) or (Current=pointer({$ifdef fpc}TPOCAPtrUInt{$else}longword{$endif}($1e00))) then begin
+    if (not assigned(Current)) or (Current=pointer(TPOCAPtrUInt($1e00))) then begin
      Coroutine^.Back:=ConvertThreadToFiber(nil);
     end else begin
      Coroutine^.Back:=Current;
