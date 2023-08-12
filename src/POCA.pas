@@ -12054,7 +12054,7 @@ end;
 function TPOCANativeObject.FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):longint;
 var PropertyItem:PPOCANativeObjectProperty;
 begin
- if assigned(CacheIndex) and (longint(CacheIndex^)<fCountProperties) then begin
+ if assigned(CacheIndex) and ((longint(CacheIndex^)>=0) and (longint(CacheIndex^)<fCountProperties)) then begin
   PropertyItem:=@fProperties[CacheIndex^];
   if PropertyItem^.Key.CastedInt64=Key.CastedInt64 then begin
    result:=CacheIndex^;
