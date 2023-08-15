@@ -229,7 +229,7 @@ const y = x * 10;
 
 Not all POCA statements are "executed".
 
-Code after double slashes `//` or between `/*` and `*/` is treated as a comment.
+Code after double slashes `//` or between `/\*` and `\*/` is treated as a comment.
 
 Comments are ignored, and will not be executed:
 
