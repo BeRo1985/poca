@@ -1,10 +1,9 @@
-:doctype: book
-
 = POCA
+:doctype: book
 
 :toc:
 
-= Introduction
+== Introduction
 
 POCA is ECMAScript-like but it's not ECMAScript at all. It has some differences and even some feature, which ECMAScript doesn't have.
 
@@ -40,7 +39,7 @@ are valid POCA code.
 
 People familiar with other programming languages, and scripting languages like JavaScript/ECMAScript in particular, are usually able to learn POCA rather quickly.
 
-= Architecture
+== Architecture
 
 POCA uses a frame-stack-wise infinite-register-based byte code instruction set architecure (ISA).
 
@@ -48,23 +47,23 @@ Unlike almost all other script interpreters, POCA is thread-safe and scalable wh
 
 POCA's API design concept is more or less similiar to the concept from LUA. So concepts like hash tables (hashs), metatables (hash events), vectors (arrays), etc. exists here also.
 
-= The basics
+== The basics
 
-== Imperative and structured
+=== Imperative and structured
 
 POCA supports structured programming in the style of C. POCA supports function and block scoping with the keywords var, let and const. POCA requires explicit semicolons, as the idea of automatic semicolon insertion like ECMAScript is a very silly idea in my opinion.
 
 Like C-style languages, control flow is done with the while, for, do / while, if / else, and switch statements. Functions are weakly typed and may accept and return any type. Arguments not provided default to undefined.
 
-== Weakly typed
+=== Weakly typed
 
 POCA, like ECMAScript/JavaScript, is weakly typed. This means that certain types are implicitly assigned based on the operation performed in most cases, but not all, to avoid some typical JavaScript/ECMAScript quirks.
 
-== Dynamic
+=== Dynamic
 
 POCA is dynamically typed. Thus, a type is associated with a value rather than an expression. POCA supports various ways to test the type of objects, including duck typing.
 
-== Everything is an expression
+=== Everything is an expression
 
 In POCA everything is an expression, even statements, declarations and definitions. So the following code is valid POCA code:
 
@@ -76,7 +75,7 @@ let bla = if(a != 0){ 1 }else{ a ? 2 : 3 };
 
 Thus, POCA is here essentially a math-expression 'something' that has been supercharged into a complete scripting language.
 
-== How to create variables
+=== How to create variables
 
 [source,javascript]
 ----
@@ -84,7 +83,7 @@ var x;
 let y;
 ----
 
-== How to use variables
+=== How to use variables
 
 [source,javascript]
 ----
@@ -93,7 +92,7 @@ y = 6;
 let z = x + y;
 ----
 
-== Values
+=== Values
 
 The POCA syntax defines two types of values:
 
@@ -104,7 +103,7 @@ Fixed values are called Literals.
 
 Variable values are called Variables.
 
-== Literals
+=== Literals
 
 The two most important syntax rules for fixed values are:
 
@@ -126,7 +125,7 @@ Strings are text, written within double or single quotes:
 'John Doe'
 ----
 
-== Variables
+=== Variables
 
 In a programming language, variables are used to store data values.
 
@@ -146,7 +145,7 @@ x = 6;
 let x = 6;
 ----
 
-== Operators
+=== Operators
 
 POCA uses arithmetic operators ( + - * / ) to compute values:
 
@@ -164,7 +163,7 @@ x = 5;
 y = 6;
 ----
 
-== Expressions
+=== Expressions
 
 An expression is a combination of values, variables, and operators, which computes to a value.
 
@@ -193,7 +192,7 @@ For example, `"John" ~ " " ~ "Doe"`, evaluates to `"John Doe"`, since `~` is usi
 "John" ~ " " ~ "Doe"
 ----
 
-== Keywords
+=== Keywords
 
 POCA keywords are used to identify actions to be performed.
 
@@ -221,7 +220,7 @@ const x = 5 + 6;
 const y = x * 10;
 ----
 
-== Comments
+=== Comments
 
 Not all POCA statements are "executed".
 
@@ -236,7 +235,7 @@ let x = 5;   // I will be executed
 // x = 6;   I will NOT be executed
 ----
 
-== Identifiers / Names
+=== Identifiers / Names
 
 Identifiers are POCA names.
 
@@ -256,7 +255,7 @@ Numbers are not allowed as the first character in names.
 
 This way POCA can easily distinguish identifiers from numbers.
 
-== POCA is Case Sensitive
+=== POCA is Case Sensitive
 
 All POCA identifiers are case sensitive.
 
@@ -270,15 +269,15 @@ let lastname = "Peterson";
 
 POCA does not interpret LET or Let as the keyword let.
 
-== POCA Character Set
+=== POCA Character Set
 
 POCA uses the Unicode character set together with the UTF8 internal encoding.
 
 Unicode covers (almost) all the characters, punctuations, and symbols in the world.
 
-= Learning by examples
+== Learning by examples
 
-== Definitions
+=== Definitions
 
 [source,javascript]
 ----
@@ -299,7 +298,7 @@ function bla(){
 let (x, y, z) = bla();
 ----
 
-== Scope blocks
+=== Scope blocks
 
 Scope blocks in POCA must be defined using the keyword `block` because everything in POCA is treated as an expression, as shown in the example below:
 
@@ -315,7 +314,7 @@ block {
 
 Without the keyword `block`, the `{` alone would indicate the beginning of an object literal in POCA because, as stated, everything is treated as an expression.
 
-== Arrays/Vectors
+=== Arrays/Vectors
 
 [source,javascript]
 ----
@@ -349,7 +348,7 @@ let (a, b, c) = Bla();
 puts(a, " ", b, " ", c);
 ----
 
-== Hashs/Prototyping/Objects
+=== Hashs/Prototyping/Objects
 
 [source,javascript]
 ----
@@ -397,7 +396,7 @@ z.y();
 readLine();
 ----
 
-== Functions/Lambdas
+=== Functions/Lambdas
 
 [source,javascript]
 ----
@@ -458,11 +457,11 @@ function searchPrimes(reg from, reg to){
   from = +from;
   to = +to;
   for(n = from; n<= to; ++n){
-    i = ((n % 2) == 0) ? 2 : 3;
+    i = ((n % 2) === 0) ? 2 : 3;
     j = n ** 0.5;
     isPrime = 1;
     while(i <= j){
-      if((n % i) == 0){
+      if((n % i) === 0){
         isPrime = 0;
         break;
       }
@@ -474,7 +473,7 @@ function searchPrimes(reg from, reg to){
 }
 ----
 
-== Threads
+=== Threads
 
 [source,javascript]
 ----
@@ -506,7 +505,7 @@ thread1.wait();
 thread2.wait();
 ----
 
-== Coroutines
+=== Coroutines
 
 [source,javascript]
 ----
@@ -524,7 +523,7 @@ print(testcoroutine.resume(1)," \r\n");
 readLine();
 ----
 
-== Classes
+=== Classes
 
 [source,javascript]
 ----
@@ -569,15 +568,15 @@ class TestB extends Test {
 }
 
 function Test.c(){
-  puts(if(this.a == 247) "yeah" else "ups");
+  puts(if(this.a === 247) "yeah" else "ups");
 }
 
 function Test::d(){
-  puts((this.a == 247) ? "allright" : "fail!");
+  puts((this.a === 247) ? "allright" : "fail!");
 }
 
 Test.e = function(){
-  puts((this.a == 247) ? ":-)" : ":-(");
+  puts((this.a === 247) ? ":-)" : ":-(");
 }
 
 let bla = new Test(246);
@@ -616,7 +615,7 @@ puts(piep.a);
 readLine();
 ----
 
-== Modules/Namespaces
+=== Modules/Namespaces
 
 [source,javascript]
 ----
@@ -682,7 +681,7 @@ TestClassInstanceFromOtherTestModule.b();
 TestClassInstanceFromOtherTestModule.c();
 ----
 
-== Hash events/Operator overloading
+=== Hash events/Operator overloading
 
 [source,javascript]
 ----
@@ -747,18 +746,18 @@ puts(vc.x, " ", vc.y, " ", vc.z);
 readLine();
 ----
 
-== Regular expressions
+=== Regular expressions
 
 [source,javascript]
 ----
 var expr = "", lineRegExp = /^(.*)\\s*$/, match = [], i = 0, scope = {};
 while(1){
-  print((expr == "") ? "> " : "\\ ");
+  print((expr === "") ? "> " : "\\ ");
   if(match = lineRegExp.match(line = readLine()))  {
     expr ~= match[0][1] ~ "\n";
     continue;
   }
-  if((expr ~= line) == ""){
+  if((expr ~= line) === ""){
     break;
   }
   try{
@@ -773,7 +772,7 @@ while(1){
 }
 ----
 
-== Exception handling
+=== Exception handling
 
 [source,javascript]
 ----
@@ -795,7 +794,7 @@ try{
 }
 ----
 
-== When
+=== When
 
 [source,javascript]
 ----
@@ -819,7 +818,7 @@ when(aValue){
 }
 ----
 
-== Switch
+=== Switch
 
 [source,javascript]
 ----
@@ -842,6 +841,6 @@ switch(aValue){
 }
 ----
 
-== And more!
+=== And more!
 
 And much more!
