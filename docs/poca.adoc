@@ -1,5 +1,9 @@
-= Introduction
 :doctype: book
+
+[index]
+= Index
+
+= Introduction
 
 POCA is ECMAScript-like but it's not ECMAScript at all. It has some differences and even some feature, which ECMAScript doesn't have.
 
