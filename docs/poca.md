@@ -1,0 +1,811 @@
+
+# Introduction
+
+POCA is ECMAScript-like but it's not ECMAScript at all. It has some differences and even some feature, which ECMAScript doesn't have.
+
+This document shows the features of POCA. POCA is a very powerful scripting language, which uses some of the concepts of ECMAScript, LUA, Squirrel, Nasal, Python and Perl. POCA supports Object Oriented Programming (OOP) in two flavours (prototype-based and class-based) but also functional programming and procedural programming.
+
+In POCA is everything a expression, there are no statements. i.e. something like 
+
+```
+var a = block { 
+  var b = 1; 
+  for(reg c = 0; c < 16; c++){
+    b += c + c
+  }; 
+  b; 
+};
+```
+
+and
+
+```  
+var a = if(b < 1){ 
+          1 
+        }else if(b < 4){ 
+          2 
+        }else{ 
+          3
+        };  
+``` 
+
+are valid POCA code.
+
+People familiar with other programming languages, and scripting languages like JavaScript/ECMAScript in particular, are usually able to learn POCA rather quickly.
+
+# Architecture
+
+POCA uses a frame-stack-wise infinite-register-based byte code instruction set architecure (ISA).
+
+Unlike almost all other script interpreters, POCA is thread-safe and scalable when called from multiple CPU threads. No special treatment is required and the threads can be scheduled simultaneously, so there is no global lock on the byte-code interpreter or x86 Just-In-Time-Compiler execution engine. The only limit on scalability is the single-threaded incremental generational garbage collector, which must block all byte-code interpreter threads and from the Just-In-Time-Compiler compiled CPU-native code threads before running.
+
+POCA's API design concept is more or less similiar to the concept from LUA. So concepts like hash tables (hashs), metatables (hash events), vectors (arrays), etc. exists here also.
+
+# The basics
+
+## Imperative and structured
+
+POCA supports structured programming in the style of C. POCA supports function and block scoping with the keywords var, let and const. POCA requires explicit semicolons, as the idea of automatic semicolon insertion like ECMAScript is a very silly idea in my opinion.
+
+Like C-style languages, control flow is done with the while, for, do / while, if / else, and switch statements. Functions are weakly typed and may accept and return any type. Arguments not provided default to undefined.
+
+## Weakly typed
+
+POCA, like ECMAScript/JavaScript, is weakly typed. This means that certain types are implicitly assigned based on the operation performed in most cases, but not all, to avoid some typical JavaScript/ECMAScript quirks.
+
+## Dynamic
+
+POCA is dynamically typed. Thus, a type is associated with a value rather than an expression. POCA supports various ways to test the type of objects, including duck typing.
+
+## Everything is an expression
+
+In POCA everything is an expression, even statements, declarations and definitions. So the following code is valid POCA code:
+
+```
+let a = block{let b = 0; for(let c = 0; c < 6; c++){ b++ }; b; };
+let bla = if(a != 0){ 1 }else{ a ? 2 : 3 };
+```
+
+Thus, POCA is here essentially a math-expression 'something' that has been supercharged into a complete scripting language.
+
+## How to create variables
+
+```
+var x;
+let y;
+```
+
+## How to use variables
+
+```
+x = 5;
+y = 6;
+let z = x + y;
+```
+
+## Values
+
+The POCA syntax defines two types of values:
+
+- Fixed values
+- Variable values
+
+Fixed values are called Literals.
+
+Variable values are called Variables.
+
+## Literals
+
+The two most important syntax rules for fixed values are:
+
+Numbers are written with or without decimals:
+
+```
+10.50
+
+1001
+```
+
+Strings are text, written within double or single quotes:
+
+```  
+"John Doe"
+
+'John Doe'  
+```
+ 
+## Variables
+
+In a programming language, variables are used to store data values.
+
+POCA uses the keywords var, let and const to declare variables.
+
+An equal sign is used to assign values to variables.
+
+In this example, x is defined as a variable. Then, x is assigned (given) the value 6:
+
+```  
+let x;
+x = 6;
+
+// or 
+
+let x = 6;
+ 
+```
+
+## Operators
+
+POCA uses arithmetic operators ( + - * / ) to compute values:
+
+```  
+(5 + 6) * 10  
+```
+
+POCA uses an assignment operator ( = ) to assign values to variables:
+
+```  
+let x, y;
+x = 5;
+y = 6;  
+```
+
+## Expressions
+
+An expression is a combination of values, variables, and operators, which computes to a value.
+
+The computation is called an evaluation.
+
+For example, 5 * 10 evaluates to 50:
+
+```  
+5 * 10  
+```  
+
+Expressions can also contain variable values:
+
+```  
+x * 10
+```  
+
+The values can be of various types, such as numbers and strings.
+
+For example, `"John" ~ " " ~ "Doe"`, evaluates to `"John Doe"`, since `~` is using for string concatenation:
+
+```  
+"John" ~ " " ~ "Doe"  
+```
+
+## Keywords
+
+POCA keywords are used to identify actions to be performed.
+
+The `let` keyword is used to create variables:
+
+```  
+let x = 5 + 6;
+let y = x * 10;  
+```
+
+The `var` keyword is also used to create variables:
+
+```  
+var x = 5 + 6;
+var y = x * 10;  
+```
+
+However, the `const` keyword is also used to create constants:
+
+```  
+const x = 5 + 6;
+const y = x * 10;  
+```
+
+## Comments
+
+Not all POCA statements are "executed".
+
+Code after double slashes `//` or between `/*` and `*/` is treated as a comment.
+
+Comments are ignored, and will not be executed:
+
+```
+let x = 5;   // I will be executed
+
+// x = 6;   I will NOT be executed
+```
+
+## Identifiers / Names
+
+Identifiers are POCA names.
+
+Identifiers are used to name variables and keywords, and functions.
+
+The rules for legal names are the same in most programming languages.
+
+A POCA name must begin with:
+
+- A letter (A-Z or a-z)
+- A dollar sign ($)
+- Or an underscore (_)
+
+Subsequent characters may be letters, digits, underscores, or dollar signs.
+
+Numbers are not allowed as the first character in names.
+
+This way POCA can easily distinguish identifiers from numbers.
+
+## POCA is Case Sensitive
+
+All POCA identifiers are case sensitive. 
+
+The variables lastName and lastname, are two different variables:
+
+```
+let lastName = "Doe";
+let lastname = "Peterson";
+```
+
+POCA does not interpret LET or Let as the keyword let.
+
+## POCA Character Set
+
+POCA uses the Unicode character set together with the UTF8 internal encoding.
+
+Unicode covers (almost) all the characters, punctuations, and symbols in the world.
+
+
+# Learning by examples
+
+
+## Definitions
+
+```
+a = 3.14159;                    // a is then inside in the current environment hash table
+var b = 0x10000;                // b is then inside in the current environment hash table
+register c = 0b10101;           // c is then assigned to a VM-register 
+reg d = 0b10101;                // reg is a syndrom for register
+let e = 0o77777;                // let is also a syndrom for register
+const f = "This is a constant";  
+
+var (g, h) = (0, 1);
+(g, h) = (h, g);
+
+function bla(){
+  return [1, 2, 3]:
+}
+
+let (x, y, z) = bla();
+```
+
+## Scope blocks
+
+Scope blocks in POCA must be defined using the keyword `block` because everything in POCA is treated as an expression, as shown in the example below:
+ 
+```  
+block {
+  let a = 1 + 2;
+  block {
+    let b = a + 2;   
+  }
+}
+```
+
+Without the keyword `block`, the `{` alone would indicate the beginning of an object literal in POCA because, as stated, everything is treated as an expression.
+
+## Arrays/Vectors
+
+```  
+let va = [1, 2, 3];              
+let vb = [4, 5, 6];
+let vc = (va ~ vb) ~ [7, 8, 9];  // ~ is the concatenation operator for arrays, strings, etc.
+let vd = vc[0 .. 4];             // range slice copy   
+
+va.push(21);
+va.push(42);
+va.push(1337);
+
+for(let i = 0; i < va.size(); i++){
+  puts(va[i]);
+}
+
+foreach(let arrayElement in vd){
+  puts(arrayElement);
+}
+         
+while(!va.empty()){
+  va.pop();
+}
+
+function Bla(){
+  return [1, 2, 3];
+}
+
+let (a, b, c) = Bla();
+
+puts(a, " ", b, " ", c);
+```
+
+## Hashs/Prototyping/Objects
+
+```
+
+let aHash = {
+              bla: "bla!", 
+              bluh: "bluh?"
+            };
+
+foreach(let hashElement; aHash){
+  puts(hashElement);
+}
+
+function oa(){
+  return {};
+}
+
+var x = {a: 12, y:() => puts(@a)};
+let y = {prototype: x, b: 34};
+let z = {prototype: y, c: 56};
+const p = {b: 42, "c": 41}; 
+
+puts(x.a);
+puts(y.a);
+puts(z.a);
+puts();
+
+y.a=13;
+
+puts(x.a);
+puts(y.a);
+puts(z.a);
+puts();
+
+z.a=14;
+
+puts(x.a);
+puts(y.a);
+puts(z.a);
+puts();
+
+x.y();
+y.y();
+z.y();
+
+readLine();  
+```
+
+## Functions/Lambdas
+
+```  
+function Test1(a, b){
+  return (a + b) * 2;
+} 
+
+function Test2(reg a, reg b){
+  return (a + b) * 2;
+} 
+
+function Test3(let a, let b){
+  return (a + b) * 2;
+} 
+
+fastfunction Test4(reg a, reg b){
+  return (a + b) * 2;
+} 
+
+fastfunction Test5(reg a, reg b){
+  return (a + b) * 2;
+} 
+
+let u(x=(4)) -> x * x;
+
+puts(u());
+
+y(x) -> x * x;
+
+puts(y(4));
+
+let z=(x)=>x + x;
+
+puts(z(4));
+
+let w=function(x)(x * x) - x;
+
+puts(w(4));
+
+let a = function(x){
+ return (x * x) - x;
+}
+
+puts(a(4));
+
+let function b(x){
+  return (x * x) - x;
+}
+
+puts(b(4));
+
+f(x) -> x + 3;
+function g(m, x) m(x) * m(x);
+puts(g(f, 7));
+
+function searchPrimes(reg from, reg to){
+  let (dummy, primes, n, i, j, isPrime) = (0, 0, 0, 0, 0, 0);
+  from = +from;
+  to = +to;
+  for(n = from; n<= to; ++n){
+    i = ((n % 2) == 0) ? 2 : 3;
+    j = n ** 0.5;
+    isPrime = 1;
+    while(i <= j){
+      if((n % i) == 0){
+        isPrime = 0;
+        break;
+      }
+      i += 2;
+    }
+    primes += isPrime;
+  }
+  return primes;
+}
+```
+## Threads
+
+```
+var terminated = 0;
+
+function thread1function(){
+  while(!terminated){
+    puts("Thread 1");
+  }
+}
+
+var thread1 = new Thread(thread1function);
+
+var thread2 = new Thread(function(){
+  while(!terminated){
+    puts("Thread 2");
+  }
+});
+
+thread1.start();
+readLine();
+
+thread2.start();
+readLine();
+
+terminated = 1;
+
+thread1.wait();
+thread2.wait();  
+```
+
+## Coroutines
+
+```
+function testcoroutinefunction(i){
+  while(1){                             
+    Coroutine.yield(i += Coroutine.get());
+  }
+}
+
+var testcoroutine = new Coroutine(testcoroutinefunction, 1000);
+print("Go!\r\n");
+print(testcoroutine.resume(100), "\r\n");
+print(testcoroutine.resume(10), "\r\n");
+print(testcoroutine.resume(1)," \r\n");
+readLine();
+```
+
+## Classes
+
+```
+var a = 12, b = 4;
+
+class Test extends BaseClass {
+
+  var a = 0;
+
+  constructor(reg v){
+    this.a = v + 1;
+  }
+
+  function init(reg v){
+    this.a = v + 1;
+  }
+
+  function b(){
+     puts(this.a);
+  } 
+
+}
+
+class TestB extends Test {
+
+  var x = 0;
+
+  constructor(reg v){
+    super(v * 2);
+    this.x = v + 1;
+  }
+
+  function b(){
+     super();    // calls previous Test.B
+     super.b();  // also calls previous Test.B
+     super.c();  // also previous Test.c
+     this.a--;
+     super.b();  // also calls previous Test.B     
+     puts(this.x);
+  } 
+
+}
+
+function Test.c(){
+  puts(if(this.a == 247) "yeah" else "ups");
+}
+
+function Test::d(){
+  puts((this.a == 247) ? "allright" : "fail!");
+}
+
+Test.e = function(){
+  puts((this.a == 247) ? ":-)" : ":-(");
+}
+
+let bla = new Test(246);
+
+puts(bla.a, " ", a, " ", b);
+
+bla.b();
+bla.c();
+bla.d();
+bla.e();
+
+puts();
+
+puts("Keys of object bla instance of class ",bla.className,":\n", block{
+  let s = ""; 
+  forkey(key;bla){
+    s ~= key ~ " of type " ~ typeof(bla[key]) ~ "\n";
+  }
+  s
+});
+
+let blup = new TestB(123);
+
+puts(blup.a , " ", blup.x, " " , (blup instanceof Test) ? "true" : "false");
+blup.b();
+
+puts(Test.className);
+puts(bla.className);
+puts(TestB.className);
+puts(blup.className);
+
+var piep = new blup.classType(42);
+
+puts(piep.a);
+ 
+readLine();  
+```  
+
+## Modules/Namespaces
+
+```
+module TestModule {
+
+  class TestClass {
+
+    var a = 0;
+     
+    constructor(reg v){
+      this.a = v;  
+    }     
+    
+    function b(){
+      puts(this.a);
+    }
+     
+  }
+  
+  function TestClass::c(){
+    puts(this.a * 2);
+  }
+
+}
+
+module OtherTestModule {
+
+  class TestClass {
+
+    class TestClassInsideTestClass {
+      
+      module TestModuleInsideTestClassInsideTestClass {
+      }
+      
+    }
+    
+    var a = 0;
+     
+    constructor(var v){
+      this.a = v + v;  
+    }
+    
+    function b(){ 
+      puts(this.a);
+    }
+     
+  }
+  
+  function TestClass.c(){
+    puts(this.a * 2);
+  }
+
+}
+
+var TestClassInstanceFromTestModule = new TestModule.TestClass(2);
+TestClassInstanceFromTestModule.b();
+TestClassInstanceFromTestModule.c();
+
+puts();
+
+var TestClassInstanceFromOtherTestModule = new OtherTestModule.TestClass(2);
+TestClassInstanceFromOtherTestModule.b();
+TestClassInstanceFromOtherTestModule.c();  
+```
+
+## Hash events/Operator overloading
+
+var Vector = {
+  create: function(reg vx=0, reg vy=0, reg vz=0){
+    return setHashEvents({
+                           prototype: this, 
+                           x: vx,
+                           y: vy,
+                           z: vz
+                         }, this);
+  },
+  __add: fastfunction(reg a, reg b){
+    // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
+    if((a instanceof Vector) && (b instanceof Vector)){
+      return new Vector(a.x + b.x, a.y + b.y, a.z + b.z);
+    }else{
+      throw "No vector?";
+    }
+  },
+  __sub: fastfunction(reg a, reg b){
+    // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
+    if((a instanceof Vector) && (b instanceof Vector)){
+      return new Vector(a.x - b.x, a.y - b.y, a.z - b.z);
+    }else{
+      throw "No vector?";
+    }
+  },
+  __mul:fastfunction(reg a, reg b){
+    // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
+    if((a instanceof Vector) && (b instanceof Vector)){
+      return new Vector(a.x * b.x, a.y * b.y, a.z * b.z);
+    }else{
+      throw "No vector?";
+    }
+  },
+  __div: fastfunction(reg a, reg b){
+    // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
+    if((a instanceof Vector) && (b instanceof Vector)){
+      return new Vector(a.x / b.x, a.y / b.y, a.z / b.z);
+    }else{
+      throw "No vector?";
+    }
+  }
+};
+
+var va = new Vector(1, 2, 3);
+var vb = new Vector(10, 20, 30);
+
+var vc = va + vb;
+puts(vc.x, " ", vc.y, " ", vc.z);
+
+vc -= vb;
+puts(vc.x, " ", vc.y, " ", vc.z);
+
+vc *= vb;
+puts(vc.x, " ", vc.y, " ", vc.z);
+
+vc /= (va*vb);
+puts(vc.x, " ", vc.y, " ", vc.z);
+
+readLine();
+
+## Regular expressions
+
+```  
+var expr = "", lineRegExp = /^(.*)\\s*$/, match = [], i = 0, scope = {};
+while(1){
+  print((expr == "") ? "> " : "\\ ");
+  if(match = lineRegExp.match(line = readLine()))  {  
+    expr ~= match[0][1] ~ "\n";
+    continue;
+  }
+  if((expr ~= line) == ""){
+    break;
+  } 
+  try{
+    print("< " ~ eval(expr, "<eval>", [], null, scope) ~ "\n");  
+  }catch(err){
+    for(i = err.size() - 1; i >= 0; i--){
+      print(err[i] ~ " ");
+    } 
+    print("\n");  
+  }
+  expr = "";  
+}
+```
+ 
+## Exception handling
+
+```  
+try{
+  print("Hello ");
+}catch(c){
+  print("dear ");
+}finally{
+  print("World!\n");
+}
+
+try{
+  print("Hello ");
+  throw 123;
+}catch(c){
+  print("dear ");
+}finally{
+  print("World!\n");
+}  
+```
+ 
+## When
+
+```  
+let aValue = 5;
+when(aValue){
+  case(5 .. 10, 15 .. 17){
+    puts("Hey! ", aValue);
+    aValue++;
+    retry;
+  }
+  case(18){
+    puts("Hi! ", aValue);
+    fallthrough;
+  }
+  case(19){
+    puts("Hallo!");
+  }
+  else{
+    puts("Ups!");
+  }
+}    
+```
+
+## Switch
+
+```  
+let aValue = 5;
+switch(aValue){
+  case 1:
+  case 5:
+  case 7:
+  case 10:
+    puts("Hey! ", aValue);
+    break;
+  case 18:
+    puts("Hi! ", aValue);
+  case 19:
+    puts("Hallo!");
+    break;
+  default:
+    puts("Ups!");
+    break;
+}  
+```
+
+## And more!
+
+And much more!
