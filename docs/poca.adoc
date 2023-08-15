@@ -257,6 +257,7 @@ All POCA identifiers are case sensitive.
 
 The variables lastName and lastname, are two different variables:
 
+[source,javascript]
 ----
 let lastName = "Doe";
 let lastname = "Peterson";
@@ -274,6 +275,7 @@ Unicode covers (almost) all the characters, punctuations, and symbols in the wor
 
 == Definitions
 
+[source,javascript]
 ----
 a = 3.14159;                    // a is then inside in the current environment hash table
 var b = 0x10000;                // b is then inside in the current environment hash table
@@ -296,6 +298,7 @@ let (x, y, z) = bla();
 
 Scope blocks in POCA must be defined using the keyword `block` because everything in POCA is treated as an expression, as shown in the example below:
 
+[source,javascript]
 ----
 block {
   let a = 1 + 2;
@@ -309,6 +312,7 @@ Without the keyword `block`, the `{` alone would indicate the beginning of an ob
 
 == Arrays/Vectors
 
+[source,javascript]
 ----
 let va = [1, 2, 3];
 let vb = [4, 5, 6];
@@ -342,8 +346,8 @@ puts(a, " ", b, " ", c);
 
 == Hashs/Prototyping/Objects
 
+[source,javascript]
 ----
-
 let aHash = {
               bla: "bla!",
               bluh: "bluh?"
@@ -390,6 +394,7 @@ readLine();
 
 == Functions/Lambdas
 
+[source,javascript]
 ----
 function Test1(a, b){
   return (a + b) * 2;
@@ -466,6 +471,7 @@ function searchPrimes(reg from, reg to){
 
 == Threads
 
+[source,javascript]
 ----
 var terminated = 0;
 
@@ -497,6 +503,7 @@ thread2.wait();
 
 == Coroutines
 
+[source,javascript]
 ----
 function testcoroutinefunction(i){
   while(1){
@@ -514,6 +521,7 @@ readLine();
 
 == Classes
 
+[source,javascript]
 ----
 var a = 12, b = 4;
 
@@ -605,6 +613,7 @@ readLine();
 
 == Modules/Namespaces
 
+[source,javascript]
 ----
 module TestModule {
 
@@ -670,6 +679,7 @@ TestClassInstanceFromOtherTestModule.c();
 
 == Hash events/Operator overloading
 
+[source,javascript]
 ----
 var Vector = {
   create: function(reg vx=0, reg vy=0, reg vz=0){
@@ -734,6 +744,7 @@ readLine();
 
 == Regular expressions
 
+[source,javascript]
 ----
 var expr = "", lineRegExp = /^(.*)\\s*$/, match = [], i = 0, scope = {};
 while(1){
@@ -759,6 +770,7 @@ while(1){
 
 == Exception handling
 
+[source,javascript]
 ----
 try{
   print("Hello ");
@@ -780,6 +792,7 @@ try{
 
 == When
 
+[source,javascript]
 ----
 let aValue = 5;
 when(aValue){
@@ -803,6 +816,7 @@ when(aValue){
 
 == Switch
 
+[source,javascript]
 ----
 let aValue = 5;
 switch(aValue){

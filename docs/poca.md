@@ -7,8 +7,8 @@ This document shows the features of POCA. POCA is a very powerful scripting lang
 
 In POCA is everything a expression, there are no statements. i.e. something like 
 
-```
-var a = block { 
+```javascript
+var a = block {
   var b = 1; 
   for(reg c = 0; c < 16; c++){
     b += c + c
@@ -19,8 +19,8 @@ var a = block {
 
 and
 
-```  
-var a = if(b < 1){ 
+```javascript
+var a = if(b < 1){
           1 
         }else if(b < 4){ 
           2 
@@ -61,7 +61,7 @@ POCA is dynamically typed. Thus, a type is associated with a value rather than a
 
 In POCA everything is an expression, even statements, declarations and definitions. So the following code is valid POCA code:
 
-```
+```javascript
 let a = block{let b = 0; for(let c = 0; c < 6; c++){ b++ }; b; };
 let bla = if(a != 0){ 1 }else{ a ? 2 : 3 };
 ```
@@ -70,14 +70,14 @@ Thus, POCA is here essentially a math-expression 'something' that has been super
 
 ## How to create variables
 
-```
+```javascript
 var x;
 let y;
 ```
 
 ## How to use variables
 
-```
+```javascript
 x = 5;
 y = 6;
 let z = x + y;
@@ -100,7 +100,7 @@ The two most important syntax rules for fixed values are:
 
 Numbers are written with or without decimals:
 
-```
+```javascript
 10.50
 
 1001
@@ -108,7 +108,7 @@ Numbers are written with or without decimals:
 
 Strings are text, written within double or single quotes:
 
-```  
+```javascript
 "John Doe"
 
 'John Doe'  
@@ -124,7 +124,7 @@ An equal sign is used to assign values to variables.
 
 In this example, x is defined as a variable. Then, x is assigned (given) the value 6:
 
-```  
+```javascript
 let x;
 x = 6;
 
@@ -138,13 +138,13 @@ let x = 6;
 
 POCA uses arithmetic operators ( + - * / ) to compute values:
 
-```  
-(5 + 6) * 10  
+```javascript
+(5 + 6) * 10
 ```
 
 POCA uses an assignment operator ( = ) to assign values to variables:
 
-```  
+```javascript
 let x, y;
 x = 5;
 y = 6;  
@@ -158,22 +158,22 @@ The computation is called an evaluation.
 
 For example, 5 * 10 evaluates to 50:
 
-```  
-5 * 10  
-```  
+```javascript
+5 * 10
+```
 
 Expressions can also contain variable values:
 
-```  
+```javascript
 x * 10
-```  
+```
 
 The values can be of various types, such as numbers and strings.
 
 For example, `"John" ~ " " ~ "Doe"`, evaluates to `"John Doe"`, since `~` is using for string concatenation:
 
-```  
-"John" ~ " " ~ "Doe"  
+```javascript
+"John" ~ " " ~ "Doe"
 ```
 
 ## Keywords
@@ -182,21 +182,21 @@ POCA keywords are used to identify actions to be performed.
 
 The `let` keyword is used to create variables:
 
-```  
+```javascript
 let x = 5 + 6;
 let y = x * 10;  
 ```
 
 The `var` keyword is also used to create variables:
 
-```  
+```javascript
 var x = 5 + 6;
 var y = x * 10;  
 ```
 
 However, the `const` keyword is also used to create constants:
 
-```  
+```javascript
 const x = 5 + 6;
 const y = x * 10;  
 ```
@@ -209,7 +209,7 @@ Code after double slashes `//` or between `/*` and `*/` is treated as a comment.
 
 Comments are ignored, and will not be executed:
 
-```
+```javascript
 let x = 5;   // I will be executed
 
 // x = 6;   I will NOT be executed
@@ -241,7 +241,7 @@ All POCA identifiers are case sensitive.
 
 The variables lastName and lastname, are two different variables:
 
-```
+```javascript
 let lastName = "Doe";
 let lastname = "Peterson";
 ```
@@ -260,7 +260,7 @@ Unicode covers (almost) all the characters, punctuations, and symbols in the wor
 
 ## Definitions
 
-```
+```javascript
 a = 3.14159;                    // a is then inside in the current environment hash table
 var b = 0x10000;                // b is then inside in the current environment hash table
 register c = 0b10101;           // c is then assigned to a VM-register 
@@ -282,7 +282,7 @@ let (x, y, z) = bla();
 
 Scope blocks in POCA must be defined using the keyword `block` because everything in POCA is treated as an expression, as shown in the example below:
  
-```  
+```javascript
 block {
   let a = 1 + 2;
   block {
@@ -295,8 +295,8 @@ Without the keyword `block`, the `{` alone would indicate the beginning of an ob
 
 ## Arrays/Vectors
 
-```  
-let va = [1, 2, 3];              
+```javascript
+let va = [1, 2, 3];
 let vb = [4, 5, 6];
 let vc = (va ~ vb) ~ [7, 8, 9];  // ~ is the concatenation operator for arrays, strings, etc.
 let vd = vc[0 .. 4];             // range slice copy   
@@ -328,8 +328,7 @@ puts(a, " ", b, " ", c);
 
 ## Hashs/Prototyping/Objects
 
-```
-
+```javascript
 let aHash = {
               bla: "bla!", 
               bluh: "bluh?"
@@ -376,7 +375,7 @@ readLine();
 
 ## Functions/Lambdas
 
-```  
+```javascript
 function Test1(a, b){
   return (a + b) * 2;
 } 
@@ -451,7 +450,7 @@ function searchPrimes(reg from, reg to){
 ```
 ## Threads
 
-```
+```javascript
 var terminated = 0;
 
 function thread1function(){
@@ -482,7 +481,7 @@ thread2.wait();
 
 ## Coroutines
 
-```
+```javascript
 function testcoroutinefunction(i){
   while(1){                             
     Coroutine.yield(i += Coroutine.get());
@@ -499,7 +498,7 @@ readLine();
 
 ## Classes
 
-```
+```javascript
 var a = 12, b = 4;
 
 class Test extends BaseClass {
@@ -586,11 +585,11 @@ var piep = new blup.classType(42);
 puts(piep.a);
  
 readLine();  
-```  
+```
 
 ## Modules/Namespaces
 
-```
+```javascript
 module TestModule {
 
   class TestClass {
@@ -655,7 +654,7 @@ TestClassInstanceFromOtherTestModule.c();
 
 ## Hash events/Operator overloading
 
-```
+```javascript
 var Vector = {
   create: function(reg vx=0, reg vy=0, reg vz=0){
     return setHashEvents({
@@ -719,7 +718,7 @@ readLine();
 
 ## Regular expressions
 
-```  
+```javascript
 var expr = "", lineRegExp = /^(.*)\\s*$/, match = [], i = 0, scope = {};
 while(1){
   print((expr == "") ? "> " : "\\ ");
@@ -744,7 +743,7 @@ while(1){
  
 ## Exception handling
 
-```  
+```javascript
 try{
   print("Hello ");
 }catch(c){
@@ -765,7 +764,7 @@ try{
  
 ## When
 
-```  
+```javascript
 let aValue = 5;
 when(aValue){
   case(5 .. 10, 15 .. 17){
@@ -788,7 +787,7 @@ when(aValue){
 
 ## Switch
 
-```  
+```javascript
 let aValue = 5;
 switch(aValue){
   case 1:
