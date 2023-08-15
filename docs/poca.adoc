@@ -2,7 +2,7 @@
 
 = POCA
 
-:tocs:
+:toc:
 
 = Introduction
 
