@@ -655,6 +655,7 @@ TestClassInstanceFromOtherTestModule.c();
 
 ## Hash events/Operator overloading
 
+```
 var Vector = {
   create: function(reg vx=0, reg vy=0, reg vz=0){
     return setHashEvents({
@@ -714,6 +715,7 @@ vc /= (va*vb);
 puts(vc.x, " ", vc.y, " ", vc.z);
 
 readLine();
+```
 
 ## Regular expressions
 
