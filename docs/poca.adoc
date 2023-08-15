@@ -1,7 +1,7 @@
 = POCA
 :toc:
 :toc-placement: preamble
-:toclevels: 1
+:toclevels: 2
 :showtitle:
 :Some attr: Some value
 
