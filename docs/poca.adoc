@@ -331,7 +331,7 @@ block {
 }
 ----
 
-Without the keyword `block`, the `{` alone would indicate the beginning of an object literal in POCA because, as stated, everything is treated as an expression.
+Without the keyword `block`, the `{` alone would indicate the beginning of an hash/object literal in POCA because, as stated, everything is treated as an expression.
 
 === Arrays/Vectors
 
