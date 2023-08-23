@@ -3432,16 +3432,20 @@ type PPOCACoroutineContext=^TPOCACoroutineContext;
       ResumeEvent,YieldEvent:{$ifdef fpc}PRTLEvent{$else}TEvent{$endif};
      end;
 
-procedure POCACoroutineContextEntrypoint(CoroutineContext:PPOCACoroutineContext); 
+{$ifdef fpc}
+function POCACoroutineContextEntrypoint(CoroutineContext:Pointer):TPOCAPtrInt;
+{$else}
+function POCACoroutineContextEntrypoint(CoroutineContext:Pointer):longword;
+{$endif}
 begin
  if assigned(CoroutineContext) then begin
 {$ifdef fpc}
-  RTLEventWaitFor(CoroutineContext^.ResumeEvent);
+  RTLEventWaitFor(PPOCACoroutineContext(CoroutineContext)^.ResumeEvent);
 {$else}
-  CoroutineContext^.ResumeEvent.WaitFor;
-  CoroutineContext^.ResumeEvent.ResetEvent;
+  PPOCACoroutineContext(CoroutineContext)^.ResumeEvent.WaitFor;
+  PPOCACoroutineContext(CoroutineContext)^.ResumeEvent.ResetEvent;
 {$endif}
-  POCACoroutineEntrypoint(CoroutineContext^.Coroutine);
+  POCACoroutineEntrypoint(PPOCACoroutineContext(CoroutineContext)^.Coroutine);
   EndThread(0);
  end;
 end;
@@ -3454,7 +3458,11 @@ begin
   result^.Coroutine:=Coroutine;
   result^.ResumeEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
   result^.YieldEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
+{$ifdef fpc}
+  result^.Handle:=BeginThread(POCACoroutineContextEntrypoint,result,result^.ThreadID);
+{$else}
   result^.Handle:=BeginThread(nil,StackSize,@POCACoroutineContextEntrypoint,result,0,result^.ThreadID);
+{$endif}
  end;
 end;
 
@@ -4576,27 +4584,27 @@ type PPOCAThreadData=^TPOCAThreadData;
       Arguments:TPOCAValueArray;
      end;
 
-{$ifdef unix}
-function POCAThreadProc(ThreadData:PPOCAThreadData):TPOCAPtrInt;
+{$ifdef fpc}
+function POCAThreadProc(ThreadData:Pointer):TPOCAPtrInt;
 {$else}
-function POCAThreadProc(ThreadData:PPOCAThreadData):longword;
+function POCAThreadProc(ThreadData:Pointer):longword;
 {$endif}
 begin
  result:=0;
  try
-  POCASemaphoreDown(ThreadData^.StartSemaphore);
-  TPasMPInterlocked.Write(ThreadData^.Started,true);
+  POCASemaphoreDown(PPOCAThreadData(ThreadData)^.StartSemaphore);
+  TPasMPInterlocked.Write(PPOCAThreadData(ThreadData)^.Started,true);
   try
-   if length(ThreadData^.Arguments)>0 then begin
-    POCACall(ThreadData^.Context,ThreadData^.Func,@ThreadData^.Arguments[0],length(ThreadData^.Arguments),POCAValueNull,POCAValueNull);
+   if length(PPOCAThreadData(ThreadData)^.Arguments)>0 then begin
+    POCACall(PPOCAThreadData(ThreadData)^.Context,PPOCAThreadData(ThreadData)^.Func,@PPOCAThreadData(ThreadData)^.Arguments[0],length(PPOCAThreadData(ThreadData)^.Arguments),POCAValueNull,POCAValueNull);
    end else begin
-    POCACall(ThreadData^.Context,ThreadData^.Func,nil,0,POCAValueNull,POCAValueNull);
+    POCACall(PPOCAThreadData(ThreadData)^.Context,PPOCAThreadData(ThreadData)^.Func,nil,0,POCAValueNull,POCAValueNull);
    end;
   except
   end;
-  TPasMPInterlocked.Write(ThreadData^.Terminated,true);
-  POCAContextDestroy(ThreadData^.Context);
-  ThreadData^.Context:=nil;
+  TPasMPInterlocked.Write(PPOCAThreadData(ThreadData)^.Terminated,true);
+  POCAContextDestroy(PPOCAThreadData(ThreadData)^.Context);
+  PPOCAThreadData(ThreadData)^.Context:=nil;
  finally
  end;
  EndThread(result);
@@ -11381,7 +11389,11 @@ begin
   TPasMPInterlocked.Write(ThreadData^.Terminated,false);
   ThreadData^.StartSemaphore:=POCASemaphoreCreate;
   TPasMPInterlocked.Write(ThreadData^.Started,false);
+{$ifdef fpc}
+  ThreadData^.Handle:=BeginThread(POCAThreadProc,ThreadData,ThreadData^.ThreadID);
+{$else}
   ThreadData^.Handle:=BeginThread(nil,0,pointer(@POCAThreadProc),ThreadData,{$ifdef Windows}CREATE_SUSPENDED{$else}0{$endif},ThreadData^.ThreadID);
+{$endif}
   if ThreadData^.Handle=0 then begin
    POCARuntimeError(Context,'Thread creation failed');
   end;
