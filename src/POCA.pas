@@ -321,7 +321,7 @@
 
 interface
 
-uses {$ifdef unix}BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
+uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
 const POCAVersion='2019-07-22-23-19-0000';
 
@@ -2023,6 +2023,61 @@ begin
   end;
  end;
 end;
+
+{$if defined(fpc) and defined(Linux)}
+type TReadLine_readline=function(_para1:PAnsiChar):PAnsiChar; cdecl;
+     TReadLine_add_history=procedure(_para1:PAnsiChar); cdecl;
+
+var ReadLine_readline:TReadLine_readline=nil;
+    ReadLine_add_history:TReadLine_add_history=nil;
+    ReadLine_LibHandle:TLibHandle=NilHandle;
+    ReadLine_Initialized_State:TPasMPInt32=0;
+
+procedure ReadLine_Initialize;
+begin
+ if TPasMPInterlocked.CompareExchange(ReadLine_Initialized_State,1,0)=0 then begin
+  try
+   try
+    ReadLine_LibHandle:=SafeLoadLibrary('libreadline.so');
+    if ReadLine_LibHandle<>NilHandle then begin
+     @ReadLine_readline:=GetProcAddress(ReadLine_LibHandle,'readline');
+     @ReadLine_add_history:=GetProcAddress(ReadLine_LibHandle,'add_history');
+    end;
+   except
+   end;
+  finally
+   TPasMPInterlocked.Write(ReadLine_Initialized_State,2);
+  end;
+ end else begin
+  while TPasMPInterlocked.Read(ReadLine_Initialized_State)<>2 do begin
+   TPasMP.Relax;
+  end;
+ end;
+end;
+{$ifend}
+
+function ReadLine:TPOCAUTF8String;
+{$if defined(fpc) and defined(Linux)}
+var s:TPOCAUTF16String;
+begin
+ ReadLine_Initialize;
+ if assigned(ReadLine_readline) and assigned(ReadLine_add_history) then begin
+  result:=PUCUUTF8Correct(ReadLine_readline(nil));
+  ReadLine_add_history(PAnsiChar(result));
+ end else begin
+  s:='';
+  System.ReadLn(s);
+  result:=PUCUUTF16ToUTF8(s);
+ end;
+end;
+{$else}
+var s:TPOCAUTF16String;
+begin
+ s:='';
+ System.ReadLn(s);
+ result:=PUCUUTF16ToUTF8(s);
+end;
+{$ifend}
 
 function CompareEx(const SubStr,s:TPOCARawByteString;Offset:longint=1):boolean;
 var i,x,LenSubStr:longint;
@@ -11813,11 +11868,8 @@ begin
 end;
 
 function POCAConsoleFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var s:TPUCUUTF16String;
 begin
- s:='';
- System.ReadLn(s);
- result:=POCANewString(Context,PUCUUTF16ToUTF8(s));
+ result:=POCANewString(Context,ReadLine);
 end;
 
 function POCAInitConsoleNamespace(Context:PPOCAContext):TPOCAValue;
@@ -12312,11 +12364,8 @@ begin
 end;
 
 function POCAGlobalFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var s:TPOCAUTF16String;
 begin
- s:='';
- System.ReadLn(s);
- result:=POCANewString(Context,PUCUUTF16ToUTF8(s));
+ result:=POCANewString(Context,ReadLine);
 end;
 
 function POCAGlobalFunctionCHR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
