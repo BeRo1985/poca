@@ -20114,6 +20114,10 @@ var TokenList:PPOCAToken;
            if assigned(List^) and (List^^.Token in [ptSEMI,ptAUTOSEMI]) then begin
             Pop;
            end;
+           if assigned(List^) and (List^^.Token in [ptCASE,ptDEFAULT]) then begin
+            AddNewChild(CaseBlock^.Right,NewToken(CaseBlock^.Right,ptFALLTHROUGH));
+            AddNewChild(CaseBlock^.Right,NewToken(CaseBlock^.Right,ptSEMI));
+           end;
            inc(i);
           end;
           else begin
