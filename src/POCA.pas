@@ -4573,7 +4573,7 @@ end;
 
 type PPOCAThreadData=^TPOCAThreadData;
      TPOCAThreadData=record
-      Handle:THandle;
+      Handle:{$ifdef fpc}TThreadID{$else}THandle{$endif};
       StartSemaphore:pointer;
       Started:TPasMPBool32;
       Terminated:TPasMPBool32;
@@ -11504,7 +11504,7 @@ begin
   if not ThreadData^.Terminated then begin
    if CountArguments<1 then begin
 {$ifdef fpc}
-    WaitForThreadTerminate(ThreadData^.Handle,-1);
+    WaitForThreadTerminate(ThreadData^.Handle,0);
 {$else}
 {$ifdef win32}
     WaitForSingleObject(ThreadData^.Handle,longword(-1));
