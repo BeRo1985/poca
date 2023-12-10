@@ -2027,13 +2027,17 @@ end;
 {$if defined(fpc) and defined(Linux)}
 type TReadLine_readline=function(_para1:PAnsiChar):PAnsiChar; cdecl;
      TReadLine_add_history=procedure(_para1:PAnsiChar); cdecl;
+     TReadLine_free=procedure(_para1:Pointer); cdecl;
 
 var ReadLine_readline:TReadLine_readline=nil;
     ReadLine_add_history:TReadLine_add_history=nil;
+    ReadLine_free:TReadLine_free=nil;
     ReadLine_LibHandle:TLibHandle=NilHandle;
+    ReadLine_CLibHandle:TLibHandle=NilHandle;
     ReadLine_Initialized_State:TPasMPInt32=0;
 
 procedure ReadLine_Initialize;
+var Index:TPOCAInt32;
 begin
  if TPasMPInterlocked.CompareExchange(ReadLine_Initialized_State,1,0)=0 then begin
   try
@@ -2042,6 +2046,19 @@ begin
     if ReadLine_LibHandle<>NilHandle then begin
      @ReadLine_readline:=GetProcAddress(ReadLine_LibHandle,'readline');
      @ReadLine_add_history:=GetProcAddress(ReadLine_LibHandle,'add_history');
+    end;
+    for Index:=-1 to 128 do begin
+     if Index<0 then begin
+      ReadLine_CLibHandle:=SafeLoadLibrary('libc.so');
+     end else begin
+      ReadLine_CLibHandle:=SafeLoadLibrary('libc.so.'+IntToStr(Index));
+     end;
+     if ReadLine_CLibHandle<>NilHandle then begin
+      break;
+     end;
+    end;
+    if ReadLine_CLibHandle<>NilHandle then begin
+     @ReadLine_free:=GetProcAddress(ReadLine_CLibHandle,'free');
     end;
    except
    end;
@@ -2056,16 +2073,32 @@ begin
 end;
 {$ifend}
 
-function ReadLine:TPOCAUTF8String;
+function ReadLine(const aPrompt:TPOCAUTF8String):TPOCAUTF8String;
 {$if defined(fpc) and defined(Linux)}
 var s:TPOCAUTF16String;
+    p:PAnsiChar;
 begin
  ReadLine_Initialize;
- if assigned(ReadLine_readline) and assigned(ReadLine_add_history) then begin
-  result:=PUCUUTF8Correct(ReadLine_readline(nil));
-  ReadLine_add_history(PAnsiChar(result));
+ if assigned(ReadLine_readline) and assigned(ReadLine_add_history) and assigned(ReadLine_free) then begin
+  if length(aPrompt)>0 then begin
+   p:=ReadLine_readline(PAnsiChar(aPrompt));
+  end else begin
+   p:=ReadLine_readline(nil);
+  end;
+  if assigned(p) then begin
+   result:=PUCUUTF8Correct(p);
+   if length(trim(result))>0 then begin
+    ReadLine_add_history(p);
+   end;
+   ReadLine_free(p);
+  end else begin
+   result:='';
+  end;
  end else begin
   s:='';
+  if length(aPrompt)>0 then begin
+   System.Write(aPrompt);
+  end;
   System.ReadLn(s);
   result:=PUCUUTF16ToUTF8(s);
  end;
@@ -11881,7 +11914,11 @@ end;
 
 function POCAConsoleFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
- result:=POCANewString(Context,ReadLine);
+ if CountArguments>0 then begin
+  result:=POCANewString(Context,ReadLine(POCAGetStringValue(Context,Arguments^[0])));
+ end else begin
+  result:=POCANewString(Context,ReadLine(''));
+ end;
 end;
 
 function POCAInitConsoleNamespace(Context:PPOCAContext):TPOCAValue;
@@ -12377,7 +12414,11 @@ end;
 
 function POCAGlobalFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
- result:=POCANewString(Context,ReadLine);
+ if CountArguments>0 then begin
+  result:=POCANewString(Context,ReadLine(POCAGetStringValue(Context,Arguments^[0])));
+ end else begin
+  result:=POCANewString(Context,ReadLine(''));
+ end;
 end;
 
 function POCAGlobalFunctionCHR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
