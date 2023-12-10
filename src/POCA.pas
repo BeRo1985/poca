@@ -1,12 +1,12 @@
 (******************************************************************************
  *                                     POCA                                   *
  ******************************************************************************
- *                        Version 2022-10-05-02-20-0000                       *
+ *                        Version 2023-12-10-09-20-0000                       *
  ******************************************************************************
  *                                zlib license                                *
  *============================================================================*
  *                                                                            *
- * Copyright (C) 2011-2022, Benjamin Rosseaux (benjamin@rosseaux.com)         *
+ * Copyright (C) 2011-2023, Benjamin Rosseaux (benjamin@rosseaux.com)         *
  *                                                                            *
  * This software is provided 'as-is', without any express or implied          *
  * warranty. In no event will the authors be held liable for any damages      *
@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2019-07-22-23-19-0000';
+const POCAVersion='2023-12-10-09-20-0000';
 
       POCA_MAX_RECURSION=1024;
 

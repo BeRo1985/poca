@@ -19,22 +19,40 @@ procedure MainProc;
 
 implementation
 
-const REPLCode='var expr = "", lineRegExp=/^(.*)\\s*$/, match = [], i = 0, scope = {};'#13#10+
+const REPLCode='print("Welcome to POCA version '+POCAVersion+'.\n");'#13#10+
+               'print("Type \".help\" for more information.\n");'#13#10+
+               'var expr = "", lineRegExp = /^(.*)\\s*$/, cmdRegEx = /^\s*\.(\w+)\s*(.*)/, match = [], i = 0, scope = {};'#13#10+
                'while(1){'#13#10+
                '  if(match = lineRegExp.match(line = readLine((expr == "") ? "> " : ". "))){'#13#10+
                '    expr ~= match[0][1] ~ "\n";'#13#10+
                '    continue;'#13#10+
                '  }'#13#10+
-               '  if((expr ~= line) == "exit"){'#13#10+
+               '  expr ~= line;'#13#10+
+               '  if(expr == "exit"){'#13#10+
                '    break;'#13#10+
-               '  }'#13#10+
-               '  try{'#13#10+
-               '    print("< " ~ String.dump(eval(expr, "<eval>", [], null, scope)) ~ "\n");'#13#10+
-               '  }catch(err){'#13#10+
-               '    for(i = err.size() - 1; i >= 0; i--){'#13#10+
-               '      print(err[i] ~ " ");'#13#10+
+               '  }else if(match = cmdRegEx.match(expr)){'#13#10+
+               '    let cmd = match[0][1];'#13#10+
+               '    when(cmd){'#13#10+
+               '      case("exit"){'#13#10+
+               '        break;'#13#10+
+               '      }'#13#10+
+               '      case("help"){'#13#10+
+               '        print(".exit     Exit the REPL\n");'#13#10+
+               '        print(".help     Print this help message\n");'#13#10+
+               '      }'#13#10+
+               '      else{'#13#10+
+               '        print("Invalid REPL keyword \"." ~ cmd ~ "\"\n");'#13#10+
+               '      }'#13#10+
                '    }'#13#10+
-               '    print("\n");'#13#10+
+               '  }else{'#13#10+
+               '    try{'#13#10+
+               '      print("< " ~ String.dump(eval(expr, "<eval>", [], null, scope)) ~ "\n");'#13#10+
+               '    }catch(err){'#13#10+
+               '      for(i = err.size() - 1; i >= 0; i--){'#13#10+
+               '        print(err[i] ~ " ");'#13#10+
+               '      }'#13#10+
+               '      print("\n");'#13#10+
+               '    }'#13#10+
                '  }'#13#10+
                '  expr = "";'#13#10+
                '}'#13#10;
