@@ -1,7 +1,7 @@
 (******************************************************************************
  *                                     POCA                                   *
  ******************************************************************************
- *                        Version 2023-12-10-09-20-0000                       *
+ *            for version see POCAVersion constant string here below          *
  ******************************************************************************
  *                                zlib license                                *
  *============================================================================*
@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2023-12-10-09-20-0000';
+const POCAVersion='2023-12-11-18-47-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -724,6 +724,7 @@ type PPOCAInt8=^TPOCAInt8;
       ptPOWEQ,
       ptREGISTER,
       ptBLOCK,
+      ptINLINEBLOCK,
       ptSUPERTHAT,
       ptTHAT,
       ptTHIS,
@@ -7670,12 +7671,12 @@ end;
 function POCAHashObj(const Obj:pointer):longword;
 begin
 {$ifdef cpu64}
- result:=longword(pointer(@Obj)^) xor $2e63823a;
+ result:=TPOCAUInt32(TPOCAPtrUInt(Obj) and $ffffffff) xor $2e63823a;
  inc(result,(result shl 15) or (result shr (32-15)));
  dec(result,(result shl 9) or (result shr (32-9)));
  inc(result,(result shl 4) or (result shr (32-4)));
  dec(result,(result shl 1) or (result shr (32-1)));
- result:=((result xor (result shl 2) or (result shr (32-2))) xor longword(pointer(@pansichar(pointer(Obj))[sizeof(longword)])^)) xor $2e63823a;
+ result:=((result xor (result shl 2) or (result shr (32-2))) xor (TPOCAPtrUInt(Obj) shr 32)) xor $2e63823a;
  inc(result,(result shl 15) or (result shr (32-15)));
  dec(result,(result shl 9) or (result shr (32-9)));
  inc(result,(result shl 4) or (result shr (32-4)));
@@ -17055,6 +17056,9 @@ var TokenList:PPOCAToken;
     ptBLOCK:begin
      DumpIt(' block ');
     end;
+    ptINLINEBLOCK:begin
+     DumpIt(' inlineblock ');
+    end;
     ptSUPERTHAT:begin
      DumpIt(' superthat ');
     end;
@@ -17381,11 +17385,11 @@ var TokenList:PPOCAToken;
       ptASSIGN,ptLT,ptLTEQ,ptEQ,ptNEQ,ptGT,ptGTEQ,ptCMP,ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptEMPTY,
       ptNULL,ptELLIPSIS,ptQUESTION,ptVAR,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptFORINDEX,ptLAND,ptLOR,ptTRY,ptCATCH,ptFINALLY,
       ptTHROW,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptPOSTDEC,ptPOSTINC,ptPREDEC,ptPREINC,ptBAND,ptBOR,ptBXOR,ptBNOT,ptBSHL,ptBSHR,
-      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptREGISTER,ptBLOCK,ptLOCAL,ptDEFINED,
-      ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,ptSNEQ,ptIN,ptIS,ptCAT,
-      ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,ptCLASSFUNCTION,ptMODULEFUNCTION,
-      ptLET,ptREG,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,
-      ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptELVISEQ,ptSYMBOLNAME])) then begin
+      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptREGISTER,ptBLOCK,ptINLINEBLOCK,
+      ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
+      ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
+      ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptREG,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
+      ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptELVISEQ,ptSYMBOLNAME])) then begin
     AddToken(ptAUTOSEMI,'',0);
    end;
   end;
@@ -19088,6 +19092,7 @@ var TokenList:PPOCAToken;
   var LastToken,NextToken,IdentifierTokenList,LastEndToken,SymbolNameToken,AnchorToken,TempToken,TokenA,TokenB,TokenC:PPOCAToken;
       WhichToken:TPOCATokenType;
       Meta:longint;
+      CountStatements:TPOCAInt32;
   begin
    result:=StartToken;
    while assigned(result) and not (result^.Token in EndToken) do begin
@@ -19742,6 +19747,8 @@ var TokenList:PPOCAToken;
       if IgnoreVarLocal or (assigned(result^.Next) and (result^.Next^.Token in [ptFASTFUNCTION,ptFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION])) then begin
        result:=result^.Next;
       end else begin
+       CountStatements:=0;
+       AnchorToken:=result;
        WhichToken:=result^.Token;
        result:=result^.Next;
        while assigned(result) and not (result^.Token in [ptCOMMA,ptSEMI,ptAUTOSEMI]) do begin
@@ -19809,8 +19816,15 @@ var TokenList:PPOCAToken;
          result:=InsertAfter(result,WhichToken);
          result:=result^.Next;
         end;
+        inc(CountStatements);
        end;
        if assigned(result) and (result^.Token in [ptSEMI,ptAUTOSEMI]) then begin
+        if CountStatements>1 then begin
+         InsertBefore(AnchorToken,ptINLINEBLOCK);
+         InsertBefore(AnchorToken,ptLCURL);
+         InsertBefore(result,ptSEMI);
+         InsertBefore(result,ptRCURL);
+        end;
         result:=result^.Next;
        end else begin
         SyntaxError('Missed semicolon',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
@@ -19828,7 +19842,7 @@ var TokenList:PPOCAToken;
   TransformAtThis;
   TransformLambdaFunction;
   TransformBlock(Parser.Tree.Children,[],false);
-//Dump(Parser.Tree.Children);
+// Dump(Parser.Tree.Children);
  end;
  procedure ProcessParser(var Parser:TPOCAParser);
   function NewToken(const t:PPOCAToken;const Token:TPOCATokenType):PPOCAToken;
@@ -19911,7 +19925,7 @@ var TokenList:PPOCAToken;
      end else begin
       if AddCurlyBraceIfNotExist then begin
        Block:=NewToken(t,ptLCURL);
-       if List^^.Token in [ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptBLOCK] then begin
+       if List^^.Token in [ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptBLOCK,ptINLINEBLOCK] then begin
         AddNewChild(Block,ParseToken(t,List));
        end else begin
         ParseBlock(Block,ptSEMI,List,UntilIncludingToken);
@@ -19973,6 +19987,9 @@ var TokenList:PPOCAToken;
        ParseBlock(t,ptSAFERBRA,List,UntilIncludingToken);
       end;
       ptBLOCK:begin
+       ParseCurlyBraceBlock(false,true);
+      end;
+      ptINLINEBLOCK:begin
        ParseCurlyBraceBlock(false,true);
       end;
       ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin // function(...){...} / function SymbolName (...){...}
@@ -20269,7 +20286,7 @@ var TokenList:PPOCAToken;
       ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin
        result:=assigned(t^.Previous) and (t^.Previous^.Token=ptASSIGN);
       end;
-      ptFOR,ptFOREACH,ptWHILE,ptFORINDEX,ptFORKEY,ptDO,ptWHEN,ptSWITCH,ptBLOCK:begin
+      ptFOR,ptFOREACH,ptWHILE,ptFORINDEX,ptFORKEY,ptDO,ptWHEN,ptSWITCH,ptBLOCK,ptINLINEBLOCK:begin
        result:=true;
       end;
       ptTRY:begin
@@ -20370,7 +20387,7 @@ var TokenList:PPOCAToken;
       ptLPAR,ptLBRA,ptLCURL,ptSAFELBRA:begin
        PrecedenceChildren(t);
       end;
-      ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptBLOCK:begin
+      ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptBLOCK,ptINLINEBLOCK:begin
        PrecedenceBlock(t);
       end;
      end;
@@ -20432,7 +20449,7 @@ var TokenList:PPOCAToken;
       ptLPAR,ptLBRA,ptLCURL,ptSAFELBRA:begin
        PrecedenceChildren(StartToken);
       end;
-      ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptCASE,ptDEFAULT,ptBLOCK:begin
+      ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptCASE,ptDEFAULT,ptBLOCK,ptINLINEBLOCK:begin
        PrecedenceBlock(StartToken);
       end;
       ptWHEN:begin
@@ -21852,12 +21869,14 @@ var TokenList:PPOCAToken;
     CodeGenerator^.ByteCode[Position]:=CodeGenerator^.ByteCodeSize;
    end;
    function GenerateExpression(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false):longint; forward;
-   function GenerateBlock(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false):longint;
+   function GenerateBlock(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false;NewScope:boolean=true):longint;
    var Expression:PPOCAToken;
        Reg:longint;
    begin
     result:=-1;
-    ScopeStart;
+    if NewScope then begin
+     ScopeStart;
+    end;
     try
      while assigned(t) do begin
       if t^.Token in [ptSEMI,ptAUTOSEMI] then begin
@@ -21884,15 +21903,19 @@ var TokenList:PPOCAToken;
       end;
      end;
     finally
-     ScopeEnd;
+     if NewScope then begin
+      ScopeEnd;
+     end;
     end;
    end;
-   function GenerateCommaBlock(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false):longint;
+   function GenerateCommaBlock(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false;NewScope:boolean=true):longint;
    var Expression:PPOCAToken;
        Reg:longint;
    begin
     result:=-1;
-    ScopeStart;
+    if NewScope then begin
+     ScopeStart;
+    end;
     try
      while assigned(t) do begin
       if t^.Token=ptCOMMA then begin
@@ -21919,7 +21942,9 @@ var TokenList:PPOCAToken;
       end;
      end;
     finally
-     ScopeEnd;
+     if NewScope then begin
+      ScopeEnd;
+     end;
     end;
    end;
    function GenerateExpression(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false):longint;
@@ -23424,7 +23449,7 @@ var TokenList:PPOCAToken;
        end;
       end;
       Registers[0]:=GetRegisters;
-      result:=GenerateBlock(tIF^.Children^.Next^.Children,OutReg,DoNeedResult);
+      result:=GenerateBlock(tIF^.Children^.Next^.Children,OutReg,DoNeedResult,true);
       if result<>OutReg then begin
        EmitOpcode(popCOPY,OutReg,result);
        SetRegisterNumber(OutReg,GetRegisterNumber(result));
@@ -23445,7 +23470,7 @@ var TokenList:PPOCAToken;
         if tELSE^.Token=ptELSEIF then begin
          result:=GenerateIF(tELSE,tELSE^.Next,OutReg);
         end else begin
-         result:=GenerateBlock(tELSE^.Children^.Children,OutReg,DoNeedResult);
+         result:=GenerateBlock(tELSE^.Children^.Children,OutReg,DoNeedResult,true);
         end;
         if result<>OutReg then begin
          EmitOpcode(popCOPY,OutReg,result);
@@ -23523,7 +23548,7 @@ var TokenList:PPOCAToken;
              FinallyBlock:=FinallyBlock^.Children;
              begin
               FixTargetImmediate(TryBlockPos);
-              Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult);
+              Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
               if result<>Reg then begin
                EmitOpcode(popCOPY,result,Reg);
                SetRegisterNumber(result,GetRegisterNumber(Reg));
@@ -23535,7 +23560,7 @@ var TokenList:PPOCAToken;
               ClearRegisters;
               FixTargetImmediate(CatchBlockPos);
               GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
-              Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult);
+              Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
               if result<>Reg then begin
                EmitOpcode(popCOPY,result,Reg);
                SetRegisterNumber(result,GetRegisterNumber(Reg));
@@ -23546,7 +23571,7 @@ var TokenList:PPOCAToken;
              begin
               ClearRegisters;
               FixTargetImmediate(FinallyBlockPos);
-              Reg:=GenerateBlock(FinallyBlock^.Children,result,DoNeedResult);
+              Reg:=GenerateBlock(FinallyBlock^.Children,result,DoNeedResult,true);
               if result<>Reg then begin
                EmitOpcode(popCOPY,result,Reg);
                SetRegisterNumber(result,GetRegisterNumber(Reg));
@@ -23562,7 +23587,7 @@ var TokenList:PPOCAToken;
            end else begin
             begin
              FixTargetImmediate(TryBlockPos);
-             Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult);
+             Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
              if result<>Reg then begin
               EmitOpcode(popCOPY,result,Reg);
               SetRegisterNumber(result,GetRegisterNumber(Reg));
@@ -23574,7 +23599,7 @@ var TokenList:PPOCAToken;
              ClearRegisters;
              FixTargetImmediate(CatchBlockPos);
              GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
-             Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult);
+             Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
              if result<>Reg then begin
               EmitOpcode(popCOPY,result,Reg);
               SetRegisterNumber(result,GetRegisterNumber(Reg));
@@ -23602,7 +23627,7 @@ var TokenList:PPOCAToken;
         FinallyBlock:=FinallyBlock^.Children;
         begin
          FixTargetImmediate(TryBlockPos);
-         Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult);
+         Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
          if result<>Reg then begin
           EmitOpcode(popCOPY,result,Reg);
           SetRegisterNumber(result,GetRegisterNumber(Reg));
@@ -23613,7 +23638,7 @@ var TokenList:PPOCAToken;
         begin
          ClearRegisters;
          FixTargetImmediate(FinallyBlockPos);
-         Reg:=GenerateBlock(FinallyBlock^.Children,result,DoNeedResult);
+         Reg:=GenerateBlock(FinallyBlock^.Children,result,DoNeedResult,true);
          if result<>Reg then begin
           EmitOpcode(popCOPY,result,Reg);
           SetRegisterNumber(result,GetRegisterNumber(Reg));
@@ -23717,7 +23742,7 @@ var TokenList:PPOCAToken;
        JumpOver:=CodeGenerator^.ByteCodeSize+1;
        EmitOpcode(popJMP,0);
        JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult);
+       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        begin
         ContinuePos:=CodeGenerator^.ByteCodeSize;
         FixTargetImmediate(JumpOver);
@@ -23742,7 +23767,7 @@ var TokenList:PPOCAToken;
        JumpOver:=CodeGenerator^.ByteCodeSize+1;
        EmitOpcode(popJMP,0);
        JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult);
+       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        begin
         CombineCurrentRegisters(Registers[0]);
         CombineCurrentRegisters(Registers[1]);
@@ -23795,7 +23820,7 @@ var TokenList:PPOCAToken;
        Registers[0]:=GetRegisters;
        StartLoop(LabelToken,false);
        JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult);
+       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        Registers[1]:=GetRegisters;
        Registers[4]:=GetRegisters;
        ContinuePos:=CodeGenerator^.ByteCodeSize;
@@ -23815,7 +23840,7 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers[4]);
        StartLoop(LabelToken,false);
        JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult);
+       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        CombineCurrentRegisters(Registers[0]);
        CombineCurrentRegisters(Registers[1]);
        CombineCurrentRegisters(Registers[4]);
@@ -23869,19 +23894,19 @@ var TokenList:PPOCAToken;
        Registers[0]:=GetRegisters;
        StartLoop(LabelToken,false);
        if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
-        Reg:=GenerateExpression(Init,-1,false);
+        Reg:=GenerateCommaBlock(Init,-1,false,false);
         FreeRegister(Reg);
        end;
        JumpOver:=CodeGenerator^.ByteCodeSize+1;
        EmitOpcode(popJMP,0);
        JumpNext:=CodeGenerator^.ByteCodeSize;
        Registers[1]:=GetRegisters;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult);
+       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        Registers[2]:=GetRegisters;
        Registers[5]:=GetRegisters;
        ContinuePos:=CodeGenerator^.ByteCodeSize;
        if assigned(Update) and (Update^.Token<>ptEMPTY) then begin
-        Reg:=GenerateExpression(Update,-1,false);
+        Reg:=GenerateCommaBlock(Update,-1,false,false);
         FreeRegister(Reg);
        end;
        begin
@@ -23902,7 +23927,7 @@ var TokenList:PPOCAToken;
        SetRegisters(Registers[0]);
        StartLoop(LabelToken,false);
        if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
-        Reg:=GenerateExpression(Init,-1,false);
+        Reg:=GenerateCommaBlock(Init,-1,false,false);
         FreeRegister(Reg);
        end;
        JumpOver:=CodeGenerator^.ByteCodeSize+1;
@@ -23911,13 +23936,14 @@ var TokenList:PPOCAToken;
        SetRegisters(Registers[1]);
        CombineCurrentRegisters(Registers[2]);
        CombineCurrentRegisters(Registers[5]);
-       result:=GenerateBlock(Body,OutReg,DoNeedResult);
+       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        CombineCurrentRegisters(Registers[1]);
        CombineCurrentRegisters(Registers[2]);
        CombineCurrentRegisters(Registers[5]);
        ContinuePos:=CodeGenerator^.ByteCodeSize;
        if assigned(Update) and (Update^.Token<>ptEMPTY) then begin
-        Reg:=GenerateExpression(Update,-1,false);
+        Reg:=GenerateCommaBlock(Update,-1,false,false);
+//      Reg:=GenerateExpression(Update,-1,false);
         FreeRegister(Reg);
        end;
        begin
@@ -24008,7 +24034,7 @@ var TokenList:PPOCAToken;
         EmitOpcode(popJMP,0);
         JumpNext:=CodeGenerator^.ByteCodeSize;
         GenerateLeftValue(Element,Reg3);
-        result:=GenerateBlock(Body,OutReg,DoNeedResult);
+        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
         ContinuePos:=CodeGenerator^.ByteCodeSize;
         Registers[1]:=GetRegisters;
         Registers[4]:=GetRegisters;
@@ -24045,7 +24071,7 @@ var TokenList:PPOCAToken;
         CombineCurrentRegisters(Registers[0]);
         CombineCurrentRegisters(Registers[1]);
         CombineCurrentRegisters(Registers[4]);
-        result:=GenerateBlock(Body,OutReg,DoNeedResult);
+        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
         ContinuePos:=CodeGenerator^.ByteCodeSize;
         CombineCurrentRegisters(Registers[0]);
         CombineCurrentRegisters(Registers[1]);
@@ -24886,7 +24912,7 @@ var TokenList:PPOCAToken;
              ClearRegisters;
             end;
             StartFallthrough(JumpRetryPos);
-            Reg:=GenerateBlock(WhenSwitchCase^.Body,result,DoNeedResult);
+            Reg:=GenerateBlock(WhenSwitchCase^.Body,result,DoNeedResult,true);
             if Reg<>result then begin
              EmitOpcode(popCOPY,result,Reg);
              SetRegisterNumber(result,GetRegisterNumber(Reg));
@@ -25196,10 +25222,10 @@ var TokenList:PPOCAToken;
       if assigned(t^.Right) then begin
        case t^.Right^.Token of
         ptCOMMA:begin
-         result:=GenerateCommaBlock(t^.Right,OutReg,DoNeedResult);
+         result:=GenerateCommaBlock(t^.Right,OutReg,DoNeedResult,true);
         end;
         ptSEMI,ptAUTOSEMI:begin
-         result:=GenerateBlock(t^.Right,OutReg,DoNeedResult);
+         result:=GenerateBlock(t^.Right,OutReg,DoNeedResult,true);
         end;
         else begin
          result:=GenerateExpression(t^.Right,OutReg,DoNeedResult);
@@ -25416,13 +25442,20 @@ var TokenList:PPOCAToken;
      end;
      case t^.Token of
       ptTOP:begin
-       result:=GenerateBlock(t^.Left,OutReg,DoNeedResult);
+       result:=GenerateBlock(t^.Left,OutReg,DoNeedResult,true);
       end;
       ptBLOCK:begin
        if (not assigned(t^.Left)) or (t^.Left^.Token<>ptLCURL) then begin
         SyntaxError('Missed curly brace',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end else begin
-        result:=GenerateBlock(t^.Left^.Children,OutReg,DoNeedResult);
+        result:=GenerateBlock(t^.Left^.Children,OutReg,DoNeedResult,true);
+       end;
+      end;
+      ptINLINEBLOCK:begin
+       if (not assigned(t^.Left)) or (t^.Left^.Token<>ptLCURL) then begin
+        SyntaxError('Missed curly brace',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+       end else begin
+        result:=GenerateBlock(t^.Left^.Children,OutReg,DoNeedResult,false);
        end;
       end;
       ptNEW:begin
@@ -26275,7 +26308,7 @@ var TokenList:PPOCAToken;
       ProcessConstantFolding(Block);
       CollectConstants(Block);
       ScopeStart;
-      i:=GenerateBlock(Block,-1,true);
+      i:=GenerateBlock(Block,-1,true,true);
       if CodeToken in [ptCLASSFUNCTION,ptMODULEFUNCTION] then begin
        EmitOpcode(popLOADLOCAL,i);
       end;
@@ -32525,7 +32558,7 @@ begin
 end;
 
 procedure InitializePOCA;
-const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright (C) 2011-2019, Benjamin ''BeRo'' Rosseaux - benjamin@rosseaux.com - http://www.rosseaux.com ';
+const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright (C) 2011-2023, Benjamin ''BeRo'' Rosseaux - benjamin@rosseaux.com - http://www.rosseaux.com ';
       FPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
       FPURoundingMode:TFPURoundingMode=rmNearest;
       FPUPrecisionMode:TFPUPrecisionMode={$ifdef HAS_TYPE_EXTENDED}pmEXTENDED{$else}pmDOUBLE{$endif};
@@ -32629,6 +32662,7 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
   AddKeywordToken(ptRETRY,'retry');
   AddKeywordToken(ptREGISTER,'register');
   AddKeywordToken(ptBLOCK,'block');
+  AddKeywordToken(ptINLINEBLOCK,'inlineblock');
   AddKeywordToken(ptTHAT,'that');
   AddKeywordToken(ptTHIS,'this');
   AddKeywordToken(ptSELF,'self');
