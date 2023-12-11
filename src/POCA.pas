@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2023-12-11-18-47-0000';
+const POCAVersion='2023-12-11-19-17-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1072,6 +1072,7 @@ type PPOCAInt8=^TPOCAInt8;
        0:(Num:double);
        1:({$ifdef cpu64}Reference:TPOCAValueReference;{$else}{$ifdef LITTLE_ENDIAN}Reference:TPOCAValueReference;ReferenceTag:longword;{$else}ReferenceTag:longword;Reference:TPOCAValueReference;{$endif}{$endif});
        2:(CastedInt64:int64);
+       2:(CastedUInt64:TPOCAUInt64);
        3:({$ifdef LITTLE_ENDIAN}CastedLo,CastedHi{$else}CastedHi,CastedLo{$endif}:longword);
      end;
 
@@ -11766,11 +11767,20 @@ var OutputString:TPOCARawByteString;
       if i>0 then begin
        OutputString:=OutputString+',';
       end;
-      DumpValue(POCAArrayGet(Keys,i));
+      Temp:=POCAArrayGet(Keys,i);
+      if Temp.CastedUInt64<>Value.CastedUInt64 then begin
+       DumpValue(Temp);
+      end else begin
+       OutputString:=OutputString+'[self]';
+      end;
       OutputString:=OutputString+':';
       Temp.Num:=0;
       POCAHashGet(Context,Value,POCAArrayGet(Keys,i),Temp);
-      DumpValue(Temp);
+      if Temp.CastedUInt64<>Value.CastedUInt64 then begin
+       DumpValue(Temp);
+      end else begin
+       OutputString:=OutputString+'[self]';
+      end;
      end;
      OutputString:=OutputString+'}';
     end;
