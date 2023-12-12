@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2023-12-11-19-17-0000';
+const POCAVersion='2023-12-12-15-29-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -10145,6 +10145,30 @@ begin
  POCAAddNativeFunction(Context,result,'free',POCAGarbageCollectorFunctionFREE);
 end;
 
+function POCAMathFunctionMIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ if CountArguments<2 then begin
+  POCARuntimeError(Context,'Bad arguments to "Math.min"');
+ end;
+ result.Num:=Min(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1]));
+end;
+
+function POCAMathFunctionMAX(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ if CountArguments<2 then begin
+  POCARuntimeError(Context,'Bad arguments to "Math.max"');
+ end;
+ result.Num:=Max(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1]));
+end;
+
+function POCAMathFunctionCLAMP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ if CountArguments<3 then begin
+  POCARuntimeError(Context,'Bad arguments to "Math.clamp"');
+ end;
+ result.Num:=Min(Max(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1])),POCAGetNumberValue(Context,Arguments^[2]));
+end;
+
 function POCAMathFunctionABS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
@@ -10559,6 +10583,9 @@ begin
  POCAHashSetString(Context,result,'SQRT2',POCANumber(sqrt(2)));
  POCAHashSetString(Context,result,'NaN',POCANumber(NaN));
  POCAHashSetString(Context,result,'Infinity',POCANumber(Infinity));
+ POCAAddNativeFunction(Context,result,'min',POCAMathFunctionMIN);
+ POCAAddNativeFunction(Context,result,'max',POCAMathFunctionMAX);
+ POCAAddNativeFunction(Context,result,'clamp',POCAMathFunctionCLAMP);
  POCAAddNativeFunction(Context,result,'abs',POCAMathFunctionABS);
  POCAAddNativeFunction(Context,result,'sin',POCAMathFunctionSIN);
  POCAAddNativeFunction(Context,result,'cos',POCAMathFunctionCOS);
