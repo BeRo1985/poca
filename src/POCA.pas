@@ -1072,8 +1072,8 @@ type PPOCAInt8=^TPOCAInt8;
        0:(Num:double);
        1:({$ifdef cpu64}Reference:TPOCAValueReference;{$else}{$ifdef LITTLE_ENDIAN}Reference:TPOCAValueReference;ReferenceTag:longword;{$else}ReferenceTag:longword;Reference:TPOCAValueReference;{$endif}{$endif});
        2:(CastedInt64:int64);
-       2:(CastedUInt64:TPOCAUInt64);
-       3:({$ifdef LITTLE_ENDIAN}CastedLo,CastedHi{$else}CastedHi,CastedLo{$endif}:longword);
+       3:(CastedUInt64:TPOCAUInt64);
+       4:({$ifdef LITTLE_ENDIAN}CastedLo,CastedHi{$else}CastedHi,CastedLo{$endif}:longword);
      end;
 
      TPOCAValueArray=array of TPOCAValue;
