@@ -6,7 +6,7 @@
  *                                zlib license                                *
  *============================================================================*
  *                                                                            *
- * Copyright (C) 2011-2023, Benjamin Rosseaux (benjamin@rosseaux.com)         *
+ * Copyright (C) 2011-2024, Benjamin Rosseaux (benjamin@rosseaux.com)         *
  *                                                                            *
  * This software is provided 'as-is', without any express or implied          *
  * warranty. In no event will the authors be held liable for any damages      *
@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-07-20-16-20-0000';
+const POCAVersion='2024-07-20-16-48-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1803,6 +1803,8 @@ function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):longb
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 procedure POCAContextDestroy(Context:PPOCAContext);
 function POCAContextSub(Super:PPOCAContext):PPOCAContext;
+
+function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
 
 function POCAInstanceCreate:PPOCAInstance;
 procedure POCAInstanceDestroy(var Instance:PPOCAInstance);
@@ -9930,6 +9932,89 @@ begin
  Super^.CallChild:=result;
 end;
 
+function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
+var OutputString:TPOCARawByteString;
+ procedure DumpValue(const Value:TPOCAValue);
+ var i:longint;
+     Keys,Temp:TPOCAValue;
+ begin
+  case POCAGetValueType(Value) of
+   pvtNULL:begin
+    OutputString:=OutputString+'null';
+   end;
+   pvtREFERENCE:begin
+    OutputString:=OutputString+'reference';
+   end;
+   pvtNUMBER:begin
+    OutputString:=OutputString+POCADoubleToString(POCAGetNumberValue(Context,Value));
+   end;
+   pvtSTRING:begin
+    OutputString:=OutputString+'"'+POCAGetStringValue(Context,Value)+'"';
+   end;
+   pvtARRAY:begin
+    OutputString:=OutputString+'[';
+    for i:=0 to POCAArraySize(Value)-1 do begin
+     if i>0 then begin
+      OutputString:=OutputString+',';
+     end;
+     DumpValue(POCAArrayGet(Value,i));
+    end;
+    OutputString:=OutputString+']';
+   end;
+   pvtHASH:begin
+    OutputString:=OutputString+'{';
+    Keys:=POCANewArray(Context);
+    POCAHashKeys(Context,Keys,Value);
+    POCAArraySort(Context,Keys);
+    if POCAIsValueArray(Keys) then begin
+     for i:=0 to POCAArraySize(Keys)-1 do begin
+      if i>0 then begin
+       OutputString:=OutputString+',';
+      end;
+      Temp:=POCAArrayGet(Keys,i);
+      if Temp.CastedUInt64<>Value.CastedUInt64 then begin
+       DumpValue(Temp);
+      end else begin
+       OutputString:=OutputString+'[self]';
+      end;
+      OutputString:=OutputString+':';
+      Temp.Num:=0;
+      POCAHashGet(Context,Value,POCAArrayGet(Keys,i),Temp);
+      if Temp.CastedUInt64<>Value.CastedUInt64 then begin
+       DumpValue(Temp);
+      end else begin
+       OutputString:=OutputString+'[self]';
+      end;
+     end;
+     OutputString:=OutputString+'}';
+    end;
+   end;
+   pvtFUNCTION:begin
+    OutputString:=OutputString+'function';
+   end;
+   pvtGHOST:begin
+    OutputString:=OutputString+'ghost';
+    if assigned(POCAGhostGetHash(Value)) then begin
+     DumpValue(POCAGhostGetHashValue(Value));
+    end;
+   end;
+   pvtCODE:begin
+    OutputString:=OutputString+'code';
+   end;
+   pvtNATIVECODE:begin
+    OutputString:=OutputString+'nativecode';
+   end;
+   else begin
+    OutputString:=OutputString+'undefined';
+   end;
+  end;
+ end;
+begin
+ OutputString:='';
+ DumpValue(ToDumpValue);
+ result:=OutputString;
+end;
+
 function POCAGarbageCollectorFunctionGETSTEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.StepFactor;
@@ -11756,88 +11841,12 @@ begin
 end;
 
 function POCAStringFunctionDUMP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var OutputString:TPOCARawByteString;
- procedure DumpValue(const Value:TPOCAValue);
- var i:longint;
-     Keys,Temp:TPOCAValue;
- begin
-  case POCAGetValueType(Value) of
-   pvtNULL:begin
-    OutputString:=OutputString+'null';
-   end;
-   pvtREFERENCE:begin
-    OutputString:=OutputString+'reference';
-   end;
-   pvtNUMBER:begin
-    OutputString:=OutputString+POCADoubleToString(POCAGetNumberValue(Context,Value));
-   end;
-   pvtSTRING:begin
-    OutputString:=OutputString+'"'+POCAGetStringValue(Context,Value)+'"';
-   end;
-   pvtARRAY:begin
-    OutputString:=OutputString+'[';
-    for i:=0 to POCAArraySize(Value)-1 do begin
-     if i>0 then begin
-      OutputString:=OutputString+',';
-     end;
-     DumpValue(POCAArrayGet(Value,i));
-    end;
-    OutputString:=OutputString+']';
-   end;
-   pvtHASH:begin
-    OutputString:=OutputString+'{';
-    Keys:=POCANewArray(Context);
-    POCAHashKeys(Context,Keys,Value);
-    POCAArraySort(Context,Keys);
-    if POCAIsValueArray(Keys) then begin
-     for i:=0 to POCAArraySize(Keys)-1 do begin
-      if i>0 then begin
-       OutputString:=OutputString+',';
-      end;
-      Temp:=POCAArrayGet(Keys,i);
-      if Temp.CastedUInt64<>Value.CastedUInt64 then begin
-       DumpValue(Temp);
-      end else begin
-       OutputString:=OutputString+'[self]';
-      end;
-      OutputString:=OutputString+':';
-      Temp.Num:=0;
-      POCAHashGet(Context,Value,POCAArrayGet(Keys,i),Temp);
-      if Temp.CastedUInt64<>Value.CastedUInt64 then begin
-       DumpValue(Temp);
-      end else begin
-       OutputString:=OutputString+'[self]';
-      end;
-     end;
-     OutputString:=OutputString+'}';
-    end;
-   end;
-   pvtFUNCTION:begin
-    OutputString:=OutputString+'function';
-   end;
-   pvtGHOST:begin
-    OutputString:=OutputString+'ghost';
-    if assigned(POCAGhostGetHash(Value)) then begin
-     DumpValue(POCAGhostGetHashValue(Value));
-    end;
-   end;
-   pvtCODE:begin
-    OutputString:=OutputString+'code';
-   end;
-   pvtNATIVECODE:begin
-    OutputString:=OutputString+'nativecode';
-   end;
-   else begin
-    OutputString:=OutputString+'undefined';
-   end;
-  end;
- end;
 begin
- OutputString:='';
  if CountArguments>0 then begin
-  DumpValue(Arguments^[0]);
+  result:=POCANewString(Context,POCAStringDump(Context,Arguments^[0]));
+ end else begin
+  result:=POCANewString(Context,'');
  end;
- result:=POCANewString(Context,OutputString);
 end;
 
 function POCAStringFunctionFROMCODEPOINTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
