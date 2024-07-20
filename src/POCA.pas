@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2023-12-12-15-29-0000';
+const POCAVersion='2024-07-20-16-20-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -21446,7 +21446,8 @@ var TokenList:PPOCAToken;
      end;
     var n:double;
     begin
-     if assigned(t) then begin
+     if assigned(t) and not t^.Visited then begin
+      t^.Visited:=true;
       if assigned(p) then begin
       end;
       case t^.Token of
@@ -21899,6 +21900,7 @@ var TokenList:PPOCAToken;
      end;
     end;
    begin
+    ResetTokenVisited;
     ScanToken(t,nil,false);
    end;
    procedure FixTargetImmediate(Position:longint);
