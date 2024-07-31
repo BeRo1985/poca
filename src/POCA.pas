@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-07-20-16-48-0000';
+const POCAVersion='2024-07-31-23-06-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -4834,8 +4834,8 @@ end;
 procedure POCAPoolCleanElement(Pool:PPOCAPool;Obj:PPOCAObject); {$ifdef UseRegister}register;{$endif} forward;
 
 procedure POCAPoolFreeBlock(Pool:PPOCAPool;Block:PPOCAPoolBlock); {$ifdef UseRegister}register;{$endif}
-var Element:longint;
-    Obj:PPOCAObject;
+var Element,OtherElement:longint;
+    Obj,OtherObj:PPOCAObject;
 begin
  POCAGarbageCollectorLinkedListMove(Block^.GrayList,Pool^.Instance.Globals.GarbageCollector.GrayList);
  for Element:=0 to Block^.Size-1 do begin
@@ -4844,6 +4844,23 @@ begin
   Obj^.Header.Instance:=Pool^.Instance;
 {$endif}
   POCAPoolCleanElement(Pool,Obj);
+ end;
+ if Pool^.FreeCount>0 then begin
+  Element:=Pool^.FreeCount-1;
+  while Element>=0 do begin
+   Obj:=Pool^.FreeObjects[Element];
+   if (TPUCUPtrUInt(Obj)>=TPUCUPtrUInt(Block^.Data)) and (TPUCUPtrUInt(Obj)<(TPUCUPtrUInt(Block^.Data)+(Block^.Size*Pool^.ElementSize))) then begin
+    if Element=(Pool^.FreeCount-1) then begin
+     Pool^.FreeObjects[Element]:=nil;
+    end else begin
+     Pool^.FreeObjects[Element]:=Pool^.FreeObjects[Pool^.FreeCount-1];
+     Pool^.FreeObjects[Pool^.FreeCount-1]:=nil;
+    end;
+    dec(Pool^.FreeCount);
+   end else begin
+    dec(Element);
+   end;
+  end;
  end;
  if assigned(Block^.Previous) then begin
   Block^.Previous^.Next:=Block^.Next;
