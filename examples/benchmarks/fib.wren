@@ -5,10 +5,10 @@ class Fib {
   }
 }
 
-var start = IO.clock
-IO.print(Fib.get(28))
-IO.print(Fib.get(28))
-IO.print(Fib.get(28))
-IO.print(Fib.get(28))
-IO.print(Fib.get(28))
-IO.print("elapsed: ", IO.clock - start)
+var start = System.clock
+System.print(Fib.get(28))
+System.print(Fib.get(28))
+System.print(Fib.get(28))
+System.print(Fib.get(28))
+System.print(Fib.get(28))
+System.print("elapsed: %(System.clock - start)")

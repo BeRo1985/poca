@@ -77,14 +77,15 @@ class Primes2 {
 
 var N = 200000
 
-var start = IO.clock
-IO.print(SearchPrimes.get(2, N))
-IO.print("elapsed: ", IO.clock - start)
+var start = System.clock
+System.print(SearchPrimes.get(2, N))
+System.print("elapsed: %(System.clock - start)")
 
-start = IO.clock
-IO.print(Primes2.get(N))
-IO.print("elapsed: ", IO.clock - start)
+start = System.clock
+System.print(Primes2.get(N))
+System.print("elapsed: %(System.clock - start)")
 
-start = IO.clock
-IO.print(Primes.get(N))
-IO.print("elapsed: ", IO.clock - start)
+start = System.clock
+System.print(Primes.get(N))
+System.print("elapsed: %(System.clock - start)")
+
