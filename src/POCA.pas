@@ -1501,7 +1501,7 @@ type PPOCAInt8=^TPOCAInt8;
      end;
 
 const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:pointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
-      POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceTag)){$endif};
+      POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAUInt64(POCAValueReferenceTag) shl 32){$endif};
 
       POCATypeSizes:array[pvtNULL..pvtGHOST] of longint=(-1, // pvtNULL
                                                          -1, // pvtNUMBER
@@ -2357,7 +2357,7 @@ asm
   jp @Repeat
  fstp st(1)
 end;
-{$elseif (defined(cpuamd64) or defined(cpux64)) and defined(fpc)}{$ifdef fpc}ms_abi_default; nostackframe;{$endif} assembler;
+{$elseif (defined(cpuamd64) or defined(cpux64))}{$ifdef fpc}ms_abi_default; nostackframe;{$endif} assembler;
 asm
 {$ifndef fpc}
  .noframe
