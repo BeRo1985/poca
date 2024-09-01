@@ -316,14 +316,14 @@
  {$define UseRegister}
 {$endif}
 {$undef POCAGarbageCollectorPoolBlockInstance}
-{$define POCAGarbageCollectorPoolBlockReferenceCounting}
+{$undef POCAGarbageCollectorPoolBlockReferenceCounting}
 {-$define pocastrictutf8}
 
 interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-07-31-23-06-0000';
+const POCAVersion='2024-09-01-20-25-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1501,6 +1501,7 @@ type PPOCAInt8=^TPOCAInt8;
      end;
 
 const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:pointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
+      POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceTag)){$endif};
 
       POCATypeSizes:array[pvtNULL..pvtGHOST] of longint=(-1, // pvtNULL
                                                          -1, // pvtNUMBER
@@ -2345,7 +2346,7 @@ begin
  end;
 end;
 
-function Modulo(x,y:double):double;{$ifdef cpu386}stdcall; assembler;
+function Modulo(x,y:double):double;{$if defined(cpu386)}stdcall; assembler;
 asm
  fld qword ptr y
  fld qword ptr x
@@ -2356,11 +2357,31 @@ asm
   jp @Repeat
  fstp st(1)
 end;
+{$elseif (defined(cpuamd64) or defined(cpux64)) and defined(fpc)}{$ifdef fpc}ms_abi_default; nostackframe;{$endif} assembler;
+asm
+{$ifndef fpc}
+ .noframe
+{$endif}
+{// Requires SSE2:
+ movapd xmm2,xmm0
+ divsd xmm2,xmm1
+ cvttsd2si rax,xmm2
+ pxor xmm2,xmm2
+ cvtsi2sd xmm2,rax
+ mulsd xmm1,xmm2
+ subsd xmm0,xmm1}
+ // Requires SSE4.1:
+ movapd xmm2,xmm0
+ divsd xmm2,xmm1
+ roundsd xmm2,xmm2,0
+ mulsd xmm2,xmm1
+ subsd xmm0,xmm2
+end;
 {$else}
 begin
  result:=x-(Floor(x/y)*y);
 end;
-{$endif}
+{$ifend}
 
 function POCADoubleToString(const AValue:double):TPOCARawByteString;
 begin
@@ -5980,7 +6001,8 @@ var s:TPOCARawByteString;
 begin
  if not POCAIsValueReference(Value) then begin
   POCARuntimeError(Context,'Bad arguments to "idof"');
-  result:=POCAValueNull;
+  //result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end else begin
   case POCAGetValueType(Value) of
    pvtNULL:begin
@@ -6074,7 +6096,8 @@ begin
    result:=POCANewString(Context,'0x'+TPOCARawByteString(IntToHex(TPOCAPtrUInt(Ghost^.GhostType),{$ifdef cpu64}16{$else}8{$endif})));
   end;
  end else begin
-  result:=POCAValueNull;
+  //result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -6151,7 +6174,8 @@ var OK:TPasDblStrUtilsBoolean;
 begin
  case POCAGetValueType(Value) of
   pvtNULL:begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
   pvtNUMBER:begin
    result:=Value;
@@ -6159,11 +6183,13 @@ begin
   pvtSTRING:begin
    POCASetValueNumber(result,ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(Value))^.Data,rmNearest,@OK));
    if not OK then begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
   else begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
    POCAConvertEvent(Context,Value,pmoTONUMBER,result);
   end;
  end;
@@ -6173,7 +6199,8 @@ function POCAStringValue(Context:PPOCAContext;const Value:TPOCAValue):TPOCAValue
 begin
  case POCAGetValueType(Value) of
   pvtNULL:begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
   pvtNUMBER:begin
    result:=POCANewString(Context,POCADoubleToString(Value.Num));
@@ -6182,7 +6209,8 @@ begin
    result:=Value;
   end;
   else begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
    POCAConvertEvent(Context,Value,pmoTOSTRING,result);
   end;
  end;
@@ -6772,9 +6800,12 @@ var Func:PPOCAFunction;
 begin
  result:=POCANew(Context,pvtFUNCTION,PPOCAObject(Func));
  Func^.Code:=Code;
- Func^.Namespace:=POCAValueNull;
+{Func^.Namespace:=POCAValueNull;
  Func^.Obj:=POCAValueNull;
- Func^.Next:=POCAValueNull;
+ Func^.Next:=POCAValueNull;}
+ Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
+ Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+ Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 function POCANewGhost(Context:PPOCAContext;const GhostType:PPOCAGhostType;const Ptr:pointer;const Hash:PPOCAHash=nil;const PtrType:TPOCAGhostPtrType=pgptRAW):TPOCAValue;
@@ -6792,7 +6823,8 @@ begin
  if assigned(NativeObjectValue) then begin
   result:=NativeObjectValue.GhostValue;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -6800,7 +6832,8 @@ function POCANewValueFromVariant(Context:PPOCAContext;const VariantValue:Variant
 begin
  case VarType(VariantValue) of
   varNull:begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
   varSmallInt,varInteger,varShortInt,varByte,varWord,varLongWord,varInt64{$ifdef fpc},varQWord{$endif}:begin
    result.Num:=VariantValue;
@@ -6815,7 +6848,8 @@ begin
    result:=POCANewString(Context,TPOCARawByteString(VariantValue));
   end;
   else begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end;
 end;
@@ -6850,7 +6884,8 @@ end;
 function POCAGhostGetHashValue(const r:TPOCAValue):TPOCAValue; {$ifdef caninline}inline;{$endif}
 var p:pointer;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAIsValueGhost(r) then begin
   p:=PPOCAGhost(POCAGetValueReferencePointer(r))^.Hash;
   if assigned(p) then begin
@@ -6882,7 +6917,8 @@ end;
 
 function POCANil:TPOCAValue; {$ifdef caninline}inline;{$endif}
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 function POCAEndToken:TPOCAValue; {$ifdef caninline}inline;{$endif}
@@ -7229,7 +7265,8 @@ begin
    end;
   end;
  end;
- result:=POCAValueNull;
+ //result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 procedure POCAArraySet(const ArrayObject:TPOCAValue;i:longint;const Value:TPOCAValue);
@@ -7343,12 +7380,14 @@ begin
     if i<ArrayRecord^.Size then begin
      NewVecRec^.Data[i]:=ArrayRecord^.Data[i];
     end else begin
-     NewVecRec^.Data[i]:=POCAValueNull;
+//   NewVecRec^.Data[i]:=POCAValueNull;
+     NewVecRec^.Data[i].CastedUInt64:=POCAValueNullCastedUInt64;
     end;
    end;
   end else begin
    for i:=0 to Size-1 do begin
-    NewVecRec^.Data[i]:=POCAValueNull;
+//  NewVecRec^.Data[i]:=POCAValueNull;
+    NewVecRec^.Data[i].CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
   POCAGarbageCollectorSwapFree(ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@ArrayInstance^.ArrayRecord,NewVecRec);
@@ -7374,7 +7413,8 @@ begin
    end;
   end;
  end;
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue);
@@ -8163,7 +8203,8 @@ end;
 function POCAHashGetPrototypeValue(const Hash:TPOCAValue):TPOCAValue;
 var p:pointer;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAIsValueHash(Hash) then begin
   p:=PPOCAHash(POCAGetValueReferencePointer(Hash))^.Prototype;
   if assigned(p) then begin
@@ -8175,7 +8216,8 @@ end;
 function POCAValueGetPrototypeValue(Context:PPOCAContext;const Hash:TPOCAValue;const Level:longint):TPOCAValue;
 var p:pointer;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if Level<POCA_PROTOTYPE_RECURSION_LIMIT then begin
   case POCAGetValueType(Hash) of
    pvtARRAY:begin
@@ -8303,7 +8345,8 @@ end;
 function POCAHashGetConstructorValue(const Hash:TPOCAValue):TPOCAValue;
 var p:pointer;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAIsValueHash(Hash) then begin
   p:=PPOCAHash(POCAGetValueReferencePointer(Hash))^.Constructor_;
   if assigned(p) then begin
@@ -8315,7 +8358,8 @@ end;
 function POCAValueGetConstructorValue(Context:PPOCAContext;const Hash:TPOCAValue;const Level:longint):TPOCAValue;
 var p:pointer;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if Level<POCA_CONSTRUCTOR_RECURSION_LIMIT then begin
   case POCAGetValueType(Hash) of
    pvtARRAY:begin
@@ -8366,7 +8410,8 @@ end;
 
 function POCAHashGetHashEventsHash(const Hash:TPOCAValue):TPOCAValue;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAIsValueHash(Hash) then begin
   POCASetValueReferencePointer(result,PPOCAHash(POCAGetValueReferencePointer(Hash))^.Events);
  end;
@@ -8505,7 +8550,8 @@ end;
 function POCAHashGetGhostValue(const Hash:TPOCAValue):TPOCAValue;
 var p:pointer;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAIsValueHash(Hash) then begin
   p:=PPOCAHash(POCAGetValueReferencePointer(Hash))^.Ghost;
   if assigned(p) then begin
@@ -9633,7 +9679,8 @@ end;
 function POCAHashGetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString):TPOCAValue;
 begin
  if not (POCAIsValueHash(Hash) and POCAHashGet(Context,Hash,POCANewUniqueString(Context,Key),result)) then begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -9746,7 +9793,8 @@ end;
 
 function POCAInternSymbol(Context:PPOCAContext;Instance:PPOCAInstance;const Symbol:TPOCAValue):TPOCAValue; {$ifdef caninline}inline;{$endif}
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if not POCAHashGet(Context,Instance.Globals.Symbols,Symbol,result) then begin
   POCAHashSet(Context,Instance.Globals.Symbols,Symbol,Symbol);
   result:=Symbol;
@@ -10778,7 +10826,8 @@ var OldFileMode:byte;
     DoCreate:boolean;
 begin
  if CountArguments>0 then begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
   New(t);
   OldFileMode:=FileMode;
   try
@@ -10830,7 +10879,8 @@ begin
    FileMode:=OldFileMode;
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -10851,7 +10901,8 @@ begin
   end;
   IOData^.Handle:=nil;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -10891,7 +10942,8 @@ begin
   end;
   result:=POCANewString(Context,TPOCARawByteString(b));
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -10913,7 +10965,8 @@ begin
   result:=POCANewGhost(Context,@POCARegExpGhost,POCARegExpCompile(Context,s,IsUTF8));
   POCAGhostSetHashValue(result,Context^.Instance.Globals.RegExpHash);
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -10942,7 +10995,8 @@ begin
   end;
   RegExp:=POCAGhostGetPointer(This);
   try
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
    s:=POCAGetStringValue(Context,Arguments^[0]);
    MultipleCaptures:=nil;
    if RegExp.MatchAll(s,MultipleCaptures,StartCodeUnit,Limit) then begin
@@ -10988,7 +11042,8 @@ begin
    s:='';
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11015,7 +11070,8 @@ begin
    s:='';
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11042,7 +11098,8 @@ begin
    s:='';
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11073,7 +11130,8 @@ begin
   Captures:=nil;
   try
    s:=POCAGetStringValue(Context,Arguments^[0]);
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
    MultipleCaptures:=nil;
    if RegExp.MatchAll(s,MultipleCaptures,StartCodeUnit,Limit) then begin
     mc:=length(MultipleCaptures);
@@ -11107,7 +11165,8 @@ begin
    s:='';
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11135,7 +11194,8 @@ begin
   RegExp:=POCAGhostGetPointer(This);
   Strings:=nil;
   try
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
    s:=POCAGetStringValue(Context,Arguments^[0]);
    if RegExp.Split(s,Strings,StartCodeUnit,Limit) then begin
     for i:=0 to length(Strings)-1 do begin
@@ -11150,7 +11210,8 @@ begin
    s:='';
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11208,7 +11269,8 @@ begin
    s:='';
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11310,7 +11372,8 @@ function POCACoroutineFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
     i:longint;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if (CountArguments<1) or not POCAIsValueFunction(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "Coroutine.create"');
  end;
@@ -11336,8 +11399,10 @@ begin
     POCATemporarySave(Context,CoroutineData^.Arguments[i-1]);
    end;
   end;
-  CoroutineData^.FromValue:=POCAValueNull;
-  CoroutineData^.ToValue:=POCAValueNull;
+{ CoroutineData^.FromValue:=POCAValueNull;
+  CoroutineData^.ToValue:=POCAValueNull;}
+  CoroutineData^.FromValue.CastedUInt64:=POCAValueNullCastedUInt64;
+  CoroutineData^.ToValue.CastedUInt64:=POCAValueNullCastedUInt64;
   CoroutineData^.ExceptionHolder:=nil;
   if not assigned(CoroutineData) then begin
    POCARuntimeError(Context,'Coroutine creation failed');
@@ -11359,7 +11424,8 @@ begin
   if CountArguments>0 then begin
    CoroutineData^.ToValue:=Arguments^[0];
   end else begin
-   CoroutineData^.ToValue:=POCAValueNull;
+// CoroutineData^.ToValue:=POCAValueNull;
+   CoroutineData^.ToValue.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
   POCAGarbageCollectorUnlock(Context);
   try
@@ -11375,16 +11441,19 @@ begin
    end;
   end;
   result:=CoroutineData^.FromValue;
-  CoroutineData^.FromValue:=POCAValueNull;
+//CoroutineData^.FromValue:=POCAValueNull;
+  CoroutineData^.FromValue.CastedUInt64:=POCAValueNullCastedUInt64;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
 function POCACoroutineFunctionYIELD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if assigned(Context) then begin
   CoroutineData:=Context^.CoroutineData;
   while (not assigned(CoroutineData)) and assigned(Context^.CallParent) do begin
@@ -11398,7 +11467,8 @@ begin
   if CountArguments>0 then begin
    CoroutineData^.FromValue:=Arguments^[0];
   end else begin
-   CoroutineData^.FromValue:=POCAValueNull;
+// CoroutineData^.FromValue:=POCAValueNull;
+   CoroutineData^.FromValue.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
   POCAGarbageCollectorUnlock(Context);
   try
@@ -11424,7 +11494,8 @@ begin
  if assigned(CoroutineData) then begin
   result:=CoroutineData^.ToValue;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11525,7 +11596,8 @@ function POCAThreadFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;con
 var ThreadData:PPOCAThreadData;
     i:longint;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if (CountArguments<1) or not POCAIsValueFunction(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "Thread.create"');
  end;
@@ -11588,7 +11660,8 @@ begin
   end;
   result:=This;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11607,14 +11680,16 @@ begin
   end;
   result:=This;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
 function POCAThreadFunctionKILL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var ThreadData:PPOCAThreadData;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  exit;
  if POCAGhostGetType(This)=@POCAThreadGhost then begin
   ThreadData:=PPOCAThreadData(POCAGhostGetPointer(This));
@@ -11640,7 +11715,8 @@ begin
   end;
   result:=This;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11655,7 +11731,8 @@ begin
    result.Num:=0;
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11692,7 +11769,8 @@ begin
    result.Num:=0;
   end;
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -11744,7 +11822,8 @@ end;
 
 function POCALockFunctionLEAVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAGhostGetType(This)=@POCALockGhost then begin
   POCALockLeave(POCAGhostGetPointer(This));
  end;
@@ -11778,7 +11857,8 @@ end;
 
 function POCASemaphoreFunctionDOWN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAGhostGetType(This)=@POCASemaphoreGhost then begin
   POCAGarbageCollectorUnlock(Context);
   try
@@ -11791,7 +11871,8 @@ end;
 
 function POCASemaphoreFunctionUP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAGhostGetType(This)=@POCASemaphoreGhost then begin
   POCASemaphoreUp(POCAGhostGetPointer(This),1);
  end;
@@ -11973,7 +12054,8 @@ begin
   end;
  end;
  System.WriteLn;
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 function POCAConsoleFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
@@ -12011,7 +12093,8 @@ begin
  if assigned(PropertyItem) then begin
   result:=PropertyItem^.Method(Context,This,Arguments,CountArguments);
  end else begin 
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -12119,9 +12202,11 @@ begin
   for Index:=0 to fPropListLen-1 do begin
    fPropHashMap.SetValue(fPropList^[Index].Name,Index);
    PropertyItem:=@fProperties[Index];
-   PropertyItem^.Key:=POCAValueNull;
+// PropertyItem^.Key:=POCAValueNull;
+   PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
    PropertyItem^.PropInfo:=fPropList^[Index];
-   PropertyItem^.Value:=POCAValueNull;
+// PropertyItem^.Value:=POCAValueNull;
+   PropertyItem^.Value.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
 
   Count:=fPropListLen;
@@ -12144,7 +12229,8 @@ begin
      TMethod(NativeFunction).Data:=self;
      fPropHashMap.SetValue(TPOCAUTF8String(MethodName),Count);
      PropertyItem:=@fProperties[Count];
-     PropertyItem^.Key:=POCAValueNull;
+//   PropertyItem^.Key:=POCAValueNull;
+     PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
      PropertyItem^.PropInfo:=nil;
      PropertyItem^.Method:=NativeFunction;
      PropertyItem^.Value:=POCANewFunction(pContext,POCANewNativeCode(pContext,TPOCANativeObjectFunctionNativeMethodCall,nil,PropertyItem));
@@ -12401,7 +12487,8 @@ begin
  if CountArguments>0 then begin
   Hash:=Arguments^[0];
  end else begin
-  Hash:=POCAValueNull;
+//Hash:=POCAValueNull;
+  Hash.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if not POCAIsValueHash(Hash) then begin
   POCARuntimeError(Context,'Bad arguments to "ownKeys"');
@@ -12417,7 +12504,8 @@ begin
  if CountArguments>0 then begin
   Hash:=Arguments^[0];
  end else begin
-  Hash:=POCAValueNull;
+//Hash:=POCAValueNull;
+  Hash.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if not POCAIsValueHash(Hash) then begin
   POCARuntimeError(Context,'Bad arguments to "keys"');
@@ -12448,7 +12536,8 @@ begin
    end;
   end;
  end;
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 function POCAGlobalFunctionPUTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
@@ -12473,7 +12562,8 @@ begin
   end;
  end;
  System.WriteLn;
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 function POCAGlobalFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
@@ -12499,12 +12589,14 @@ begin
  if CountArguments>0 then begin
   Hash:=Arguments^[0];
  end else begin
-  Hash:=POCAValueNull;
+//Hash:=POCAValueNull;
+  Hash.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>1 then begin
   Key:=Arguments^[1];
  end else begin
-  Key:=POCAValueNull;
+//Key:=POCAValueNull;
+  Key.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if (not POCAIsValueHash(Hash)) or POCAIsValueNull(Key) then begin
   POCARuntimeError(Context,'Bad arguments to "contains"');
@@ -12529,23 +12621,28 @@ begin
  if CountArguments>2 then begin
   CallArguments:=Arguments^[2];
  end else begin
-  CallArguments:=POCAValueNull;
+//CallArguments:=POCAValueNull;
+  CallArguments.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>3 then begin
   CallThis:=Arguments^[3];
  end else begin
-  CallThis:=POCAValueNull;
+//CallThis:=POCAValueNull;
+  CallThis.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>4 then begin
   CallNamespace:=Arguments^[4];
  end else begin
-  CallNamespace:=POCAValueNull;
+//CallNamespace:=POCAValueNull;
+  CallNamespace.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if not (POCAIsValueHash(CallThis) or POCAIsValueGhost(CallThis)) then begin
-  CallThis:=POCAValueNull;
+//CallThis:=POCAValueNull;
+  CallThis.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if not POCAIsValueHash(CallNamespace) then begin
-  CallNamespace:=POCAValueNull;
+//CallNamespace:=POCAValueNull;
+  CallNamespace.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if (CountArguments=0) or (not (POCAIsValueNull(CallArguments) or POCAIsValueArray(CallArguments))) then begin
   POCARuntimeError(Context,'Bad arguments to "eval"');
@@ -12611,7 +12708,8 @@ begin
  end;
  FrameIndex:=trunc(POCAGetNumberValue(Context,Index));
  if FrameIndex>(Context^.FrameTop-1) then begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end else begin
   Frame:=@Context^.FrameStack[Context^.FrameTop-(1+FrameIndex)];
   result:=POCANewArray(Context);
@@ -12635,7 +12733,8 @@ begin
  if CountArguments>0 then begin
   Func:=Arguments^[0];
  end else begin
-  Func:=POCAValueNull;
+//Func:=POCAValueNull;
+  Func.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>0 then begin
   Index:=POCANumberValue(Context,Arguments^[1]);
@@ -12656,7 +12755,8 @@ begin
   POCAArrayPush(result,f^.Namespace);
   POCAArrayPush(result,f^.Obj);
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -12666,7 +12766,8 @@ begin
  if CountArguments>0 then begin
   Func:=Arguments^[0];
  end else begin
-  Func:=POCAValueNull;
+//Func:=POCAValueNull;
+  Func.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>1 then begin
   Hash:=Arguments^[1];
@@ -12676,12 +12777,14 @@ begin
  if CountArguments>2 then begin
   Obj:=Arguments^[2];
  end else begin
-  Obj:=POCAValueNull;
+//Obj:=POCAValueNull;
+  Obj.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>3 then begin
   Next:=Arguments^[3];
  end else begin
-  Next:=POCAValueNull;
+//Next:=POCAValueNull;
+  Next.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if ((not POCAIsValueFunction(Func)) or (not POCAIsValueHash(Hash))) or ((not POCAIsValueNull(Obj)) and (not POCAIsValueFunction(Obj))) or ((not POCAIsValueNull(Next)) and (not POCAIsValueFunction(Next))) then begin
   POCARuntimeError(Context,'Bad arguments to "bind"');
@@ -12700,28 +12803,34 @@ begin
  if CountArguments>0 then begin
   Func:=Arguments^[0];
  end else begin
-  Func:=POCAValueNull;
+//Func:=POCAValueNull;
+  Func.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>1 then begin
   CallArguments:=Arguments^[1];
  end else begin
-  CallArguments:=POCAValueNull;
+//CallArguments:=POCAValueNull;
+  CallArguments.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>2 then begin
   CallThis:=Arguments^[2];
  end else begin
-  CallThis:=POCAValueNull;
+//CallThis:=POCAValueNull;
+  CallThis.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if CountArguments>3 then begin
   CallNamespace:=Arguments^[3];
  end else begin
-  CallNamespace:=POCAValueNull;
+//CallNamespace:=POCAValueNull;
+  CallNamespace.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if not (POCAIsValueHash(CallThis) or POCAIsValueGhost(CallThis)) then begin
-  CallThis:=POCAValueNull;
+//CallThis:=POCAValueNull;
+  CallThis.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if not POCAIsValueHash(CallNamespace) then begin
-  CallNamespace:=POCAValueNull;
+//CallNamespace:=POCAValueNull;
+  CallNamespace.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if (CountArguments=0) or (not POCAIsValueFunction(Func)) or (not (POCAIsValueNull(CallArguments) or POCAIsValueArray(CallArguments))) then begin
   POCARuntimeError(Context,'Bad arguments to "call"');
@@ -12806,7 +12915,8 @@ begin
  if CountArguments>0 then begin
   Hash:=Arguments^[0];
  end else begin
-  Hash:=POCAValueNull;
+//Hash:=POCAValueNull;
+  Hash.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if not POCAIsValueHash(Hash) then begin
   POCARuntimeError(Context,'Bad arguments to "rawKeys"');
@@ -12964,7 +13074,8 @@ begin
  if CountArguments>2 then begin
   LenValue:=POCANumberValue(Context,Arguments^[1]);
  end else begin
-  LenValue:=POCAValueNull;
+//LenValue:=POCAValueNull;
+  LenValue.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  if POCAIsValueNumber(LenValue) then begin
   Len:=trunc(LenValue.Num);
@@ -13065,7 +13176,8 @@ begin
    end;
   end;
   else begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
    POCARuntimeError(Context,'Bad this value to "countCodePoints"');
   end;
  end;
@@ -13078,7 +13190,8 @@ begin
    result.Num:=length(PPOCAString(POCAGetValueReferencePointer(This))^.Data);
   end;
   else begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
    POCARuntimeError(Context,'Bad this value to "countCodeUnits"');
   end;
  end;
@@ -13095,7 +13208,8 @@ begin
    end;
   end;
   else begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
    POCARuntimeError(Context,'Bad this value to "length"');
   end;
  end;
@@ -13107,13 +13221,15 @@ begin
  if CountArguments=0 then begin
   result.Num:=POCAGetNumberValue(Context,This);
  end else begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
   OK:=false;
   if POCAGetValueType(This)=pvtSTRING then begin
    POCASetValueNumber(result,ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(This))^.Data,rmNearest,@OK,trunc(POCAGetNumberValue(Context,Arguments^[0]))));
   end;
   if not OK then begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end;
 end;
@@ -13365,13 +13481,15 @@ var Len,Start,Size,IsUTF8:longint;
     Str:TPOCARawByteString;
 begin
  if CountArguments<1 then begin
-  result:=POCAValueNull;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end else begin
   Start:=trunc(POCAGetNumberValue(Context,Arguments^[0]));
   if CountArguments>1 then begin
    LenValue:=POCANumberValue(Context,Arguments^[1]);
   end else begin
-   LenValue:=POCAValueNull;
+// LenValue:=POCAValueNull;
+   LenValue.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
   if POCAIsValueNumber(LenValue) then begin
    Len:=trunc(LenValue.Num);
@@ -13507,7 +13625,8 @@ begin
      result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(Str^.Data,CodePoint)));
     end;
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end else begin
    Len:=Str^.DataLength;
@@ -13518,7 +13637,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result:=POCANewString(Context,PUCUUTF32CharToUTF8(byte(ansichar(Str^.Data[CodePoint+1]))));
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end else begin
@@ -13532,7 +13652,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(s,CodePoint)));
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end else begin
    Len:=length(s);
@@ -13543,7 +13664,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result:=POCANewString(Context,PUCUUTF32CharToUTF8(byte(ansichar(s[CodePoint+1]))));
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end;
@@ -13573,7 +13695,8 @@ begin
      result.Num:=PUCUUTF8CodePointGetChar(Str^.Data,CodePoint);
     end;
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end else begin
    Len:=Str^.DataLength;
@@ -13584,7 +13707,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result.Num:=byte(ansichar(Str^.Data[CodePoint+1]));
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end else begin
@@ -13598,7 +13722,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result.Num:=PUCUUTF8CodePointGetChar(s,CodePoint);
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end else begin
    Len:=length(s);
@@ -13609,7 +13734,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result.Num:=byte(ansichar(s[CodePoint+1]));
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end;
@@ -13633,7 +13759,8 @@ begin
   if (CodePoint>=0) and (CodePoint<Len) then begin
    result.Num:=byte(ansichar(Str^.Data[CodePoint+1]));
   end else begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end else begin
   s:=POCAGetStringValue(Context,This);
@@ -13645,7 +13772,8 @@ begin
   if (CodePoint>=0) and (CodePoint<Len) then begin
    result.Num:=byte(ansichar(s[CodePoint+1]));
   end else begin
-   result:=POCAValueNull;
+ //result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end;
 end;
@@ -13669,7 +13797,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result.Num:=POCAStringUTF8GetCodeUnit(Context,This,CodePoint)-1;
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end else begin
    Len:=Str^.DataLength;
@@ -13680,7 +13809,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result.Num:=CodePoint;
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end else begin
@@ -13694,7 +13824,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result.Num:=PUCUUTF8GetCodeUnit(s,CodePoint)-1;
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end else begin
    Len:=length(s);
@@ -13705,7 +13836,8 @@ begin
    if (CodePoint>=0) and (CodePoint<Len) then begin
     result.Num:=CodePoint;
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end;
@@ -13730,7 +13862,8 @@ begin
    if (CodeUnit>=0) and (CodeUnit<Len) then begin
     result.Num:=POCAStringUTF8GetCodePoint(Context,This,CodeUnit+1);
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end else begin
    Len:=Str^.DataLength;
@@ -13741,7 +13874,8 @@ begin
    if (CodeUnit>=0) and (CodeUnit<Len) then begin
     result.Num:=CodeUnit;
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end else begin
@@ -13755,7 +13889,8 @@ begin
    if (CodeUnit>=0) and (CodeUnit<Len) then begin
     result.Num:=PUCUUTF8GetCodePoint(s,CodeUnit+1);
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end else begin
    Len:=length(s);
@@ -13766,7 +13901,8 @@ begin
    if (CodeUnit>=0) and (CodeUnit<Len) then begin
     result.Num:=CodeUnit;
    end else begin
-    result:=POCAValueNull;
+  //result:=POCAValueNull;
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end;
@@ -21125,7 +21261,8 @@ var TokenList:PPOCAToken;
    begin
     case t^.Token of
      ptNULL:begin
-      c:=POCAValueNull;
+    //c:=POCAValueNull;
+      c.CastedUInt64:=POCAValueNullCastedUInt64;
      end;
      ptLITERALSTR:begin
       c:=POCANewUniqueString(Parser.Context,t^.Str);
@@ -21137,7 +21274,8 @@ var TokenList:PPOCAToken;
       if length(CodeName)>0 then begin
        c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,CodeName));
       end else begin
-       c:=POCAValueNull;
+     //c:=POCAValueNull;
+       c.CastedUInt64:=POCAValueNullCastedUInt64;
        SyntaxError('Invalid super syntax usage',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
       end;
      end;
@@ -21148,7 +21286,8 @@ var TokenList:PPOCAToken;
       c:=POCANumber(t^.Num);
      end;
      else begin
-      c:=POCAValueNull;
+    //c:=POCAValueNull;
+      c.CastedUInt64:=POCAValueNullCastedUInt64;
       SyntaxError('Invalid constant',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
      end;
     end;
@@ -26452,7 +26591,8 @@ var TokenList:PPOCAToken;
         if Code^.CountRegExps>0 then begin
          GetMem(Code^.RegExps,Code^.CountRegExps*sizeof(TPOCAValue));
          for i:=0 to Code^.CountRegExps-1 do begin
-          Code^.RegExps^[i]:=POCAValueNull;
+//        Code^.RegExps^[i]:=POCAValueNull;
+          Code^.RegExps^[i].CastedUInt64:=POCAValueNullCastedUInt64;
          end;
         end;
        end;
@@ -26820,7 +26960,8 @@ var Func:PPOCAFunction;
 begin
  result:=POCANewFunction(Context,Code);
  Func:=PPOCAFunction(POCAGetValueReferencePointer(result));
- Func^.Namespace:=POCAValueNull;
+//Func^.Namespace:=POCAValueNull;
+ Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Obj:=Frame^.Obj;
  Func^.Next:=Frame^.Func;
 end;
@@ -26849,6 +26990,11 @@ begin
  end;
 end;
 
+procedure POCASetupArgumentsErrorTooFewArguments(Context:PPOCAContext;Code:PPOCACode;CountArguments:longint);
+begin
+ POCARuntimeError(Context,'Too few function arguments (we have '+TPOCARawByteString(IntToStr(CountArguments))+' but we do need '+TPOCARawByteString(IntToStr(Code^.CountArguments))+')');
+end;
+
 procedure POCASetupArguments(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode;Args:PPOCAValues;CountArguments:longint;ArgIndices:PLongwords=nil);
 var i,j:longint;
     Hash:PPOCAHash;
@@ -26856,7 +27002,7 @@ var i,j:longint;
     ArrayRecord:PPOCAArrayRecord;
 begin
  if CountArguments<longint(Code^.CountArguments) then begin
-  POCARuntimeError(Context,'Too few function arguments (we have '+TPOCARawByteString(IntToStr(CountArguments))+' but we do need '+TPOCARawByteString(IntToStr(Code^.CountArguments))+')');
+  POCASetupArgumentsErrorTooFewArguments(Context,Code,CountArguments);
  end else begin
   Hash:=PPOCAHash(POCAGetValueReferencePointer(Frame^.Locals));
   j:=0;
@@ -26951,7 +27097,8 @@ procedure POCACheckNamedArguments(Context:PPOCAContext;Code:PPOCACode;Hash:PPOCA
 var i:longint;
     Sym,Value:TPOCAValue;
 begin
- Value:=POCAValueNull;
+//Value:=POCAValueNull;
+ Value.CastedUInt64:=POCAValueNullCastedUInt64;
  for i:=0 to Code^.CountArguments-1 do begin
   Sym:=Code^.Constants[Code^.ArgumentSymbols[i]];
   if assigned(Hash^.Events) then begin
@@ -26996,7 +27143,8 @@ procedure POCASetupNamedArgumentsWithLocals(Context:PPOCAContext;Frame:PPOCAFram
 var i:longint;
     Sym,Value:TPOCAValue;
 begin
- Value:=POCAValueNull;
+//Value:=POCAValueNull;
+ Value.CastedUInt64:=POCAValueNullCastedUInt64;
  for i:=0 to Code^.CountArguments-1 do begin
   Sym:=Code^.Constants[Code^.ArgumentSymbols[i]];
   if POCAHashGet(Context,Hash,Sym,Value) then begin
@@ -27051,7 +27199,8 @@ begin
    SetLength(Frame^.Registers,POCARoundUpToPowerOfTwo(Frame^.CountRegisters+1));
   end;
   for i:=0 to Frame^.CountRegisters-1 do begin
-   Frame^.Registers[i]:=POCAValueNull;
+// Frame^.Registers[i]:=POCAValueNull;
+   Frame^.Registers[i].CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end;
 end;
@@ -27061,7 +27210,8 @@ var Func,Obj,Code:TPOCAValue;
     i,CountArguments,ArgumentIndex:longint;
     ObjPtr:PPOCAObject;
 begin
- Obj:=POCAValueNull;
+//Obj:=POCAValueNull;
+ Obj.CastedUInt64:=POCAValueNullCastedUInt64;
 
  CountArguments:=Opcode shr 8;
 
@@ -27162,7 +27312,8 @@ begin
      dec(CountArguments);
     end else begin
      if PPOCACode(ObjPtr)^.FastFunction then begin
-      result^.Locals:=POCAValueNull;
+//    result^.Locals:=POCAValueNull;
+      result^.Locals.CastedUInt64:=POCAValueNullCastedUInt64;
      end else begin
       result^.Locals:=POCANewHash(Context);
      end;
@@ -27176,6 +27327,7 @@ begin
     end;
 
     if PPOCACode(ObjPtr)^.HasArguments or not PPOCACode(ObjPtr)^.IsEmpty then begin
+
      POCASetupRegisters(result,PPOCACode(ObjPtr));
 
      if PPOCACode(ObjPtr)^.HasArguments then begin
@@ -27192,7 +27344,8 @@ begin
     end;
 
     if PPOCACode(ObjPtr)^.IsEmpty then begin
-     Frame^.Registers[Frame^.ResultRegister]:=POCAValueNull;
+//   Frame^.Registers[Frame^.ResultRegister]:=POCAValueNull;
+     Frame^.Registers[Frame^.ResultRegister].CastedUInt64:=POCAValueNullCastedUInt64;
      Frame^.CountArguments:=0;
      result:=@Context.FrameStack[Context.FrameTop-1];
     end else begin
@@ -27203,9 +27356,12 @@ begin
   end;
  end;
 
- Frame^.Registers[Frame^.ResultRegister]:=POCAValueNull;
+//Frame^.Registers[Frame^.ResultRegister]:=POCAValueNull;
+ Frame^.Registers[Frame^.ResultRegister].CastedUInt64:=POCAValueNullCastedUInt64;
  Frame^.CountArguments:=0;
+
  result:=@Context.FrameStack[Context.FrameTop-1];
+
 end;
 
 procedure POCARunStackOverflow(Context:PPOCAContext);
@@ -27380,7 +27536,8 @@ begin
   Func:=POCAGetValueReferencePointer(Frame^.Func);
   Value:=Func^.Obj;
  end else begin
-  Value:=POCAValueNull;
+//Value:=POCAValueNull;
+  Value.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -27431,7 +27588,8 @@ end;
 function POCARunContainerGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
 var CodePoint,CodeUnit:longint;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if not POCAIsValueScalarType(Key) then begin
   POCARuntimeError(Context,'Container index not scalar');
  end else begin
@@ -28033,7 +28191,8 @@ begin
     Frame^.InstructionPointer:=TryBlockPos;
     rv:=POCARunByteCode(Context);
    end else begin
-    rv:=POCAValueNull;
+  //rv:=POCAValueNull;
+    rv.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   except
    on CurrentException:Exception do begin
@@ -28108,7 +28267,8 @@ var CurrentIndex:longint;
     c:TPOCAValue;
     d:longword;
 begin
- c:=POCAValueNull;
+//c:=POCAValueNull;
+ c.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAIsValueArray(b) then begin
   if POCAIsValueArray(a) and (POCAGetValueReferencePointer(a)=POCAGetValueReferencePointer(b)) then begin
    r.Num:=1;
@@ -31398,7 +31558,8 @@ var Code:PPOCACode;
     Registers:PPOCAValues;
     a,b:TPOCAValue;
 begin
- result:=POCAValueNull;
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  Frame:=@Context^.FrameStack[Context^.FrameTop-1];
  Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
 {$ifdef POCAHasJIT}
@@ -31795,7 +31956,8 @@ begin
     Registers^[Operands^[0]].Num:=longint(longword(Operands^[1]));
    end;
    popLOADNULL:begin
-    Registers^[Operands^[0]]:=POCAValueNull;
+//  Registers^[Operands^[0]]:=POCAValueNull;
+    Registers^[Operands^[0]].CastedUInt64:=POCAValueNullCastedUInt64;
    end;
    popLOADTHAT:begin
     POCARunGetThat(Context,Frame,Registers^[Operands^[0]]);
@@ -32477,7 +32639,7 @@ begin
     Registers^[Operands^[0]].Num:=ord(POCAObjectIs(Context,Registers^[Operands^[1]],Registers^[Operands^[2]]));
    end;
    popJIFNULL:begin
-    if Registers^[Operands^[1]].CastedInt64=POCAValueNull.CastedInt64 then begin
+    if Registers^[Operands^[1]].CastedUInt64=POCAValueNullCastedUInt64 then begin
      Frame^.InstructionPointer:=Operands^[0];
     end;
    end;

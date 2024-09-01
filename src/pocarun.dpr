@@ -12,6 +12,7 @@ program pocarun;
 uses
 {$ifdef fpc}
 {$ifdef unix}
+  cmem,
   cthreads,
 {$endif}
 {$endif}
