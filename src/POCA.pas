@@ -9873,7 +9873,7 @@ end;
 
 procedure POCADefaultUserIOFlush(const aContext:PPOCAContext);
 begin
-{$if declared(Flush)}
+{$if defined(fpc) and declared(Flush) and declared(StdOut)}
  System.Flush(StdOut);
 {$ifend}
 end;
