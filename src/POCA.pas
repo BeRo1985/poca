@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-09-01-20-25-0000';
+const POCAVersion='2024-09-02-16-54-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1402,7 +1402,13 @@ type PPOCAInt8=^TPOCAInt8;
      PPOCAFrameStack=^TPOCAFrameStack;
      TPOCAFrameStack=array[0..POCA_MAX_RECURSION-1] of TPOCAFrame;
 
+     TPOCAUserIOWrite=procedure(const aContext:PPOCAContext;const aString:String);
+     TPOCAUserIOWriteLn=procedure(const aContext:PPOCAContext;const aString:String);
+     TPOCAUserIOReadLn=procedure(const aContext:PPOCAContext;out aString:String);
+     TPOCAUserIOFlush=procedure(const aContext:PPOCAContext);
+
      TPOCAContext=record
+
       Instance:PPOCAInstance;
 
       Active:longbool;
@@ -1430,10 +1436,16 @@ type PPOCAInt8=^TPOCAInt8;
 
       UserData:pointer;
 
+      UserIOWrite:TPOCAUserIOWrite;
+      UserIOWriteLn:TPOCAUserIOWriteLn;
+      UserIOReadLn:TPOCAUserIOReadLn;
+      UserIOFlush:TPOCAUserIOFlush;
+
       NextFree:PPOCAContext;
 
       Previous:PPOCAContext;
       Next:PPOCAContext;
+
      end;
 
      TPOCAInstance=record
@@ -2078,9 +2090,10 @@ begin
 end;
 {$ifend}
 
-function ReadLine(const aPrompt:TPOCAUTF8String):TPOCAUTF8String;
+function ReadLine(const aContext:PPOCAContext;const aPrompt:TPOCAUTF8String):TPOCAUTF8String;
 {$if defined(fpc) and defined(Linux)}
 var s:TPOCAUTF16String;
+    t:String;
     p:PAnsiChar;
 begin
  ReadLine_Initialize;
@@ -2102,17 +2115,39 @@ begin
  end else begin
   s:='';
   if length(aPrompt)>0 then begin
-   System.Write(aPrompt);
+   if assigned(aContext) and assigned(aContext^.UserIOWrite) then begin
+    aContext^.UserIOWrite(aContext,aPrompt);
+   end else begin
+    System.Write(aPrompt);
+   end;
   end;
-  System.ReadLn(s);
+  if assigned(aContext) and assigned(aContext^.UserIOReadLn) then begin
+   aContext^.UserIOReadLn(aContext,t);
+   s:=t;
+  end else begin
+   System.ReadLn(s);
+  end;
   result:=PUCUUTF16ToUTF8(s);
  end;
 end;
 {$else}
 var s:TPOCAUTF16String;
+    t:String;
 begin
  s:='';
- System.ReadLn(s);
+ if length(aPrompt)>0 then begin
+  if assigned(aContext) and assigned(aContext^.UserIOWrite) then begin
+   aContext^.UserIOWrite(aContext,aPrompt);
+  end else begin
+   System.Write(aPrompt);
+  end;
+ end;
+ if assigned(aContext) and assigned(aContext^.UserIOReadLn) then begin
+  aContext^.UserIOReadLn(aContext,t);
+  s:=t;
+ end else begin
+  System.ReadLn(s);
+ end;
  result:=PUCUUTF16ToUTF8(s);
 end;
 {$ifend}
@@ -9821,6 +9856,28 @@ begin
  Context^.UserData:=nil;
 end;
 
+procedure POCADefaultUserIOWrite(const aContext:PPOCAContext;const aString:String);
+begin
+ System.Write(aString);
+end;
+
+procedure POCADefaultUserIOWriteLn(const aContext:PPOCAContext;const aString:String);
+begin
+ System.WriteLn(aString);
+end;
+
+procedure POCADefaultUserIOReadLn(const aContext:PPOCAContext;out aString:String);
+begin
+ System.ReadLn(aString);
+end;
+
+procedure POCADefaultUserIOFlush(const aContext:PPOCAContext);
+begin
+{$if declared(Flush)}
+ System.Flush(StdOut);
+{$ifend}
+end;
+
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 begin                     
  POCALockEnter(Instance^.Globals.Lock);
@@ -9858,6 +9915,10 @@ begin
    Instance^.Globals.LastContext:=result;
    result^.NextFree:=nil;
   end;
+  result^.UserIOWrite:=POCADefaultUserIOWrite;
+  result^.UserIOWriteLn:=POCADefaultUserIOWriteLn;
+  result^.UserIOReadLn:=POCADefaultUserIOReadLn;
+  result^.UserIOFlush:=POCADefaultUserIOFlush;
  finally
   POCALockLeave(Instance^.Globals.Lock);
  end;
@@ -12035,25 +12096,48 @@ end;
 function POCAConsoleFunctionLOG(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var i:longint;
     Value:TPOCAValue;
+    s:String;
 begin
  for i:=0 to CountArguments-1 do begin
   Value:=Arguments^[i];
   case POCAGetValueType(Value) of
    pvtNULL:begin
-    System.Write('null');
+    s:='null';
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    pvtSTRING:begin
-    System.Write(PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data));
+    s:=PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    pvtNUMBER:begin
-    System.Write(POCADoubleToString(Value.Num));
+    s:=POCADoubleToString(Value.Num);
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    else begin
     POCARuntimeError(Context,'Bad arguments to "log"');
    end;
   end;
  end;
- System.WriteLn;
+ if assigned(Context) and assigned(Context^.UserIOWriteLn) then begin
+  Context^.UserIOWriteLn(Context,'');
+ end else begin
+  System.WriteLn('');
+ end;
+ if assigned(Context) and assigned(Context^.UserIOFlush) then begin
+  Context^.UserIOFlush(Context);
+ end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
@@ -12061,9 +12145,9 @@ end;
 function POCAConsoleFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
-  result:=POCANewString(Context,ReadLine(POCAGetStringValue(Context,Arguments^[0])));
+  result:=POCANewString(Context,ReadLine(Context,POCAGetStringValue(Context,Arguments^[0])));
  end else begin
-  result:=POCANewString(Context,ReadLine(''));
+  result:=POCANewString(Context,ReadLine(Context,''));
  end;
 end;
 
@@ -12518,23 +12602,42 @@ end;
 function POCAGlobalFunctionPRINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var i:longint;
     Value:TPOCAValue;
+    s:String;
 begin
  for i:=0 to CountArguments-1 do begin
   Value:=Arguments^[i];
   case POCAGetValueType(Value) of
    pvtNULL:begin
-    System.Write('null');
+    s:='null';
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    pvtSTRING:begin
-    System.Write(TPOCAUTF16String(PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)));
+    s:=TPOCAUTF16String(PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data));
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    pvtNUMBER:begin
-    System.Write(POCADoubleToString(Value.Num));
+    s:=POCADoubleToString(Value.Num);
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    else begin
     POCARuntimeError(Context,'Bad arguments to "print"');
    end;
   end;
+ end;
+ if assigned(Context) and assigned(Context^.UserIOFlush) then begin
+  Context^.UserIOFlush(Context);
  end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -12543,25 +12646,48 @@ end;
 function POCAGlobalFunctionPUTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var i:longint;
     Value:TPOCAValue;
+    s:String;
 begin
  for i:=0 to CountArguments-1 do begin
   Value:=Arguments^[i];
   case POCAGetValueType(Value) of
    pvtNULL:begin
-    System.Write('null');
+    s:='null';
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    pvtSTRING:begin
-    System.Write(TPOCAUTF16String(PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)));
+    s:=TPOCAUTF16String(PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data));
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    pvtNUMBER:begin
-    System.Write(POCADoubleToString(Value.Num));
+    s:=POCADoubleToString(Value.Num);
+    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
+     Context^.UserIOWrite(Context,s);
+    end else begin
+     System.Write(s);
+    end;
    end;
    else begin
     POCARuntimeError(Context,'Bad arguments to "puts"');
    end;
   end;
  end;
- System.WriteLn;
+ if assigned(Context) and assigned(Context^.UserIOWriteLn) then begin
+  Context^.UserIOWriteLn(Context,'');
+ end else begin
+  System.WriteLn('');
+ end;
+ if assigned(Context) and assigned(Context^.UserIOFlush) then begin
+  Context^.UserIOFlush(Context);
+ end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
@@ -12569,9 +12695,9 @@ end;
 function POCAGlobalFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
-  result:=POCANewString(Context,ReadLine(POCAGetStringValue(Context,Arguments^[0])));
+  result:=POCANewString(Context,ReadLine(Context,POCAGetStringValue(Context,Arguments^[0])));
  end else begin
-  result:=POCANewString(Context,ReadLine(''));
+  result:=POCANewString(Context,ReadLine(Context,''));
  end;
 end;
 
