@@ -10,3 +10,7 @@ randomFunction();
 let imported = import 'importsrc';
 
 imported.randomFunction();
+
+let otherImported = import('importsrc');
+
+otherImported.randomFunction();
