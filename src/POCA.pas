@@ -12794,6 +12794,7 @@ begin
  end;
  Frame:=@Context^.FrameStack[Context^.FrameTop-1];
  if POCAIsValueHash(ModuleValue) and POCAIsValueHash(Frame^.Locals) then begin
+  POCAHashSetString(Context,Frame^.Locals,ModuleName,ModuleValue);
   if POCAIsValueArray(Imports) then begin
    All:=false;
    for Index:=1 to POCAArraySize(Imports) do begin
