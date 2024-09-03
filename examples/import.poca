@@ -1,2 +1,5 @@
 
-import('importsrc.poca',123);
+//import 'importsrc.poca';
+
+import Vector from 'importsrc.poca';
+

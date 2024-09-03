@@ -19490,8 +19490,9 @@ var TokenList:PPOCAToken;
    end;
   var LastToken,NextToken,IdentifierTokenList,LastEndToken,SymbolNameToken,AnchorToken,TempToken,TokenA,TokenB,TokenC:PPOCAToken;
       WhichToken:TPOCATokenType;
-      Meta:longint;
+      Meta,CountImports,Index:longint;
       CountStatements:TPOCAInt32;
+      Imports:array of TPOCARawByteString;
   begin
    result:=StartToken;
    while assigned(result) and not (result^.Token in EndToken) do begin
@@ -19576,6 +19577,7 @@ var TokenList:PPOCAToken;
         SyntaxError('Missed closed parenthesis brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
        end;
       end else begin
+       TokenC:=result;
        result^.Token:=ptSEMI;
        result:=result^.Next;
        TempToken:=result;
@@ -19611,7 +19613,70 @@ var TokenList:PPOCAToken;
         SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
         break;
        end;
-       if assigned(result) and (result^.Token=ptSYMBOL) then begin
+       if assigned(result) and (result^.Token=ptLITERALSTR) then begin
+        TokenC^.Token:=ptSYMBOL;
+        TokenC^.Str:='import';
+        TokenA:=InsertAfter(TokenC,ptLPAR);
+        TokenA:=InsertStringAfter(TokenA,result^.Str);
+        TokenB:=TempToken;
+        Imports:=nil;
+        CountImports:=0;
+        try
+         while assigned(TokenB) and not ((TokenB^.Token in [ptSEMI,ptAUTOSEMI]) or
+                                         ((TokenB^.Token=ptSYMBOL) and (TokenB^.Str='from'))) do begin
+          if assigned(TokenB) and (TokenB^.Token=ptSYMBOL) then begin
+           if length(Imports)<=CountImports then begin
+            SetLength(Imports,(CountImports+1)*2);
+           end;
+           Imports[CountImports]:=TokenB^.Str;
+           inc(CountImports);
+           TokenB:=TokenB^.Next;
+           if assigned(TokenB) then begin
+            case TokenB^.Token of
+             ptSEMI,ptAUTOSEMI:begin
+              break;
+             end;
+             ptCOMMA:begin
+              TokenB:=TokenB^.Next;
+             end;
+             else begin
+              if (TokenB^.Token=ptSYMBOL) and (TokenB^.Str='from') then begin
+               break;
+              end else begin
+               SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+               break;
+              end;
+             end;
+            end;
+           end;
+          end else begin
+           TokenB:=TokenB^.Next;
+          end;
+         end;
+         SetLength(Imports,CountImports);
+         if CountImports>0 then begin
+          TokenA:=InsertAfter(TokenA,ptCOMMA);
+          TokenA:=InsertAfter(TokenA,ptLBRA);
+          for Index:=0 to CountImports-1 do begin
+           if Index>0 then begin
+            TokenA:=InsertAfter(TokenA,ptCOMMA);
+           end;
+           TokenA:=InsertStringAfter(TokenA,Imports[Index]);
+          end;
+          TokenA:=InsertAfter(TokenA,ptRBRA);
+         end;
+         TokenA:=InsertAfter(TokenA,ptRPAR);
+         if assigned(result^.Previous) then begin
+          result^.Previous^.Next:=nil;
+         end;
+         result^.Previous:=TokenA;
+         TokenA^.Next:=result^.Next;
+         result:=result^.Next;
+        finally
+         Imports:=nil;
+        end;
+        continue;
+       end else if assigned(result) and (result^.Token=ptSYMBOL) then begin
         TokenA:=result;
         TokenB:=result;
         result:=result^.Next;
@@ -20265,7 +20330,7 @@ var TokenList:PPOCAToken;
   TransformAtThis;
   TransformLambdaFunction;
   TransformBlock(Parser.Tree.Children,[],false);
-// Dump(Parser.Tree.Children);
+//Dump(Parser.Tree.Children);
  end;
  procedure ProcessParser(var Parser:TPOCAParser);
   function NewToken(const t:PPOCAToken;const Token:TPOCATokenType):PPOCAToken;
