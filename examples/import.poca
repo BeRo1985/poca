@@ -14,3 +14,17 @@ imported.randomFunction();
 let otherImported = import('importsrc');
 
 otherImported.randomFunction();
+
+module EmbeddedModule {
+
+  function otherRandomFunction(){
+    puts("And the second!");
+  }
+
+  export otherRandomFunction;
+
+}
+
+import otherRandomFunction from EmbeddedModule;
+
+otherRandomFunction();

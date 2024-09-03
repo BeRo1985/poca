@@ -12744,7 +12744,7 @@ function POCAGlobalFunctionIMPORT(Context:PPOCAContext;const This:TPOCAValue;con
 var ModuleLoaderFunctionIndex:longint;
     Index:longword;
     SubContext:PPOCAContext;
-    Code,Imports,ModuleValue,Import,Value:TPOCAValue;
+    Code,Imports,ModuleValue,Import,Value,ExportValue:TPOCAValue;
     ModuleName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
     ImportName:TPOCARawByteString;
     Frame:PPOCAFrame;
@@ -12779,6 +12779,7 @@ begin
     Code:=POCABindToContext(Context,POCACompile(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
     POCAProtect(Context,ModuleValue);
     try
+     POCAHashSetString(Context,ModuleValue,'exports',POCANewHash(SubContext));
      POCACall(SubContext,Code,nil,0,POCAValueNull,ModuleValue);
      POCAHashSetString(Context,Context^.Instance^.Globals.Modules,CleanedModuleName,ModuleValue);
     finally
@@ -12809,11 +12810,15 @@ begin
     Imports:=POCANewArray(Context);
     POCAHashOwnKeys(Context,Imports,ModuleValue);
    end;
+   ExportValue:=POCAHashGetString(Context,ModuleValue,'exports');
+   if (not POCAIsValueHash(ExportValue)) or (POCAHashRawSize(ExportValue)=0) then begin
+    ExportValue:=ModuleValue;
+   end;
    for Index:=1 to POCAArraySize(Imports) do begin
     Import:=POCAArrayGet(Imports,Index-1);
     ImportName:=POCAGetStringValue(Context,Import);
     if length(ImportName)>0 then begin
-     Value:=POCAHashGetString(Context,ModuleValue,ImportName);
+     Value:=POCAHashGetString(Context,ExportValue,ImportName);
      if not POCAIsValueNull(Value) then begin
       POCAHashSetString(Context,Frame^.Locals,ImportName,Value);
      end;
