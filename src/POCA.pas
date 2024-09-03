@@ -12748,7 +12748,7 @@ var ModuleLoaderFunctionIndex:longint;
     ModuleName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
     ImportName:TPOCARawByteString;
     Frame:PPOCAFrame;
-    OK:Boolean;
+    OK,All:Boolean;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "import"');
@@ -12794,11 +12794,20 @@ begin
  end;
  Frame:=@Context^.FrameStack[Context^.FrameTop-1];
  if POCAIsValueHash(ModuleValue) and POCAIsValueHash(Frame^.Locals) then begin
-  if POCAIsValueNull(Imports) then begin
-   Imports:=POCANewArray(Context);
-   POCAHashOwnKeys(Context,Imports,ModuleValue);
-  end;
   if POCAIsValueArray(Imports) then begin
+   All:=false;
+   for Index:=1 to POCAArraySize(Imports) do begin
+    Import:=POCAArrayGet(Imports,Index-1);
+    ImportName:=POCAGetStringValue(Context,Import);
+    if ImportName='*' then begin
+     All:=true;
+     break;
+    end;
+   end;
+   if All then begin
+    Imports:=POCANewArray(Context);
+    POCAHashOwnKeys(Context,Imports,ModuleValue);
+   end;
    for Index:=1 to POCAArraySize(Imports) do begin
     Import:=POCAArrayGet(Imports,Index-1);
     ImportName:=POCAGetStringValue(Context,Import);
@@ -12809,8 +12818,8 @@ begin
      end;
     end;
    end;
-  end else begin
-   POCARuntimeError(Context,'Bad arguments to "import"');
+{ end else begin
+   POCARuntimeError(Context,'Bad arguments to "import"');}
   end;
   result:=ModuleValue;
  end else begin
