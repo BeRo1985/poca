@@ -12800,7 +12800,7 @@ begin
    for Index:=1 to POCAArraySize(Imports) do begin
     Import:=POCAArrayGet(Imports,Index-1);
     ImportName:=POCAGetStringValue(Context,Import);
-    if ImportName='*' then begin
+    if (ImportName='*') or (ImportName='all') then begin
      All:=true;
      break;
     end;
