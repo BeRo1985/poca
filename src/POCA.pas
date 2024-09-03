@@ -14264,6 +14264,11 @@ begin
  POCAAddNativeFunction(Context,result,'repeat',POCAStringFunctionREPEAT);
 end;
 
+function POCADefaultModuleFunction(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String):Boolean;
+begin
+ result:=false;
+end;
+
 function POCAInstanceCreate:PPOCAInstance;
 var i:longint;
     Context:PPOCAContext;
@@ -14345,7 +14350,9 @@ begin
  end;
  begin
   result^.Globals.ModuleLoaderFunctions:=nil;
-  result^.Globals.CountModuleLoaderFunctions:=0;
+  SetLength(result^.Globals.ModuleLoaderFunctions,1);
+  result^.Globals.ModuleLoaderFunctions[0]:=POCADefaultModuleFunction;
+  result^.Globals.CountModuleLoaderFunctions:=1;
  end;
  begin
   Context:=POCAContextCreate(result);
