@@ -12792,7 +12792,7 @@ begin
    POCARuntimeError(Context,'Module "'+ModuleName+'" not found!');
   end;
  end;
- Frame:=@Context^.FrameStack[Context^.FrameTop];
+ Frame:=@Context^.FrameStack[Context^.FrameTop-1];
  if POCAIsValueHash(ModuleValue) and POCAIsValueHash(Frame^.Locals) then begin
   if POCAIsValueNull(Imports) then begin
    Imports:=POCANewArray(Context);
@@ -14307,6 +14307,7 @@ begin
  end;
 
  result:=false;
+
 end;
 
 function POCAInstanceCreate:PPOCAInstance;
