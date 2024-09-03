@@ -3,3 +3,6 @@ import 'importsrc';
 
 importsrc.randomFunction();
 
+import randomFunction from 'importsrc';
+
+randomFunction();
