@@ -19668,7 +19668,7 @@ var TokenList:PPOCAToken;
        TempToken:=result;
        while assigned(result) and not ((result^.Token in [ptSEMI,ptAUTOSEMI]) or
                                        ((result^.Token=ptSYMBOL) and (result^.Str='from'))) do begin
-        if assigned(result) and (result^.Token=ptSYMBOL) then begin
+        if assigned(result) and ((result^.Token=ptSYMBOL) or (result^.Token=ptMUL)) then begin
          result:=result^.Next;
          if assigned(result) then begin
           case result^.Token of
@@ -19709,11 +19709,15 @@ var TokenList:PPOCAToken;
         try
          while assigned(TokenB) and not ((TokenB^.Token in [ptSEMI,ptAUTOSEMI]) or
                                          ((TokenB^.Token=ptSYMBOL) and (TokenB^.Str='from'))) do begin
-          if assigned(TokenB) and (TokenB^.Token=ptSYMBOL) then begin
+          if assigned(TokenB) and ((TokenB^.Token=ptSYMBOL) or (TokenB^.Token=ptMUL)) then begin
            if length(Imports)<=CountImports then begin
             SetLength(Imports,(CountImports+1)*2);
            end;
-           Imports[CountImports]:=TokenB^.Str;
+           if  TokenB^.Token=ptSYMBOL then begin
+            Imports[CountImports]:=TokenB^.Str;
+           end else begin
+            Imports[CountImports]:='*';
+           end;
            inc(CountImports);
            TokenB:=TokenB^.Next;
            if assigned(TokenB) then begin
@@ -19787,7 +19791,10 @@ var TokenList:PPOCAToken;
        result:=TempToken;
        while assigned(result) and not ((result^.Token in [ptSEMI,ptAUTOSEMI]) or
                                        ((result^.Token=ptSYMBOL) and (result^.Str='from'))) do begin
-        if assigned(result) and (result^.Token=ptSYMBOL) then begin
+        if assigned(result) and (result^.Token=ptMUL) then begin
+         SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+         break;
+        end else if assigned(result) and (result^.Token=ptSYMBOL) then begin
          NextToken:=result^.Next;
          TempToken:=InsertBefore(result,ptVAR);
          TempToken:=InsertAfter(result,ptASSIGN);
