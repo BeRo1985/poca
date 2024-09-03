@@ -1,0 +1,6 @@
+
+function randomFunction(){
+  puts("Hello world!");
+}
+
+randomFunction();
