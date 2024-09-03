@@ -1381,6 +1381,8 @@ type PPOCAInt8=^TPOCAInt8;
 
       HiddenNamespace:TPOCAValue;
 
+      Modules:TPOCAValue;
+
       BaseClass:TPOCAValue;
 
       ArrayHash:TPOCAValue;
@@ -5304,6 +5306,7 @@ var GarbageCollector:PPOCAGarbageCollector;
  begin
   MarkValue(Instance^.Globals.Namespace);
   MarkValue(Instance^.Globals.HiddenNamespace);
+  MarkValue(Instance^.Globals.Modules);
   MarkValue(Instance^.Globals.BaseClass);
   MarkValue(Instance^.Globals.ArrayHash);
   MarkValue(Instance^.Globals.NumberHash);
@@ -12730,6 +12733,75 @@ begin
  result.Num:=ord(POCAHashGet(Context,Hash,Key,Key));
 end;
 
+function POCAGlobalFunctionIMPORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var Index:longword;
+    SubContext:PPOCAContext;
+    Code,Imports,ModuleValue,Import,Value:TPOCAValue;
+    ArrayRecord:PPOCAArrayRecord;
+    ModuleName,ModuleFileName,ModuleCode,ImportName:TPOCARawByteString;
+    Frame:PPOCAFrame;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "import"');
+ end;
+ if CountArguments>1 then begin
+  Imports:=Arguments^[1];
+ end else begin
+//Imports:=POCAValueNull;
+  Imports.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
+ ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.Modules,ModuleName);
+ if POCAIsValueNull(ModuleValue) then begin
+  ModuleFileName:=ModuleName;
+  ModuleCode:='';
+  if true then begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+   POCARuntimeError(Context,'Module "'+ModuleName+'" not found!');
+  end else begin
+   SubContext:=POCAContextSub(Context);
+   try
+    ModuleValue:=POCANewHash(SubContext);
+    Code:=POCABindToContext(Context,POCACompile(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
+    POCAProtect(Context,ModuleValue);
+    try
+     POCACall(SubContext,Code,nil,0,POCAValueNull,ModuleValue);
+     POCAHashSetString(Context,Context^.Instance^.Globals.Modules,ModuleName,ModuleValue);
+    finally
+     POCAUnprotect(Context,ModuleValue);
+    end;
+   finally
+    POCAContextDestroy(SubContext);
+   end;
+  end;
+ end;
+ Frame:=@Context^.FrameStack[Context^.FrameTop];
+ if POCAIsValueHash(ModuleValue) and POCAIsValueHash(Frame^.Locals) then begin
+  if POCAIsValueNull(Imports) then begin
+   Imports:=POCANewArray(Context);
+   POCAHashOwnKeys(Context,Imports,ModuleValue);
+  end;
+  if POCAIsValueArray(Imports) then begin
+   for Index:=1 to POCAArraySize(Imports) do begin
+    Import:=POCAArrayGet(Imports,Index-1);
+    ImportName:=POCAGetStringValue(Context,Import);
+    if length(ImportName)>0 then begin
+     Value:=POCAHashGetString(Context,ModuleValue,ImportName);
+     if not POCAIsValueNull(Value) then begin
+      POCAHashSetString(Context,Frame^.Locals,ImportName,Value);
+     end;
+    end;
+   end;
+  end else begin
+   POCARuntimeError(Context,'Bad arguments to "import"');
+  end;
+  result:=ModuleValue;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+  POCARuntimeError(Context,'Import of module "'+ModuleName+'" failed!');
+ end;
+end;
+
 function POCAGlobalFunctionEVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var SubContext:PPOCAContext;
     Code,CallArguments,CallThis,CallNamespace:TPOCAValue;
@@ -13077,6 +13149,7 @@ begin
  POCAAddNativeFunction(Context,result,'readLine',POCAGlobalFunctionREADLINE);
  POCAAddNativeFunction(Context,result,'chr',POCAGlobalFunctionCHR);
  POCAAddNativeFunction(Context,result,'contains',POCAGlobalFunctionCONTAINS);
+ POCAAddNativeFunction(Context,result,'import',POCAGlobalFunctionIMPORT);
  POCAAddNativeFunction(Context,result,'eval',POCAGlobalFunctionEVAL);
  POCAAddNativeFunction(Context,result,'compile',POCAGlobalFunctionCOMPILE);
  POCAAddNativeFunction(Context,result,'caller',POCAGlobalFunctionCALLER);
@@ -14298,6 +14371,7 @@ begin
    result^.Globals.HiddenNamespace:=POCANewHash(Context);
    result^.Globals.Namespace:=POCAInitGlobalNamespace(Context);
    result^.Globals.BaseClass:=POCAInitBaseClass(Context);
+   result^.Globals.Modules:=POCANewHash(Context);
    begin
     result^.Globals.ArrayHash:=POCAInitArrayHash(Context);
     result^.Globals.NumberHash:=POCAInitNumberHash(Context);
@@ -19479,143 +19553,167 @@ var TokenList:PPOCAToken;
      ptIMPORT:begin
       TokenA:=nil;
       TokenB:=nil;
-      result^.Token:=ptSEMI;
-      result:=result^.Next;
-      TempToken:=result;
-      while assigned(result) and not ((result^.Token in [ptSEMI,ptAUTOSEMI]) or
-                                      ((result^.Token=ptSYMBOL) and (result^.Str='from'))) do begin
-       if assigned(result) and (result^.Token=ptSYMBOL) then begin
+      if assigned(result^.Next) and (result^.Next^.Token=ptLITERALSTR) then begin
+       if assigned(result^.Next^.Next) and (result^.Next^.Next^.Token in [ptSEMI,ptAUTOSEMI]) then begin
+        result^.Token:=ptSYMBOL;
+        result^.Str:='import';
+        TokenA:=result^.Next;
+        TokenB:=result^.Next^.Next;
+        InsertBefore(TokenA,ptLPAR);
+        InsertBefore(TokenB,ptRPAR);
+        result:=TokenB^.Next;
+       end else begin
+        SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+        break;
+       end;
+      end else if assigned(result^.Next) and (result^.Next^.Token=ptLPAR) then begin
+       result^.Token:=ptSYMBOL;
+       result^.Str:='import';
+       result:=TransformBlock(result^.Next^.Next,[ptRPAR],false);
+       if assigned(result) and (result^.Token=ptRPAR) then begin
         result:=result^.Next;
-        if assigned(result) then begin
-         case result^.Token of
-          ptSEMI,ptAUTOSEMI:begin
-           break;
-          end;
-          ptCOMMA:begin
-           result:=result^.Next;
-          end;
-          else begin
-           if (result^.Token=ptSYMBOL) and (result^.Str='from') then begin
+       end else begin
+        SyntaxError('Missed closed parenthesis brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+       end;
+      end else begin
+       result^.Token:=ptSEMI;
+       result:=result^.Next;
+       TempToken:=result;
+       while assigned(result) and not ((result^.Token in [ptSEMI,ptAUTOSEMI]) or
+                                       ((result^.Token=ptSYMBOL) and (result^.Str='from'))) do begin
+        if assigned(result) and (result^.Token=ptSYMBOL) then begin
+         result:=result^.Next;
+         if assigned(result) then begin
+          case result^.Token of
+           ptSEMI,ptAUTOSEMI:begin
             break;
-           end else begin
-            SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
-            break;
+           end;
+           ptCOMMA:begin
+            result:=result^.Next;
+           end;
+           else begin
+            if (result^.Token=ptSYMBOL) and (result^.Str='from') then begin
+             break;
+            end else begin
+             SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+             break;
+            end;
            end;
           end;
          end;
-        end;
-       end else begin
-        result:=result^.Next;
-       end;
-      end;
-      if (result^.Token=ptSYMBOL) and (result^.Str='from') then begin
-       result:=result^.Next;
-      end else begin
-       SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
-       break;
-      end;
-      if assigned(result) and (result^.Token=ptSYMBOL) then begin
-       TokenA:=result;
-       TokenB:=result;
-       result:=result^.Next;
-       repeat
-        if assigned(result) and (result^.Token=ptDOT) then begin
-         result:=result^.Next;
-         if assigned(result) and (result^.Token=ptSYMBOL) then begin
-          TokenB:=result;
-          result:=result^.Next;
-         end else begin
-          SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
-         end;
         end else begin
-         break;
+         result:=result^.Next;
         end;
-       until false;
-      end else begin
-       SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
-      end;
-      if not (assigned(result) and (result^.Token in [ptSEMI,ptAUTOSEMI])) then begin
-       SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
-      end;
-      result:=TempToken;
-      while assigned(result) and not ((result^.Token in [ptSEMI,ptAUTOSEMI]) or
-                                      ((result^.Token=ptSYMBOL) and (result^.Str='from'))) do begin
+       end;
+       if (result^.Token=ptSYMBOL) and (result^.Str='from') then begin
+        result:=result^.Next;
+       end else begin
+        SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+        break;
+       end;
        if assigned(result) and (result^.Token=ptSYMBOL) then begin
-        NextToken:=result^.Next;
-        TempToken:=InsertBefore(result,ptVAR);
-        TempToken:=InsertAfter(result,ptASSIGN);
-        TokenC:=TokenA;
-        while assigned(TokenC) do begin
-         TempToken:=InsertAfter(TempToken,TokenC^.Token);
-         if TokenC^.Token=ptSYMBOL then begin
-          TempToken^.Str:=TokenC^.Str;
-         end;
-         if TokenC=TokenB then begin
+        TokenA:=result;
+        TokenB:=result;
+        result:=result^.Next;
+        repeat
+         if assigned(result) and (result^.Token=ptDOT) then begin
+          result:=result^.Next;
+          if assigned(result) and (result^.Token=ptSYMBOL) then begin
+           TokenB:=result;
+           result:=result^.Next;
+          end else begin
+           SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+          end;
+         end else begin
           break;
          end;
-         TokenC:=TokenC^.Next;
-        end;
-        TempToken:=InsertAfter(TempToken,ptDOT);
-        TempToken:=InsertSymbolAfter(TempToken,'exports');
-        TempToken:=InsertAfter(TempToken,ptDOT);
-        TempToken:=InsertAfter(TempToken,result^.Token);
-        if result^.Token=ptSYMBOL then begin
-         TempToken^.Str:=result^.Str;
-        end;
-        TempToken:=InsertAfter(TempToken,ptSEMI);
-        result:=NextToken;
-        if assigned(result) then begin
-         case result^.Token of
-          ptSEMI,ptAUTOSEMI:begin
+        until false;
+       end else begin
+        SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+       end;
+       if not (assigned(result) and (result^.Token in [ptSEMI,ptAUTOSEMI])) then begin
+        SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+       end;
+       result:=TempToken;
+       while assigned(result) and not ((result^.Token in [ptSEMI,ptAUTOSEMI]) or
+                                       ((result^.Token=ptSYMBOL) and (result^.Str='from'))) do begin
+        if assigned(result) and (result^.Token=ptSYMBOL) then begin
+         NextToken:=result^.Next;
+         TempToken:=InsertBefore(result,ptVAR);
+         TempToken:=InsertAfter(result,ptASSIGN);
+         TokenC:=TokenA;
+         while assigned(TokenC) do begin
+          TempToken:=InsertAfter(TempToken,TokenC^.Token);
+          if TokenC^.Token=ptSYMBOL then begin
+           TempToken^.Str:=TokenC^.Str;
+          end;
+          if TokenC=TokenB then begin
            break;
           end;
-          ptCOMMA:begin
-           result^.Token:=ptSEMI;
-           result:=result^.Next;
-          end;
-          else begin
-           if (result^.Token=ptSYMBOL) and (result^.Str='from') then begin
+          TokenC:=TokenC^.Next;
+         end;
+         TempToken:=InsertAfter(TempToken,ptDOT);
+         TempToken:=InsertSymbolAfter(TempToken,'exports');
+         TempToken:=InsertAfter(TempToken,ptDOT);
+         TempToken:=InsertAfter(TempToken,result^.Token);
+         if result^.Token=ptSYMBOL then begin
+          TempToken^.Str:=result^.Str;
+         end;
+         TempToken:=InsertAfter(TempToken,ptSEMI);
+         result:=NextToken;
+         if assigned(result) then begin
+          case result^.Token of
+           ptSEMI,ptAUTOSEMI:begin
             break;
-           end else begin
-            SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
-            break;
+           end;
+           ptCOMMA:begin
+            result^.Token:=ptSEMI;
+            result:=result^.Next;
+           end;
+           else begin
+            if (result^.Token=ptSYMBOL) and (result^.Str='from') then begin
+             break;
+            end else begin
+             SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+             break;
+            end;
            end;
           end;
          end;
-        end;
-       end else begin
-        result:=result^.Next;
-       end;
-      end;
-      if (result^.Token=ptSYMBOL) and (result^.Str='from') then begin
-       result^.Token:=ptSEMI;
-       result:=result^.Next;
-      end else begin
-       SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
-       break;
-      end;
-      if assigned(result) and (result^.Token=ptSYMBOL) then begin
-       result^.Token:=ptSEMI;
-       result:=result^.Next;
-       repeat
-        if assigned(result) and (result^.Token=ptDOT) then begin
-         result^.Token:=ptSEMI;
+        end else begin
          result:=result^.Next;
-         if assigned(result) and (result^.Token=ptSYMBOL) then begin
+        end;
+       end;
+       if (result^.Token=ptSYMBOL) and (result^.Str='from') then begin
+        result^.Token:=ptSEMI;
+        result:=result^.Next;
+       end else begin
+        SyntaxError('Invalid import statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+        break;
+       end;
+       if assigned(result) and (result^.Token=ptSYMBOL) then begin
+        result^.Token:=ptSEMI;
+        result:=result^.Next;
+        repeat
+         if assigned(result) and (result^.Token=ptDOT) then begin
           result^.Token:=ptSEMI;
           result:=result^.Next;
+          if assigned(result) and (result^.Token=ptSYMBOL) then begin
+           result^.Token:=ptSEMI;
+           result:=result^.Next;
+          end else begin
+           SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+          end;
          end else begin
-          SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+          break;
          end;
-        end else begin
-         break;
-        end;
-       until false;
-      end else begin
-       SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
-      end;
-      if not (assigned(result) and (result^.Token in [ptSEMI,ptAUTOSEMI])) then begin
-       SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+        until false;
+       end else begin
+        SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+       end;
+       if not (assigned(result) and (result^.Token in [ptSEMI,ptAUTOSEMI])) then begin
+        SyntaxError('Invalid export statement',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+       end;
       end;
      end;
      ptEXPORT:begin
