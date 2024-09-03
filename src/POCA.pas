@@ -12824,10 +12824,10 @@ begin
      end;
     end;
    end;
-{ end else begin
-   POCARuntimeError(Context,'Bad arguments to "import"');}
+   result:=ExportValue;
+  end else begin
+   result:=ModuleValue;
   end;
-  result:=ModuleValue;
  end else begin
   result.CastedUInt64:=POCAValueNullCastedUInt64;
   POCARuntimeError(Context,'Import of module "'+ModuleName+'" failed!');

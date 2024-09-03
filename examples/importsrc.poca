@@ -4,3 +4,5 @@ function randomFunction(){
 }
 
 puts("importsrc.poca loaded!");
+
+export randomFunction; // <= Optional, otherwise everything is exported
