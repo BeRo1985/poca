@@ -12745,7 +12745,8 @@ var ModuleLoaderFunctionIndex:longint;
     Index:longword;
     SubContext:PPOCAContext;
     Code,Imports,ModuleValue,Import,Value:TPOCAValue;
-    ModuleName,ModuleFileName,ModuleCode,ImportName:TPOCARawByteString;
+    ModuleName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
+    ImportName:TPOCARawByteString;
     Frame:PPOCAFrame;
     OK:Boolean;
 begin
@@ -12759,7 +12760,8 @@ begin
   Imports.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
  ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
- ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.Modules,ModuleName);
+ CleanedModuleName:=ChangeFileExt(ExtractFileName(ModuleName),'');
+ ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.Modules,CleanedModuleName);
  if POCAIsValueNull(ModuleValue) then begin
   ModuleFileName:=ModuleName;
   ModuleCode:='';
@@ -12778,7 +12780,7 @@ begin
     POCAProtect(Context,ModuleValue);
     try
      POCACall(SubContext,Code,nil,0,POCAValueNull,ModuleValue);
-     POCAHashSetString(Context,Context^.Instance^.Globals.Modules,ModuleName,ModuleValue);
+     POCAHashSetString(Context,Context^.Instance^.Globals.Modules,CleanedModuleName,ModuleValue);
     finally
      POCAUnprotect(Context,ModuleValue);
     end;
@@ -14265,7 +14267,42 @@ begin
 end;
 
 function POCADefaultModuleFunction(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String):Boolean;
+var Index:longint;
+    Path,FileName:TPOCAUTF8String;
 begin
+
+ for Index:=-3 to -1 do begin
+
+  case Index of
+   -3:begin
+    Path:='';
+   end;
+   -2:begin
+    Path:=IncludeTrailingPathDelimiter(ExtractFilePath(ParamStr(0)));
+   end;
+   -1:begin
+    Path:=IncludeTrailingPathDelimiter(GetCurrentDir);
+   end;
+  end;
+
+  FileName:=Path+aModuleName;
+  if FileExists(FileName) then begin
+   aModuleCode:=POCAGetFileContent(FileName);
+   aModuleFileName:=FileName;
+   result:=true;
+   exit;
+  end;
+
+  FileName:=Path+aModuleName+'.poca';
+  if FileExists(FileName) then begin
+   aModuleCode:=POCAGetFileContent(FileName);
+   aModuleFileName:=FileName;
+   result:=true;
+   exit;
+  end;
+
+ end;
+
  result:=false;
 end;
 
