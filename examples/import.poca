@@ -7,6 +7,10 @@ import randomFunction from 'importsrc';
 
 randomFunction();
 
+import * from 'importsrc';
+
+randomFunction();
+
 let imported = import 'importsrc';
 
 imported.randomFunction();
