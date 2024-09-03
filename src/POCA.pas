@@ -14271,7 +14271,7 @@ var Index:longint;
     Path,FileName:TPOCAUTF8String;
 begin
 
- for Index:=-3 to -1 do begin
+ for Index:=-3 to aContext^.Instance^.IncludeDirectories.Count-1 do begin
 
   case Index of
    -3:begin
@@ -14282,6 +14282,9 @@ begin
    end;
    -1:begin
     Path:=IncludeTrailingPathDelimiter(GetCurrentDir);
+   end;
+   else begin
+    Path:=IncludeTrailingPathDelimiter(aContext^.Instance^.IncludeDirectories[Index]);
    end;
   end;
 
