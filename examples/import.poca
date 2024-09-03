@@ -6,3 +6,7 @@ importsrc.randomFunction();
 import randomFunction from 'importsrc';
 
 randomFunction();
+
+let imported = import 'importsrc';
+
+imported.randomFunction();
