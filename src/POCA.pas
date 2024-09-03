@@ -1320,6 +1320,10 @@ type PPOCAInt8=^TPOCAInt8;
 
      TPOCARequestGarbageCollection=(brgcNONE,brgcCYCLE,brgcFULLEPHEMERAL,brgcFULL);
 
+     TPOCAModuleLoaderFunction=function(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String):Boolean;
+
+     TPOCAModuleLoaderFunctions=array of TPOCAModuleLoaderFunction;
+
      PPOCAGlobals=^TPOCAGlobals;
      TPOCAGlobals=record
       Instance:PPOCAInstance;
@@ -1396,6 +1400,9 @@ type PPOCAInt8=^TPOCAInt8;
 
       FreeContextCount:longint;
       FreeContexts:PPOCAContext;
+
+      ModuleLoaderFunctions:TPOCAModuleLoaderFunctions;
+      CountModuleLoaderFunctions:longint;
 
       FirstContext:PPOCAContext;
       LastContext:PPOCAContext;
@@ -12734,12 +12741,13 @@ begin
 end;
 
 function POCAGlobalFunctionIMPORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var Index:longword;
+var ModuleLoaderFunctionIndex:longint;
+    Index:longword;
     SubContext:PPOCAContext;
     Code,Imports,ModuleValue,Import,Value:TPOCAValue;
-    ArrayRecord:PPOCAArrayRecord;
     ModuleName,ModuleFileName,ModuleCode,ImportName:TPOCARawByteString;
     Frame:PPOCAFrame;
+    OK:Boolean;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "import"');
@@ -12755,10 +12763,14 @@ begin
  if POCAIsValueNull(ModuleValue) then begin
   ModuleFileName:=ModuleName;
   ModuleCode:='';
-  if true then begin
-   result.CastedUInt64:=POCAValueNullCastedUInt64;
-   POCARuntimeError(Context,'Module "'+ModuleName+'" not found!');
-  end else begin
+  OK:=false;
+  for ModuleLoaderFunctionIndex:=0 to Context^.Instance^.Globals.CountModuleLoaderFunctions-1 do begin
+   if Context^.Instance^.Globals.ModuleLoaderFunctions[ModuleLoaderFunctionIndex](Context,ModuleName,ModuleCode,ModuleFileName) then begin
+    OK:=true;
+    break;
+   end;
+  end;
+  if OK then begin
    SubContext:=POCAContextSub(Context);
    try
     ModuleValue:=POCANewHash(SubContext);
@@ -12773,6 +12785,9 @@ begin
    finally
     POCAContextDestroy(SubContext);
    end;
+  end else begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+   POCARuntimeError(Context,'Module "'+ModuleName+'" not found!');
   end;
  end;
  Frame:=@Context^.FrameStack[Context^.FrameTop];
@@ -14329,6 +14344,10 @@ begin
   result^.Globals.LastContext:=nil;
  end;
  begin
+  result^.Globals.ModuleLoaderFunctions:=nil;
+  result^.Globals.CountModuleLoaderFunctions:=0;
+ end;
+ begin
   Context:=POCAContextCreate(result);
   try
    begin
@@ -14485,6 +14504,9 @@ begin
    FreeAndNil(Instance^.IncludeDirectories);
 
    FreeAndNil(Instance^.SourceFiles);
+
+   Instance^.Globals.ModuleLoaderFunctions:=nil;
+
   finally
    Finalize(Instance^);
    Dispose(Instance);
