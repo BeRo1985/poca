@@ -14473,6 +14473,9 @@ begin
      POCAHashSetString(Context,result^.Globals.Namespace,'LockHash',result^.Globals.LockHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'SemaphoreHash',result^.Globals.SemaphoreHash);
     end;
+    begin
+     POCAHashSetString(Context,result^.Globals.Namespace,'modules',result^.Globals.Modules);     
+    end;
    end;
   finally
    POCAContextDestroy(Context);
