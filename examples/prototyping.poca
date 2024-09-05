@@ -21,11 +21,16 @@ var OtherObjTest = {
   prototype: ObjTest,
 
   create: function(){
-/*  let obj = ObjTest.create();
+
+/*  let obj = new ObjTest();
     obj.prototype = OtherObjTest;
     obj.c = 42;
     return obj;*/
+
+    // Or shorter:
+
     return (new ObjTest()) ~ { prototype: OtherObjTest, c: 42 };
+    
   },
 
   d: 21
