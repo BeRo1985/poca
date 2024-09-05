@@ -10,24 +10,14 @@ function makeMaze(w, h) {
   // Create vertical walls
   var ver = [];
   for (let i = 0; i < h; i++) {
-    let row = [];
-    for (let j = 0; j < w; j++) {
-      row.push("|  ");
-    }
-    row.push("|"); // end wall
-    ver.push(row);
+    ver.push(((new Array(w)).fill("|  ")) ~ ["|"]);
   }
   ver.push([]); // empty last row for vertical walls
 
   // Create horizontal walls
   var hor = [];
   for (let i = 0; i <= h; i++) {
-    let row = [];
-    for (let j = 0; j < w; j++) {
-      row.push("+--");
-    }
-    row.push("+"); // end wall
-    hor.push(row);
+    hor.push(((new Array(w)).fill("+--")) ~ ["+"]);
   }
 
   // Walk function to generate maze
