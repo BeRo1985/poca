@@ -2407,8 +2407,8 @@ asm
 {$ifndef fpc}
  .noframe
 {$endif}
-{// Requires SSE2:
- movapd xmm2,xmm0
+ // Requires SSE2:
+{movapd xmm2,xmm0
  divsd xmm2,xmm1
  cvttsd2si rax,xmm2
  pxor xmm2,xmm2
@@ -2418,7 +2418,7 @@ asm
  // Requires SSE4.1:
  movapd xmm2,xmm0
  divsd xmm2,xmm1
- roundsd xmm2,xmm2,0
+ roundsd xmm2,xmm2,1 // 1 = Floor
  mulsd xmm2,xmm1
  subsd xmm0,xmm2
 end;
