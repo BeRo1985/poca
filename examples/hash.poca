@@ -7,4 +7,19 @@ let Test={a:246};
 let bla={prototype:Test};
 puts(bla.a);
 
+let a = { "x" : 1, "y" : 2, "z" : 3 };
+
+block{
+  print("!\n");
+}
+
+print("Keys of object a: ", inlineblock{
+  let r = "";
+  forkey(k; a){
+    r ~= k ~ " ";
+  }
+  r ~= "\n";
+  r;
+}, "\n");
+
 readLine();

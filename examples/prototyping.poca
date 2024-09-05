@@ -30,7 +30,7 @@ var OtherObjTest = {
     // Or shorter:
 
     return (new ObjTest()) ~ { prototype: OtherObjTest, c: 42 };
-    
+
   },
 
   d: 21
@@ -40,6 +40,4 @@ var OtherObjTest = {
 var otherObj = new OtherObjTest();
 
 print(otherObj.a, " ", otherObj.b, " ", otherObj.c, " ", otherObj.d, "\n");
-
-let a = { "x" : 1 }, b = { "y" : 2 }, c = { "z" : 3 };
 

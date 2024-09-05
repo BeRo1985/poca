@@ -20875,8 +20875,11 @@ var TokenList:PPOCAToken;
       ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin
        result:=assigned(t^.Previous) and (t^.Previous^.Token=ptASSIGN);
       end;
-      ptFOR,ptFOREACH,ptWHILE,ptFORINDEX,ptFORKEY,ptDO,ptWHEN,ptSWITCH,ptBLOCK,ptINLINEBLOCK:begin
+      ptFOR,ptFOREACH,ptWHILE,ptFORINDEX,ptFORKEY,ptDO,ptWHEN,ptSWITCH:begin
        result:=true;
+      end;
+      ptBLOCK,ptINLINEBLOCK:begin
+       result:=(not assigned(t^.Previous)) or (t^.Previous^.Token in [ptSEMI,ptAUTOSEMI]);
       end;
       ptTRY:begin
        result:=(not assigned(t^.Previous)) or (t^.Previous^.Token in [ptSEMI,ptAUTOSEMI]);
