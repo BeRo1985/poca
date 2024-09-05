@@ -18047,7 +18047,12 @@ var TokenList:PPOCAToken;
       end;
       '^':begin
        inc(SourcePosition);
-       AddToken(ptBXOR,'',0);
+       if (SourcePosition<=SourceLength) and (Source[SourcePosition]='=') then begin
+        inc(SourcePosition);
+        AddToken(ptBXOREQ,'',0);
+       end else begin
+        AddToken(ptBXOR,'',0);
+       end;
       end;
       ':':begin
        inc(SourcePosition);
