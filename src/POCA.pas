@@ -1158,6 +1158,7 @@ type PPOCAInt8=^TPOCAInt8;
       CountOptionalArguments:longword;
       NeedArgumentArray:longbool;
       HasArguments:longbool;
+      HasRestArguments:longbool;
       ConstantCount:longword;
       ByteCode:PLongwords;
       ByteCodeSize:longword;
@@ -26733,6 +26734,7 @@ var TokenList:PPOCAToken;
          SyntaxError('Bad function argument expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end else begin
          CodeGenerator^.RestArgSym:=POCAInternSymbol(Parser.Context,Instance,POCANewString(Parser.Context,t^.Left^.Str));
+         Code^.HasRestArguments:=true;
         end;
        end;
        ptASSIGN:begin
@@ -26924,6 +26926,7 @@ var TokenList:PPOCAToken;
       Code^.ClassFunction:=CodeToken=ptCLASSFUNCTION;
       Code^.FastFunction:=CodeGenerator^.FastFunction;
       Code^.IsEmpty:=IsEmpty;
+      Code^.HasRestArguments:=false;
       Code^.LocalsAsThisObj:=CodeToken in [ptCLASSFUNCTION,ptMODULEFUNCTION];
       Code^.CountRegisters:=CodeGenerator^.CountRegisters;
       CodeGenerator^.RestArgSym:=Instance^.Globals.ArgumentsValueReference;
@@ -26998,7 +27001,7 @@ var TokenList:PPOCAToken;
         Code^.Lines:=copy(CodeGenerator^.Lines,0,CodeGenerator^.LineCount);
        end;
       end;
-      Code^.HasArguments:=(Code^.CountArguments+Code^.CountOptionalArguments)<>0;
+      Code^.HasArguments:=Code^.HasRestArguments or ((Code^.CountArguments+Code^.CountOptionalArguments)<>0);
      end;
     end;
    finally
@@ -27444,7 +27447,7 @@ begin
    dec(CountArguments);
   end;
   inc(j,Code^.CountOptionalArguments);
-  if Code^.NeedArgumentArray or (CountArguments>0) then begin
+  if Code^.NeedArgumentArray or Code^.HasRestArguments or (CountArguments>0) then begin
    Arguments:=POCANewArray(Context);
    if CountArguments<=0 then begin
     CountArguments:=0;
