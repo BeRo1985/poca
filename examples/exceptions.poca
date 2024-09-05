@@ -1,7 +1,7 @@
 
 try{
   print("Hallo ");
-}catch(c){
+}catch(let c){
   print("boese ");
 }finally{
   print("Welt\r\n");

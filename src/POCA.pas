@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-09-05-06-00-0000';
+const POCAVersion='2024-09-05-18-23-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1327,7 +1327,10 @@ type PPOCAInt8=^TPOCAInt8;
 
      PPOCAGlobals=^TPOCAGlobals;
      TPOCAGlobals=record
+
       Instance:PPOCAInstance;
+
+      StrictMode:longbool;
 
       Pools:TPOCAPools;
 
@@ -1407,6 +1410,7 @@ type PPOCAInt8=^TPOCAInt8;
 
       FirstContext:PPOCAContext;
       LastContext:PPOCAContext;
+
      end;
 
      PPOCAFrameStack=^TPOCAFrameStack;
@@ -14349,6 +14353,9 @@ begin
  result^.SourceFiles:=TStringList.Create;
  result^.IncludeDirectories:=TStringList.Create;
  begin
+  result^.Globals.StrictMode:=true;
+ end;
+ begin
   result^.Globals.GarbageCollector.Lock:=POCALockCreate;
   result^.Globals.GarbageCollector.ProtectList:=TPOCAPointerList.Create;
   for Ghost:=false to true do begin
@@ -19597,6 +19604,25 @@ var TokenList:PPOCAToken;
    while assigned(result) and not (result^.Token in EndToken) do begin
     LastToken:=result;
     case result^.Token of
+     ptCATCH:begin
+      result:=result^.Next;
+      if assigned(result) and (result^.Token=ptLPAR) then begin
+       result:=result^.Next;
+       if assigned(result) and (result^.Token in [ptVAR,ptREGISTER,ptCONST]) then begin
+        result:=result^.Next;
+       end;
+       if assigned(result) and (result^.Token=ptSYMBOL) then begin
+        result:=result^.Next;
+       end else begin
+        SyntaxError('Missed symbol',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+       end;
+       if assigned(result) and (result^.Token in [ptRPAR]) then begin
+        result:=result^.Next;
+       end else begin
+        SyntaxError('Missed closed parenthesis brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+       end;
+      end;
+     end;
      ptLPAR:begin
       result:=TransformBlock(result^.Next,[ptRPAR],false);
       if assigned(result) and (result^.Token=ptRPAR) then begin
@@ -20345,7 +20371,7 @@ var TokenList:PPOCAToken;
        AnchorToken:=result;
        WhichToken:=result^.Token;
        result:=result^.Next;
-       while assigned(result) and not (result^.Token in [ptCOMMA,ptSEMI,ptAUTOSEMI]) do begin
+       while assigned(result) and not ((result^.Token in [ptCOMMA,ptSEMI,ptAUTOSEMI]) or (result^.Token in EndToken)) do begin
         LastToken:=result;
         case result^.Token of
          ptLPAR:begin
@@ -20356,7 +20382,7 @@ var TokenList:PPOCAToken;
            SyntaxError('Missed closed parenthesis brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
           end;
           if assigned(result) and (result^.Token=ptASSIGN) then begin
-           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI],false);
+           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI]+EndToken,false);
           end;
          end;
          ptLCURL:begin
@@ -20367,7 +20393,7 @@ var TokenList:PPOCAToken;
            SyntaxError('Missed closed curly brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
           end;
           if assigned(result) and (result^.Token=ptASSIGN) then begin
-           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI],false);
+           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI]+EndToken,false);
           end;
          end;
          ptLBRA:begin
@@ -20378,7 +20404,7 @@ var TokenList:PPOCAToken;
            SyntaxError('Missed closed brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
           end;
           if assigned(result) and (result^.Token=ptASSIGN) then begin
-           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI],false);
+           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI]+EndToken,false);
           end;
          end;
          ptSAFELBRA:begin
@@ -20389,12 +20415,12 @@ var TokenList:PPOCAToken;
            SyntaxError('Missed safe closed brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
           end;
           if assigned(result) and (result^.Token=ptASSIGN) then begin
-           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI],false);
+           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI]+EndToken,false);
           end;
          end;
          ptSYMBOL:begin
           if assigned(result^.Next) and (result^.Next^.Token in [ptASSIGN]) then begin
-           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI],false);
+           result:=TransformBlock(result^.Next,[ptCOMMA,ptSEMI,ptAUTOSEMI]+EndToken,false);
           end else begin
            result:=InsertAfter(result,ptASSIGN);
            result:=InsertAfter(result,ptNULL);
@@ -20412,14 +20438,18 @@ var TokenList:PPOCAToken;
         end;
         inc(CountStatements);
        end;
-       if assigned(result) and (result^.Token in [ptSEMI,ptAUTOSEMI]) then begin
+       if assigned(result) and ((result^.Token in [ptSEMI,ptAUTOSEMI]) or (result^.Token in EndToken)) then begin
         if CountStatements>1 then begin
          InsertBefore(AnchorToken,ptINLINEBLOCK);
          InsertBefore(AnchorToken,ptLCURL);
          InsertBefore(result,ptSEMI);
          InsertBefore(result,ptRCURL);
         end;
-        result:=result^.Next;
+        if result^.Token in EndToken then begin
+         break;
+        end else begin
+         result:=result^.Next;
+        end;
        end else begin
         SyntaxError('Missed semicolon',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
        end;
@@ -24099,7 +24129,8 @@ var TokenList:PPOCAToken;
      result:=GenerateIF(t,t^.Left^.Next.Next,OutReg);
     end;
     function GenerateTry(t:PPOCAToken;OutReg:longint):longint;
-    var TryBlock,CatchBlock,FinallyBlock,CatchIdentifier:PPOCAToken;
+    var TryBlock,CatchBlock,FinallyBlock,CatchIdentifier,TemporaryCatchIdentifier,
+        FullCatchIdentifier:PPOCAToken;
         CatchIdentifierRegister,TryBlockPos,CatchBlockPos,FinallyBlockPos,EndPos,Reg:longint;
     begin
      if OutReg<0 then begin
@@ -24141,11 +24172,17 @@ var TokenList:PPOCAToken;
       Emit($ffffffff);
       if assigned(CatchBlock) then begin
        CatchIdentifier:=CatchBlock^.Children;
+       FullCatchIdentifier:=nil;
        if assigned(CatchIdentifier) and (CatchIdentifier^.Token=ptLPAR) then begin
-        if assigned(CatchIdentifier^.Children) and (CatchIdentifier^.Children^.Token=ptSYMBOL) then begin
-         if (not assigned(CatchIdentifier^.Children^.Next)) or (CatchIdentifier^.Children^.Next^.Token=ptEMPTY) then begin
+        FullCatchIdentifier:=CatchIdentifier^.Children;
+        TemporaryCatchIdentifier:=FullCatchIdentifier;
+        if assigned(TemporaryCatchIdentifier) and (TemporaryCatchIdentifier^.Token in [ptVAR,ptREGISTER]) then begin
+         TemporaryCatchIdentifier:=TemporaryCatchIdentifier^.Right;
+        end;
+        if assigned(TemporaryCatchIdentifier) and (TemporaryCatchIdentifier^.Token=ptSYMBOL) then begin
+         if (not assigned(TemporaryCatchIdentifier^.Next)) or (TemporaryCatchIdentifier^.Next^.Token=ptEMPTY) then begin
           CatchBlock:=CatchIdentifier^.Next;
-          CatchIdentifier:=CatchIdentifier^.Children;
+          CatchIdentifier:=TemporaryCatchIdentifier;
           if CatchBlock^.Token=ptLCURL then begin
            if assigned(FinallyBlock) then begin
             if assigned(FinallyBlock^.Children) and (FinallyBlock^.Children^.Token=ptLCURL) then begin
@@ -24202,12 +24239,25 @@ var TokenList:PPOCAToken;
             begin
              ClearRegisters;
              FixTargetImmediate(CatchBlockPos);
-             GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
-             Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
-             if result<>Reg then begin
-              EmitOpcode(popCOPY,result,Reg);
-              SetRegisterNumber(result,GetRegisterNumber(Reg));
-              FreeRegister(Reg);
+             if assigned(FullCatchIdentifier) and (FullCatchIdentifier^.Token in [ptVAR,ptREGISTER]) then begin
+              ScopeStart;
+              GenerateBlock(FullCatchIdentifier,-1,false,false);
+              GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
+              Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,false);
+              if result<>Reg then begin
+               EmitOpcode(popCOPY,result,Reg);
+               SetRegisterNumber(result,GetRegisterNumber(Reg));
+               FreeRegister(Reg);
+              end;
+              ScopeEnd;
+             end else begin
+              GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
+              Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
+              if result<>Reg then begin
+               EmitOpcode(popCOPY,result,Reg);
+               SetRegisterNumber(result,GetRegisterNumber(Reg));
+               FreeRegister(Reg);
+              end;
              end;
              EmitOpcode(popTRYBLOCKEND,result);
             end;
@@ -27932,11 +27982,16 @@ begin
   end;
  end;
  begin
-  if POCAIsValueHash(Frame^.Locals) then begin
-   // 3. Function frame locals with creation, because symbol isn't existing already
-   POCAHashSetCache(Context,Frame^.Locals,Sym,Value,CacheIndex);
+  if Context^.Instance^.Globals.StrictMode then begin
+   // 3. Raise error
+   POCARuntimeError(Context,'Undefined symbol: '+POCAGetStringValue(Context,Sym));
   end else begin
-   POCARuntimeError(Context,'Could not define symbol: '+POCAGetStringValue(Context,Sym));
+   if POCAIsValueHash(Frame^.Locals) then begin
+    // 3. Function frame locals with creation, because symbol isn't existing already
+    POCAHashSetCache(Context,Frame^.Locals,Sym,Value,CacheIndex);
+   end else begin
+    POCARuntimeError(Context,'Could not define symbol: '+POCAGetStringValue(Context,Sym));
+   end;
   end;
  end;
 end;

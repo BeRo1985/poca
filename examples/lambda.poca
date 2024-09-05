@@ -2,7 +2,7 @@
 function bla(){
 }
 
-y(x)->x*x;
+let y(x)->x*x;
 
 puts(y(4));
 

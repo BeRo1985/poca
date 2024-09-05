@@ -64,7 +64,7 @@ puts();
 
 puts("Keys of object bla instance of class ",bla.className,":\n", block{
   let s = ""; 
-  forkey(key;bla){
+  forkey(let key;bla){
     s ~= key ~ " of type " ~ typeof(bla[key]) ~ "\n";
   }
   s

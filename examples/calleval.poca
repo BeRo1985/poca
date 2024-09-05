@@ -3,7 +3,7 @@ function evalCode(fn){
   return call(fn, [], null, {});
 }
 
-outer = "blah";
+var outer = "blah";
 print("outer = ", outer, "\n");
 
 function f1(){
@@ -29,23 +29,23 @@ print("[call] f3() = ", call(f3, [], null, {}), "\n");
 
 // A Lisp-like map function.
 function map(fun, list){
-  result = [];
-  for(i=0; i<list.size(); i++) {
+  let result = [];
+  for(let i = 0; i < list.size(); i++) {
     result.push(call(fun, [list[i]], null, {}));
   }
   return result;
 }
 
-list = [1, 2, 3, 4, 5];
+var list = [1, 2, 3, 4, 5];
 print("Before map():");
-foreach(elem; list) { print(" ", elem); }
+foreach(var elem; list) { print(" ", elem); }
 list = map(function(){ arguments[0] + 100 }, list);
 print("\nAfter map():");
-foreach(elem; list) { print(" ", elem); }
+foreach(var elem; list) { print(" ", elem); }
 print("\n");
 
-fn = function(){ print("a = ", a, "\n"); var b = a; }
-hash = { a : 2 };
+let fn = function(){ print("a = ", a, "\n"); var b = a; }
+let hash = { a : 2 };
 call(fn, null, null, hash);
 hash.a += 1;
 call(fn, null, null, hash);

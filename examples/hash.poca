@@ -15,7 +15,7 @@ block{
 
 print("Keys of object a: ", inlineblock{
   let r = "";
-  forkey(k; a){
+  forkey(let k; a){
     r ~= k ~ " ";
   }
   r ~= "\n";

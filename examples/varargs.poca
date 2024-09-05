@@ -20,7 +20,7 @@ print("tst4() = ", tst4(1, 2, 3), "\n");
 let vargs = function(a, b, rest...){
     print("vargs a = ", a, ", b = ", b);
     print(" rest = [ ");
-    foreach(e; rest) { print(e, " "); }
+    foreach(let e; rest) { print(e, " "); }
     print("]\n");
 };
 
