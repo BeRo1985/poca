@@ -3,18 +3,9 @@ function makeMaze(w, h) {
   // Create visibility grid
   var vis = [];
   for (var i = 0; i < h; i++) {
-    let row = [];
-    for (let j = 0; j < w; j++) {
-      row.push(0);
-    }
-    row.push(1); // add the 1 at the end of each row
-    vis.push(row);
+    vis.push(((new Array(w)).fill(0)) ~ [1]);
   }
-  let lastRow = [];
-  for (let j = 0; j < w + 1; j++) {
-    lastRow.push(1);
-  }
-  vis.push(lastRow);
+  vis.push((new Array(w + 1)).fill(1));
 
   // Create vertical walls
   var ver = [];
