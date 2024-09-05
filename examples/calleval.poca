@@ -27,7 +27,6 @@ function f3(){ 3 };
 print("f3() = ", f3(), "\n");
 print("[call] f3() = ", call(f3, [], null, {}), "\n");
 
-
 // A Lisp-like map function.
 function map(fun, list){
   result = [];
