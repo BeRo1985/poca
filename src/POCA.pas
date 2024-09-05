@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-09-03-09-21-0000';
+const POCAVersion='2024-09-05-04-33-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -9753,6 +9753,9 @@ begin
     if POCAHashGet(Context,Source,Key,Value) then begin
      POCAHashSet(Context,Hash,Key,Value);
     end;
+   end;
+   if assigned(HashInstance^.Prototype) then begin
+    POCAHashSetPrototype(Context,Hash,HashInstance^.Prototype);
    end;
   end else begin
    HashRec:=HashInstance^.HashRecord;
