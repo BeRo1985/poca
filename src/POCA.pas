@@ -13324,7 +13324,7 @@ begin
   Len:=0;
  end;
  Size:=POCAArraySize(This);
- if ((Start<0) or (Start>Size)) or (Len<0) then begin
+ if ((Start<0) or (Start>=Size)) or (Len<0) then begin
   POCARuntimeError(Context,'Bad arguments to "slice"');
  end;
  if (not POCAIsValueNumber(LenValue)) or (Len>(Size-Start)) then begin
@@ -13347,6 +13347,81 @@ begin
  result:=This;
 end;
 
+function POCAArrayFunctionJOIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i,Size:longint;
+    SeparatorValue:TPOCAValue;
+    Separator,StrValue:TPOCAUTF8String;
+begin
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "join"');
+ end;
+ if CountArguments>0 then begin
+  SeparatorValue:=POCAStringValue(Context,Arguments^[0]);
+ end else begin
+//LenValue:=POCAValueNull;
+  SeparatorValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ if POCAIsValueString(SeparatorValue) then begin
+  Separator:=POCAGetStringValue(Context,SeparatorValue);
+ end else begin
+  Separator:=',';
+ end;
+ Size:=POCAArraySize(This);
+ StrValue:='';
+ if Size>0 then begin
+  for i:=0 to Size-1 do begin
+   if i>0 then begin
+    StrValue:=StrValue+Separator;
+   end;
+   StrValue:=StrValue+POCAGetStringValue(Context,POCAArrayGet(This,i));
+  end;
+ end;
+ result:=POCANewString(Context,StrValue);
+end;
+
+function POCAArrayFunctionFILL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i,Start,End_,Size:longint;
+    FillValue:TPOCAValue;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "fill"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "fill"');
+ end;
+ FillValue:=Arguments^[0];
+ if CountArguments>1 then begin
+  Start:=trunc(POCAGetNumberValue(Context,Arguments^[1]));
+ end else begin
+  Start:=0;
+ end;
+ Size:=POCAArraySize(This);
+ if CountArguments>2 then begin
+  End_:=trunc(POCAGetNumberValue(Context,Arguments^[2]));
+ end else begin
+  End_:=Size;
+ end;
+ if ((Start<0) or (Start>=Size)) or ((End_<0) or (End_>Size)) then begin
+  POCARuntimeError(Context,'Bad arguments to "fill"');
+ end;
+ result:=POCANewArray(Context);
+ if Start<End_ then begin
+  for i:=0 to Start-1 do begin
+   POCAArrayPush(result,POCAArrayGet(This,i));
+  end;
+  for i:=Start to End_-1 do begin
+   POCAArrayPush(result,FillValue);
+  end;
+  for i:=End_ to Size-1 do begin
+   POCAArrayPush(result,POCAArrayGet(This,i));
+  end;
+ end else begin
+  for i:=0 to Size-1 do begin
+   POCAArrayPush(result,POCAArrayGet(This,i));
+  end;
+ end;
+end;
+
 function POCAInitArrayHash(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
@@ -13357,6 +13432,8 @@ begin
  POCAAddNativeFunction(Context,result,'pop',POCAArrayFunctionPOP);
  POCAAddNativeFunction(Context,result,'slice',POCAArrayFunctionSLICE);
  POCAAddNativeFunction(Context,result,'sort',POCAArrayFunctionSORT);
+ POCAAddNativeFunction(Context,result,'join',POCAArrayFunctionJOIN);
+ POCAAddNativeFunction(Context,result,'fill',POCAArrayFunctionFILL);
 end;
 
 function POCANumberFunctionTOSTRING(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
