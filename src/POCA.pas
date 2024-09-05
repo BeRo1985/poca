@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-09-05-04-33-0000';
+const POCAVersion='2024-09-05-06-00-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -24318,6 +24318,7 @@ var TokenList:PPOCAToken;
         Len,JumpNext,JumpOver,BreakPos,ContinuePos,Start:longint;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
+     ScopeStart;
      Registers[0]:=nil;
      Registers[1]:=nil;
      Registers[2]:=nil;
@@ -24392,12 +24393,14 @@ var TokenList:PPOCAToken;
       SetLength(Registers[3],0);
       SetLength(Registers[4],0);
      end;
+     ScopeEnd;
     end;
     function GenerateDoWhile(t:PPOCAToken;OutReg:longint):longint;
     var Test,Body,LabelToken:PPOCAToken;
         Len,JumpNext,BreakPos,ContinuePos,Start:longint;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
+     ScopeStart;
      Registers[0]:=nil;
      Registers[1]:=nil;
      Registers[2]:=nil;
@@ -24462,12 +24465,14 @@ var TokenList:PPOCAToken;
       SetLength(Registers[3],0);
       SetLength(Registers[4],0);
      end;
+     ScopeEnd;
     end;
     function GenerateFor(t:PPOCAToken;OutReg:longint):longint;
     var Init,Test,Body,Update,LabelToken,h:PPOCAToken;
         Len,JumpNext,JumpOver,BreakPos,ContinuePos,Reg,Start:longint;
         Registers:array[0..5] of TPOCACodeGeneratorRegisters;
     begin
+     ScopeStart;
      Registers[0]:=nil;
      Registers[1]:=nil;
      Registers[2]:=nil;
@@ -24567,12 +24572,14 @@ var TokenList:PPOCAToken;
       SetLength(Registers[4],0);
       SetLength(Registers[5],0);
      end;
+     ScopeEnd;
     end;
     function GenerateForEachForIndexForKey(t:PPOCAToken;OutReg:longint):longint;
     var JumpNext,JumpOver,BreakPos,ContinuePos,Reg1,Reg2,Reg3,Reg4,Len,Start:longint;
         Element,Body,ArrayInstance,LabelToken,h:PPOCAToken;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
+     ScopeStart;
      Registers[0]:=nil;
      Registers[1]:=nil;
      Registers[2]:=nil;
@@ -24709,6 +24716,7 @@ var TokenList:PPOCAToken;
       SetLength(Registers[3],0);
       SetLength(Registers[4],0);
      end;
+     ScopeEnd;
     end;
     procedure GenerateBreakContinue(t:PPOCAToken);
     var Levels,Loop,i:longint;
