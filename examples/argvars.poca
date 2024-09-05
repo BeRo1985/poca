@@ -1,0 +1,8 @@
+
+function test(b, argruments...){
+  print(arguments[0], "\n");
+}
+
+test(3, 7);
+test(1, 4);
+test(1, 2);
