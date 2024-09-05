@@ -13053,7 +13053,9 @@ begin
   CallNamespace:=Arguments^[3];
  end else begin
 //CallNamespace:=POCAValueNull;
-  CallNamespace.CastedUInt64:=POCAValueNullCastedUInt64;
+//CallNamespace.CastedUInt64:=POCAValueNullCastedUInt64;
+  CallNamespace:=POCANewHash(Context); ///!
+  POCATemporarySave(Context,CallNamespace);
  end;
  if not (POCAIsValueHash(CallThis) or POCAIsValueGhost(CallThis)) then begin
 //CallThis:=POCAValueNull;
@@ -21282,7 +21284,9 @@ var TokenList:PPOCAToken;
        OptionalArgumentLocals:PLongints;
        OptionalArgumentValues:PLongints;
        OptionalArgumentAllocated:longword;
+       RestArgSymbolString:TPOCAUTF8String;
        RestArgSym:TPOCAValue;
+       HasRestArguments:LongBool;
        SwitchTop:longint;
        SwitchAllocated:longint;
        Switchs:TPOCACodeGeneratorSwitchs;
@@ -26123,6 +26127,10 @@ var TokenList:PPOCAToken;
        SetRegisterNumber(result,false);
       end;
       ptSYMBOL:begin
+       if t^.Str=CodeGenerator^.RestArgSymbolString then begin
+        CodeGenerator^.HasRestArguments:=true;
+        CodeGenerator^.HasLocals:=true;
+       end;
        if IsSymbolRegister(t) then begin
         result:=GetSymbolRegister(t,false,false);
         if OutReg>=0 then begin
@@ -26733,7 +26741,10 @@ var TokenList:PPOCAToken;
         if (not assigned(t^.Left)) or (t^.Left^.Token<>ptSYMBOL) then begin
          SyntaxError('Bad function argument expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end else begin
+         CodeGenerator^.RestArgSymbolString:=t^.Left^.Str;
          CodeGenerator^.RestArgSym:=POCAInternSymbol(Parser.Context,Instance,POCANewString(Parser.Context,t^.Left^.Str));
+         CodeGenerator^.HasLocals:=true;
+         CodeGenerator^.HasRestArguments:=true;
          Code^.HasRestArguments:=true;
         end;
        end;
@@ -26858,10 +26869,14 @@ var TokenList:PPOCAToken;
    try
     begin
      FillChar(CodeGenerator^,sizeof(TPOCACodeGenerator),#0);
+     Initialize(CodeGenerator^);
      CodeGenerator^.ByteCodeAllocated:=1024;
      GetMem(CodeGenerator^.ByteCode,CodeGenerator^.ByteCodeAllocated*sizeof(longword));
      FillChar(CodeGenerator^.ByteCode^,CodeGenerator^.ByteCodeAllocated*sizeof(longword),#0);
      CodeGenerator^.HasLocals:=false;
+     CodeGenerator^.RestArgSym:=Instance^.Globals.ArgumentsValueReference;
+     CodeGenerator^.RestArgSymbolString:='arguments';
+     CodeGenerator^.HasRestArguments:=false;
      CodeGenerator^.FastFunction:=CodeToken=ptFASTFUNCTION;
      CodeGenerator^.Consts:=POCANewArray(Parser.Context);
      CodeGenerator^.SwitchTop:=0;
@@ -26929,7 +26944,6 @@ var TokenList:PPOCAToken;
       Code^.HasRestArguments:=false;
       Code^.LocalsAsThisObj:=CodeToken in [ptCLASSFUNCTION,ptMODULEFUNCTION];
       Code^.CountRegisters:=CodeGenerator^.CountRegisters;
-      CodeGenerator^.RestArgSym:=Instance^.Globals.ArgumentsValueReference;
       Code^.CountArguments:=0;
       Code^.CountOptionalArguments:=0;
       Code^.HasArgumentLocals:=false;
@@ -27001,6 +27015,7 @@ var TokenList:PPOCAToken;
         Code^.Lines:=copy(CodeGenerator^.Lines,0,CodeGenerator^.LineCount);
        end;
       end;
+      Code^.HasRestArguments:=Code^.HasRestArguments or CodeGenerator^.HasRestArguments;
       Code^.HasArguments:=Code^.HasRestArguments or ((Code^.CountArguments+Code^.CountOptionalArguments)<>0);
      end;
     end;
@@ -27050,6 +27065,7 @@ var TokenList:PPOCAToken;
     SetLength(CodeGenerator^.Opcodes,0);
     SetLength(CodeGenerator^.Constants,0);
     SetLength(CodeGenerator^.ConstantRegisters,0);
+    Finalize(CodeGenerator^);
     Dispose(CodeGenerator);
    end;
   end;
