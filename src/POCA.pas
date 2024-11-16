@@ -11104,14 +11104,13 @@ begin
   POCARuntimeError(Context,'Bad THIS value');
  end;
  IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
- if (CountArguments>0) and (POCAGhostGetType(Arguments^[0])=@POCAIOGhost) then begin
-  IOData:=PPOCAIOGhostData(POCAGhostGetPointer(Arguments^[0]));
+ if CountArguments>0 then begin
   if assigned(IOData^.TextHandle) then begin
-   s:=POCAGetStringValue(Context,Arguments^[1]);
+   s:=POCAGetStringValue(Context,Arguments^[0]);
    Write(IOData^.TextHandle^,s);
    result.Num:=length(s);
   end else if assigned(IOData^.BinaryHandle) then begin
-   s:=POCAGetStringValue(Context,Arguments^[1]);
+   s:=POCAGetStringValue(Context,Arguments^[0]);
    BlockWrite(IOData^.BinaryHandle^,s[1],length(s));
    result.Num:=length(s);
   end else begin
@@ -11130,17 +11129,22 @@ begin
  if POCAGhostGetType(This)<>@POCAIOGhost then begin
   POCARuntimeError(Context,'Bad THIS value');
  end;
- IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
- if assigned(IOData^.TextHandle) then begin
-  s:=POCAGetStringValue(Context,Arguments^[0])+{$ifdef unix}#10{$else}#13#10{$endif};
-  Write(IOData^.TextHandle^,s);
-  result.Num:=length(s);
- end else if assigned(IOData^.BinaryHandle) then begin
-  s:=POCAGetStringValue(Context,Arguments^[0])+{$ifdef unix}#10{$else}#13#10{$endif};
-  BlockWrite(IOData^.BinaryHandle^,s[1],length(s));
-  result.Num:=length(s);
+ if CountArguments>0 then begin
+  IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
+  if assigned(IOData^.TextHandle) then begin
+   s:=POCAGetStringValue(Context,Arguments^[0])+{$ifdef unix}#10{$else}#13#10{$endif};
+   Write(IOData^.TextHandle^,s);
+   result.Num:=length(s);
+  end else if assigned(IOData^.BinaryHandle) then begin
+   s:=POCAGetStringValue(Context,Arguments^[0])+{$ifdef unix}#10{$else}#13#10{$endif};
+   BlockWrite(IOData^.BinaryHandle^,s[1],length(s));
+   result.Num:=length(s);
+  end else begin
+   result.Num:=0;
+  end;
  end else begin
-  result.Num:=0;
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
