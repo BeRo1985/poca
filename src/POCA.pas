@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-09-05-18-23-0000';
+const POCAVersion='2024-11-16-17-31-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1396,6 +1396,7 @@ type PPOCAInt8=^TPOCAInt8;
       ArrayHash:TPOCAValue;
       NumberHash:TPOCAValue;
       StringHash:TPOCAValue;
+      IOHash:TPOCAValue;
       RegExpHash:TPOCAValue;
       CoroutineHash:TPOCAValue;
       ThreadHash:TPOCAValue;
@@ -5323,6 +5324,7 @@ var GarbageCollector:PPOCAGarbageCollector;
   MarkValue(Instance^.Globals.ArrayHash);
   MarkValue(Instance^.Globals.NumberHash);
   MarkValue(Instance^.Globals.StringHash);
+  MarkValue(Instance^.Globals.IOHash);
   MarkValue(Instance^.Globals.RegExpHash);
   MarkValue(Instance^.Globals.CoroutineHash);
   MarkValue(Instance^.Globals.ThreadHash);
@@ -10865,9 +10867,11 @@ end;
 
 type PPOCAIOGhostData=^TPOCAIOGhostData;
      TPOCAIOGhostData=record
-      Handle:^text;
+      TextHandle:^text;
+      BinaryHandle:^file;
       Opened:boolean;
       SystemHandle:boolean;
+      Binary:boolean;
      end;
 
 procedure POCAIOGhostDestroy(Data:pointer);
@@ -10876,24 +10880,36 @@ begin
  if assigned(Data) then begin
   if DataCasted^.Opened then begin
    if not DataCasted.SystemHandle then begin
-    System.Close(DataCasted^.Handle^);
+    if DataCasted.Binary then begin
+     System.Close(DataCasted^.BinaryHandle^);
+    end else begin
+     System.Close(DataCasted^.TextHandle^);
+    end;
    end;
    DataCasted^.Opened:=false;
   end;
-  if assigned(DataCasted^.Handle) and not DataCasted.SystemHandle then begin
-   FreeMem(DataCasted^.Handle);
-   DataCasted^.Handle:=nil;
+  if DataCasted.Binary then begin
+   if assigned(DataCasted^.BinaryHandle) and not DataCasted.SystemHandle then begin
+    FreeMem(DataCasted^.BinaryHandle);
+    DataCasted^.BinaryHandle:=nil;
+   end;
+  end else begin
+   if assigned(DataCasted^.TextHandle) and not DataCasted.SystemHandle then begin
+    FreeMem(DataCasted^.TextHandle);
+    DataCasted^.TextHandle:=nil;
+   end;
   end;
  end;
 end;
 
 const POCAIOGhost:TPOCAGhostType=(Destroy:POCAIOGhostDestroy;CanDestroy:nil;Mark:nil;Name:'io');
 
-function POCAIOGhostNew(var t:text;SystemHandle:boolean):PPOCAIOGhostData;
+function POCAIOGhostNew(var t:text;var f:file;SystemHandle:boolean):PPOCAIOGhostData;
 begin
  New(result);
  FillChar(result^,sizeof(TPOCAIOGhostData),#0);
- result^.Handle:=@t;
+ result^.TextHandle:=@t;
+ result^.BinaryHandle:=@f;
  result^.Opened:=true;
  result^.SystemHandle:=SystemHandle;
 end;
@@ -10902,12 +10918,15 @@ function POCAIOFunctionOPEN(Context:PPOCAContext;const This:TPOCAValue;const Arg
 var OldFileMode:byte;
     fn,fm:TPOCAUTF8String;
     t:^text;
+    f:^file;
     DoCreate:boolean;
+    Binary:boolean;
 begin
  if CountArguments>0 then begin
 //result:=POCAValueNull;
   result.CastedUInt64:=POCAValueNullCastedUInt64;
-  New(t);
+  t:=nil;
+  f:=nil;
   OldFileMode:=FileMode;
   try
    try
@@ -10921,35 +10940,76 @@ begin
     if fm='c' then begin
      FileMode:=fmOpenReadWrite;
      DoCreate:=true;
+     Binary:=false;     
     end else if fm='r' then begin
      FileMode:=fmOpenRead;
+     Binary:=false;
     end else if fm='rw' then begin
      FileMode:=fmOpenReadWrite;
+     Binary:=false;
     end else if fm='w' then begin
+     Binary:=false;
      if FileExists(String(fn)) then begin
       FileMode:=fmOpenWrite;
      end else begin
       FileMode:=fmOpenReadWrite;
       DoCreate:=true;
      end;
+    end else if fm='cb' then begin
+     FileMode:=fmOpenReadWrite;
+     DoCreate:=true;
+     Binary:=true;
+    end else if fm='rb' then begin
+     FileMode:=fmOpenRead;
+     Binary:=true;
+    end else if fm='rwb' then begin
+     FileMode:=fmOpenReadWrite;
+     Binary:=true;
+    end else if fm='wb' then begin
+     Binary:=true;
+     if FileExists(String(fn)) then begin
+      FileMode:=fmOpenWrite;
+     end else begin
+      FileMode:=fmOpenReadWrite;
+      DoCreate:=true;
+     end;      
     end else begin
      FileMode:=fmOpenRead;
+     Binary:=false;
     end;
-    AssignFile(t^,String(fn));
-    if DoCreate then begin
-     {$i-}Rewrite(t^);{$i+}
+    if Binary then begin
+     New(f);
+     AssignFile(f^,String(fn));
+     if DoCreate then begin
+      {$i-}Rewrite(f^,1);{$i+}
+     end else begin
+      {$i-}Reset(f^,1);{$i+}
+     end;
     end else begin
-     {$i-}Reset(t^);{$i+}
+     New(t);
+     AssignFile(t^,String(fn));
+     if DoCreate then begin
+      {$i-}Rewrite(t^);{$i+}
+     end else begin
+      {$i-}Reset(t^);{$i+}
+     end;
     end;
     if IOResult<>0 then begin
      result.Num:=0;
-     Dispose(t);
     end else begin
-     result:=POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(t^,false));
+     result:=POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(t^,f^,false));
+     POCAGhostSetHashValue(result,Context^.Instance.Globals.IOHash);
     end;
    except
     try
-     Dispose(t);
+     if assigned(t) then begin
+      Dispose(t);
+      t:=nil;
+     end;
+     if assigned(f) then begin
+      Dispose(f);
+      f:=nil; 
+     end;
     except
     end;
     raise;
@@ -10966,19 +11026,137 @@ end;
 function POCAIOFunctionCLOSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var IOData:PPOCAIOGhostData;
 begin
+ if POCAGhostGetType(This)<>@POCAIOGhost then begin
+  POCARuntimeError(Context,'Bad THIS value');
+ end;
+ IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
+ result.Num:=ord(IOData^.Opened);
+ if IOData^.Opened then begin
+  if assigned(IOData^.TextHandle) then begin
+   if (IOData^.TextHandle<>@System.Input) and (IOData^.TextHandle<>@System.Output) and (IOData^.TextHandle<>@System.ErrOutput) then begin
+    System.Close(IOData^.TextHandle^);
+   end;
+  end; 
+  if assigned(IOData^.BinaryHandle) then begin
+   System.Close(IOData^.BinaryHandle^);
+  end;
+  IOData^.Opened:=false;
+ end;
+ if assigned(IOData^.TextHandle) and ((IOData^.TextHandle<>@System.Input) and (IOData^.TextHandle<>@System.Output) and (IOData^.TextHandle<>@System.ErrOutput)) then begin
+  FreeMem(IOData^.TextHandle);
+ end;
+ if assigned(IOData^.BinaryHandle) then begin
+  FreeMem(IOData^.BinaryHandle);
+ end;
+ IOData^.TextHandle:=nil;
+ IOData^.BinaryHandle:=nil;
+end;
+
+function POCAIOFunctionEOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var IOData:PPOCAIOGhostData;
+begin
+ if POCAGhostGetType(This)<>@POCAIOGhost then begin
+  POCARuntimeError(Context,'Bad THIS value');
+ end;                
+ IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
+ if assigned(IOData^.TextHandle) then begin
+  result.Num:=ord(eof(IOData^.TextHandle^));
+ end else if assigned(IOData^.BinaryHandle) then begin
+  result.Num:=ord(eof(IOData^.BinaryHandle^));
+ end else begin
+  result.Num:=1;
+ end;
+end;
+
+function POCAIOFunctionREAD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var IOData:PPOCAIOGhostData;
+    s:TPOCARawByteString;
+    i,Len:longint;
+begin
+ if POCAGhostGetType(This)<>@POCAIOGhost then begin
+  POCARuntimeError(Context,'Bad THIS value');
+ end;
+ IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
+ if assigned(IOData^.TextHandle) then begin
+  Read(IOData^.TextHandle^,s);
+  result:=POCANewString(Context,s);
+ end else if assigned(IOData^.BinaryHandle) then begin
+  if (CountArguments>0) and POCAIsValueNumber(Arguments^[0]) then begin
+   Len:=trunc(POCAGetNumberValue(Context,Arguments^[0]));
+  end else begin
+   Len:=1;
+  end;
+  i:=Min(FileSize(IOData^.BinaryHandle^)-FilePos(IOData^.BinaryHandle^),Len);
+  SetLength(s,i);
+  BlockRead(IOData^.BinaryHandle^,s[1],i);
+  result:=POCANewString(Context,s);
+ end else begin
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAIOFunctionWRITE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var IOData:PPOCAIOGhostData;
+    s:TPOCARawByteString;
+begin
+ if POCAGhostGetType(This)<>@POCAIOGhost then begin
+  POCARuntimeError(Context,'Bad THIS value');
+ end;
+ IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
  if (CountArguments>0) and (POCAGhostGetType(Arguments^[0])=@POCAIOGhost) then begin
   IOData:=PPOCAIOGhostData(POCAGhostGetPointer(Arguments^[0]));
-  result.Num:=ord(IOData^.Opened);
-  if IOData^.Opened then begin
-   if (IOData^.Handle<>@System.Input) and (IOData^.Handle<>@System.Output) and (IOData^.Handle<>@System.ErrOutput) then begin
-    System.Close(IOData^.Handle^);
-   end;
-   IOData^.Opened:=false;
+  if assigned(IOData^.TextHandle) then begin
+   s:=POCAGetStringValue(Context,Arguments^[1]);
+   Write(IOData^.TextHandle^,s);
+   result.Num:=length(s);
+  end else if assigned(IOData^.BinaryHandle) then begin
+   s:=POCAGetStringValue(Context,Arguments^[1]);
+   BlockWrite(IOData^.BinaryHandle^,s[1],length(s));
+   result.Num:=length(s);
+  end else begin
+   result.Num:=0;
   end;
-  if assigned(IOData^.Handle) and ((IOData^.Handle<>@System.Input) and (IOData^.Handle<>@System.Output) and (IOData^.Handle<>@System.ErrOutput)) then begin
-   FreeMem(IOData^.Handle);
-  end;
-  IOData^.Handle:=nil;
+ end else begin
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAIOFunctionWRITELN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var IOData:PPOCAIOGhostData;
+    s:TPOCARawByteString;
+begin
+ if POCAGhostGetType(This)<>@POCAIOGhost then begin
+  POCARuntimeError(Context,'Bad THIS value');
+ end;
+ IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
+ if assigned(IOData^.TextHandle) then begin
+  s:=POCAGetStringValue(Context,Arguments^[0])+{$ifdef unix}#10{$else}#13#10{$endif};
+  Write(IOData^.TextHandle^,s);
+  result.Num:=length(s);
+ end else if assigned(IOData^.BinaryHandle) then begin
+  s:=POCAGetStringValue(Context,Arguments^[0])+{$ifdef unix}#10{$else}#13#10{$endif};
+  BlockWrite(IOData^.BinaryHandle^,s[1],length(s));
+  result.Num:=length(s);
+ end else begin
+  result.Num:=0;
+ end;
+end;
+
+function POCAIOFunctionREADLN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var IOData:PPOCAIOGhostData;
+    s:TPOCARawByteString;
+begin
+ if POCAGhostGetType(This)<>@POCAIOGhost then begin
+  POCARuntimeError(Context,'Bad THIS value');
+ end;
+ IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
+ if assigned(IOData^.TextHandle) then begin
+  Readln(IOData^.TextHandle^,s);
+  result:=POCANewString(Context,s);
+ end else if assigned(IOData^.BinaryHandle) then begin
+  result.Num:=0;
  end else begin
 //result:=POCAValueNull;
   result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -10992,7 +11170,17 @@ begin
  POCAHashSetString(Context,result,'stdOut',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.Output,true)));
  POCAHashSetString(Context,result,'stdErr',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.ErrOutput,true)));}
  POCAAddNativeFunction(Context,result,'open',POCAIOFunctionOPEN);
+end;
+
+function POCAInitIOHash(Context:PPOCAContext):TPOCAValue;
+begin
+ result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'close',POCAIOFunctionCLOSE);
+ POCAAddNativeFunction(Context,result,'eof',POCAIOFunctionEOF);
+ POCAAddNativeFunction(Context,result,'read',POCAIOFunctionREAD);
+ POCAAddNativeFunction(Context,result,'write',POCAIOFunctionWRITE);
+ POCAAddNativeFunction(Context,result,'writeln',POCAIOFunctionWRITELN);
+ POCAAddNativeFunction(Context,result,'readln',POCAIOFunctionREADLN);
 end;
 
 procedure POCARegExpGhostDestroy(Data:pointer);
@@ -14548,6 +14736,7 @@ begin
     result^.Globals.ArrayHash:=POCAInitArrayHash(Context);
     result^.Globals.NumberHash:=POCAInitNumberHash(Context);
     result^.Globals.StringHash:=POCAInitStringHash(Context);
+    result^.Globals.IOHash:=POCAInitIOHash(Context);
     result^.Globals.RegExpHash:=POCAInitRegExpHash(Context);
     result^.Globals.CoroutineHash:=POCAInitCoroutineHash(Context);
     result^.Globals.ThreadHash:=POCAInitThreadHash(Context);
@@ -14557,6 +14746,7 @@ begin
      POCAHashSetString(Context,result^.Globals.Namespace,'ArrayHash',result^.Globals.ArrayHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'NumberHash',result^.Globals.NumberHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'StringHash',result^.Globals.StringHash);
+     POCAHashSetString(Context,result^.Globals.Namespace,'IOHash',result^.Globals.IOHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'RegExpHash',result^.Globals.RegExpHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'CoroutineHash',result^.Globals.CoroutineHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'ThreadHash',result^.Globals.ThreadHash);
