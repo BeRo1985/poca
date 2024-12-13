@@ -2470,7 +2470,7 @@
 		},
 		"block-statement": {
       "name": "code.block.poca",
-			"begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(?=\\bblock\\s*\\()",
+			"begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(?=\\bblock\\s*\\{",
 			"end": "\\}",
 			"endCaptures": {
 				"0": {
