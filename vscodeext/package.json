@@ -12,7 +12,7 @@
   "contributes": {
     "languages": [{
       "id": "poca",
-      "aliases": ["poca", "poca"],
+      "aliases": ["poca", "Poca"],
       "extensions": [".poca"],
       "configuration": "./language-configuration.json"
     }],

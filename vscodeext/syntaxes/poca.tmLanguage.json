@@ -2468,9 +2468,9 @@
 				}
 			]
 		},
-		"block-statement": {
-      "name": "code.block.poca",
-			"begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(?=\\bblock\\s*\\{",
+	  "block-statement": {
+			"name": "code.block.poca",
+			"begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))\\bblock\\s*\\{",
 			"end": "\\}",
 			"endCaptures": {
 				"0": {
@@ -2482,29 +2482,6 @@
 					"include": "#comment"
 				},
 				{
-					"name": "block-expression.expr.poca",
-					"begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(block)\\s*(\\()",
-					"beginCaptures": {
-						"1": {
-							"name": "keyword.control.block.poca"
-						},
-						"2": {
-							"name": "meta.brace.round.poca"
-						}
-					},
-					"end": "\\)",
-					"endCaptures": {
-						"0": {
-							"name": "meta.brace.round.poca"
-						}
-					},
-					"patterns": [
-						{
-							"include": "#expression"
-						}
-					]
-				},
-				{
 					"name": "block-block.expr.poca",
 					"begin": "\\{",
 					"beginCaptures": {
@@ -2512,7 +2489,7 @@
 							"name": "punctuation.definition.block.poca"
 						}
 					},
-					"end": "(?=\\})",
+					"end": "\\}",
 					"patterns": [
 						{
 							"include": "#statements"
