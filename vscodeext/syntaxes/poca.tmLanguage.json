@@ -2469,8 +2469,13 @@
 			]
 		},
 	  "block-statement": {
-			"name": "code.block.poca",
-			"begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))\\bblock\\s*\\{",
+			"name": "meta.code.block.poca",
+			"begin": "\\bblock\\s*\\{",
+			"beginCaptures": {
+				"0": {
+					"name": "punctuation.definition.block.poca"
+				}
+			},
 			"end": "\\}",
 			"endCaptures": {
 				"0": {
@@ -2479,22 +2484,7 @@
 			},
 			"patterns": [
 				{
-					"include": "#comment"
-				},
-				{
-					"name": "block-block.expr.poca",
-					"begin": "\\{",
-					"beginCaptures": {
-						"0": {
-							"name": "punctuation.definition.block.poca"
-						}
-					},
-					"end": "\\}",
-					"patterns": [
-						{
-							"include": "#statements"
-						}
-					]
+					"include": "#statements"
 				}
 			]
 		},
