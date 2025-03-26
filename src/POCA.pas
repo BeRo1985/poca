@@ -6,7 +6,7 @@
  *                                zlib license                                *
  *============================================================================*
  *                                                                            *
- * Copyright (C) 2011-2024, Benjamin Rosseaux (benjamin@rosseaux.com)         *
+ * Copyright (C) 2011-2025, Benjamin Rosseaux (benjamin@rosseaux.com)         *
  *                                                                            *
  * This software is provided 'as-is', without any express or implied          *
  * warranty. In no event will the authors be held liable for any damages      *
@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2024-11-16-17-31-0000';
+const POCAVersion='2025-03-26-07-54-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1219,6 +1219,9 @@ type PPOCAInt8=^TPOCAInt8;
       Destroy:procedure(Ghost:pointer);
       CanDestroy:function(Ghost:pointer):longbool;
       Mark:function(Ghost:pointer):longbool;
+      ExistKey:function(Context:PPOCAContext;Ghost:pointer;const aKey:TPOCAValue):longbool;
+      GetKey:function(Context:PPOCAContext;Ghost:pointer;const aKey:TPOCAValue;out aValue:TPOCAValue):longbool;
+      SetKey:function(Context:PPOCAContext;Ghost:pointer;const aKey:TPOCAValue;const aValue:TPOCAValue):longbool;
       Name:TPOCARawByteString;
      end;
 
@@ -10902,7 +10905,7 @@ begin
  end;
 end;
 
-const POCAIOGhost:TPOCAGhostType=(Destroy:POCAIOGhostDestroy;CanDestroy:nil;Mark:nil;Name:'io');
+const POCAIOGhost:TPOCAGhostType=(Destroy:POCAIOGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'io');
 
 function POCAIOGhostNew(var t:text;var f:file;SystemHandle:boolean):PPOCAIOGhostData;
 begin
@@ -11194,7 +11197,7 @@ begin
  end;
 end;
 
-const POCARegExpGhost:TPOCAGhostType=(Destroy:POCARegExpGhostDestroy;CanDestroy:nil;Mark:nil;Name:'RegExp');
+const POCARegExpGhost:TPOCAGhostType=(Destroy:POCARegExpGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'RegExp');
 
 function POCARegExpFunctionESCAPE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var a,b:TPOCARawByteString;
@@ -11637,7 +11640,7 @@ begin
  end;
 end;
 
-const POCACoroutineGhost:TPOCAGhostType=(Destroy:POCACoroutineGhostDestroy;CanDestroy:nil;Mark:POCACoroutineGhostMark;Name:'Coroutine');
+const POCACoroutineGhost:TPOCAGhostType=(Destroy:POCACoroutineGhostDestroy;CanDestroy:nil;Mark:POCACoroutineGhostMark;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Coroutine');
 
 function POCACoroutineFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
@@ -11861,7 +11864,7 @@ begin
  end;
 end;
 
-const POCAThreadGhost:TPOCAGhostType=(Destroy:POCAThreadGhostDestroy;CanDestroy:nil;Mark:POCAThreadGhostMark;Name:'Thread');
+const POCAThreadGhost:TPOCAGhostType=(Destroy:POCAThreadGhostDestroy;CanDestroy:nil;Mark:POCAThreadGhostMark;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Thread');
 
 function POCAThreadFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var ThreadData:PPOCAThreadData;
@@ -12068,7 +12071,7 @@ begin
  POCALockDestroy(Data);
 end;
 
-const POCALockGhost:TPOCAGhostType=(Destroy:POCALockGhostDestroy;CanDestroy:nil;Mark:nil;Name:'Lock');
+const POCALockGhost:TPOCAGhostType=(Destroy:POCALockGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Lock');
 
 function POCALockFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
@@ -12118,7 +12121,7 @@ begin
  POCASemaphoreDestroy(Data);
 end;
 
-const POCASemaphoreGhost:TPOCAGhostType=(Destroy:POCASemaphoreGhostDestroy;CanDestroy:nil;Mark:nil;Name:'Semaphore');
+const POCASemaphoreGhost:TPOCAGhostType=(Destroy:POCASemaphoreGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Semaphore');
 
 function POCASemaphoreFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
@@ -27615,20 +27618,24 @@ begin
      exit;
     end;
    end;
-   p:=POCAGhostGetHashValue(Obj);
-   if POCAIsValueHash(p) then begin
-    result:=POCAGetMember(Context,p,Field,OutValue,CacheIndex,false,Throw);
-{   if not result then begin
-     p:=POCAHashGetPrototypeValue(p);
-     if POCAIsValueHash(p) and assigned(POCAHashGetGhost(p)) then begin
-      p:=POCAHashGetGhostValue(p);
-     end;
-     if POCAIsValueHash(p) or POCAIsValueGhost(p) then begin
-      result:=POCAGetMember(Context,p,Field,OutValue,CacheIndex,false,Throw);
-     end;
-    end;{}
+   if assigned(Ghost^.GhostType^.GetKey) and Ghost^.GhostType^.GetKey(Context,Ghost,Field,OutValue) then begin
+    result:=true;
    end else begin
-    result:=false;
+    p:=POCAGhostGetHashValue(Obj);
+    if POCAIsValueHash(p) then begin
+     result:=POCAGetMember(Context,p,Field,OutValue,CacheIndex,false,Throw);
+ {   if not result then begin
+      p:=POCAHashGetPrototypeValue(p);
+      if POCAIsValueHash(p) and assigned(POCAHashGetGhost(p)) then begin
+       p:=POCAHashGetGhostValue(p);
+      end;
+      if POCAIsValueHash(p) or POCAIsValueGhost(p) then begin
+       result:=POCAGetMember(Context,p,Field,OutValue,CacheIndex,false,Throw);
+      end;
+     end;{}
+    end else begin
+     result:=false;
+    end;
    end;
    if (not result) and Throw then begin
     POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
@@ -27670,20 +27677,24 @@ begin
      POCARuntimeError(Context,'Expandable-write-access to a non-expandable native object isn''t allowed');
     end;
    end;
-   p:=POCAGhostGetHashValue(Obj);
-   if POCAIsValueHash(p) then begin
-    result:=POCASetMember(Context,p,Field,Value,CacheIndex,Throw);
-{   if not result then begin
-     p:=POCAHashGetPrototypeValue(p);
-     if POCAIsValueHash(p) and assigned(POCAHashGetGhost(p)) then begin
-      p:=POCAHashGetGhostValue(p);
-     end;
-     if POCAIsValueHash(p) or POCAIsValueGhost(p) then begin
-      result:=POCASetMember(Context,p,Field,Value,CacheIndex,Throw);
-     end;
-    end;{}
+   if assigned(Ghost^.GhostType^.SetKey) and Ghost^.GhostType^.SetKey(Context,Ghost,Field,Value) then begin
+    result:=true;
    end else begin
-    result:=false;
+    p:=POCAGhostGetHashValue(Obj);
+    if POCAIsValueHash(p) then begin
+     result:=POCASetMember(Context,p,Field,Value,CacheIndex,Throw);
+  {   if not result then begin
+      p:=POCAHashGetPrototypeValue(p);
+      if POCAIsValueHash(p) and assigned(POCAHashGetGhost(p)) then begin
+       p:=POCAHashGetGhostValue(p);
+      end;
+      if POCAIsValueHash(p) or POCAIsValueGhost(p) then begin
+       result:=POCASetMember(Context,p,Field,Value,CacheIndex,Throw);
+      end;
+     end;{}
+    end else begin
+     result:=false;
+    end;
    end;
    if (not result) and Throw then begin
     POCARuntimeError(Context,'Error at setting member: '+POCAGetStringValue(Context,Field));
