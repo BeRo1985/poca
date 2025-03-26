@@ -1216,12 +1216,12 @@ type PPOCAInt8=^TPOCAInt8;
 
      PPOCAGhostType=^TPOCAGhostType;
      TPOCAGhostType=record
-      Destroy:procedure(Ghost:pointer);
-      CanDestroy:function(Ghost:pointer):longbool;
-      Mark:function(Ghost:pointer):longbool;
-      ExistKey:function(Context:PPOCAContext;Ghost:pointer;const aKey:TPOCAValue):longbool;
-      GetKey:function(Context:PPOCAContext;Ghost:pointer;const aKey:TPOCAValue;out aValue:TPOCAValue):longbool;
-      SetKey:function(Context:PPOCAContext;Ghost:pointer;const aKey:TPOCAValue;const aValue:TPOCAValue):longbool;
+      Destroy:procedure(GhostDataPtr:pointer);
+      CanDestroy:function(GhostDataPtr:pointer):longbool;
+      Mark:function(GhostDataPtr:pointer):longbool;
+      ExistKey:function(Context:PPOCAContext;Ghost:PPOCAGhost;const aKey:TPOCAValue):longbool;
+      GetKey:function(Context:PPOCAContext;Ghost:PPOCAGhost;const aKey:TPOCAValue;out aValue:TPOCAValue):longbool;
+      SetKey:function(Context:PPOCAContext;Ghost:PPOCAGhost;const aKey:TPOCAValue;const aValue:TPOCAValue):longbool;
       Name:TPOCARawByteString;
      end;
 
