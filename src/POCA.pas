@@ -1216,12 +1216,12 @@ type PPOCAInt8=^TPOCAInt8;
 
      PPOCAGhostType=^TPOCAGhostType;
      TPOCAGhostType=record
-      Destroy:procedure(GhostDataPtr:pointer);
-      CanDestroy:function(GhostDataPtr:pointer):longbool;
-      Mark:function(GhostDataPtr:pointer):longbool;
-      ExistKey:function(Context:PPOCAContext;Ghost:PPOCAGhost;const aKey:TPOCAValue):longbool;
-      GetKey:function(Context:PPOCAContext;Ghost:PPOCAGhost;const aKey:TPOCAValue;out aValue:TPOCAValue):longbool;
-      SetKey:function(Context:PPOCAContext;Ghost:PPOCAGhost;const aKey:TPOCAValue;const aValue:TPOCAValue):longbool;
+      Destroy:procedure(const Ghost:PPOCAGhost);
+      CanDestroy:function(const Ghost:PPOCAGhost):longbool;
+      Mark:function(const Ghost:PPOCAGhost):longbool;
+      ExistKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue):longbool;
+      GetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;out aValue:TPOCAValue):longbool;
+      SetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;const aValue:TPOCAValue):longbool;
       Name:TPOCARawByteString;
      end;
 
@@ -4829,7 +4829,7 @@ begin
  if assigned(Obj^.Ptr) then begin
   if assigned(Obj^.GhostType) then begin
    if assigned(addr(Obj^.GhostType.Destroy)) then begin
-    Obj^.GhostType.Destroy(Obj^.Ptr);
+    Obj^.GhostType.Destroy(Obj);
    end;
    Obj^.GhostType:=nil;
   end;
@@ -5107,8 +5107,8 @@ begin
  end;
 end;
 
-function POCACoroutineGhostMark(Data:pointer):longbool; forward;
-function POCAThreadGhostMark(Data:pointer):longbool; forward;
+function POCACoroutineGhostMarkEx(const Data:pointer):longbool; forward;
+function POCAThreadGhostMarkEx(const Data:pointer):longbool; forward;
 
 function POCAGarbageCollectorCollectCycle(Instance:PPOCAInstance):boolean; {$ifdef UseRegister}register;{$endif}
 var GarbageCollector:PPOCAGarbageCollector;
@@ -5228,7 +5228,7 @@ var GarbageCollector:PPOCAGarbageCollector;
  begin
   result:=false;
   if assigned(Obj^.GhostType) and assigned(addr(Obj^.GhostType^.Mark)) then begin
-   if Obj^.GhostType^.Mark(Obj^.Ptr) then begin
+   if Obj^.GhostType^.Mark(Obj) then begin
     result:=true;
    end;
   end;
@@ -5379,10 +5379,10 @@ var GarbageCollector:PPOCAGarbageCollector;
     end;   
    end;               
    if assigned(PPOCACoroutineData(Context^.CoroutineData)) and (assigned(PPOCACoroutineData(Context^.CoroutineData)^.Coroutine) and (PPOCACoroutineData(Context^.CoroutineData)^.Coroutine^.State<>pcsTERMINATED)) then begin
-    POCACoroutineGhostMark(Context^.ThreadData);
+    POCACoroutineGhostMarkEx(Context^.ThreadData);
    end;
    if assigned(PPOCAThreadData(Context^.ThreadData)) and not PPOCAThreadData(Context^.ThreadData)^.Terminated then begin
-    POCAThreadGhostMark(Context^.ThreadData);
+    POCAThreadGhostMarkEx(Context^.ThreadData);
    end;
    MarkTemporarySavedObjects(Context);
    POCAGarbageCollectorLinkedListMove(Context^.GrayList,GarbageCollector^.GrayList);
@@ -5609,7 +5609,7 @@ begin
      end;
      while (i<>0) and POCAGarbageCollectorLinkedListPop(GarbageCollector^.WhiteGhostList,Obj) do begin
       dec(i);
-      if (((Obj^.Header.ValueType=pvtGHOST) and assigned(PPOCAGhost(Obj)^.GhostType)) and assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy))) and not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj)^.Ptr) then begin
+      if (((Obj^.Header.ValueType=pvtGHOST) and assigned(PPOCAGhost(Obj)^.GhostType)) and assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy))) and not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj)) then begin
        POCAGarbageCollectorLinkedListRemove(Obj);
        POCAGarbageCollectorLinkedListPush(GarbageCollector^.GrayList,Obj);
       end else begin
@@ -10877,29 +10877,32 @@ type PPOCAIOGhostData=^TPOCAIOGhostData;
       Binary:boolean;
      end;
 
-procedure POCAIOGhostDestroy(Data:pointer);
-var DataCasted:PPOCAIOGhostData absolute Data;
+procedure POCAIOGhostDestroy(const Ghost:PPOCAGhost);
+var DataCasted:PPOCAIOGhostData;
 begin
- if assigned(Data) then begin
-  if DataCasted^.Opened then begin
-   if not DataCasted.SystemHandle then begin
-    if DataCasted.Binary then begin
-     System.Close(DataCasted^.BinaryHandle^);
-    end else begin
-     System.Close(DataCasted^.TextHandle^);
+ if assigned(Ghost) then begin
+  DataCasted:=Ghost^.Ptr;
+  if assigned(DataCasted) then begin
+   if DataCasted^.Opened then begin
+    if not DataCasted.SystemHandle then begin
+     if DataCasted.Binary then begin
+      System.Close(DataCasted^.BinaryHandle^);
+     end else begin
+      System.Close(DataCasted^.TextHandle^);
+     end;
     end;
+    DataCasted^.Opened:=false;
    end;
-   DataCasted^.Opened:=false;
-  end;
-  if DataCasted.Binary then begin
-   if assigned(DataCasted^.BinaryHandle) and not DataCasted.SystemHandle then begin
-    FreeMem(DataCasted^.BinaryHandle);
-    DataCasted^.BinaryHandle:=nil;
-   end;
-  end else begin
-   if assigned(DataCasted^.TextHandle) and not DataCasted.SystemHandle then begin
-    FreeMem(DataCasted^.TextHandle);
-    DataCasted^.TextHandle:=nil;
+   if DataCasted.Binary then begin
+    if assigned(DataCasted^.BinaryHandle) and not DataCasted.SystemHandle then begin
+     FreeMem(DataCasted^.BinaryHandle);
+     DataCasted^.BinaryHandle:=nil;
+    end;
+   end else begin
+    if assigned(DataCasted^.TextHandle) and not DataCasted.SystemHandle then begin
+     FreeMem(DataCasted^.TextHandle);
+     DataCasted^.TextHandle:=nil;
+    end;
    end;
   end;
  end;
@@ -11190,10 +11193,10 @@ begin
  POCAAddNativeFunction(Context,result,'readln',POCAIOFunctionREADLN);
 end;
 
-procedure POCARegExpGhostDestroy(Data:pointer);
+procedure POCARegExpGhostDestroy(const Ghost:PPOCAGhost);
 begin
- if assigned(Data) then begin
-  TFLRE(Data).Free;
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  TFLRE(Ghost^.Ptr).Free;
  end;
 end;
 
@@ -11567,10 +11570,11 @@ begin
  POCAAddNativeFunction(Context,result,'replace',POCARegExpFunctionREPLACE);
 end;
 
-procedure POCACoroutineGhostDestroy(Data:pointer);
-var DataCasted:PPOCACoroutineData absolute Data;
+procedure POCACoroutineGhostDestroy(const Ghost:PPOCAGhost);
+var DataCasted:PPOCACoroutineData;
 begin
- if assigned(Data) then begin
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  DataCasted:=Ghost^.Ptr;
   if assigned(DataCasted^.Coroutine) then begin
    POCACoroutineDestroy(DataCasted^.Coroutine);
   end;
@@ -11595,12 +11599,13 @@ begin
  end;
 end;
 
-function POCACoroutineGhostMark(Data:pointer):longbool;
-var DataCasted:PPOCACoroutineData absolute Data;
+function POCACoroutineGhostMarkEx(const Data:Pointer):longbool;
+var DataCasted:PPOCACoroutineData;
     i:longint;
 begin
  result:=false;
  if assigned(Data) then begin
+  DataCasted:=Data;
   if POCAMarkValue(DataCasted^.Context^.Instance,DataCasted^.Data) then begin
    result:=true;
   end;
@@ -11618,6 +11623,15 @@ begin
     result:=true;
    end;
   end;
+ end;
+end;
+
+function POCACoroutineGhostMark(const Ghost:PPOCAGhost):longbool;
+begin
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  result:=POCACoroutineGhostMarkEx(Ghost^.Ptr);
+ end else begin
+  result:=false;
  end;
 end;
 
@@ -11832,24 +11846,26 @@ begin
  end;
 end;
 
-procedure POCAThreadGhostDestroy(Data:pointer);
-var DataCasted:PPOCAThreadData absolute Data;
+procedure POCAThreadGhostDestroy(const Ghost:PPOCAGhost);
+var DataCasted:PPOCAThreadData;
 begin
- if assigned(Data) then begin
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  DataCasted:=Ghost^.Ptr;
   try
-   POCAThreadDestroy(Data);
+   POCAThreadDestroy(DataCasted);
   finally
    Dispose(DataCasted);
   end;
  end;
 end;
 
-function POCAThreadGhostMark(Data:pointer):longbool;
-var DataCasted:PPOCAThreadData absolute Data;
+function POCAThreadGhostMarkEx(const Data:Pointer):longbool;
+var DataCasted:PPOCAThreadData;
     i:longint;
 begin
  result:=false;
  if assigned(Data) then begin
+  DataCasted:=Data;
   if POCAMarkValue(DataCasted^.Context^.Instance,DataCasted^.Data) then begin
    result:=true;
   end;
@@ -11861,6 +11877,15 @@ begin
     result:=true;
    end;
   end;
+ end;
+end;
+
+function POCAThreadGhostMark(const Ghost:PPOCAGhost):longbool;
+begin
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  result:=POCAThreadGhostMarkEx(Ghost^.Ptr);
+ end else begin
+  result:=false;
  end;
 end;
 
@@ -12066,9 +12091,11 @@ begin
  POCAAddNativeFunction(Context,result,'stop',POCAThreadFunctionKILL);
 end;
 
-procedure POCALockGhostDestroy(Data:pointer);
+procedure POCALockGhostDestroy(const Ghost:PPOCAGhost);
 begin
- POCALockDestroy(Data);
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  POCALockDestroy(Ghost^.Ptr);
+ end;
 end;
 
 const POCALockGhost:TPOCAGhostType=(Destroy:POCALockGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Lock');
@@ -12116,9 +12143,11 @@ begin
  POCAAddNativeFunction(Context,result,'leave',POCALockFunctionLEAVE);
 end;
 
-procedure POCASemaphoreGhostDestroy(Data:pointer);
+procedure POCASemaphoreGhostDestroy(const Ghost:PPOCAGhost);
 begin
- POCASemaphoreDestroy(Data);
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  POCASemaphoreDestroy(Ghost^.Ptr);
+ end;
 end;
 
 const POCASemaphoreGhost:TPOCAGhostType=(Destroy:POCASemaphoreGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Semaphore');
@@ -12371,16 +12400,16 @@ begin
  POCAAddNativeFunction(Context,result,'readLine',POCAConsoleFunctionREADLINE);
 end;
 
-procedure TPOCANativeObjectDestroy(Ghost:pointer);
+procedure TPOCANativeObjectDestroy(const Ghost:PPOCAGhost);
 begin
- if assigned(Ghost) then begin
-  TPOCANativeObject(Ghost).Free;
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  TPOCANativeObject(Ghost^.Ptr).Free;
  end;
 end;
 
-function TPOCANativeObjectCanDestroy(Ghost:pointer):longbool;
+function TPOCANativeObjectCanDestroy(const Ghost:PPOCAGhost):longbool;
 begin
- result:=assigned(Ghost);
+ result:=assigned(Ghost) and assigned(Ghost^.Ptr);
 end;
 
 function TPOCANativeObjectFunctionNativeMethodCall(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
@@ -12395,10 +12424,10 @@ begin
  end;
 end;
 
-function TPOCANativeObjectMark(Ghost:pointer):longbool;
+function TPOCANativeObjectMark(const Ghost:PPOCAGhost):longbool;
 begin
- if assigned(Ghost) then begin
-  result:=TPOCANativeObject(Ghost).Mark;
+ if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
+  result:=TPOCANativeObject(Ghost^.Ptr).Mark;
  end else begin
   result:=false;
  end;
