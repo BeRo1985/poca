@@ -5555,7 +5555,7 @@ begin
          end;
         end;
        end;
-       else {brgcFULLEPHEMERAL:}begin
+       else {brgcFULLEPHEMERAL,brgcFULL:}begin
         i:=-1;
        end;
       end;
@@ -5608,7 +5608,7 @@ begin
         end;
        end;
       end;
-      else {brgcFULLEPHEMERAL:}begin
+      else {brgcFULLEPHEMERAL,brgcFULL:}begin
        i:=-1;
       end;
      end;
@@ -5646,7 +5646,7 @@ begin
         end;
        end;
       end;
-      else {brgcFULLEPHEMERAL:}begin
+      else {brgcFULLEPHEMERAL,brgcFULL:}begin
        i:=-1;
       end;
      end;
@@ -5702,7 +5702,7 @@ begin
         end;
        end;
       end;
-      else {brgcFULLEPHEMERAL:}begin
+      else {brgcFULLEPHEMERAL,brgcFULL:}begin
        for Ghost:=false to true do begin
         POCAGarbageCollectorLinkedListMoveMark(GarbageCollector^.BlackLists[Ghost],GarbageCollector^.WhiteLists[Ghost],0);
        end;
