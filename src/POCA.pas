@@ -28074,11 +28074,12 @@ begin
     if Named then begin
      POCARuntimeError(Context,'Native functions have no named arguments');
     end;
-    if assigned(PPOCANativeCode(ObjPtr)^.UserData) then begin
+{   if assigned(PPOCANativeCode(ObjPtr)^.UserData) then begin
      Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
     end else begin
      Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
-    end;
+    end;}
+    Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
     Frame^.CountArguments:=0;
     result:=@Context.FrameStack[Context.FrameTop-1];
     exit;
