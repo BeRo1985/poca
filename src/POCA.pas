@@ -1322,7 +1322,7 @@ type PPOCAInt8=^TPOCAInt8;
       
      end;
 
-     TPOCARequestGarbageCollection=(brgcNONE,brgcCYCLE,brgcFULLEPHEMERAL,brgcFULL);
+     TPOCARequestGarbageCollection=(prgcNONE,prgcCYCLE,prgcFULLEPHEMERAL,prgcFULL);
 
      TPOCAModuleLoaderFunction=function(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String):Boolean;
 
@@ -5506,7 +5506,7 @@ begin
      end else begin
       GarbageCollector^.PersistentCycleCounter:=0;
      end;
-     if GarbageCollector^.PersistentForceScan or ((GarbageCollector^.PersistentInterval>0) and (GarbageCollector^.PersistentCycleCounter>=GarbageCollector^.PersistentInterval)) or (Instance^.Globals.RequestGarbageCollection=brgcFULL) then begin
+     if GarbageCollector^.PersistentForceScan or ((GarbageCollector^.PersistentInterval>0) and (GarbageCollector^.PersistentCycleCounter>=GarbageCollector^.PersistentInterval)) or (Instance^.Globals.RequestGarbageCollection=prgcFULL) then begin
       GarbageCollector^.PersistentForceScan:=false;
       GarbageCollector^.PersistentCycleCounter:=0;
       for Ghost:=false to true do begin
@@ -5545,7 +5545,7 @@ begin
       end;
      end else begin
       case Instance^.Globals.RequestGarbageCollection of
-       brgcCYCLE:begin
+       prgcCYCLE:begin
         i:=POCAGarbageCollectorUsed(Instance);
         if i<>0 then begin
          i:=(i*GarbageCollector^.StepFactor) shr 8;
@@ -5554,7 +5554,7 @@ begin
          end;
         end;
        end;
-       else {brgcFULLEPHEMERAL,brgcFULL:}begin
+       else {prgcFULLEPHEMERAL,prgcFULL:}begin
         i:=-1;
        end;
       end;
@@ -5598,7 +5598,7 @@ begin
     end;
     pgcsMARKWHITEGHOSTS:begin
      case Instance^.Globals.RequestGarbageCollection of
-      brgcCYCLE:begin
+      prgcCYCLE:begin
        i:=POCAGarbageCollectorUsed(Instance);
        if i<>0 then begin
         i:=(i*GarbageCollector^.GhostFactor) shr 8;
@@ -5607,7 +5607,7 @@ begin
         end;
        end;
       end;
-      else {brgcFULLEPHEMERAL,brgcFULL:}begin
+      else {prgcFULLEPHEMERAL,prgcFULL:}begin
        i:=-1;
       end;
      end;
@@ -5636,7 +5636,7 @@ begin
     end;
     pgcsSWEEP:begin
      case Instance^.Globals.RequestGarbageCollection of
-      brgcCYCLE:begin
+      prgcCYCLE:begin
        i:=POCAGarbageCollectorUsed(Instance);
        if i<>0 then begin
         i:=(i*GarbageCollector^.SweepFactor) shr 8;
@@ -5645,7 +5645,7 @@ begin
         end;
        end;
       end;
-      else {brgcFULLEPHEMERAL,brgcFULL:}begin
+      else {prgcFULLEPHEMERAL,prgcFULL:}begin
        i:=-1;
       end;
      end;
@@ -5670,7 +5670,7 @@ begin
     end;
     pgcsFLIP:begin
      case Instance^.Globals.RequestGarbageCollection of
-      brgcCYCLE:begin
+      prgcCYCLE:begin
        i:=0;
        for Ghost:=false to true do begin
         if GarbageCollector^.BlackLists[Ghost]^.Next<>GarbageCollector^.BlackLists[Ghost] then begin
@@ -5701,7 +5701,7 @@ begin
         end;
        end;
       end;
-      else {brgcFULLEPHEMERAL,brgcFULL:}begin
+      else {prgcFULLEPHEMERAL,prgcFULL:}begin
        for Ghost:=false to true do begin
         POCAGarbageCollectorLinkedListMoveMark(GarbageCollector^.BlackLists[Ghost],GarbageCollector^.WhiteLists[Ghost],0);
        end;
@@ -5771,10 +5771,10 @@ begin
  if Instance^.Globals.WaitCount>=(Instance^.Globals.ThreadCount-1) then begin
   POCAFreeDead(Instance);
   case Instance^.Globals.RequestGarbageCollection of
-   brgcCYCLE:begin
+   prgcCYCLE:begin
     POCAGarbageCollectorCollectCycle(Instance);
    end;
-   brgcFULLEPHEMERAL,brgcFULL:begin
+   prgcFULLEPHEMERAL,prgcFULL:begin
     POCAGarbageCollectorCollectAll(Instance);
    end;
   end;
@@ -6460,10 +6460,10 @@ begin
   while ContextObjectPool^.Count<Count do begin
    while Pool^.FreeCount=0 do begin
     if Context^.Instance^.Globals.GarbageCollector.FullCollect then begin
-     Context^.Instance^.Globals.RequestGarbageCollection:=brgcFULLEPHEMERAL;
+     Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULLEPHEMERAL;
      POCAGarbageCollectorBottleneck(Context^.Instance);
      if Pool^.FreeCount=0 then begin
-      Context^.Instance^.Globals.RequestGarbageCollection:=brgcFULL;
+      Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULL;
       POCAGarbageCollectorBottleneck(Context^.Instance);
      end;
     end;
@@ -6499,7 +6499,7 @@ begin
   end;
   if GarbageCollector^.AllocationCounter>=Count then begin
    TPasMPInterlocked.Exchange(GarbageCollector^.AllocationCounter,0);
-   Context^.Instance^.Globals.RequestGarbageCollection:=brgcCYCLE;
+   Context^.Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
    POCAGarbageCollectorBottleneck(Context^.Instance);
   end;
  end;
@@ -10324,14 +10324,14 @@ end;
 
 function POCAGarbageCollectorFunctionCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
- Context^.Instance^.Globals.RequestGarbageCollection:=brgcFULL;
+ Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULL;
  POCAGarbageCollectorBottleneck(Context^.Instance);
  result.Num:=1;
 end;
 
 function POCAGarbageCollectorFunctionCYCLE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
- Context^.Instance^.Globals.RequestGarbageCollection:=brgcCYCLE;
+ Context^.Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
  POCAGarbageCollectorBottleneck(Context^.Instance);
  result.Num:=1;
 end;
