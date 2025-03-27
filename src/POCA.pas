@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-27-10-30-0000';
+const POCAVersion='2025-03-27-11-14-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -4731,7 +4731,7 @@ begin
   FreeMem(Obj^.UTF8CodePointsToCodeUnitsIndex);
   Obj^.UTF8CodePointsToCodeUnitsIndex:=nil;
  end;
- if assigned(Obj^.UTF8CodePointsToCodeUnitsIndex) then begin
+ if assigned(Obj^.UTF8CodeUnitsToCodePointsIndex) then begin
   FreeMem(Obj^.UTF8CodeUnitsToCodePointsIndex);
   Obj^.UTF8CodeUnitsToCodePointsIndex:=nil;
  end;
@@ -4873,7 +4873,6 @@ begin
    if assigned(Pool^.LastBlock) then begin
     Block^.Previous:=Pool^.LastBlock;
     Block^.Previous^.Next:=Block;
-    Pool^.FirstBlock:=Block;
    end else begin
     Block^.Previous:=nil;
     Pool^.FirstBlock:=Block;
