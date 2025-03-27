@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-26-07-54-0000';
+const POCAVersion='2025-03-27-10-30-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1391,6 +1391,9 @@ type PPOCAInt8=^TPOCAInt8;
       Namespace:TPOCAValue;
 
       HiddenNamespace:TPOCAValue;
+
+      RootArray:TPOCAValue;
+      RootHash:TPOCAValue;
 
       Modules:TPOCAValue;
 
@@ -5320,6 +5323,8 @@ var GarbageCollector:PPOCAGarbageCollector;
  end;
  procedure MarkRoots;
  begin
+  MarkValue(Instance^.Globals.RootArray);
+  MarkValue(Instance^.Globals.RootHash);
   MarkValue(Instance^.Globals.Namespace);
   MarkValue(Instance^.Globals.HiddenNamespace);
   MarkValue(Instance^.Globals.Modules);
@@ -14764,6 +14769,8 @@ begin
      result^.Globals.UnknownValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'Unknown'));
     end;
    end;
+   result^.Globals.RootArray:=POCANewArray(Context);
+   result^.Globals.RootHash:=POCANewHash(Context);
    result^.Globals.HiddenNamespace:=POCANewHash(Context);
    result^.Globals.Namespace:=POCAInitGlobalNamespace(Context);
    result^.Globals.BaseClass:=POCAInitBaseClass(Context);
