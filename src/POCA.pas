@@ -1736,6 +1736,7 @@ function POCANewValueFromVariant(Context:PPOCAContext;const VariantValue:Variant
 
 function POCAGhostGetType(const r:TPOCAValue):PPOCAGhostType; {$ifdef caninline}inline;{$endif}
 function POCAGhostGetPointer(const r:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
+function POCAGhostFastGetPointer(const r:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
 function POCAGhostGetHash(const r:TPOCAValue):PPOCAHash; {$ifdef caninline}inline;{$endif}
 function POCAGhostGetHashValue(const r:TPOCAValue):TPOCAValue; {$ifdef caninline}inline;{$endif}
 function POCAGhostSetHash(const r:TPOCAValue;const h:PPOCAHash):boolean; {$ifdef caninline}inline;{$endif}
@@ -6929,6 +6930,11 @@ begin
  end else begin
   result:=nil;
  end;
+end;
+
+function POCAGhostFastGetPointer(const r:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
+begin
+ result:=PPOCAGhost(POCAGetValueReferencePointer(r))^.Ptr;
 end;
 
 function POCAGhostGetHash(const r:TPOCAValue):PPOCAHash; {$ifdef caninline}inline;{$endif}
