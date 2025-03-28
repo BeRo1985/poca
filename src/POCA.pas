@@ -1418,6 +1418,9 @@ type PPOCAInt8=^TPOCAInt8;
       FirstContext:PPOCAContext;
       LastContext:PPOCAContext;
 
+      HostData:Pointer;
+      HostDataFreeable:LongBool;
+
      end;
 
      PPOCAFrameStack=^TPOCAFrameStack;
@@ -14809,6 +14812,10 @@ begin
    POCAContextDestroy(Context);
   end;
  end;
+ begin
+  result^.Globals.HostData:=nil;
+  result^.Globals.HostDataFreeable:=true;
+ end;
 end;
 
 procedure POCAInstanceDestroy(var Instance:PPOCAInstance);
@@ -14900,6 +14907,13 @@ begin
    FreeAndNil(Instance^.SourceFiles);
 
    Instance^.Globals.ModuleLoaderFunctions:=nil;
+
+   if assigned(Instance^.Globals.HostData) then begin
+    if Instance^.Globals.HostDataFreeable then begin
+     FreeMem(Instance^.Globals.HostData);
+    end;
+    Instance^.Globals.HostData:=nil;
+   end;
 
   finally
    Finalize(Instance^);
