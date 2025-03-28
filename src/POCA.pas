@@ -27673,7 +27673,7 @@ begin
      exit;
     end;
    end;
-   if assigned(Ghost^.GhostType^.GetKey) and Ghost^.GhostType^.GetKey(Context,Ghost,Field,OutValue) then begin
+   if assigned(Ghost) and assigned(Ghost^.GhostType) and assigned(Ghost^.GhostType^.GetKey) and Ghost^.GhostType^.GetKey(Context,Ghost,Field,OutValue) then begin
     result:=true;
    end else begin
     p:=POCAGhostGetHashValue(Obj);
@@ -27732,7 +27732,7 @@ begin
      POCARuntimeError(Context,'Expandable-write-access to a non-expandable native object isn''t allowed');
     end;
    end;
-   if assigned(Ghost^.GhostType^.SetKey) and Ghost^.GhostType^.SetKey(Context,Ghost,Field,Value) then begin
+   if assigned(Ghost) and assigned(Ghost^.GhostType) and assigned(Ghost^.GhostType^.SetKey) and Ghost^.GhostType^.SetKey(Context,Ghost,Field,Value) then begin
     result:=true;
    end else begin
     p:=POCAGhostGetHashValue(Obj);
