@@ -71,7 +71,7 @@
   {$endif}
  {$endif}
  {-$pic off}
- {$define caninline}
+ {-$define caninline}
  {$ifdef FPC_HAS_TYPE_EXTENDED}
   {$define HAS_TYPE_EXTENDED}
  {$else}
