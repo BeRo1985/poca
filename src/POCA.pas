@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-27-11-14-0000';
+const POCAVersion='2025-03-30-09-05-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -18069,7 +18069,7 @@ var TokenList:PPOCAToken;
  procedure ProcessLexer(var Parser:TPOCAParser;const Source:TPOCARawByteString);
  var SourcePosition,SourceLength,SourceLine,SourceColumn,LastPragma,LastOutputInfo:longint;
      AutomaticSemicolonInsertion:boolean;
-  procedure AddToken(Token:TPOCATokenType;const Str:TPOCARawByteString;const Num:double);
+  procedure AddToken(Token:TPOCATokenType;const Str:TPOCARawByteString;Num:double);
   var NewToken:PPOCAToken;
       i,j:longint;
   begin
@@ -18113,7 +18113,15 @@ var TokenList:PPOCAToken;
     ptFASTFUNC:begin
      Token:=ptFASTFUNCTION;
     end;
-   end;     
+    ptFALSE:begin
+     Token:=ptLITERALNUM;
+     Num:=0.0;
+    end;
+    ptTRUE:begin
+     Token:=ptLITERALNUM;
+     Num:=1.0;
+    end;
+   end;
    New(NewToken);
    FillChar(NewToken^,sizeof(TPOCAToken),#0);
    NewToken^.TokenListNext:=TokenList;
@@ -19812,7 +19820,9 @@ var TokenList:PPOCAToken;
                                                 ptRBRA,
                                                 ptRCURL,
                                                 ptLITERALSTR,
-                                                ptLITERALNUM])) then begin
+                                                ptLITERALNUM,
+                                                ptTRUE,
+                                                ptFALSE])) then begin
        CurrentToken^.Token:=ptTHIS;
        InsertAfter(CurrentToken,ptDOT);
       end else begin
