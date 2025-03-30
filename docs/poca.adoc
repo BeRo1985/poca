@@ -336,7 +336,7 @@ POCA distinguishes between object/hash literals and code blocks based on their c
 { name } // Assuming 'name' is defined, it expands to { name: name }
 
 // Example code block
-{ name; } // This is treated as a code block, because it is separated by a semicolon, for distinguishing it from an shorthand object literal
+{ name; } // This is treated as a code block, because of the semicolon, for distinguishing it from an shorthand object literal
 
 // Example code block
 { print("Hello"); }
