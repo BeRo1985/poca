@@ -364,7 +364,9 @@ scope {
 
 ----
 
-Without the `scope` and `code` keyword, POCA relies on the presence of key-value pairs (identifiers followed by a colon and value) to identify object literals. If no such pattern is found within the curly braces, it's treated as a code block.
+Without the `scope` and `code` keyword, POCA relies on the presence of key-value pairs (identifiers followed by a colon and value) to identify object literals. If no such pattern is found within the curly braces, it's treated as a code block. However, empty curly braces `{}` are always treated as an empty object literal, since inside code blocks, these are anyway effectively no-ops and will be garbage collected later.  
+
+This distinction allows for flexibility in defining both objects and code blocks, making POCA's syntax versatile.
 
 === Arrays/Vectors
 
