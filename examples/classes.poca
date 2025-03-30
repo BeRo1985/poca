@@ -62,7 +62,7 @@ bla.e();
 
 puts();
 
-puts("Keys of object bla instance of class ",bla.className,":\n", block{
+puts("Keys of object bla instance of class ",bla.className,":\n", scope{
   let s = ""; 
   forkey(let key;bla){
     s ~= key ~ " of type " ~ typeof(bla[key]) ~ "\n";

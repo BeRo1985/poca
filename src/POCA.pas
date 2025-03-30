@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-30-13-39-0000';
+const POCAVersion='2025-03-30-14-02-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -723,8 +723,8 @@ type PPOCAInt8=^TPOCAInt8;
       ptPOW,
       ptPOWEQ,
       ptREGISTER,
-      ptBLOCK,
-      ptINLINEBLOCK,
+      ptSCOPE,
+      ptCODE,
       ptSUPERTHAT,
       ptTHAT,
       ptTHIS,
@@ -17882,10 +17882,10 @@ var TokenList:PPOCAToken;
     ptREGISTER:begin
      DumpIt(' register ');
     end;
-    ptBLOCK:begin
+    ptSCOPE:begin
      DumpIt(' block ');
     end;
-    ptINLINEBLOCK:begin
+    ptCODE:begin
      DumpIt(' inlineblock ');
     end;
     ptSUPERTHAT:begin
@@ -18222,7 +18222,7 @@ var TokenList:PPOCAToken;
       ptASSIGN,ptLT,ptLTEQ,ptEQ,ptNEQ,ptGT,ptGTEQ,ptCMP,ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptEMPTY,
       ptNULL,ptELLIPSIS,ptQUESTION,ptVAR,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptFORINDEX,ptLAND,ptLOR,ptTRY,ptCATCH,ptFINALLY,
       ptTHROW,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptPOSTDEC,ptPOSTINC,ptPREDEC,ptPREINC,ptBAND,ptBOR,ptBXOR,ptBNOT,ptBSHL,ptBSHR,
-      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptREGISTER,ptBLOCK,ptINLINEBLOCK,
+      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptREGISTER,ptSCOPE,ptCODE,
       ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
       ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptREG,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
@@ -20779,7 +20779,7 @@ var TokenList:PPOCAToken;
        end;
        if assigned(result) and ((result^.Token in [ptSEMI,ptAUTOSEMI]) or (result^.Token in EndToken)) then begin
         if CountStatements>1 then begin
-         InsertBefore(AnchorToken,ptINLINEBLOCK);
+         InsertBefore(AnchorToken,ptCODE);
          InsertBefore(AnchorToken,ptLCURL);
          InsertBefore(result,ptSEMI);
          InsertBefore(result,ptRCURL);
@@ -20888,7 +20888,7 @@ var TokenList:PPOCAToken;
      end else begin
       if AddCurlyBraceIfNotExist then begin
        Block:=NewToken(t,ptLCURL);
-       if List^^.Token in [ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptBLOCK,ptINLINEBLOCK] then begin
+       if List^^.Token in [ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptSCOPE,ptCODE] then begin
         AddNewChild(Block,ParseToken(t,List));
        end else begin
         ParseBlock(Block,ptSEMI,ptNONE,List,UntilIncludingToken);
@@ -20949,10 +20949,10 @@ var TokenList:PPOCAToken;
       ptSAFELBRA:begin
        ParseBlock(t,ptSAFERBRA,ptNONE,List,UntilIncludingToken);
       end;
-      ptBLOCK:begin
+      ptSCOPE:begin
        ParseCurlyBraceBlock(false,true);
       end;
-      ptINLINEBLOCK:begin
+      ptCODE:begin
        ParseCurlyBraceBlock(false,true);
       end;
       ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin // function(...){...} / function SymbolName (...){...}
@@ -21256,7 +21256,7 @@ var TokenList:PPOCAToken;
       ptFOR,ptFOREACH,ptWHILE,ptFORINDEX,ptFORKEY,ptDO,ptWHEN,ptSWITCH:begin
        result:=true;
       end;
-      ptBLOCK,ptINLINEBLOCK:begin
+      ptSCOPE,ptCODE:begin
        result:=(not assigned(t^.Previous)) or (t^.Previous^.Token in [ptSEMI,ptAUTOSEMI]);
       end;
       ptTRY:begin
@@ -21358,7 +21358,7 @@ var TokenList:PPOCAToken;
       ptLPAR,ptLBRA,ptLCURL,ptSAFELBRA:begin
        PrecedenceChildren(t);
       end;
-      ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptBLOCK,ptINLINEBLOCK:begin
+      ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptSCOPE,ptCODE:begin
        PrecedenceBlock(t);
       end;
      end;
@@ -21420,7 +21420,7 @@ var TokenList:PPOCAToken;
       ptLPAR,ptLBRA,ptLCURL,ptSAFELBRA:begin
        PrecedenceChildren(StartToken);
       end;
-      ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptCASE,ptDEFAULT,ptBLOCK,ptINLINEBLOCK:begin
+      ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptCASE,ptDEFAULT,ptSCOPE,ptCODE:begin
        PrecedenceBlock(StartToken);
       end;
       ptWHEN:begin
@@ -26472,14 +26472,14 @@ var TokenList:PPOCAToken;
       ptTOP:begin
        result:=GenerateBlock(t^.Left,OutReg,DoNeedResult,true);
       end;
-      ptBLOCK:begin
+      ptSCOPE:begin
        if (not assigned(t^.Left)) or (t^.Left^.Token<>ptLCURL) then begin
         SyntaxError('Missed curly brace',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end else begin
         result:=GenerateBlock(t^.Left^.Children,OutReg,DoNeedResult,true);
        end;
       end;
-      ptINLINEBLOCK:begin
+      ptCODE:begin
        if (not assigned(t^.Left)) or (t^.Left^.Token<>ptLCURL) then begin
         SyntaxError('Missed curly brace',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end else begin
@@ -33744,8 +33744,8 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
   AddKeywordToken(ptFALLTHROUGH,'fallthrough');
   AddKeywordToken(ptRETRY,'retry');
   AddKeywordToken(ptREGISTER,'register');
-  AddKeywordToken(ptBLOCK,'block');
-  AddKeywordToken(ptINLINEBLOCK,'inlineblock');
+  AddKeywordToken(ptSCOPE,'scope');
+  AddKeywordToken(ptCODE,'code');
   AddKeywordToken(ptTHAT,'that');
   AddKeywordToken(ptTHIS,'this');
   AddKeywordToken(ptSELF,'self');

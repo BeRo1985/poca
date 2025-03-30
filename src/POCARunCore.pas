@@ -21,7 +21,7 @@ implementation
 
 const REPLCode='print("Welcome to POCA version '+POCAVersion+'.\n");'#13#10+
                'print("Type \".help\" for more information.\n");'#13#10+
-               'let expr = "", lineRegExp = /^(.*)\\s*$/, cmdRegEx = /^\s*\.(\w+)\s*(.*)/, scope = {};'#13#10+
+               'let expr = "", lineRegExp = /^(.*)\\s*$/, cmdRegEx = /^\s*\.(\w+)\s*(.*)/, currentScope = {};'#13#10+
                'while(1){'#13#10+
                '  let match, line;'#13#10+
                '  if(match = lineRegExp.match(line = readLine((expr == "") ? "> " : ". "))){'#13#10+
@@ -47,7 +47,7 @@ const REPLCode='print("Welcome to POCA version '+POCAVersion+'.\n");'#13#10+
                '    }'#13#10+
                '  }else{'#13#10+
                '    try{'#13#10+
-               '      print("< " ~ String.dump(eval(expr, "<eval>", [], null, scope)) ~ "\n");'#13#10+
+               '      print("< " ~ String.dump(eval(expr, "<eval>", [], null, currentScope)) ~ "\n");'#13#10+
                '    }catch(let err){'#13#10+
                '      for(let i = err.size() - 1; i >= 0; i--){'#13#10+
                '        print(err[i] ~ " ");'#13#10+
