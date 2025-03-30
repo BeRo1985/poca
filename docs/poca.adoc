@@ -319,19 +319,36 @@ let (x, y, z) = bla();
 
 === Scope blocks
 
-Scope blocks in POCA must be defined using the keyword `block` because everything in POCA is treated as an expression, as shown in the example below:
+POCA distinguishes between object/hash literals and code blocks based on their content. Object literals are defined by key-value pairs separated by colons (`:`) and commas (`,`). Code blocks consist of expressions or statements without this pattern. The `block` keyword can be used to explicitly define a code block when ambiguity might arise, as everything in POCA is treated as an expression.
 
 [source,javascript]
 ----
+// Example object literal with multiple keys
+{ name: "Alice", age: 30 }
+
+// Example object literal with a single key-value pair
+{ Name: "Alice" }
+
+// Example code block
+{ print("Hello"); }
+
+// Explicit code block using 'block'
+block {
+  let x = 10;
+  print(x);
+}
+
+// Example of nested code blocks with explicit 'block' keyword
 block {
   let a = 1 + 2;
   block {
     let b = a + 2;
   }
 }
+
 ----
 
-Without the keyword `block`, the `{` alone would indicate the beginning of an hash/object literal in POCA because, as stated, everything is treated as an expression.
+Without the `block` keyword, POCA relies on the presence of key-value pairs (identifiers followed by a colon and value) to identify object literals. If no such pattern is found within the curly braces, it's treated as a code block.
 
 === Arrays/Vectors
 
