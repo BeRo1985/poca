@@ -804,7 +804,7 @@ readLine();
 
 [source,javascript]
 ----
-var expr = "", lineRegExp = /^(.*)\\s*$/, match = [], i = 0, scope = {};
+var expr = "", lineRegExp = /^(.*)\\s*$/, match = [], i = 0, currentScope = {};
 while(1){
   print((expr === "") ? "> " : "\\ ");
   if(match = lineRegExp.match(line = readLine()))  {
@@ -815,7 +815,7 @@ while(1){
     break;
   }
   try{
-    print("< " ~ eval(expr, "<eval>", [], null, scope) ~ "\n");
+    print("< " ~ eval(expr, "<eval>", [], null, currentScope) ~ "\n");
   }catch(err){
     for(i = err.size() - 1; i >= 0; i--){
       print(err[i] ~ " ");
