@@ -23814,43 +23814,52 @@ var TokenList:PPOCAToken;
      if (not assigned(t)) or (t^.Token=ptEMPTY) then begin
       exit;
      end;
-     if (t^.Token<>ptCOLON) or not assigned(t^.Left) then begin
-      SyntaxError('Bad hash initializer',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-     end else begin
-      case t^.Left^.Token of
-       ptSYMBOL:begin      
-        Reg1:=GenerateScalarConstant(t^.Left,-1);
-       end;
-       ptLITERALSTR,ptLITERALNUM:begin
-        Reg1:=GenerateExpression(t^.Left,-1,true);
-       end;
-       ptPROTOTYPE:begin
-        Reg2:=GenerateExpression(t^.Right,-1,true);
-        EmitOpcode(popSETPROTOTYPE,HashReg,Reg2);
-        FreeRegister(Reg2);
-        exit;
-       end;
-       ptCONSTRUCTOR:begin
-        Reg2:=GenerateExpression(t^.Right,-1,true);
-        EmitOpcode(popSETCONSTRUCTOR,HashReg,Reg2);
-        FreeRegister(Reg2);
-        exit;
-       end;
-       ptHASHKIND:begin
-        Reg2:=GenerateExpression(t^.Right,-1,true);
-        EmitOpcode(popSETHASHKIND,HashReg,Reg2);
-        FreeRegister(Reg2);
-        exit;
-       end;
-       else begin
-        Reg1:=-1;
-        SyntaxError('Bad hash initializer',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-       end;
-      end;
-      Reg2:=GenerateExpression(t^.Right,-1,true);
+     if t^.Token=ptSYMBOL then begin
+      // Shorthand
+      Reg1:=GenerateScalarConstant(t,-1);
+      Reg2:=GenerateExpression(t,-1,true);
       EmitOpcode(popHASHAPPEND,HashReg,Reg1,Reg2);
       FreeRegister(Reg1);
       FreeRegister(Reg2);
+     end else begin
+      if (t^.Token<>ptCOLON) or not assigned(t^.Left) then begin
+       SyntaxError('Bad hash initializer',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+      end else begin
+       case t^.Left^.Token of
+        ptSYMBOL:begin
+         Reg1:=GenerateScalarConstant(t^.Left,-1);
+        end;
+        ptLITERALSTR,ptLITERALNUM:begin
+         Reg1:=GenerateExpression(t^.Left,-1,true);
+        end;
+        ptPROTOTYPE:begin
+         Reg2:=GenerateExpression(t^.Right,-1,true);
+         EmitOpcode(popSETPROTOTYPE,HashReg,Reg2);
+         FreeRegister(Reg2);
+         exit;
+        end;
+        ptCONSTRUCTOR:begin
+         Reg2:=GenerateExpression(t^.Right,-1,true);
+         EmitOpcode(popSETCONSTRUCTOR,HashReg,Reg2);
+         FreeRegister(Reg2);
+         exit;
+        end;
+        ptHASHKIND:begin
+         Reg2:=GenerateExpression(t^.Right,-1,true);
+         EmitOpcode(popSETHASHKIND,HashReg,Reg2);
+         FreeRegister(Reg2);
+         exit;
+        end;
+        else begin
+         Reg1:=-1;
+         SyntaxError('Bad hash initializer',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+        end;
+       end;
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       EmitOpcode(popHASHAPPEND,HashReg,Reg1,Reg2);
+       FreeRegister(Reg1);
+       FreeRegister(Reg2);
+      end;
      end;
     end;
     procedure GenerateHash(t:PPOCAToken;HashReg:longint);
@@ -23865,6 +23874,19 @@ var TokenList:PPOCAToken;
        end;
        break;
       end;
+     end;
+    end;
+    function IsLCURLCodeBlock(t:PPOCAToken):boolean;
+    begin
+     if assigned(t) then begin
+      if (not assigned(t^.Left)) or
+         ((assigned(t^.Left) and (t^.Token=ptCOMMA) and (t^.Left^.Token in [ptCOLON,ptSYMBOL])) or (t^.Token=ptCOLON)) then begin
+       result:=false;
+      end else begin
+       result:=true;
+      end;
+     end else begin
+      result:=false;
      end;
     end;
     function IsHashCall(t:PPOCAToken):boolean;
@@ -26649,14 +26671,18 @@ var TokenList:PPOCAToken;
        result:=GenerateAssignment(t,OutReg);
       end;
       ptLCURL:begin
-       if OutReg<0 then begin
-        result:=GetRegister(true,false);
+       if assigned(t^.Children) and IsLCURLCodeBlock(t^.Children) then begin
+        result:=GenerateBlock(t^.Children,OutReg,DoNeedResult,true);
        end else begin
-        result:=OutReg;
+        if OutReg<0 then begin
+         result:=GetRegister(true,false);
+        end else begin
+         result:=OutReg;
+        end;
+        EmitOpcode(popNEWHASH,result);
+        GenerateHash(t^.Left,result);
+        SetRegisterNumber(result,false);
        end;
-       EmitOpcode(popNEWHASH,result);
-       GenerateHash(t^.Left,result);
-       SetRegisterNumber(result,false);
       end;
       ptLBRA:begin
        if Unary(t) then begin
