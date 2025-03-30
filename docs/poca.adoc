@@ -329,6 +329,15 @@ POCA distinguishes between object/hash literals and code blocks based on their c
 // Example object literal with a single key-value pair
 { Name: "Alice" }
 
+// Example shorthand object literal
+{ name, age } // Assuming 'name' and 'age' are defined variables, it expands to { name: name, age: age }
+
+// Example object literal with a single shorthand key
+{ name } // Assuming 'name' is defined, it expands to { name: name }
+
+// Example code block
+{ name; } // This is treated as a code block, not an object literal, because it is separated by a semicolon, for distinguishing it from an shorthand object literal
+
 // Example code block
 { print("Hello"); }
 
