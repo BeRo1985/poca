@@ -3,24 +3,30 @@
 :toc-placement: preamble
 :toclevels: 2
 :showtitle:
-:Some attr: Some value
+:!webfonts:
 
 // Need some preamble to get TOC:
 {empty}
 
 == Introduction
 
-POCA is ECMAScript-like but it's not ECMAScript at all. It has some differences and even some feature, which ECMAScript doesn't have.
+POCA is JavaScript/ECMAScript-like, but it's not the same. It has some
+differences and even a few features that ECMAScript doesn't have.
 
-This document shows the features of POCA. POCA is a very powerful scripting language, which uses some of the concepts of ECMAScript, LUA, Squirrel, Nasal, Python and Perl. POCA supports Object Oriented Programming (OOP) in two flavours (prototype-based and class-based) but also functional programming and procedural programming.
+This document shows the features of POCA. POCA is a very powerful scripting
+language, that uses some of the concepts coming from ECMAScript, Lua, Squirrel,
+Nasal, Python, and Perl. POCA supports object-oriented programming (OOP) in two
+flavours (prototype-based and class-based), as well as functional programming
+and procedural programming styles.
 
-In POCA is everything a expression, there are no statements. i.e. something like
+In POCA everything is an expression; there are no statements, so for example
+something like
 
 [source,javascript]
 ----
 var a = scope {
   var b = 1;
-  for(reg c = 0; c < 16; c++){
+  for (reg c = 0; c < 16; c++) {
     b += c + c
   };
   b;
@@ -31,46 +37,70 @@ and
 
 [source,javascript]
 ----
-var a = if(b < 1){
+var a = if (b < 1) {
           1
-        }else if(b < 4){
+        } else if (b < 4){
           2
-        }else{
+        } else {
           3
         };
 ----
 
-are valid POCA code.
+is valid POCA code.
 
-People familiar with other programming languages, and scripting languages like JavaScript/ECMAScript in particular, are usually able to learn POCA rather quickly.
+People familiar with other programming languages, especially scripting
+languages such as JavaScript/ECMAScript in particular, are usually able to
+learn POCA fairly quickly.
 
 == Architecture
 
-POCA uses a frame-stack-wise infinite-register-based byte code instruction set architecure (ISA).
+POCA uses a frame stack, infinite register, bytecode instruction set
+architecture (ISA).
 
-Unlike almost all other script interpreters, POCA is thread-safe and scalable when called from multiple CPU threads. No special treatment is required and the threads can be scheduled simultaneously, so there is no global lock on the byte-code interpreter or x86 Just-In-Time-Compiler execution engine. The only limit on scalability is the single-threaded incremental generational garbage collector, which must block all byte-code interpreter threads and from the Just-In-Time-Compiler compiled CPU-native code threads before running.
+Unlike almost all other script interpreters, POCA is thread-safe and scalable
+when called from multiple CPU threads. No special handling is required and the
+threads can be scheduled concurrently. There is no global lock (GIL) on the g
+interpreter or the x86 just in time (JIT) compiler execution engine. The only
+limit to scalability is the single-threaded incremental and generational
+garbage collector, which must block all bytecode interpreter threads and CPU
+native code threads compiled by the JIT compiler before executing.
 
-POCA's API design concept is more or less similiar to the concept from LUA. So concepts like hash tables (hashs), metatables (hash events), vectors (arrays), etc. exists here also.
+POCA's API design concept is more or less similar to Lua's. This means that
+concepts like hash tables (hashes), meta tables (hash table events), vectors
+(arrays), etc. exist here too.
 
-== The basics
+== Overview
 
 === Imperative and structured
 
-POCA supports structured programming in the style of C. POCA supports function and block scoping with the keywords var, let and const. POCA requires explicit semicolons, as the idea of automatic semicolon insertion like ECMAScript is a very silly idea in my opinion.
+POCA supports structured programming in the style of C. POCA supports function
+and block scoping with the keywords var, let and const. POCA requires explicit
+semicolons, as automatic semicolon injection can introduce hard-to-detect bugs.
+The only exception is that you can omit the last semicolon in a `function`,
+`scope`, or `code` block.
 
-Like C-style languages, control flow is done with the while, for, do / while, if / else, and switch statements. Functions are weakly typed and may accept and return any type. Arguments not provided default to undefined.
+As with C-like languages, control flow can be achieved using `while`, `for`,
+`do` / `while`, `if` / `else`, and `switch` / `case` statements. Functions are
+weakly typed and can accept and return any type. Unspecified arguments default
+to undefined. In addition to `for`, POCA also supports `foreach`, which can
+iterate over ranges (arrays).
 
 === Weakly typed
 
-POCA, like ECMAScript/JavaScript, is weakly typed. This means that certain types are implicitly assigned based on the operation performed in most cases, but not all, to avoid some typical JavaScript/ECMAScript quirks.
+POCA, like ECMAScript/JavaScript, is weakly typed. This means that in most, but
+not all cases, certain types are implicitly assigned based on the operation
+being performed, avoiding some typical JavaScript/ECMAScript quirks.
 
 === Dynamic
 
-POCA is dynamically typed. Thus, a type is associated with a value rather than an expression. POCA supports various ways to test the type of objects, including duck typing.
+POCA is dynamically typed. Thus, a type is associated with a concrete value and
+not with an expression. POCA supports several ways to test the type of objects,
+including duck typing.
 
 === Everything is an expression
 
-In POCA everything is an expression, even statements, declarations and definitions. So the following code is valid POCA code:
+In POCA, everything is an expression, even statements, declarations and
+definitions. So the following code snippet is valid:
 
 [source,javascript]
 ----
@@ -78,9 +108,12 @@ let a = scope{let b = 0; for(let c = 0; c < 6; c++){ b++ }; b; };
 let bla = if(a != 0){ 1 }else{ a ? 2 : 3 };
 ----
 
-Thus, POCA is here essentially a math-expression 'something' that has been supercharged into a complete scripting language.
+POCA essentially maps the mathematical concept and expression of "something"
+into a complete scripting language.
 
-=== How to create variables
+== A quick tour
+
+=== How to declare variables
 
 [source,javascript]
 ----
@@ -229,14 +262,14 @@ const y = x * 10;
 
 Not all POCA statements are "executed".
 
-Code after double slashes `//` or between 
+Code after double slashes `//` or between
 
 [source,javascript]
 ```
 /*
 ```
 
-and 
+and
 
 [source,javascript]
 ```
@@ -364,7 +397,7 @@ scope {
 
 ----
 
-Without the `scope` and `code` keyword, POCA relies on the presence of key-value pairs (identifiers followed by a colon and value) to identify object literals. If no such pattern is found within the curly braces, it's treated as a code block. However, empty curly braces `{}` are always treated as an empty object literal, since inside code blocks, these are anyway effectively no-ops and will be garbage collected later.  
+Without the `scope` and `code` keyword, POCA relies on the presence of key-value pairs (identifiers followed by a colon and value) to identify object literals. If no such pattern is found within the curly braces, it's treated as a code block. However, empty curly braces `{}` are always treated as an empty object literal, since inside code blocks, these are anyway effectively no-ops and will be garbage collected later.
 
 This distinction allows for flexibility in defining both objects and code blocks, making POCA's syntax versatile.
 
