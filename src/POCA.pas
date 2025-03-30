@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-30-09-05-0000';
+const POCAVersion='2025-03-30-13-39-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -20833,7 +20833,7 @@ var TokenList:PPOCAToken;
    p^.LastChild:=c;
    c^.Rule:=prNONE;
   end;
-  procedure ParseBlock(Top:PPOCAToken;EndToken:TPOCATokenType;List:PPPOCAToken;UntilIncludingToken:PPOCAToken);
+  procedure ParseBlock(Top:PPOCAToken;EndToken,EarlyEndToken:TPOCATokenType;List:PPPOCAToken;UntilIncludingToken:PPOCAToken);
    function ParseToken(Parent:PPOCAToken;List:PPPOCAToken;ParentToken:TPOCATokenType=ptNONE):PPOCAToken;
    var t,Block,CaseBlock,UntilToIncludeToken:PPOCAToken;
     function Pop:PPOCAToken;
@@ -20891,7 +20891,7 @@ var TokenList:PPOCAToken;
        if List^^.Token in [ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptFORINDEX,ptFORKEY,ptTRY,ptCATCH,ptFINALLY,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptBLOCK,ptINLINEBLOCK] then begin
         AddNewChild(Block,ParseToken(t,List));
        end else begin
-        ParseBlock(Block,ptSEMI,List,UntilIncludingToken);
+        ParseBlock(Block,ptSEMI,ptNONE,List,UntilIncludingToken);
        end;
        AddNewChild(t,Block);
       end else begin
@@ -20938,16 +20938,16 @@ var TokenList:PPOCAToken;
      t^.Parent:=Parent;
      case t^.Token of
       ptLPAR:begin
-       ParseBlock(t,ptRPAR,List,UntilIncludingToken);
+       ParseBlock(t,ptRPAR,ptNONE,List,UntilIncludingToken);
       end;
       ptLBRA:begin
-       ParseBlock(t,ptRBRA,List,UntilIncludingToken);
+       ParseBlock(t,ptRBRA,ptNONE,List,UntilIncludingToken);
       end;
       ptLCURL:begin
-       ParseBlock(t,ptRCURL,List,UntilIncludingToken);
+       ParseBlock(t,ptRCURL,ptNONE,List,UntilIncludingToken);
       end;
       ptSAFELBRA:begin
-       ParseBlock(t,ptSAFERBRA,List,UntilIncludingToken);
+       ParseBlock(t,ptSAFERBRA,ptNONE,List,UntilIncludingToken);
       end;
       ptBLOCK:begin
        ParseCurlyBraceBlock(false,true);
@@ -21156,7 +21156,7 @@ var TokenList:PPOCAToken;
           else begin
            if assigned(CaseBlock) and assigned(CaseBlock^.Right) and (CaseBlock^.Right^.Token=ptLCURL) then begin
             UntilToIncludeToken:=ScanUntil([ptCASE,ptDEFAULT,ptRCURL]);
-            ParseBlock(CaseBlock^.Right,ptNONE,List,UntilToIncludeToken);
+            ParseBlock(CaseBlock^.Right,ptNONE,ptNONE,List,UntilToIncludeToken);
             if assigned(List^) and (List^^.Token in [ptSEMI,ptAUTOSEMI]) then begin
              Pop;
             end;
@@ -21191,7 +21191,11 @@ var TokenList:PPOCAToken;
          Block:=NewToken(t,ptLPAR);
          UntilToIncludeToken:=ScanUntil([ptCOLON]);
          if assigned(UntilToIncludeToken) and assigned(UntilToIncludeToken^.Next) and (UntilToIncludeToken^.Next.Token=ptCOLON) then begin
-          ParseBlock(Block,ptNONE,List,UntilToIncludeToken);
+          if assigned(Block) and (Block^.Token=ptLPAR) then begin
+           ParseBlock(Block,ptNONE,ptCOLON,List,UntilToIncludeToken);
+          end else begin
+           ParseBlock(Block,ptNONE,ptNONE,List,UntilToIncludeToken);
+          end;
           AddNewChild(t,Block);
           if assigned(List^) and (List^^.Token=ptCOLON) then begin
            Pop;
@@ -21268,7 +21272,8 @@ var TokenList:PPOCAToken;
   begin
    t:=Top;
    while assigned(List^) do begin
-    if ((List^^.Token in [ptRPAR,ptRBRA,ptRCURL,ptELSEIF,ptELSE,ptCASE,ptDEFAULT,ptCATCH,ptFINALLY]) and (List^^.Token<>EndToken)) or ((EndToken in [ptSEMI,ptAUTOSEMI]) and (List^^.Token=ptCOMMA)) then begin
+    if (List^^.Token=EarlyEndToken) or
+       (((List^^.Token in [ptRPAR,ptRBRA,ptRCURL,ptELSEIF,ptELSE,ptCASE,ptDEFAULT,ptCATCH,ptFINALLY]) and (List^^.Token<>EndToken)) or ((EndToken in [ptSEMI,ptAUTOSEMI]) and (List^^.Token=ptCOMMA))) then begin
      break;
     end;
     t:=ParseToken(t,List);
@@ -21568,7 +21573,7 @@ var TokenList:PPOCAToken;
     t:=Parser.Tree.Children;
     Parser.Tree.Children:=nil;
     Parser.Tree.LastChild:=nil;
-    ParseBlock(@Parser.Tree,ptNONE,@t,nil);
+    ParseBlock(@Parser.Tree,ptNONE,ptNONE,@t,nil);
     if assigned(t) then begin
      case t^.Token of
       ptRPAR:begin
