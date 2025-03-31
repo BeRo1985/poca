@@ -24,16 +24,13 @@ The following sections provide a detailed breakdown of each stage in the POCA en
 Before any analysis begins, the POCA engine uses a preprocessor to convert raw source files into a normalized form suitable for further compilation. This stage is crucial for:
 
 - **Macro Expansion:** 
-  Scanning the input for macro definitions and invocations, then replacing macros with their corresponding expansions.
-
+  - Scanning the input for macro definitions and invocations, then replacing macros with their corresponding expansions.
 - **Include Directive Resolution:** 
-  Detecting and recursively processing include statements to incorporate external code files.
-
+  -  Detecting and recursively processing include statements to incorporate external code files.
 - **Conditional Compilation:** 
-  Evaluating conditional directives to include or exclude code segments based on compile-time parameters.
-  
+  - Evaluating conditional directives to include or exclude code segments based on compile-time parameters.
 - **Comment Removal and Whitespace Normalization:** 
-  Eliminating comments and redundant whitespace to produce a clean, streamlined source text.
+  - Eliminating comments and redundant whitespace to produce a clean, streamlined source text.
 
 ## 2. The Lexer: Converting Source to Tokens
 
@@ -51,9 +48,12 @@ Internally, the lexer scans the input text character by character, classifying s
 
 After tokenization, the transformer refines the token stream. Its main responsibilities include:
 
-- **Syntactic Ambiguity Resolution:** Resolving syntactic ambiguities and applying language-specific transformations such as converting “at” tokens or handling lambda function syntactic sugar.
-- **Token Correction:** Inserting or correcting tokens where needed (for example, adding missing assignment operators or automatically inserted semicolons).
-- **Token Reorganization:** Reorganizing tokens into a structure that is more amenable to syntactic analysis.
+- **Syntactic Ambiguity Resolution:** 
+  - Resolving syntactic ambiguities and applying language-specific transformations such as converting “at” tokens or handling lambda function syntactic sugar.
+- **Token Correction:** 
+  - Inserting or correcting tokens where needed (for example, adding missing assignment operators or automatically inserted semicolons).
+- **Token Reorganization:** 
+  - Reorganizing tokens into a structure that is more amenable to syntactic analysis.
 
 The engine calls a dedicated transformer function as follows:
 
@@ -81,11 +81,16 @@ This stage ultimately results in an AST that clearly delineates the program’s 
 
 The final stage compiles the AST into bytecode — a series of low-level instructions that the POCA virtual machine (and optionally, a JIT compiler) can execute. Key steps in this phase include:
 
-- **AST Traversal and Opcode Emission:** Traversing the AST and, for each node, emitting one or more opcodes that represent operations such as arithmetic (`popADD`, `popSUB`, etc.), control flow (jump instructions for loops and conditionals), and function calls.
-- **Register Allocation and Constant Management:** Allocating registers and managing constants. The code generator maintains a pool of registers and uses routines like `GetRegister` and `FreeRegister` to handle temporary storage.
-- **Peephole Optimization:** Applying peephole optimizations to reduce redundant instructions. The `PeepholeOptimize` routine examines recently generated opcodes and refines them for better runtime performance.
-- **Constant Folding:** Applying constant folding to optimize constant expressions during compile time. This optimization evaluates expressions that consist solely of literals (such as numeric and string literals) and constant operations (e.g., arithmetic or concatenation), replacing them with their computed value. Routines like `ProcessConstantFolding`, `CollectConstants`, and `FindConstantRegister` traverse the token tree to detect and substitute foldable expressions with precomputed constants. This reduces runtime computation and simplifies the AST before generating bytecode for better performance.
-- **Opcode Emission and Immediate Value Encoding:** Emitting opcodes and encoding immediate values via functions like `EmitOpcode` and `EmitImmediate`.
+- **AST Traversal and Opcode Emission:** 
+  - Traversing the AST and, for each node, emitting one or more opcodes that represent operations such as arithmetic (`popADD`, `popSUB`, etc.), control flow (jump instructions for loops and conditionals), and function calls.
+- **Register Allocation and Constant Management:** 
+  - Allocating registers and managing constants. The code generator maintains a pool of registers and uses routines like `GetRegister` and `FreeRegister` to handle temporary storage.
+- **Peephole Optimization:** 
+  - Applying peephole optimizations to reduce redundant instructions. The `PeepholeOptimize` routine examines recently generated opcodes and refines them for better runtime performance.
+- **Constant Folding:** 
+  - Applying constant folding to optimize constant expressions during compile time. This optimization evaluates expressions that consist solely of literals (such as numeric and string literals) and constant operations (e.g., arithmetic or concatenation), replacing them with their computed value. Routines like `ProcessConstantFolding`, `CollectConstants`, and `FindConstantRegister` traverse the token tree to detect and substitute foldable expressions with precomputed constants. This reduces runtime computation and simplifies the AST before generating bytecode for better performance.
+- **Opcode Emission and Immediate Value Encoding:** 
+  - Emitting opcodes and encoding immediate values via functions like `EmitOpcode` and `EmitImmediate`.
 
 A typical entry point for code generation is:
 
@@ -107,11 +112,16 @@ The POCA scripting language engine is a sophisticated system that effectively tr
 
 In summary, the POCA scripting language engine works as a carefully layered system:
 
-- **Preprocessor:** The Preprocessor converts raw source files into a normalized, streamlined text.
-- **Lexer:** The Lexer converts raw source text into a detailed token stream.
-- **Transformer:** The Transformer cleans and adjusts this token stream, preparing it for deeper analysis.
-- **Parser:** The Parser builds an AST that mirrors the logical structure of the code.
-- **Bytecode Generator:** The Bytecode Generator traverses the AST to produce efficient, executable instructions — with support for both interpretation and JIT compilation.
+- **Preprocessor:** 
+  - The Preprocessor converts raw source files into a normalized, streamlined text.
+- **Lexer:** 
+  - The Lexer converts raw source text into a detailed token stream.
+- **Transformer:** 
+  - The Transformer cleans and adjusts this token stream, preparing it for deeper analysis.
+- **Parser:** 
+  - The Parser builds an AST that mirrors the logical structure of the code.
+- **Bytecode Generator:** 
+  - The Bytecode Generator traverses the AST to produce efficient, executable instructions — with support for both interpretation and JIT compilation.
 
 This pipeline not only ensures that the language is parsed accurately but also that the generated bytecode is optimized for performance. The source code excerpts provide clear evidence of each of these stages and the attention given to error handling and optimization throughout the process .
 
