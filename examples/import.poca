@@ -51,3 +51,18 @@ forkey(let moduleName in ModuleManager.moduleScopes){
 }
 
 puts();
+
+// Remove the modules from the module manager for reloading
+// (for example if you want to reload the module after editing it)
+// Note that this is not necessary if you don't want to reload the module
+// and you can just use the module as is.
+puts("Removing modules from module manager cache..."); 
+ModuleManager.remove('importsrc');
+ModuleManager.remove('importsrc2');
+
+puts();
+
+puts("Loaded modules:");
+forkey(let moduleName in ModuleManager.moduleScopes){
+  puts(moduleName);
+}
