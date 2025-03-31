@@ -62,7 +62,7 @@ The final stage compiles the AST into bytecode — a series of low-level instruc
 - Allocating registers and managing constants. The code generator maintains a pool of registers and uses routines like `GetRegister` and `FreeRegister` to handle temporary storage.
 - Applying peephole optimizations to reduce redundant instructions. The `PeepholeOptimize` routine examines recently generated opcodes and refines them for better runtime performance.
 - Applying constant folding to optimize constant expressions during compile time. This optimization evaluates expressions that consist solely of literals (such as numeric and string literals) and constant operations (e.g., arithmetic or concatenation), replacing them with their computed value. Routines like `ProcessConstantFolding`, `CollectConstants`, and `FindConstantRegister` traverse the token tree to detect and substitute foldable expressions with precomputed constants. This reduces runtime computation and simplifies the AST before generating bytecode for better performance.
-- Handling immediate values and operand encoding via functions like `EmitOpcode` and `EmitImmediate`.
+- Emitting opcodes and encoding immediate values via functions like `EmitOpcode` and `EmitImmediate`.
 
 A typical entry point for code generation is:
 
