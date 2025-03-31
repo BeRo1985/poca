@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-31-18-14-0000';
+const POCAVersion='2025-03-31-19-35-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -480,7 +480,9 @@ const POCAVersion='2025-03-31-18-14-0000';
       popIS=144;
       popJIFNULL=145;
       popJIFNOTNULL=146;
-      popCOUNT=147;
+      popSAFEEXTRACT=147;
+      popSAFEGETMEMBER=148;
+      popCOUNT=149;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -22160,7 +22162,7 @@ var TokenList:PPOCAToken;
       popPOP:begin
        if CodeGenerator^.CountOpcodes>1 then begin
         case CodeGenerator^.ByteCode^[CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-2]] and $ff of
-         popPUSHREG,popGETLOCAL,popPUSHZERO,popPUSHONE,popPUSHCONST,popPUSHEND,popGETMEMBER:begin
+         popPUSHREG,popGETLOCAL,popPUSHZERO,popPUSHONE,popPUSHCONST,popPUSHEND,popGETMEMBER,popSAFEGETMEMBER:begin
           dec(CodeGenerator^.CountOpcodes,2);
           CodeGenerator^.ByteCodeSize:=CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes];
           continue;
@@ -25910,7 +25912,11 @@ var TokenList:PPOCAToken;
        result:=OutReg;
       end;
       Reg2:=GenerateExpression(t^.Right,-1,true);
-      EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+      if Safe then begin
+       EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
+      end else begin
+       EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+      end;
       FreeRegister(Reg2);
      end else begin
       if OutReg<0 then begin
@@ -26401,7 +26407,11 @@ var TokenList:PPOCAToken;
         end else begin
          result:=OutReg;
         end;
-        EmitOpcode(popGETMEMBER,result,Reg,FindConstantIndex(t^.Right),$ffffffff);
+        if Safe then begin
+         EmitOpcode(popSAFEGETMEMBER,result,Reg,FindConstantIndex(t^.Right),$ffffffff);
+        end else begin
+         EmitOpcode(popGETMEMBER,result,Reg,FindConstantIndex(t^.Right),$ffffffff);
+        end;
        end;
        else begin
         SyntaxError('Object field must be symbol',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -28710,6 +28720,12 @@ begin
  POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,IsInherited,true);
 end;
 
+procedure POCARunSafeGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:longword;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
+begin
+ OutValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,IsInherited,false);
+end;
+
 procedure POCARunSetMember(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;var CacheIndex:longword); {$ifdef caninline}inline;{$endif}
 begin
  POCASetMember(Context,Obj,Fld,Value,CacheIndex,true);
@@ -28825,6 +28841,65 @@ begin
    end;
    else begin
     POCARuntimeError(Context,'Extract from non-container');
+   end;
+  end;
+ end;
+end;
+
+function POCARunContainerSafeGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
+var CodePoint,CodeUnit:longint;
+begin
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
+ if not POCAIsValueScalarType(Key) then begin
+  POCARuntimeError(Context,'Container index not scalar');
+ end else begin
+  case POCAGetValueType(Box) of
+   pvtNUMBER:begin
+    if not POCAHashGet(Context,Context.Instance^.Globals.NumberHash,Key,result) then begin
+     result.CastedUInt64:=POCAValueNullCastedUInt64;
+    end;
+   end;
+   pvtHASH:begin
+    if not POCAHashGet(Context,Box,Key,result) then begin
+     result.CastedUInt64:=POCAValueNullCastedUInt64;
+    end;
+   end;
+   pvtARRAY:begin
+    if POCAIsValueString(Key) then begin
+     if not POCAHashGet(Context,Context.Instance^.Globals.ArrayHash,Key,result) then begin
+      result.CastedUInt64:=POCAValueNullCastedUInt64;
+     end;
+    end else begin
+     result:=POCAArrayGet(Box,POCARunCheckArray(Context,Box,Key));
+    end;
+   end;
+   pvtSTRING:begin
+    if POCAIsValueString(Key) then begin
+     if not POCAHashGet(Context,Context.Instance^.Globals.StringHash,Key,result) then begin
+      result.CastedUInt64:=POCAValueNullCastedUInt64;
+     end;
+    end else begin
+     if PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8 then begin
+      CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
+      CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Box,CodePoint);
+      if (CodeUnit>0) and (CodeUnit<=length(PPOCAString(POCAGetValueReferencePointer(Box))^.Data)) then begin
+       result.Num:=PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit);
+      end else begin
+       result.Num:=PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint);
+      end;
+     end else begin
+      result.Num:=ord(PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
+     end;
+    end;
+   end;
+   pvtGHOST:begin
+    if not POCAHashGet(Context,POCAGhostGetHashValue(Box),Key,result) then begin
+     result.CastedUInt64:=POCAValueNullCastedUInt64;
+    end;
+   end;
+   else begin
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
  end;
@@ -32669,6 +32744,12 @@ begin
     popJIFNOTNULL:begin
      DoItByVMOpcodeDispatcher;
     end;
+    popSAFEEXTRACT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popSAFEGETMEMBER:begin
+     DoItByVMOpcodeDispatcher;
+    end;
     else begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -33836,6 +33917,13 @@ begin
     if Registers^[Operands^[1]].CastedUInt64<>POCAValueNullCastedUInt64 then begin
      Frame^.InstructionPointer:=Operands^[0];
     end;
+   end;
+   popSAFEEXTRACT:begin
+    Registers^[Operands^[0]]:=POCARunContainerSafeGet(Context,Registers^[Operands^[1]],Registers^[Operands^[2]]);
+    Context^.TemporarySavedObjectCount:=0;
+   end;
+   popSAFEGETMEMBER:begin
+    POCARunSafeGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],false);
    end;
    popCOUNT..255:begin
     POCARuntimeError(Context,'Invalid unknown opcode instruction');
