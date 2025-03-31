@@ -2127,7 +2127,7 @@ begin
  if result then begin
   FileDateTimeUTC:=DateTimeFromLocalTimeToUniversalTime(FileDateTimeUTC);
  end;
-{$endif}
+{$ifend}
 end;
 {$ifend}
 
