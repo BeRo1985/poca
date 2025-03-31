@@ -44,7 +44,7 @@ Within this stage, helper functions like `InsertAfter` and `TransformLambdaFunct
 
 The parser takes the cleaned-up token stream and constructs an abstract syntax tree (AST) that represents the hierarchical structure of the source code. This tree is essential for understanding the relationships between different parts of the code, such as expressions, statements, and blocks.
 
-With a cleaned-up token stream in hand, the parser builds an abstract syntax tree (AST) representing the grammatical structure of the source code. Using recursive descent techniques, the parser examines tokens—often grouped into blocks or statements — and links them as parent, child, and sibling nodes.
+With a cleaned-up token stream in hand, the parser builds an abstract syntax tree (AST) representing the grammatical structure of the source code. Using recursive descent techniques, the parser examines tokens — often grouped into blocks or statements — and links them as parent, child, and sibling nodes.
 
 For example, functions such as `ProcessParser` and helper routines like `ParseBlock` and `ParseToken` are used to traverse the token stream, detect constructs (e.g., if/else blocks, loops, function definitions), and report syntax errors if expected tokens are missing. The parser relies on the token metadata (such as the token type, source line, and column) to provide detailed error reporting. You can see aspects of this process in the code snippets that manage block parsing and token linking:
 
