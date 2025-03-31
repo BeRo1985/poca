@@ -1,5 +1,5 @@
 
-Below is an overview document that explains how the POCA scripting language engine processes source code — from initial lexical analysis through transformation, parsing, and finally bytecode generation. This explanation is intended for public documentation and highlights both the architectural design and key implementation details as reflected in the source code.
+Below is an overview document that explains how the POCA scripting language engine processes source code — from initial preprocessing and lexical analysis through transformation, parsing, and finally bytecode generation. This explanation is intended for public documentation and highlights both the architectural design and key implementation details as reflected in the source code.
 
 # Overview of the POCA Engine Pipeline
 
