@@ -2105,7 +2105,7 @@ end;
 function NowUTC:TDateTime;
 {$if defined(DelphiXE2AndUp)}
 begin
- result:=TTimeZone.NowUTC;
+ result:=TDateTime.NowUTC;
 end;
 {$else}
 begin
