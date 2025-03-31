@@ -16,7 +16,7 @@ Each stage is designed to operate on a structured data type (typically a linked 
 
 The first step in the POCA engine is lexical analysis, where the source code is transformed into a stream of tokens. This process is crucial for understanding the structure and meaning of the code. The lexer is responsible for identifying keywords, operators, literals, and other syntactic elements, while also managing whitespace and comments.
 
-The lexer’s role is to read the (preprocessed) source text and break it down into a series of tokens. Each token represents a meaningful language element—such as identifiers, keywords, literals, and operators — and includes source metadata (file, line, and column numbers). In POCA, this process is initiated by a call similar to:
+The lexer’s role is to read the (preprocessed) source text and break it down into a series of tokens. Each token represents a meaningful language element — such as identifiers, keywords, literals, and operators — and includes source metadata (file, line, and column numbers). In POCA, this process is initiated by a call similar to:
 
 ```pascal
   ProcessLexer(Parser, PreprocessorInstance.Preprocessor.OutputText)
