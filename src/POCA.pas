@@ -321,7 +321,7 @@
 
 interface
 
-uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
+uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
 const POCAVersion='2025-03-31-01-57-0000';
 
@@ -1324,7 +1324,7 @@ type PPOCAInt8=^TPOCAInt8;
 
      TPOCARequestGarbageCollection=(prgcNONE,prgcCYCLE,prgcFULLEPHEMERAL,prgcFULL);
 
-     TPOCAModuleLoaderFunction=function(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String):Boolean;
+     TPOCAModuleLoaderFunction=function(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String;out aModuleDateTime:TDateTime):Boolean;
 
      TPOCAModuleLoaderFunctions=array of TPOCAModuleLoaderFunction;
 
@@ -1397,6 +1397,7 @@ type PPOCAInt8=^TPOCAInt8;
 
       ModuleScopes:TPOCAValue;
       ModuleValues:TPOCAValue;
+      ModuleTimes:TPOCAValue;
 
       BaseClass:TPOCAValue;
 
@@ -2043,6 +2044,92 @@ begin
 end;
 {$endif}
 {$warnings on}
+
+function GetDateTimeUTCOffset:TDateTime;
+{$if defined(fpc) and declared(GetLocalTimeOffset)}
+begin
+ result:=GetLocalTimeOffset/1440.0;
+end;
+{$elseif defined(DelphiXE2AndUp) and declared(TTimeZone)}
+begin
+ result:=0.0;
+ result:=result+TTimeZone.Local.GetUtcOffset(Now);
+end;
+{$else}
+var SystemTimes:array[0..1] of TSystemTime;
+    DateTimes:array[0..1] of TDateTime;
+begin
+{$if declared(GetUniversalTime)}
+ GetUniversalTime(SystemTimes[0]);
+{$else}
+ GetSystemTime(SystemTimes[0]);
+{$ifend}
+ GetLocalTime(SystemTimes[1]);
+ DateTimes[0]:=SystemTimeToDateTime(SystemTimes[0]);
+ DateTimes[1]:=SystemTimeToDateTime(SystemTimes[1]);
+ result:=MinutesBetween(DateTimes[0],DateTimes[1])/1440.0;
+end;
+{$ifend}
+
+function DateTimeFromLocalTimeToUniversalTime(const aDateTime:TDateTime):TDateTime;
+{$if defined(fpc) and declared(LocalTimeToUniversal)}
+begin
+ result:=LocalTimeToUniversal(aDateTime);
+end;
+{$elseif defined(DelphiXE2AndUp) and declared(TTimeZone)}
+begin
+ result:=TTimeZone.Local.ToUniversalTime(aDateTime);
+end;
+{$else}
+begin
+ result:=aDateTime+GetDateTimeUTCOffset;
+end;
+{$ifend}
+
+function DateTimeFromUniversalTimeToLocalTime(const aDateTime:TDateTime):TDateTime;
+{$if defined(fpc) and declared(LocalTimeToUniversal)}
+begin
+ result:=UniversalTimeToLocal(aDateTime);
+end;
+{$elseif defined(DelphiXE2AndUp) and declared(TTimeZone)}
+begin
+ result:=TTimeZone.Local.ToLocalTime(aDateTime);
+end;
+{$else}
+begin
+ result:=aDateTime-GetDateTimeUTCOffset;
+end;
+{$ifend}
+
+{$if not declared(NowUTC)}
+function NowUTC:TDateTime;
+{$if defined(DelphiXE2AndUp)}
+begin
+ result:=TTimeZone.NowUTC;
+end;
+{$else}
+begin
+ result:=DateTimeFromLocalTimeToUniversalTime(Now);
+end;
+{$ifend}
+{$ifend}
+
+{$if not declared(FileAgeUTC)}
+function FileAgeUTC(const FileName:String;out FileDateTimeUTC:TDateTime;FollowLink:Boolean=True):Boolean;
+begin
+{$if defined(DelphiXE2AndUp)}
+ result:=FileExists(FileName);
+ if result then begin
+  FileDateTimeUTC:=TFile.GetLastWriteTimeUtc(FileName);
+ end;
+{$else}
+ result:=FileAge(FileName,FileDateTimeUTC{$ifdef fpc},FollowLink{$endif});
+ if result then begin
+  FileDateTimeUTC:=DateTimeFromLocalTimeToUniversalTime(FileDateTimeUTC);
+ end;
+{$endif}
+end;
+{$ifend}
 
 function PosEx(const SubStr,s:TPOCARawByteString;Offset:longint=1):longint;
 var i,x,LenSubStr:longint;
@@ -5333,6 +5420,7 @@ var GarbageCollector:PPOCAGarbageCollector;
   MarkValue(Instance^.Globals.HiddenNamespace);
   MarkValue(Instance^.Globals.ModuleScopes);
   MarkValue(Instance^.Globals.ModuleValues);
+  MarkValue(Instance^.Globals.ModuleTimes);
   MarkValue(Instance^.Globals.BaseClass);
   MarkValue(Instance^.Globals.ArrayHash);
   MarkValue(Instance^.Globals.NumberHash);
@@ -10403,8 +10491,9 @@ function POCAGlobalFunctionIMPORTREQUIRE(Context:PPOCAContext;const This:TPOCAVa
 var ModuleLoaderFunctionIndex:longint;
     Index:longword;
     SubContext:PPOCAContext;
-    Code,Imports,ModuleScope,Import,Value,ExportValue,ModuleValue:TPOCAValue;
+    Code,Imports,ModuleScope,Import,Value,ExportValue,ModuleValue,ModuleTime:TPOCAValue;
     ModuleName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
+    ModuleDateTime:TDateTime;
     ImportName:TPOCARawByteString;
     Frame:PPOCAFrame;
     OK,All:Boolean;
@@ -10426,12 +10515,14 @@ begin
  CleanedModuleName:=POCACleanModuleName(ModuleName);
  ModuleScope:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName);
  ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName);
- if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) then begin
+ ModuleTime:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleTimes,CleanedModuleName);
+ if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) and POCAIsValueNull(ModuleTime) then begin
   ModuleFileName:=ModuleName;
   ModuleCode:='';
+  ModuleDateTime:=0.0;
   OK:=false;
   for ModuleLoaderFunctionIndex:=0 to Context^.Instance^.Globals.CountModuleLoaderFunctions-1 do begin
-   if Context^.Instance^.Globals.ModuleLoaderFunctions[ModuleLoaderFunctionIndex](Context,ModuleName,ModuleCode,ModuleFileName) then begin
+   if Context^.Instance^.Globals.ModuleLoaderFunctions[ModuleLoaderFunctionIndex](Context,ModuleName,ModuleCode,ModuleFileName,ModuleDateTime) then begin
     OK:=true;
     break;
    end;
@@ -10447,6 +10538,7 @@ begin
      ModuleValue:=POCACall(SubContext,Code,nil,0,POCAValueNull,ModuleScope);
      POCAHashSetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName,ModuleValue);
      POCAHashSetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName,ModuleScope);
+     POCAHashSetString(Context,Context^.Instance^.Globals.ModuleTimes,CleanedModuleName,POCANewNumber(Context,ModuleDateTime));
     finally
      POCAUnprotect(Context,ModuleScope);
     end;
@@ -10514,7 +10606,7 @@ begin
 end;
 
 function POCAModuleManagerFunctionLOADED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var ModuleScope,ModuleValue:TPOCAValue;
+var ModuleScope,ModuleValue,ModuleTime:TPOCAValue;
     ModuleName,CleanedModuleName:TPOCAUTF8String;
 begin
  if CountArguments<1 then begin
@@ -10524,7 +10616,8 @@ begin
  CleanedModuleName:=POCACleanModuleName(ModuleName);
  ModuleScope:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName);
  ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName);
- if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) then begin
+ ModuleTime:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleTimes,CleanedModuleName);
+ if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) and POCAIsValueNull(ModuleTime) then begin
   result.Num:=0.0;
  end else begin
   result.Num:=1.0;
@@ -10532,7 +10625,7 @@ begin
 end;
 
 function POCAModuleManagerFunctionREMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var ModuleScope,Value,ModuleValue:TPOCAValue;
+var ModuleScope,Value,ModuleValue,ModuleTime:TPOCAValue;
     ModuleName,CleanedModuleName:TPOCAUTF8String;
 begin
  if CountArguments<1 then begin
@@ -10542,7 +10635,8 @@ begin
  CleanedModuleName:=POCACleanModuleName(ModuleName);
  ModuleScope:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName);
  ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName);
- if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) then begin
+ ModuleTime:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleTimes,CleanedModuleName);
+ if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) and POCAIsValueNull(ModuleTime) then begin
   result.Num:=0.0;
  end else begin
   Value:=POCANewUniqueString(Context,CleanedModuleName);
@@ -10550,6 +10644,7 @@ begin
   try
    POCAHashDelete(Context,Context^.Instance^.Globals.ModuleScopes,Value);
    POCAHashDelete(Context,Context^.Instance^.Globals.ModuleValues,Value);
+   POCAHashDelete(Context,Context^.Instance^.Globals.ModuleTimes,Value);
   finally
    POCAUnprotect(Context,Value);
   end;
@@ -10562,6 +10657,7 @@ begin
  result:=POCANewHash(Context);
  POCAHashSetString(Context,result,'moduleScopes',Context^.Instance^.Globals.ModuleScopes);
  POCAHashSetString(Context,result,'moduleValues',Context^.Instance^.Globals.ModuleValues);
+ POCAHashSetString(Context,result,'moduleTimes',Context^.Instance^.Globals.ModuleTimes);
  POCAAddNativeFunction(Context,result,'import',POCAGlobalFunctionIMPORT);
  POCAAddNativeFunction(Context,result,'require',POCAGlobalFunctionREQUIRE);
  POCAAddNativeFunction(Context,result,'loaded',POCAModuleManagerFunctionLOADED);
@@ -14689,7 +14785,7 @@ begin
  POCAAddNativeFunction(Context,result,'repeat',POCAStringFunctionREPEAT);
 end;
 
-function POCADefaultModuleFunction(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String):Boolean;
+function POCADefaultModuleFunction(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String;out aModuleDateTime:TDateTime):Boolean;
 var Index:longint;
     Path,FileName:TPOCAUTF8String;
 begin
@@ -14715,6 +14811,9 @@ begin
   if FileExists(FileName) then begin
    aModuleCode:=POCAGetFileContent(FileName);
    aModuleFileName:=FileName;
+   if not FileAgeUTC(aModuleFileName,aModuleDateTime,true) then begin
+    aModuleDateTime:=NowUTC;
+   end;
    result:=true;
    exit;
   end;
@@ -14723,6 +14822,9 @@ begin
   if FileExists(FileName) then begin
    aModuleCode:=POCAGetFileContent(FileName);
    aModuleFileName:=FileName;
+   if not FileAgeUTC(aModuleFileName,aModuleDateTime,true) then begin
+    aModuleDateTime:=NowUTC;
+   end;
    result:=true;
    exit;
   end;
@@ -14863,6 +14965,7 @@ begin
    end;
    result^.Globals.ModuleScopes:=POCANewHash(Context);
    result^.Globals.ModuleValues:=POCANewHash(Context);
+   result^.Globals.ModuleTimes:=POCANewHash(Context);
    result^.Globals.RootArray:=POCANewArray(Context);
    result^.Globals.RootHash:=POCANewHash(Context);
    result^.Globals.HiddenNamespace:=POCANewHash(Context);
