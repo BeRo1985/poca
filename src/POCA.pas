@@ -32684,7 +32684,7 @@ end;
 function POCARunByteCode(Context:PPOCAContext):TPOCAValue;
 var Code:PPOCACode;
     Frame:PPOCAFrame;
-    Opcode,CurrentPC:longword;
+    Opcode:longword;
     Operands:PLongwords;
     Registers:PPOCAValues;
     a,b:TPOCAValue;
@@ -32703,7 +32703,7 @@ begin
   Opcode:=Code^.ByteCode^[Frame^.InstructionPointer];
   Operands:=@Code^.ByteCode^[Frame^.InstructionPointer+1];
   inc(Frame^.InstructionPointer,1+(Opcode shr 8));
-  case Opcode and $ff of
+  case TPOCAUInt8(Opcode and $ff) of
    popNOP:begin
    end;
    popADD:begin
@@ -33774,7 +33774,7 @@ begin
      Frame^.InstructionPointer:=Operands^[0];
     end;
    end;
-   else begin
+   popCOUNT..255:begin
     POCARuntimeError(Context,'Invalid unknown opcode instruction');
    end;
   end;
