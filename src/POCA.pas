@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-31-01-57-0000';
+const POCAVersion='2025-03-31-03-28-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -10496,8 +10496,9 @@ var ModuleLoaderFunctionIndex:longint;
     ModuleDateTime:TDateTime;
     ImportName:TPOCARawByteString;
     Frame:PPOCAFrame;
-    OK,All:Boolean;
+    OK,All,AllowReloadIfNewer:Boolean;
 begin
+
  if CountArguments<1 then begin
   if IsRequire then begin
    POCARuntimeError(Context,'Bad arguments to "require"');
@@ -10505,28 +10506,69 @@ begin
    POCARuntimeError(Context,'Bad arguments to "import"');
   end;
  end;
+
  if (CountArguments>1) and not IsRequire then begin
   Imports:=Arguments^[1];
  end else begin
 //Imports:=POCAValueNull;
   Imports.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
+
+ if IsRequire then begin
+  if CountArguments>1 then begin
+   AllowReloadIfNewer:=POCAGetBooleanValue(Context,Arguments^[1]);
+  end else begin
+   AllowReloadIfNewer:=false;
+  end;
+ end else begin
+  if CountArguments>2 then begin
+   AllowReloadIfNewer:=POCAGetBooleanValue(Context,Arguments^[2]);
+  end else begin
+   AllowReloadIfNewer:=false;
+  end;
+ end;
+
  ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
+
  CleanedModuleName:=POCACleanModuleName(ModuleName);
+
  ModuleScope:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName);
  ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName);
  ModuleTime:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleTimes,CleanedModuleName);
- if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) and POCAIsValueNull(ModuleTime) then begin
-  ModuleFileName:=ModuleName;
-  ModuleCode:='';
-  ModuleDateTime:=0.0;
-  OK:=false;
+
+ OK:=false;
+
+ ModuleFileName:=ModuleName;
+ ModuleCode:='';
+ ModuleDateTime:=0.0;
+
+ if AllowReloadIfNewer and not (POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) and POCAIsValueNull(ModuleTime)) then begin
   for ModuleLoaderFunctionIndex:=0 to Context^.Instance^.Globals.CountModuleLoaderFunctions-1 do begin
    if Context^.Instance^.Globals.ModuleLoaderFunctions[ModuleLoaderFunctionIndex](Context,ModuleName,ModuleCode,ModuleFileName,ModuleDateTime) then begin
     OK:=true;
     break;
    end;
   end;
+  if OK then begin
+   if POCAGetNumberValue(Context,ModuleTime)<ModuleDateTime then begin
+    ModuleScope.CastedUInt64:=POCAValueNullCastedUInt64;
+    ModuleValue.CastedUInt64:=POCAValueNullCastedUInt64;
+    ModuleTime.CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
+  end;
+ end;
+
+ if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) and POCAIsValueNull(ModuleTime) then begin
+
+  if not OK then begin
+   for ModuleLoaderFunctionIndex:=0 to Context^.Instance^.Globals.CountModuleLoaderFunctions-1 do begin
+    if Context^.Instance^.Globals.ModuleLoaderFunctions[ModuleLoaderFunctionIndex](Context,ModuleName,ModuleCode,ModuleFileName,ModuleDateTime) then begin
+     OK:=true;
+     break;
+    end;
+   end;
+  end;
+
   if OK then begin
    SubContext:=POCAContextSub(Context);
    try
@@ -10549,15 +10591,25 @@ begin
    result.CastedUInt64:=POCAValueNullCastedUInt64;
    POCARuntimeError(Context,'Module "'+ModuleName+'" not found!');
   end;
+
  end;
+
  if IsRequire then begin
+
   result:=ModuleValue;
+
  end else begin
+
   Frame:=@Context^.FrameStack[Context^.FrameTop-1];
+
   if POCAIsValueHash(ModuleScope) and POCAIsValueHash(Frame^.Locals) then begin
+
    POCAHashSetString(Context,Frame^.Locals,ModuleName,ModuleScope);
+
    if POCAIsValueArray(Imports) then begin
+
     All:=false;
+
     for Index:=1 to POCAArraySize(Imports) do begin
      Import:=POCAArrayGet(Imports,Index-1);
      ImportName:=POCAGetStringValue(Context,Import);
@@ -10566,14 +10618,17 @@ begin
       break;
      end;
     end;
+
     if All then begin
      Imports:=POCANewArray(Context);
      POCAHashOwnKeys(Context,Imports,ModuleScope);
     end;
+
     ExportValue:=POCAHashGetString(Context,ModuleScope,'exports');
     if (not POCAIsValueHash(ExportValue)) or (POCAHashRawSize(ExportValue)=0) then begin
      ExportValue:=ModuleScope;
     end;
+
     for Index:=1 to POCAArraySize(Imports) do begin
      Import:=POCAArrayGet(Imports,Index-1);
      ImportName:=POCAGetStringValue(Context,Import);
@@ -10584,15 +10639,24 @@ begin
       end;
      end;
     end;
+
     result:=ExportValue;
+
    end else begin
+
     result:=ModuleScope;
+
    end;
+
   end else begin
+
    result.CastedUInt64:=POCAValueNullCastedUInt64;
    POCARuntimeError(Context,'Import of module "'+ModuleName+'" failed!');
+
   end;
+
  end;
+
 end;
 
 function POCAGlobalFunctionIMPORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
@@ -10652,6 +10716,31 @@ begin
  end;
 end;
 
+function POCAModuleManagerFunctionGETMODULEFILETIME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var ModuleLoaderFunctionIndex:longint;
+    ModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
+    ModuleDateTime:TDateTime;
+    OK:Boolean;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "getModuleFileTime"');
+ end;
+ ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
+ OK:=false;
+ for ModuleLoaderFunctionIndex:=0 to Context^.Instance^.Globals.CountModuleLoaderFunctions-1 do begin
+  if Context^.Instance^.Globals.ModuleLoaderFunctions[ModuleLoaderFunctionIndex](Context,ModuleName,ModuleCode,ModuleFileName,ModuleDateTime) then begin
+   OK:=true;
+   break;
+  end;
+ end;
+ if OK then begin
+  result.Num:=ModuleDateTime;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+  POCARuntimeError(Context,'Module "'+ModuleName+'" not found!');
+ end;
+end;
+
 function POCAInitModuleManagerNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
@@ -10662,6 +10751,7 @@ begin
  POCAAddNativeFunction(Context,result,'require',POCAGlobalFunctionREQUIRE);
  POCAAddNativeFunction(Context,result,'loaded',POCAModuleManagerFunctionLOADED);
  POCAAddNativeFunction(Context,result,'remove',POCAModuleManagerFunctionREMOVE);
+ POCAAddNativeFunction(Context,result,'getModuleFileTime',POCAModuleManagerFunctionGETMODULEFILETIME);
 end;
 
 function POCAMathFunctionMIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
