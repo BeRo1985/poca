@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-31-16-19-0000';
+const POCAVersion='2025-03-31-18-14-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -479,7 +479,8 @@ const POCAVersion='2025-03-31-16-19-0000';
       popELVIS=143;
       popIS=144;
       popJIFNULL=145;
-      popCOUNT=146;
+      popJIFNOTNULL=146;
+      popCOUNT=147;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -781,7 +782,8 @@ type PPOCAInt8=^TPOCAInt8;
       ptELVIS,
       ptELVISEQ,
       ptSYMBOLNAME,
-      ptSUPERCODESYMBOL
+      ptSUPERCODESYMBOL,
+      ptNULLISHOR
      );
 
      PPOCAMetaOp=^TPOCAMetaOp;
@@ -15215,7 +15217,7 @@ type TPOCATokenPrecedenceRule=(prNONE,prBINARY,prREVERSE,prPREFIX,prSUFFIX);
      end;
      PPOCABinaryToPrefixUnaryTokenCorrectionMap=^TPOCABinaryToPrefixUnaryTokenCorrectionMap;
      TPOCABinaryToPrefixUnaryTokenCorrectionMap=array[TPOCATokenType] of TPOCATokenType;
-const POCATokenPrecedences:array[0..30] of TPOCATokenPrecedence=((Tokens:[ptSEMI,ptCOMMA,ptAUTOSEMI];Rule:prREVERSE),
+const POCATokenPrecedences:array[0..31] of TPOCATokenPrecedence=((Tokens:[ptSEMI,ptCOMMA,ptAUTOSEMI];Rule:prREVERSE),
                                                                  (Tokens:[ptELLIPSIS];Rule:prSUFFIX),
                                                                  (Tokens:[ptREGEXP];Rule:prPREFIX),
                                                                  (Tokens:[ptRETURN,ptBREAK,ptCONTINUE,ptTHROW,ptBREAKPOINT,ptDELETE];Rule:prPREFIX),
@@ -15225,6 +15227,7 @@ const POCATokenPrecedences:array[0..30] of TPOCATokenPrecedence=((Tokens:[ptSEMI
                                                                  (Tokens:[ptDOTDOT];Rule:prREVERSE),
                                                                  (Tokens:[ptVAR,ptREGISTER,ptCONST];Rule:prPREFIX),
                                                                  (Tokens:[ptELVIS];Rule:prBINARY),
+                                                                 (Tokens:[ptNULLISHOR];Rule:prBINARY),
                                                                  (Tokens:[ptOR];Rule:prBINARY),
                                                                  (Tokens:[ptAND];Rule:prBINARY),
                                                                  (Tokens:[ptBOR];Rule:prBINARY),
@@ -18339,6 +18342,9 @@ var TokenList:PPOCAToken;
     ptSUPERCODESYMBOL:begin
      DumpIt(' __'+Token^.Str+'__ ');
     end;
+    ptNULLISHOR:begin
+     DumpIt(' ?? ');
+    end;
    end;
    if assigned(Token^.Children) then begin
     Dump(Token^.Children);
@@ -18506,7 +18512,8 @@ var TokenList:PPOCAToken;
       ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
       ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptREG,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
-      ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptELVISEQ,ptSYMBOLNAME])) then begin
+      ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptELVISEQ,ptSYMBOLNAME,
+      ptNULLISHOR])) then begin
     AddToken(ptAUTOSEMI,'',0);
    end;
   end;
@@ -18660,6 +18667,10 @@ var TokenList:PPOCAToken;
          ']':begin
           inc(SourcePosition);
           AddToken(ptSAFERBRA,'',0);
+         end;
+         '?':begin
+          inc(SourcePosition);
+          AddToken(ptNULLISHOR,'',0);
          end;
          else begin
           AddToken(ptQUESTION,'',0);
@@ -24448,6 +24459,42 @@ var TokenList:PPOCAToken;
      SetLength(l^.BreakJumps,0);
      SetLength(l^.ContinueJumps,0);
     end;
+    function GenerateNullishShortCircuit(t:PPOCAToken;OutReg:longint):longint;
+    var e,r:longint;
+        Registers:TPOCACodeGeneratorRegisters;
+    begin
+     Registers:=nil;
+     try
+      begin
+       if OutReg<0 then begin
+        OutReg:=GetRegister(true,false);
+       end;
+       result:=OutReg;
+       r:=GenerateExpression(t^.Left,result,true);
+       if result<>r then begin
+        EmitOpcode(popCOPY,result,r);
+        SetRegisterNumber(result,GetRegisterNumber(r));
+       end;
+       if GetRegisterNumber(result) then begin
+        e:=CodeGenerator^.ByteCodeSize+1;
+        EmitOpcode(popJMP,0);
+       end else begin
+        e:=CodeGenerator^.ByteCodeSize+1;
+        EmitOpcode(popJIFNOTNULL,0,result);
+       end;
+       Registers:=GetRegisters;
+       r:=GenerateExpression(t^.Right,result,true);
+       if result<>r then begin
+        EmitOpcode(popCOPY,result,r);
+        SetRegisterNumber(result,GetRegisterNumber(r));
+       end;
+       CombineCurrentRegisters(Registers);
+       FixTargetImmediate(e);
+      end;
+     finally
+      SetLength(Registers,0);
+     end;
+    end;
     function GenerateShortCircuit(t:PPOCAToken;OutReg:longint):longint;
     var e,r:longint;
         Registers:TPOCACodeGeneratorRegisters;
@@ -27114,6 +27161,9 @@ var TokenList:PPOCAToken;
       end;
       ptAND,ptOR,ptELVIS:begin
        result:=GenerateShortCircuit(t,OutReg);
+      end;
+      ptNULLISHOR:begin
+       result:=GenerateNullishShortCircuit(t,OutReg);
       end;
       ptMUL:begin
        result:=GenerateBinaryOperation(popMUL,t,OutReg);
@@ -32616,6 +32666,9 @@ begin
     popJIFNULL:begin
      DoItByVMOpcodeDispatcher;
     end;
+    popJIFNOTNULL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
     else begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -33776,6 +33829,11 @@ begin
    end;
    popJIFNULL:begin
     if Registers^[Operands^[1]].CastedUInt64=POCAValueNullCastedUInt64 then begin
+     Frame^.InstructionPointer:=Operands^[0];
+    end;
+   end;
+   popJIFNOTNULL:begin
+    if Registers^[Operands^[1]].CastedUInt64<>POCAValueNullCastedUInt64 then begin
      Frame^.InstructionPointer:=Operands^[0];
     end;
    end;
