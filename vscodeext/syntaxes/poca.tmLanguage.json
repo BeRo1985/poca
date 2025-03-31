@@ -98,7 +98,10 @@
 		"control-statement": {
 			"patterns": [
 				{
-					"include": "#block-statement"
+					"include": "#scope-statement"
+				},
+				{
+					"include": "#code-statement"
 				},
 				{
 					"include": "#switch-statement"
@@ -2468,9 +2471,29 @@
 				}
 			]
 		},
-	  "block-statement": {
-			"name": "meta.code.block.poca",
-			"begin": "\\bblock\\s*\\{",
+                "scope-statement": {
+			"name": "meta.code.block.scope.poca",
+			"begin": "\\bscope\\s*\\{",
+			"beginCaptures": {
+				"0": {
+					"name": "punctuation.definition.block.poca"
+				}
+			},
+			"end": "\\}",
+			"endCaptures": {
+				"0": {
+					"name": "punctuation.definition.block.poca"
+				}
+			},
+			"patterns": [
+				{
+					"include": "#statements"
+				}
+			]
+		},
+                "code-statement": {
+			"name": "meta.code.block.code.poca",
+			"begin": "\\bscope\\s*\\{",
 			"beginCaptures": {
 				"0": {
 					"name": "punctuation.definition.block.poca"
