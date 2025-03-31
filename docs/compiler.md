@@ -58,10 +58,11 @@ This stage ultimately results in an AST that clearly delineates the program’s 
 
 The final stage compiles the AST into bytecode — a series of low-level instructions that the POCA virtual machine (and optionally, a JIT compiler) can execute. Key steps in this phase include:
 
-- Traversing the AST and, for each node, emitting one or more opcodes that represent operations such as arithmetic (popADD, popSUB, etc.), control flow (jump instructions for loops and conditionals), and function calls.
+- Traversing the AST and, for each node, emitting one or more opcodes that represent operations such as arithmetic (`popADD`, `popSUB`, etc.), control flow (jump instructions for loops and conditionals), and function calls.
 - Allocating registers and managing constants. The code generator maintains a pool of registers and uses routines like `GetRegister` and `FreeRegister` to handle temporary storage.
-- Applying peephole optimizations to reduce redundant instructions. The “PeepholeOptimize” routine examines recently generated opcodes and refines them for better runtime performance.
-. Handling immediate values and operand encoding via functions like `EmitOpcode` and `EmitImmediate`.
+- Applying peephole optimizations to reduce redundant instructions. The `PeepholeOptimize` routine examines recently generated opcodes and refines them for better runtime performance.
+- Applying constant folding to optimize constant expressions during compile time. This optimization evaluates expressions that consist solely of literals (such as numeric and string literals) and constant operations (e.g., arithmetic or concatenation), replacing them with their computed value. Routines like `ProcessConstantFolding`, `CollectConstants`, and `FindConstantRegister` traverse the token tree to detect and substitute foldable expressions with precomputed constants. This reduces runtime computation and simplifies the AST before generating bytecode for better performance.
+- Handling immediate values and operand encoding via functions like `EmitOpcode` and `EmitImmediate`.
 
 A typical entry point for code generation is:
 
