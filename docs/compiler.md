@@ -23,10 +23,17 @@ The following sections provide a detailed breakdown of each stage in the POCA en
 
 Before any analysis begins, the POCA engine uses a preprocessor to convert raw source files into a normalized form suitable for further compilation. This stage is crucial for:
 
-- **Macro Expansion:** Scanning the input for macro definitions and invocations, then replacing macros with their corresponding expansions.
-- **Include Directive Resolution:** Detecting and recursively processing include statements to incorporate external code files.
-- **Conditional Compilation:** Evaluating conditional directives to include or exclude code segments based on compile-time parameters.
-- **Comment Removal and Whitespace Normalization:** Eliminating comments and redundant whitespace to produce a clean, streamlined source text.
+- **Macro Expansion:** 
+  Scanning the input for macro definitions and invocations, then replacing macros with their corresponding expansions.
+
+- **Include Directive Resolution:** 
+  Detecting and recursively processing include statements to incorporate external code files.
+
+- **Conditional Compilation:** 
+  Evaluating conditional directives to include or exclude code segments based on compile-time parameters.
+  
+- **Comment Removal and Whitespace Normalization:** 
+  Eliminating comments and redundant whitespace to produce a clean, streamlined source text.
 
 ## 2. The Lexer: Converting Source to Tokens
 
