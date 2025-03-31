@@ -13,6 +13,12 @@ The POCA engine is built as a multi‐stage compiler that takes a source file, p
 
 Each stage is designed to operate on a structured data type (typically a linked list or tree of tokens) and contributes to robust error handling and code optimization.
 
+The parser at the core of POCA originally started as a parser for mathematical expressions, but has since evolved into a comprehensive scripting language parser. This evolution reflects its core design principle: everything in POCA — including control structures and blocks — is treated as an expression. This design choice allows for a flexible, expressive scripting environment, and provides a powerful foundation for advanced features such as lambda functions, nested constructs, and complex expressions.
+
+# Breakdown of the POCA Engine Stages
+
+The following sections provide a detailed breakdown of each stage in the POCA engine, including the key functions and data structures involved.
+
 ## 1. The Preprocessor: Preparing the Source Code
 
 Before any analysis begins, the POCA engine uses a preprocessor to convert raw source files into a normalized form suitable for further compilation. This stage is crucial for:
