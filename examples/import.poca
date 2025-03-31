@@ -39,7 +39,7 @@ otherRandomFunction();
 
 puts();
 
-let TestObject = require('importsrc2');
+let TestObject = require('importsrc2'); // As in Lua as alternative to the import mechanism
 
 puts(TestObject.d());
 
