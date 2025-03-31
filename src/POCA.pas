@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-30-14-02-0000';
+const POCAVersion='2025-03-31-01-57-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1395,7 +1395,8 @@ type PPOCAInt8=^TPOCAInt8;
       RootArray:TPOCAValue;
       RootHash:TPOCAValue;
 
-      Modules:TPOCAValue;
+      ModuleScopes:TPOCAValue;
+      ModuleValues:TPOCAValue;
 
       BaseClass:TPOCAValue;
 
@@ -5330,7 +5331,8 @@ var GarbageCollector:PPOCAGarbageCollector;
   MarkValue(Instance^.Globals.RootHash);
   MarkValue(Instance^.Globals.Namespace);
   MarkValue(Instance^.Globals.HiddenNamespace);
-  MarkValue(Instance^.Globals.Modules);
+  MarkValue(Instance^.Globals.ModuleScopes);
+  MarkValue(Instance^.Globals.ModuleValues);
   MarkValue(Instance^.Globals.BaseClass);
   MarkValue(Instance^.Globals.ArrayHash);
   MarkValue(Instance^.Globals.NumberHash);
@@ -10392,6 +10394,180 @@ begin
  POCAAddNativeFunction(Context,result,'free',POCAGarbageCollectorFunctionFREE);
 end;
 
+function POCACleanModuleName(const aModuleFileName:TPOCAUTF8String):TPOCAUTF8String;
+begin
+ result:=StringReplace(ChangeFileExt(ExtractFileName(aModuleFileName),''),'\','/',[rfReplaceAll]);
+end;
+
+function POCAGlobalFunctionIMPORTREQUIRE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer;const IsRequire:Boolean):TPOCAValue;
+var ModuleLoaderFunctionIndex:longint;
+    Index:longword;
+    SubContext:PPOCAContext;
+    Code,Imports,ModuleScope,Import,Value,ExportValue,ModuleValue:TPOCAValue;
+    ModuleName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
+    ImportName:TPOCARawByteString;
+    Frame:PPOCAFrame;
+    OK,All:Boolean;
+begin
+ if CountArguments<1 then begin
+  if IsRequire then begin
+   POCARuntimeError(Context,'Bad arguments to "require"');
+  end else begin
+   POCARuntimeError(Context,'Bad arguments to "import"');
+  end;
+ end;
+ if (CountArguments>1) and not IsRequire then begin
+  Imports:=Arguments^[1];
+ end else begin
+//Imports:=POCAValueNull;
+  Imports.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
+ CleanedModuleName:=POCACleanModuleName(ModuleName);
+ ModuleScope:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName);
+ ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName);
+ if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) then begin
+  ModuleFileName:=ModuleName;
+  ModuleCode:='';
+  OK:=false;
+  for ModuleLoaderFunctionIndex:=0 to Context^.Instance^.Globals.CountModuleLoaderFunctions-1 do begin
+   if Context^.Instance^.Globals.ModuleLoaderFunctions[ModuleLoaderFunctionIndex](Context,ModuleName,ModuleCode,ModuleFileName) then begin
+    OK:=true;
+    break;
+   end;
+  end;
+  if OK then begin
+   SubContext:=POCAContextSub(Context);
+   try
+    ModuleScope:=POCANewHash(SubContext);
+    Code:=POCABindToContext(Context,POCACompile(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
+    POCAProtect(Context,ModuleScope);
+    try
+     POCAHashSetString(Context,ModuleScope,'exports',POCANewHash(SubContext));
+     ModuleValue:=POCACall(SubContext,Code,nil,0,POCAValueNull,ModuleScope);
+     POCAHashSetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName,ModuleValue);
+     POCAHashSetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName,ModuleScope);
+    finally
+     POCAUnprotect(Context,ModuleScope);
+    end;
+   finally
+    POCAContextDestroy(SubContext);
+   end;
+  end else begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+   POCARuntimeError(Context,'Module "'+ModuleName+'" not found!');
+  end;
+ end;
+ if IsRequire then begin
+  result:=ModuleValue;
+ end else begin
+  Frame:=@Context^.FrameStack[Context^.FrameTop-1];
+  if POCAIsValueHash(ModuleScope) and POCAIsValueHash(Frame^.Locals) then begin
+   POCAHashSetString(Context,Frame^.Locals,ModuleName,ModuleScope);
+   if POCAIsValueArray(Imports) then begin
+    All:=false;
+    for Index:=1 to POCAArraySize(Imports) do begin
+     Import:=POCAArrayGet(Imports,Index-1);
+     ImportName:=POCAGetStringValue(Context,Import);
+     if (ImportName='*') or (ImportName='all') then begin
+      All:=true;
+      break;
+     end;
+    end;
+    if All then begin
+     Imports:=POCANewArray(Context);
+     POCAHashOwnKeys(Context,Imports,ModuleScope);
+    end;
+    ExportValue:=POCAHashGetString(Context,ModuleScope,'exports');
+    if (not POCAIsValueHash(ExportValue)) or (POCAHashRawSize(ExportValue)=0) then begin
+     ExportValue:=ModuleScope;
+    end;
+    for Index:=1 to POCAArraySize(Imports) do begin
+     Import:=POCAArrayGet(Imports,Index-1);
+     ImportName:=POCAGetStringValue(Context,Import);
+     if length(ImportName)>0 then begin
+      Value:=POCAHashGetString(Context,ExportValue,ImportName);
+      if not POCAIsValueNull(Value) then begin
+       POCAHashSetString(Context,Frame^.Locals,ImportName,Value);
+      end;
+     end;
+    end;
+    result:=ExportValue;
+   end else begin
+    result:=ModuleScope;
+   end;
+  end else begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+   POCARuntimeError(Context,'Import of module "'+ModuleName+'" failed!');
+  end;
+ end;
+end;
+
+function POCAGlobalFunctionIMPORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ result:=POCAGlobalFunctionIMPORTREQUIRE(Context,This,Arguments,CountArguments,UserData,false);
+end;
+
+function POCAGlobalFunctionREQUIRE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ result:=POCAGlobalFunctionIMPORTREQUIRE(Context,This,Arguments,CountArguments,UserData,true);
+end;
+
+function POCAModuleManagerFunctionLOADED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var ModuleScope,ModuleValue:TPOCAValue;
+    ModuleName,CleanedModuleName:TPOCAUTF8String;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "loaded"');
+ end;
+ ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
+ CleanedModuleName:=POCACleanModuleName(ModuleName);
+ ModuleScope:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName);
+ ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName);
+ if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) then begin
+  result.Num:=0.0;
+ end else begin
+  result.Num:=1.0;
+ end;
+end;
+
+function POCAModuleManagerFunctionREMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var ModuleScope,Value,ModuleValue:TPOCAValue;
+    ModuleName,CleanedModuleName:TPOCAUTF8String;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "remove"');
+ end;
+ ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
+ CleanedModuleName:=POCACleanModuleName(ModuleName);
+ ModuleScope:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleScopes,CleanedModuleName);
+ ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.ModuleValues,CleanedModuleName);
+ if POCAIsValueNull(ModuleScope) and POCAIsValueNull(ModuleValue) then begin
+  result.Num:=0.0;
+ end else begin
+  Value:=POCANewUniqueString(Context,CleanedModuleName);
+  POCAProtect(Context,Value);
+  try
+   POCAHashDelete(Context,Context^.Instance^.Globals.ModuleScopes,Value);
+   POCAHashDelete(Context,Context^.Instance^.Globals.ModuleValues,Value);
+  finally
+   POCAUnprotect(Context,Value);
+  end;
+  result.Num:=1.0;
+ end;
+end;
+
+function POCAInitModuleManagerNamespace(Context:PPOCAContext):TPOCAValue;
+begin
+ result:=POCANewHash(Context);
+ POCAHashSetString(Context,result,'moduleScopes',Context^.Instance^.Globals.ModuleScopes);
+ POCAHashSetString(Context,result,'moduleValues',Context^.Instance^.Globals.ModuleValues);
+ POCAAddNativeFunction(Context,result,'import',POCAGlobalFunctionIMPORT);
+ POCAAddNativeFunction(Context,result,'require',POCAGlobalFunctionREQUIRE);
+ POCAAddNativeFunction(Context,result,'loaded',POCAModuleManagerFunctionLOADED);
+ POCAAddNativeFunction(Context,result,'remove',POCAModuleManagerFunctionREMOVE);
+end;
+
 function POCAMathFunctionMIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if CountArguments<2 then begin
@@ -12985,100 +13161,6 @@ begin
  result.Num:=ord(POCAHashGet(Context,Hash,Key,Key));
 end;
 
-function POCAGlobalFunctionIMPORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var ModuleLoaderFunctionIndex:longint;
-    Index:longword;
-    SubContext:PPOCAContext;
-    Code,Imports,ModuleValue,Import,Value,ExportValue:TPOCAValue;
-    ModuleName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
-    ImportName:TPOCARawByteString;
-    Frame:PPOCAFrame;
-    OK,All:Boolean;
-begin
- if CountArguments<1 then begin
-  POCARuntimeError(Context,'Bad arguments to "import"');
- end;
- if CountArguments>1 then begin
-  Imports:=Arguments^[1];
- end else begin
-//Imports:=POCAValueNull;
-  Imports.CastedUInt64:=POCAValueNullCastedUInt64;
- end;
- ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
- CleanedModuleName:=ChangeFileExt(ExtractFileName(ModuleName),'');
- ModuleValue:=POCAHashGetString(Context,Context^.Instance^.Globals.Modules,CleanedModuleName);
- if POCAIsValueNull(ModuleValue) then begin
-  ModuleFileName:=ModuleName;
-  ModuleCode:='';
-  OK:=false;
-  for ModuleLoaderFunctionIndex:=0 to Context^.Instance^.Globals.CountModuleLoaderFunctions-1 do begin
-   if Context^.Instance^.Globals.ModuleLoaderFunctions[ModuleLoaderFunctionIndex](Context,ModuleName,ModuleCode,ModuleFileName) then begin
-    OK:=true;
-    break;
-   end;
-  end;
-  if OK then begin
-   SubContext:=POCAContextSub(Context);
-   try
-    ModuleValue:=POCANewHash(SubContext);
-    Code:=POCABindToContext(Context,POCACompile(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
-    POCAProtect(Context,ModuleValue);
-    try
-     POCAHashSetString(Context,ModuleValue,'exports',POCANewHash(SubContext));
-     POCACall(SubContext,Code,nil,0,POCAValueNull,ModuleValue);
-     POCAHashSetString(Context,Context^.Instance^.Globals.Modules,CleanedModuleName,ModuleValue);
-    finally
-     POCAUnprotect(Context,ModuleValue);
-    end;
-   finally
-    POCAContextDestroy(SubContext);
-   end;
-  end else begin
-   result.CastedUInt64:=POCAValueNullCastedUInt64;
-   POCARuntimeError(Context,'Module "'+ModuleName+'" not found!');
-  end;
- end;
- Frame:=@Context^.FrameStack[Context^.FrameTop-1];
- if POCAIsValueHash(ModuleValue) and POCAIsValueHash(Frame^.Locals) then begin
-  POCAHashSetString(Context,Frame^.Locals,ModuleName,ModuleValue);
-  if POCAIsValueArray(Imports) then begin
-   All:=false;
-   for Index:=1 to POCAArraySize(Imports) do begin
-    Import:=POCAArrayGet(Imports,Index-1);
-    ImportName:=POCAGetStringValue(Context,Import);
-    if (ImportName='*') or (ImportName='all') then begin
-     All:=true;
-     break;
-    end;
-   end;
-   if All then begin
-    Imports:=POCANewArray(Context);
-    POCAHashOwnKeys(Context,Imports,ModuleValue);
-   end;
-   ExportValue:=POCAHashGetString(Context,ModuleValue,'exports');
-   if (not POCAIsValueHash(ExportValue)) or (POCAHashRawSize(ExportValue)=0) then begin
-    ExportValue:=ModuleValue;
-   end;
-   for Index:=1 to POCAArraySize(Imports) do begin
-    Import:=POCAArrayGet(Imports,Index-1);
-    ImportName:=POCAGetStringValue(Context,Import);
-    if length(ImportName)>0 then begin
-     Value:=POCAHashGetString(Context,ExportValue,ImportName);
-     if not POCAIsValueNull(Value) then begin
-      POCAHashSetString(Context,Frame^.Locals,ImportName,Value);
-     end;
-    end;
-   end;
-   result:=ExportValue;
-  end else begin
-   result:=ModuleValue;
-  end;
- end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64;
-  POCARuntimeError(Context,'Import of module "'+ModuleName+'" failed!');
- end;
-end;
-
 function POCAGlobalFunctionEVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var SubContext:PPOCAContext;
     Code,CallArguments,CallThis,CallNamespace:TPOCAValue;
@@ -13407,6 +13489,7 @@ function POCAInitGlobalNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAHashSetString(Context,result,'GarbageCollector',POCAInitGarbageCollectorNamespace(Context));
+ POCAHashSetString(Context,result,'ModuleManager',POCAInitModuleManagerNamespace(Context));
  POCAHashSetString(Context,result,'Math',POCAInitMathNamespace(Context));
  POCAHashSetString(Context,result,'IO',POCAInitIONamespace(Context));
  POCAHashSetString(Context,result,'RegExp',POCAInitRegExpNamespace(Context));
@@ -13429,6 +13512,7 @@ begin
  POCAAddNativeFunction(Context,result,'chr',POCAGlobalFunctionCHR);
  POCAAddNativeFunction(Context,result,'contains',POCAGlobalFunctionCONTAINS);
  POCAAddNativeFunction(Context,result,'import',POCAGlobalFunctionIMPORT);
+ POCAAddNativeFunction(Context,result,'require',POCAGlobalFunctionREQUIRE);
  POCAAddNativeFunction(Context,result,'eval',POCAGlobalFunctionEVAL);
  POCAAddNativeFunction(Context,result,'compile',POCAGlobalFunctionCOMPILE);
  POCAAddNativeFunction(Context,result,'caller',POCAGlobalFunctionCALLER);
@@ -14777,12 +14861,13 @@ begin
      result^.Globals.UnknownValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'Unknown'));
     end;
    end;
+   result^.Globals.ModuleScopes:=POCANewHash(Context);
+   result^.Globals.ModuleValues:=POCANewHash(Context);
    result^.Globals.RootArray:=POCANewArray(Context);
    result^.Globals.RootHash:=POCANewHash(Context);
    result^.Globals.HiddenNamespace:=POCANewHash(Context);
    result^.Globals.Namespace:=POCAInitGlobalNamespace(Context);
    result^.Globals.BaseClass:=POCAInitBaseClass(Context);
-   result^.Globals.Modules:=POCANewHash(Context);
    begin
     result^.Globals.ArrayHash:=POCAInitArrayHash(Context);
     result^.Globals.NumberHash:=POCAInitNumberHash(Context);
@@ -14803,9 +14888,6 @@ begin
      POCAHashSetString(Context,result^.Globals.Namespace,'ThreadHash',result^.Globals.ThreadHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'LockHash',result^.Globals.LockHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'SemaphoreHash',result^.Globals.SemaphoreHash);
-    end;
-    begin
-     POCAHashSetString(Context,result^.Globals.Namespace,'modules',result^.Globals.Modules);     
     end;
    end;
   finally

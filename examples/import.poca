@@ -36,3 +36,18 @@ module EmbeddedModule {
 import otherRandomFunction from EmbeddedModule;
 
 otherRandomFunction();
+
+puts();
+
+let TestObject = require('importsrc2');
+
+puts(TestObject.d());
+
+puts();
+
+puts("Loaded modules:");
+forkey(let moduleName in ModuleManager.moduleScopes){
+  puts(moduleName);
+}
+
+puts();
