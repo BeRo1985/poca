@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-03-31-03-28-0000';
+const POCAVersion='2025-03-31-16-19-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -17783,58 +17783,63 @@ var TokenList:PPOCAToken;
         NextChar;
        end;
        SkipGetToken;
-       case LookUpKeyword(CurrentTokenString) of
-        kwINCLUDE:begin
-         DoINCLUDE(false,false);
-        end;
-        kwINCLUDENEXT:begin
-         DoINCLUDE(true,false);
-        end;
-        kwINCLUDEONCE:begin
-         DoINCLUDE(false,true);
-        end;
-        kwINCLUDENEXTONCE:begin
-         DoINCLUDE(true,true);
-        end;
-        kwDEFINE:begin
-         DoDEFINE;
-        end;
-        kwUNDEF:begin
-         DoUNDEF;
-        end;
-        kwIF:begin
-         DoIF;
-        end;
-        kwIFDEF:begin
-         DoIFDEF(true);
-        end;
-        kwIFNDEF:begin
-         DoIFDEF(false);
-        end;
-        kwELIF:begin
-         DoELSEELIF;
-        end;
-        kwELSE:begin
-         DoELSEELIF;
-        end;
-        kwENDIF:begin
-         DoENDIF;
-        end;
-        kwLINE:begin
-         DoLINE;
-        end;
-        kwPRAGMA:begin
-         DoPRAGMA;
-        end;
-        kwERROR:begin
-         DoERROR;
-        end;
-        kwWARNING:begin
-         DoWARNING;
-        end;
-        else begin
-         AddWarning('undefined statement: '+CurrentTokenString);
-         SkipEOL;
+       if (CurrentToken=tCHAR) and (CurrentTokenChar=ord('!')) then begin
+        NextChar;
+        SkipEOL;
+       end else begin
+        case LookUpKeyword(CurrentTokenString) of
+         kwINCLUDE:begin
+          DoINCLUDE(false,false);
+         end;
+         kwINCLUDENEXT:begin
+          DoINCLUDE(true,false);
+         end;
+         kwINCLUDEONCE:begin
+          DoINCLUDE(false,true);
+         end;
+         kwINCLUDENEXTONCE:begin
+          DoINCLUDE(true,true);
+         end;
+         kwDEFINE:begin
+          DoDEFINE;
+         end;
+         kwUNDEF:begin
+          DoUNDEF;
+         end;
+         kwIF:begin
+          DoIF;
+         end;
+         kwIFDEF:begin
+          DoIFDEF(true);
+         end;
+         kwIFNDEF:begin
+          DoIFDEF(false);
+         end;
+         kwELIF:begin
+          DoELSEELIF;
+         end;
+         kwELSE:begin
+          DoELSEELIF;
+         end;
+         kwENDIF:begin
+          DoENDIF;
+         end;
+         kwLINE:begin
+          DoLINE;
+         end;
+         kwPRAGMA:begin
+          DoPRAGMA;
+         end;
+         kwERROR:begin
+          DoERROR;
+         end;
+         kwWARNING:begin
+          DoWARNING;
+         end;
+         else begin
+          AddWarning('undefined statement: '+CurrentTokenString);
+          SkipEOL;
+         end;
         end;
        end;
       end else begin
