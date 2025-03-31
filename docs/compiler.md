@@ -1,9 +1,7 @@
 
 Below is an overview document that explains how the POCA scripting language engine processes source code — from initial lexical analysis through transformation, parsing, and finally bytecode generation. This explanation is intended for public documentation and highlights both the architectural design and key implementation details as reflected in the source code.
 
-────────────────────────────────────────────────────────────
-**Overview of the POCA Engine Pipeline**
-────────────────────────────────────────────────────────────
+# Overview of the POCA Engine Pipeline
 
 The POCA engine is built as a multi‐stage compiler that takes a source file, processes it through several transformation stages, and ultimately generates a stream of bytecode instructions to be executed by a virtual machine (with optional native code JIT support). The main stages are:
 
@@ -14,9 +12,7 @@ The POCA engine is built as a multi‐stage compiler that takes a source file, p
 
 Each stage is designed to operate on a structured data type (typically a linked list or tree of tokens) and contributes to robust error handling and code optimization.
 
-────────────────────────────────────────────────────────────
-**1. The Lexer: Converting Source to Tokens**
-────────────────────────────────────────────────────────────
+## 1. The Lexer: Converting Source to Tokens
 
 The first step in the POCA engine is lexical analysis, where the source code is transformed into a stream of tokens. This process is crucial for understanding the structure and meaning of the code. The lexer is responsible for identifying keywords, operators, literals, and other syntactic elements, while also managing whitespace and comments.
 
@@ -28,9 +24,7 @@ The lexer’s role is to read the (preprocessed) source text and break it down i
 
 Internally, the lexer scans the input text character by character, classifying sequences according to rules defined in token tables (including operator precedence and token kinds). Functions like `ResetTokenVisited` and `ScanToken` ensure that each token is properly marked and that the entire input is processed. This stage lays the groundwork for subsequent transformation and parsing by creating a reliable token stream.
 
-────────────────────────────────────────────────────────────
-**2. The Transformer: Refining the Token Stream**
-────────────────────────────────────────────────────────────
+## 2. The Transformer: Refining the Token Stream
 
 After tokenization, the transformer refines the token stream. Its main responsibilities include:
 
@@ -42,13 +36,11 @@ The engine calls a dedicated transformer function as follows:
 
 ```pascal
   ProcessTransformer(Parser)
-```  
+```
 
 Within this stage, helper functions like `InsertAfter` and `TransformLambdaFunction` manipulate the token list to fix up constructs that are not immediately clear from the raw lexical output. This transformation ensures that the parser later sees a more normalized and semantically consistent token tree.
 
-────────────────────────────────────────────────────────────
-3. The Parser: Building the Syntax Tree
-────────────────────────────────────────────────────────────
+## 3. The Parser: Building the Syntax Tree
 
 The parser takes the cleaned-up token stream and constructs an abstract syntax tree (AST) that represents the hierarchical structure of the source code. This tree is essential for understanding the relationships between different parts of the code, such as expressions, statements, and blocks.
 
@@ -62,9 +54,7 @@ For example, functions such as `ProcessParser` and helper routines like `ParseBl
 
 This stage ultimately results in an AST that clearly delineates the program’s structure and paves the way for generating executable code.
 
-────────────────────────────────────────────────────────────
-4. The Bytecode Generation: From AST to Executable Code
-────────────────────────────────────────────────────────────
+## 4. The Bytecode Generation: From AST to Executable Code
 
 The final stage compiles the AST into bytecode — a series of low-level instructions that the POCA virtual machine (and optionally, a JIT compiler) can execute. Key steps in this phase include:
 
@@ -81,17 +71,15 @@ A typical entry point for code generation is:
 
 Later, the engine may also map this bytecode to native code when JIT compilation is enabled, as seen in routines that call `POCAGenerateNativeCode` and execute the native code through `POCARunNativeCode` (see further details in POCA.pas).
 
-────────────────────────────────────────────────────────────
-**5. Integration and Error Handling**
-────────────────────────────────────────────────────────────
+# Integration and Error Handling
 
 The POCA engine is designed to handle errors gracefully at each stage. The lexer, transformer, parser, and bytecode generator all include mechanisms for reporting errors with context. For example, if the parser encounters an unexpected token, it can report a syntax error using source file and line data inherited from the lexer. This ensures that developers receive meaningful feedback when issues arise.
 
 The overall design of the POCA engine is modular: each phase feeds into the next, and errors (whether syntactic, semantic, or runtime) are caught and reported with context. For instance, if the parser encounters unexpected tokens, it can report a syntax error using source file and line data inherited from the lexer. Likewise, the bytecode generator’s optimization routines not only enhance performance but also help detect anomalies in the AST structure.
 
-────────────────────────────────────────────────────────────
-**6. Conclusion**
-────────────────────────────────────────────────────────────
+# Conclusion
+
+The POCA scripting language engine is a sophisticated system that effectively transforms source code into executable bytecode. Each stage of the pipeline is carefully designed to ensure that the code is parsed accurately and efficiently, with robust error handling and optimization at every step.
 
 In summary, the POCA scripting language engine works as a carefully layered system:
 
