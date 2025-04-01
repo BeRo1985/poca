@@ -3584,10 +3584,12 @@ requires can reuse them. This system supports both a JavaScript-like
 everything using `+import * from ...+` – and a Lua-style `+require+`
 concept – which returns whatever object the module exports or returns.
 
-Modules are tracked internally by three global hashes: - *moduleScopes*:
-Stores the top-level scope (hash) of each loaded module. -
-*moduleValues*: Stores the exported object returned by the module
-(relevant for `+require+`). - *moduleTimes*: Stores a timestamp
+Modules are tracked internally by three global hashes: 
+
+- *moduleScopes*: Stores the top-level scope (hash) of each loaded module. 
+- *moduleValues*: Stores the exported object returned by the module
+(relevant for `+require+`). 
+- *moduleTimes*: Stores a timestamp
 indicating when the module was last loaded (used for conditional
 reloads).
 

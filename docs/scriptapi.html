@@ -7023,12 +7023,23 @@ everything using <code>import * from ...</code> – and a Lua-style <code>requir
 concept – which returns whatever object the module exports or returns.</p>
 </div>
 <div class="paragraph">
-<p>Modules are tracked internally by three global hashes: - <strong>moduleScopes</strong>:
-Stores the top-level scope (hash) of each loaded module. -
-<strong>moduleValues</strong>: Stores the exported object returned by the module
-(relevant for <code>require</code>). - <strong>moduleTimes</strong>: Stores a timestamp
+<p>Modules are tracked internally by three global hashes:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>moduleScopes</strong>: Stores the top-level scope (hash) of each loaded module.</p>
+</li>
+<li>
+<p><strong>moduleValues</strong>: Stores the exported object returned by the module
+(relevant for <code>require</code>).</p>
+</li>
+<li>
+<p><strong>moduleTimes</strong>: Stores a timestamp
 indicating when the module was last loaded (used for conditional
 reloads).</p>
+</li>
+</ul>
 </div>
 <div class="paragraph">
 <p>The POCA engine also provides &#8220;module loader functions&#8221; that know how
@@ -10083,7 +10094,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 21:46:09 +0200
+Last updated 2025-04-01 21:50:16 +0200
 </div>
 </div>
 </body>
