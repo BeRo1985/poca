@@ -1393,7 +1393,21 @@ performance tuning, making it suitable for a wide range of use cases.
 
 == Global Functions
 
-=== size
+=== Overview
+
+The POCA global functions provide a set of utility functions that
+facilitate common operations in POCA scripts. These functions are
+available globally and can be used without needing to create an
+instance of any object. They include functions for type checking,
+string manipulation, array handling, and more. The functions are
+designed to be simple and intuitive, allowing you to perform
+operations on various data types easily.
+
+'''''
+
+=== Global Functions
+
+==== size
 
 *Usage:*
 
@@ -1424,7 +1438,7 @@ size(42);            // 0
 
 '''''
 
-=== ownKeys
+==== ownKeys
 
 *Usage:*
 
@@ -1449,7 +1463,7 @@ let arr = ownKeys(h); // ["a", "b"]
 
 '''''
 
-=== keys
+==== keys
 
 *Usage:*
 
@@ -1474,7 +1488,7 @@ let arr = keys(h); // ["a", "b"]
 
 '''''
 
-=== print
+==== print
 
 *Usage:*
 
@@ -1500,7 +1514,7 @@ print("Hello, ", 123);
 
 '''''
 
-=== puts
+==== puts
 
 *Usage:*
 
@@ -1526,7 +1540,7 @@ puts("Hello, World!");
 
 '''''
 
-=== readLine
+==== readLine
 
 *Usage:*
 
@@ -1551,7 +1565,7 @@ puts("Hello, " + name);
 
 '''''
 
-=== chr
+==== chr
 
 *Usage:*
 
@@ -1574,7 +1588,7 @@ chr(65); // "A"
 
 '''''
 
-=== contains
+==== contains
 
 *Usage:*
 
@@ -1594,7 +1608,7 @@ if (contains(myHash, "someKey")) {
 
 '''''
 
-=== import
+==== import
 
 See also *ModuleManager.import*.
 
@@ -1624,7 +1638,7 @@ or exported hash.
 
 '''''
 
-=== require
+==== require
 
 See also *ModuleManager.require*.
 
@@ -1646,7 +1660,7 @@ the module file changed.
 
 '''''
 
-=== eval
+==== eval
 
 *Usage:*
 
@@ -1675,7 +1689,7 @@ runs.
 
 '''''
 
-=== compile
+==== compile
 
 *Usage:*
 
@@ -1698,7 +1712,7 @@ object; otherwise returns a code object bound to the current context.
 
 '''''
 
-=== caller
+==== caller
 
 *Usage:*
 
@@ -1719,7 +1733,7 @@ current frame, 1 is the caller, etc.
 
 '''''
 
-=== closure
+==== closure
 
 *Usage:*
 
@@ -1741,7 +1755,7 @@ range.
 
 '''''
 
-=== bind
+==== bind
 
 *Usage:*
 
@@ -1763,7 +1777,7 @@ reference. This effectively re-binds a function’s environment.
 
 '''''
 
-=== call
+==== call
 
 *Usage:*
 
@@ -1787,7 +1801,7 @@ providing:
 
 '''''
 
-=== setHashEvents
+==== setHashEvents
 
 *Usage:*
 
@@ -1806,7 +1820,7 @@ override meta-operations (get, set, etc.). Returns the original hash.
 
 '''''
 
-=== getHashEvents
+==== getHashEvents
 
 *Usage:*
 
@@ -1824,7 +1838,7 @@ special events are assigned.
 
 '''''
 
-=== rawDelete
+==== rawDelete
 
 *Usage:*
 
@@ -1843,7 +1857,7 @@ let success = rawDelete(myHash, key);
 
 '''''
 
-=== rawExist
+==== rawExist
 
 *Usage:*
 
@@ -1862,7 +1876,7 @@ meta-events. Returns 1 if present, 0 if not.
 
 '''''
 
-=== rawGet
+==== rawGet
 
 *Usage:*
 
@@ -1882,7 +1896,7 @@ found.
 
 '''''
 
-=== rawSet
+==== rawSet
 
 *Usage:*
 
@@ -1901,7 +1915,7 @@ rawSet(myHash, key, value);
 
 '''''
 
-=== rawSize
+==== rawSize
 
 *Usage:*
 
@@ -1918,7 +1932,7 @@ meta-events. Equivalent to the internal hash size.
 
 '''''
 
-=== rawKeys
+==== rawKeys
 
 *Usage:*
 
@@ -1935,7 +1949,7 @@ meta-events. The array is sorted.
 
 '''''
 
-== Summary
+=== Summary
 
 *Global Functions in POCA*
 

@@ -588,6 +588,9 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_global_functions">Global Functions</a>
 <ul class="sectlevel2">
+<li><a href="#_overview_7">Overview</a></li>
+<li><a href="#_global_functions_2">Global Functions</a>
+<ul class="sectlevel3">
 <li><a href="#_size">size</a></li>
 <li><a href="#_ownkeys">ownKeys</a></li>
 <li><a href="#_keys">keys</a></li>
@@ -615,9 +618,11 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </ul>
 </li>
 <li><a href="#_summary_7">Summary</a></li>
+</ul>
+</li>
 <li><a href="#_io">IO</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_7">Overview</a></li>
+<li><a href="#_overview_8">Overview</a></li>
 <li><a href="#_global_object_io">Global Object: <strong>IO</strong></a>
 <ul class="sectlevel3">
 <li><a href="#_io_open">IO.open</a></li>
@@ -639,7 +644,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_lock">Lock</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_8">Overview</a></li>
+<li><a href="#_overview_9">Overview</a></li>
 <li><a href="#_global_lock_object">Global Lock Object</a>
 <ul class="sectlevel3">
 <li><a href="#_lock_create_or_new_lock">Lock.create(), or new Lock()</a></li>
@@ -656,7 +661,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_math">Math</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_9">Overview</a></li>
+<li><a href="#_overview_10">Overview</a></li>
 <li><a href="#_global_math_object">Global Math Object</a></li>
 <li><a href="#_math_constants">Math Constants</a>
 <ul class="sectlevel3">
@@ -730,7 +735,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_modulemanager">ModuleManager</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_10">Overview</a></li>
+<li><a href="#_overview_11">Overview</a></li>
 <li><a href="#_global_modulemanager_object">Global ModuleManager Object</a>
 <ul class="sectlevel3">
 <li><a href="#_modulemanager_properties">ModuleManager Properties</a></li>
@@ -754,7 +759,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_number">Number</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_11">Overview</a></li>
+<li><a href="#_overview_12">Overview</a></li>
 <li><a href="#_global_number_object">Global Number Object</a>
 <ul class="sectlevel3">
 <li><a href="#_number_create">Number.create</a></li>
@@ -774,7 +779,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_regexp">RegExp</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_12">Overview</a></li>
+<li><a href="#_overview_13">Overview</a></li>
 <li><a href="#_global_regexp_object">Global RegExp Object</a>
 <ul class="sectlevel3">
 <li><a href="#_regexp_create_regexp_compile_and_the_new_operator">RegExp.create, RegExp.compile, and the new Operator</a></li>
@@ -797,7 +802,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_semaphore">Semaphore</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_13">Overview</a></li>
+<li><a href="#_overview_14">Overview</a></li>
 <li><a href="#_global_semaphore_object">Global Semaphore Object</a>
 <ul class="sectlevel3">
 <li><a href="#_semaphore_create_or_new_semaphore">Semaphore.create(), or new Semaphore()</a></li>
@@ -814,7 +819,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_string">String</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_14">Overview</a></li>
+<li><a href="#_overview_15">Overview</a></li>
 <li><a href="#_global_string_object">Global String Object</a>
 <ul class="sectlevel3">
 <li><a href="#_string_create_new_string_or_literal_syntax">String.create(), new String(), or Literal Syntax</a></li>
@@ -861,7 +866,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_thread">Thread</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_15">Overview</a></li>
+<li><a href="#_overview_16">Overview</a></li>
 <li><a href="#_global_thread_object">Global Thread Object</a>
 <ul class="sectlevel3">
 <li><a href="#_thread_create">Thread.create</a></li>
@@ -3137,7 +3142,22 @@ performance tuning, making it suitable for a wide range of use cases.</p>
 <h2 id="_global_functions">Global Functions</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_size">size</h3>
+<h3 id="_overview_7">Overview</h3>
+<div class="paragraph">
+<p>The POCA global functions provide a set of utility functions that
+facilitate common operations in POCA scripts. These functions are
+available globally and can be used without needing to create an
+instance of any object. They include functions for type checking,
+string manipulation, array handling, and more. The functions are
+designed to be simple and intuitive, allowing you to perform
+operations on various data types easily.</p>
+</div>
+<hr>
+</div>
+<div class="sect2">
+<h3 id="_global_functions_2">Global Functions</h3>
+<div class="sect3">
+<h4 id="_size">size</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3197,8 +3217,8 @@ size(42);            // 0</code></pre>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_ownkeys">ownKeys</h3>
+<div class="sect3">
+<h4 id="_ownkeys">ownKeys</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3240,8 +3260,8 @@ let arr = ownKeys(h); // ["a", "b"]</code></pre>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_keys">keys</h3>
+<div class="sect3">
+<h4 id="_keys">keys</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3283,8 +3303,8 @@ let arr = keys(h); // ["a", "b"]</code></pre>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_print">print</h3>
+<div class="sect3">
+<h4 id="_print">print</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3327,8 +3347,8 @@ newline). Accepts <code>null</code>, strings, or numbers. If a custom
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_puts">puts</h3>
+<div class="sect3">
+<h4 id="_puts">puts</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3371,8 +3391,8 @@ writes a newline (<code>"\n"</code>).</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_readline">readLine</h3>
+<div class="sect3">
+<h4 id="_readline">readLine</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3414,8 +3434,8 @@ puts("Hello, " + name);</code></pre>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_chr">chr</h3>
+<div class="sect3">
+<h4 id="_chr">chr</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3455,8 +3475,8 @@ string in UTF-8 form.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_contains">contains</h3>
+<div class="sect3">
+<h4 id="_contains">contains</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3492,8 +3512,8 @@ string in UTF-8 form.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_import">import</h3>
+<div class="sect3">
+<h4 id="_import">import</h4>
 <div class="paragraph">
 <p>See also <strong>ModuleManager.import</strong>.</p>
 </div>
@@ -3543,8 +3563,8 @@ or exported hash.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_require">require</h3>
+<div class="sect3">
+<h4 id="_require">require</h4>
 <div class="paragraph">
 <p>See also <strong>ModuleManager.require</strong>.</p>
 </div>
@@ -3584,8 +3604,8 @@ the module file changed.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_eval">eval</h3>
+<div class="sect3">
+<h4 id="_eval">eval</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3648,8 +3668,8 @@ runs.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_compile">compile</h3>
+<div class="sect3">
+<h4 id="_compile">compile</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3690,8 +3710,8 @@ object; otherwise returns a code object bound to the current context.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_caller">caller</h3>
+<div class="sect3">
+<h4 id="_caller">caller</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3727,8 +3747,8 @@ current frame, 1 is the caller, etc.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_closure">closure</h3>
+<div class="sect3">
+<h4 id="_closure">closure</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3766,8 +3786,8 @@ range.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_bind">bind</h3>
+<div class="sect3">
+<h4 id="_bind">bind</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3809,8 +3829,8 @@ reference. This effectively re-binds a function’s environment.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_call">call</h3>
+<div class="sect3">
+<h4 id="_call">call</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3864,8 +3884,8 @@ providing:</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_sethashevents">setHashEvents</h3>
+<div class="sect3">
+<h4 id="_sethashevents">setHashEvents</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3900,8 +3920,8 @@ override meta-operations (get, set, etc.). Returns the original hash.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_gethashevents">getHashEvents</h3>
+<div class="sect3">
+<h4 id="_gethashevents">getHashEvents</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3934,8 +3954,8 @@ special events are assigned.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_rawdelete">rawDelete</h3>
+<div class="sect3">
+<h4 id="_rawdelete">rawDelete</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -3970,8 +3990,8 @@ special events are assigned.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_rawexist">rawExist</h3>
+<div class="sect3">
+<h4 id="_rawexist">rawExist</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -4006,8 +4026,8 @@ meta-events. Returns 1 if present, 0 if not.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_rawget">rawGet</h3>
+<div class="sect3">
+<h4 id="_rawget">rawGet</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -4043,8 +4063,8 @@ found.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_rawset">rawSet</h3>
+<div class="sect3">
+<h4 id="_rawset">rawSet</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -4081,8 +4101,8 @@ found.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_rawsize">rawSize</h3>
+<div class="sect3">
+<h4 id="_rawsize">rawSize</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -4114,8 +4134,8 @@ meta-events. Equivalent to the internal hash size.</p>
 </div>
 <hr>
 </div>
-<div class="sect2">
-<h3 id="_rawkeys">rawKeys</h3>
+<div class="sect3">
+<h4 id="_rawkeys">rawKeys</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -4148,10 +4168,8 @@ meta-events. The array is sorted.</p>
 <hr>
 </div>
 </div>
-</div>
-<div class="sect1">
-<h2 id="_summary_7">Summary</h2>
-<div class="sectionbody">
+<div class="sect2">
+<h3 id="_summary_7">Summary</h3>
 <div class="paragraph">
 <p><strong>Global Functions in POCA</strong></p>
 </div>
@@ -4181,11 +4199,12 @@ details.</p>
 </div>
 </div>
 </div>
+</div>
 <div class="sect1">
 <h2 id="_io">IO</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_7">Overview</h3>
+<h3 id="_overview_8">Overview</h3>
 <div class="paragraph">
 <p>The POCA IO API provides file input/output functionality for a dynamic,
 typeless language. Instead of dealing with static types, you interact
@@ -4578,7 +4597,7 @@ projects using a simple, dynamic approach.</p>
 <h2 id="_lock">Lock</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_8">Overview</h3>
+<h3 id="_overview_9">Overview</h3>
 <div class="paragraph">
 <p>The POCA Lock API provides mutual exclusion mechanisms for synchronizing
 access to shared resources in concurrent POCA scripts. Locks in POCA are
@@ -4767,7 +4786,7 @@ execution.</p>
 <h2 id="_math">Math</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_9">Overview</h3>
+<h3 id="_overview_10">Overview</h3>
 <div class="paragraph">
 <p>The POCA Math API provides a set of mathematical constants and functions
 for numerical calculations in POCA scripts. These include basic
@@ -6971,7 +6990,7 @@ radians.</p>
 <h2 id="_modulemanager">ModuleManager</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_10">Overview</h3>
+<h3 id="_overview_11">Overview</h3>
 <div class="paragraph">
 <p>The POCA ModuleManager API provides a mechanism for dynamically loading,
 unloading, and reloading modules within POCA scripts. A &#8220;module&#8221; is
@@ -7441,7 +7460,7 @@ and imports in a structured manner.</p>
 <h2 id="_number">Number</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_11">Overview</h3>
+<h3 id="_overview_12">Overview</h3>
 <div class="paragraph">
 <p>The POCA Number API provides methods for converting number literals into
 string representations with various formatting options. These methods
@@ -7784,7 +7803,7 @@ for numeric string representation in a dynamic, typeless environment.</p>
 <h2 id="_regexp">RegExp</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_12">Overview</h3>
+<h3 id="_overview_13">Overview</h3>
 <div class="paragraph">
 <p>The POCA RegExp API brings powerful pattern matching to your POCA
 scripts. Regular expressions in POCA are dynamic, typeless objects
@@ -8350,7 +8369,7 @@ manipulation both flexible and powerful in your POCA projects.</p>
 <h2 id="_semaphore">Semaphore</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_13">Overview</h3>
+<h3 id="_overview_14">Overview</h3>
 <div class="paragraph">
 <p>The POCA Semaphore API provides counting semaphore mechanisms for
 synchronizing access to shared resources in concurrent POCA scripts.
@@ -8540,7 +8559,7 @@ execution.</p>
 <h2 id="_string">String</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_14">Overview</h3>
+<h3 id="_overview_15">Overview</h3>
 <div class="paragraph">
 <p>The POCA String API provides a rich set of operations for manipulating
 strings in POCA scripts. Strings in POCA are a native type (not ghost
@@ -9657,7 +9676,7 @@ string manipulation in POCA.</p>
 <h2 id="_thread">Thread</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_15">Overview</h3>
+<h3 id="_overview_16">Overview</h3>
 <div class="paragraph">
 <p>The POCA Thread API allows you to execute functions concurrently in
 separate threads. Threads in POCA are dynamic, typeless ghost objects
@@ -10014,7 +10033,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 04:40:55 +0200
+Last updated 2025-04-01 04:49:15 +0200
 </div>
 </div>
 </body>
