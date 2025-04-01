@@ -3893,6 +3893,13 @@ default is 10.
 let num1 = Number.create(123.456);
 let num2 = new Number(123.456); // Equivalent to Number.create()
 let num3 = 123.456; // Using literal syntax
+let num4 = Number.create("123.456", 10); // String to number conversion
+let num5 = new Number("ff", 16); // Hexadecimal to number
+let num6 = Number.create("100", 2); // Binary to number
+let num7 = new Number("0xff"); // Hexadecimal to number
+let num8 = Number.create("0b1010"); // Binary to number
+let num7 = Number.create("0xff.8"); // Floating-point hex to number
+let num8 = new Number("0b1010.1"); // Floating-point binary to number
 ----
 * *Note:* The `+new Number()+` syntax is equivalent to `+Number.create()+`
 
