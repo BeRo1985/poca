@@ -111,6 +111,63 @@ let bla = if(a != 0){ 1 }else{ a ? 2 : 3 };
 POCA essentially maps the mathematical concept and expression of "something"
 into a complete scripting language.
 
+=== Scoping
+
+POCA supports lexical scoping. This means that the scope of a variable is
+determined by its position in the source code. 
+
+Variables declared with `var` are local-scoped, which means they are 
+accessible only within the scope in which they are declared and any nested 
+scopes. This is similar to how variables are scoped in JavaScript and ECMAScript, 
+where variables declared with `var` are function-scoped. These variables are 
+stored in a local hash table and are accessible from the current frame and all 
+nested frames.
+
+However, variables declared with `let` and `const` are block-scoped as well, 
+but unlike `var`, they are not accessible beyond the *execution context frame* 
+boundaries, such as a function or the global scope. Because of this, POCA 
+assigns so-called "registers" to variables declared with `let` and `const`. 
+These variables are not stored in the local hash table but directly in the 
+VM's registers. VM registers are frame-specific, which means they cannot be 
+accessed from outside the current frame.
+
+This is different from JavaScript and ECMAScript, where variables declared
+with `let` and `const` are block-scoped but can still be accessed from
+the outer scope.
+
+Here are some scoping examples in POCA to show what the above means:
+
+[source,javascript]
+----
+
+let a = 1;
+
+var b = 2;
+
+function Func1(){
+  // a is not accessible here, but b is accessible
+  let c = 3;
+  var d = 4;
+  function Func2(){
+    // b and d are accessible here, but a and c are not
+    // ...
+  }
+}
+
+----
+
+POCA also supports closures, which means that functions can capture and
+remember the environment in which they were created, even if that
+environment is no longer in scope.
+
+This allows for powerful programming techniques, such as creating
+functions that can maintain state or encapsulate private variables.
+
+POCA also supports the `scope` and `code` keywords to create explicit
+scopes. The `scope` keyword creates a new scope, while the `code` keyword
+creates a new code block without introducing a new scope. This allows for
+more control over variable visibility and lifetime.
+
 == A quick tour
 
 === How to declare variables
