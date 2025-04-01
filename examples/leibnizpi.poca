@@ -1,3 +1,7 @@
+
+// From https://booping.synth.download/notes/a628ykjo22mh01fv
+// Leibniz formula for pi
+
 let r = 0.0;
 for (let i = 99; i >= 0; i--) {
   let w = i / 100;
