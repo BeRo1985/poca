@@ -12578,6 +12578,11 @@ begin
  result.Num:=SysUtils.Now;
 end;
 
+function POCADateTimeFunctionNOWUTC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ result.Num:=SysUtils.NowUTC;
+end;
+
 function POCADateTimeFunctionMILLISECONDS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if CountArguments<1 then begin
@@ -12590,6 +12595,7 @@ function POCAInitDateTimeNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'now',POCADateTimeFunctionNOW);
+ POCAAddNativeFunction(Context,result,'nowUTC',POCADateTimeFunctionNOWUTC);
  POCAAddNativeFunction(Context,result,'milliseconds',POCADateTimeFunctionMILLISECONDS);
 end;
 
