@@ -9,4 +9,4 @@ for (let i = 99; i >= 0; i--) {
   w = Math.exp(w) / (2.0 * Math.cosh(w));
   r += (((i & 1) ? -4.0 : 4.0) * (Math.isNaN(w) ? 1.0 : w)) / ((2 * i) + 1);
 }
-puts(r, " Error: ", r - Math.PI);
+Console.log(r, " Error: ", r - Math.PI);
