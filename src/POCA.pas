@@ -25055,11 +25055,12 @@ var TokenList:PPOCAToken;
        if OutReg<0 then begin
         OutReg:=GetRegister(true,false);
        end;
-       if t^.Left^.Token=ptLPAR then begin
+{      if t^.Left^.Token=ptLPAR then begin
         JumpNext:=GenerateTest(t^.Left^.Left,false,true,0);
        end else begin
         JumpNext:=GenerateTest(t^.Left,false,true,0);
-       end;
+       end;}
+       JumpNext:=GenerateTest(t^.Left,false,true,0);
        Registers[0]:=GetRegisters;
        begin
         result:=GenerateExpression(t^.Right^.Left,OutReg,true);
