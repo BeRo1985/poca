@@ -455,7 +455,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_array_create_new_array_or_the_literal_syntax">Array.create(), new Array(), or the [] Literal Syntax</a></li>
 </ul>
 </li>
-<li><a href="#_methods_on_array_ghost_objects">Methods on Array Ghost Objects</a>
+<li><a href="#_methods_on_arrays">Methods on Arrays</a>
 <ul class="sectlevel3">
 <li><a href="#_array_empty">Array.empty</a></li>
 <li><a href="#_array_size">Array.size</a></li>
@@ -892,8 +892,8 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 Arrays in POCA are dynamic, typeless collections that support a variety
 of operations including element insertion, removal, slicing, sorting,
 joining, and filling. The API offers an Array namespace for creating
-arrays as well as a rich set of methods on array ghost objects for
-manipulating collections of values.</p>
+arrays as well as a rich set of methods on arrays for manipulating
+collections of values.</p>
 </div>
 <hr>
 </div>
@@ -901,8 +901,8 @@ manipulating collections of values.</p>
 <h3 id="_global_array_object">Global Array Object</h3>
 <div class="paragraph">
 <p>The global <strong>Array</strong> object serves as both a factory and a namespace for
-array operations. You can create array ghost objects using any of the
-following variants:</p>
+array operations. You can create arrays using any of the following
+variants:</p>
 </div>
 <div class="sect3">
 <h4 id="_array_create_new_array_or_the_literal_syntax">Array.create(), new Array(), or the [] Literal Syntax</h4>
@@ -950,9 +950,9 @@ following variants:</p>
 <ul>
 <li>
 <p><strong>Description:</strong> <code>Array.create()</code>, <code>new Array()</code>, or the <code>[]</code>
-literal syntax creates a new array ghost object by invoking the
-underlying array creation routine. The resulting ghost object represents
-a dynamic array, which is registered for subsequent array operations.</p>
+literal syntax creates a new array by invoking the underlying array
+creation routine. The resulting ghost object represents a dynamic array,
+which is registered for subsequent array operations.</p>
 </li>
 <li>
 <p><strong>Parameters:</strong></p>
@@ -970,7 +970,7 @@ elements.</p>
 </div>
 </li>
 <li>
-<p><strong>Return Value:</strong> A new array ghost object.</p>
+<p><strong>Return Value:</strong> A new array.</p>
 </li>
 <li>
 <p><strong>Example:</strong></p>
@@ -993,9 +993,9 @@ let arr5 = ["a", "b", "c"]; // Using literal syntax with initial values</code></
 </div>
 </div>
 <div class="sect2">
-<h3 id="_methods_on_array_ghost_objects">Methods on Array Ghost Objects</h3>
+<h3 id="_methods_on_arrays">Methods on Arrays</h3>
 <div class="paragraph">
-<p>Once created, array ghost objects provide the following methods:</p>
+<p>Once created, arrays provide the following methods:</p>
 </div>
 <div class="sect3">
 <h4 id="_array_empty">Array.empty</h4>
@@ -1095,7 +1095,7 @@ size is smaller, elements are truncated; if larger, new slots are added
 </div>
 </li>
 <li>
-<p><strong>Return Value:</strong> The array ghost object itself.</p>
+<p><strong>Return Value:</strong> The array itself.</p>
 </li>
 <li>
 <p><strong>Example:</strong></p>
@@ -1128,7 +1128,7 @@ size is smaller, elements are truncated; if larger, new slots are added
 <p><strong>Parameters:</strong> One or more elements to be added.</p>
 </li>
 <li>
-<p><strong>Return Value:</strong> The array ghost object itself.</p>
+<p><strong>Return Value:</strong> The array itself.</p>
 </li>
 <li>
 <p><strong>Example:</strong></p>
@@ -1207,8 +1207,7 @@ elements, the slice extends to the end of the array.</p>
 </div>
 </li>
 <li>
-<p><strong>Return Value:</strong> A new array ghost object containing the specified
-elements.</p>
+<p><strong>Return Value:</strong> A new array containing the specified elements.</p>
 </li>
 <li>
 <p><strong>Example:</strong></p>
@@ -1242,7 +1241,7 @@ comparison.</p>
 <p><strong>Parameters:</strong> None.</p>
 </li>
 <li>
-<p><strong>Return Value:</strong> The sorted array ghost object itself.</p>
+<p><strong>Return Value:</strong> The sorted array itself.</p>
 </li>
 <li>
 <p><strong>Example:</strong></p>
@@ -1336,8 +1335,7 @@ array size.</p>
 </div>
 </li>
 <li>
-<p><strong>Return Value:</strong> A new array ghost object with the specified range
-filled.</p>
+<p><strong>Return Value:</strong> A new array with the specified range filled.</p>
 </li>
 <li>
 <p><strong>Example:</strong></p>
@@ -1359,13 +1357,13 @@ filled.</p>
 <li>
 <p><strong>Global Object:</strong> The Array object acts as a factory for creating array
 ghost objects. <code>Array.create()</code>, <code>new Array()</code>, or the <code>[]</code>
-literal syntax creates a new array ghost object by invoking the
-underlying array creation routine. The resulting ghost object represents
-a dynamic array, which is registered for subsequent array operations.</p>
+literal syntax creates a new array by invoking the underlying array
+creation routine. The resulting ghost object represents a dynamic array,
+which is registered for subsequent array operations.</p>
 </li>
 <li>
-<p><strong>Array Ghost Object Methods:</strong> Once created, array ghost objects
-provide the following methods to manipulate arrays:</p>
+<p><strong>Array Methods:</strong> Once created, array provide the following methods to
+manipulate arrays:</p>
 <div class="ulist">
 <ul>
 <li>
@@ -10016,7 +10014,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 04:31:09 +0200
+Last updated 2025-04-01 04:40:55 +0200
 </div>
 </div>
 </body>

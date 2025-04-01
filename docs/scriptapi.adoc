@@ -16,16 +16,16 @@ The POCA Array API provides functionality similar to JavaScript arrays.
 Arrays in POCA are dynamic, typeless collections that support a variety
 of operations including element insertion, removal, slicing, sorting,
 joining, and filling. The API offers an Array namespace for creating
-arrays as well as a rich set of methods on array ghost objects for
-manipulating collections of values.
+arrays as well as a rich set of methods on arrays for manipulating 
+collections of values.
 
 '''''
 
 === Global Array Object
 
 The global *Array* object serves as both a factory and a namespace for
-array operations. You can create array ghost objects using any of the
-following variants:
+array operations. You can create arrays using any of the following 
+variants:
 
 ==== Array.create(), new Array(), or the [] Literal Syntax
 
@@ -65,15 +65,15 @@ let arr = ["a", "b", "c"];
 ----
 
 * *Description:* `+Array.create()+`, `+new Array()+`, or the `+[]+`
-literal syntax creates a new array ghost object by invoking the
-underlying array creation routine. The resulting ghost object represents
-a dynamic array, which is registered for subsequent array operations.
+literal syntax creates a new array by invoking the underlying array 
+creation routine. The resulting ghost object represents a dynamic array, 
+which is registered for subsequent array operations.
 * *Parameters:*
 ** If provided, the first parameter specifies the desired size of the
 array.
 ** Additional parameters (if any) are used to initialize the array
 elements.
-* *Return Value:* A new array ghost object.
+* *Return Value:* A new array.
 * *Example:*
 +
 [source,js]
@@ -90,9 +90,9 @@ let arr5 = ["a", "b", "c"]; // Using literal syntax with initial values
 
 '''''
 
-=== Methods on Array Ghost Objects
+=== Methods on Arrays
 
-Once created, array ghost objects provide the following methods:
+Once created, arrays provide the following methods:
 
 ==== Array.empty
 
@@ -154,7 +154,7 @@ size is smaller, elements are truncated; if larger, new slots are added
 (typically initialized to null).
 * *Parameters:*
 ** `+newSize+` (number): The desired new size of the array.
-* *Return Value:* The array ghost object itself.
+* *Return Value:* The array itself.
 * *Example:*
 +
 [source,js]
@@ -175,7 +175,7 @@ arr.push(element1, element2, ...);
 
 * *Description:* Appends one or more elements to the end of the array.
 * *Parameters:* One or more elements to be added.
-* *Return Value:* The array ghost object itself.
+* *Return Value:* The array itself.
 * *Example:*
 +
 [source,js]
@@ -222,8 +222,7 @@ elements, the slice extends to the end of the array.
 * *Parameters:*
 ** `+start+` (number): The starting index.
 ** `+length+` (number): The number of elements to include (optional).
-* *Return Value:* A new array ghost object containing the specified
-elements.
+* *Return Value:* A new array containing the specified elements.
 * *Example:*
 +
 [source,js]
@@ -245,7 +244,7 @@ arr.sort();
 * *Description:* Sorts the array elements in place using the default
 comparison.
 * *Parameters:* None.
-* *Return Value:* The sorted array ghost object itself.
+* *Return Value:* The sorted array itself.
 * *Example:*
 +
 [source,js]
@@ -299,8 +298,7 @@ array size.
 ** `+value+` (any): The value to fill with.
 ** `+start+` (number): The starting index (optional).
 ** `+end+` (number): The ending index (optional).
-* *Return Value:* A new array ghost object with the specified range
-filled.
+* *Return Value:* A new array with the specified range filled.
 * *Example:*
 +
 [source,js]
@@ -314,11 +312,11 @@ let newArr = arr.fill("x", 2, 5);
 
 * *Global Object:* The Array object acts as a factory for creating array
 ghost objects. `+Array.create()+`, `+new Array()+`, or the `+[]+`
-literal syntax creates a new array ghost object by invoking the
-underlying array creation routine. The resulting ghost object represents
-a dynamic array, which is registered for subsequent array operations.
-* *Array Ghost Object Methods:* Once created, array ghost objects
-provide the following methods to manipulate arrays:
+literal syntax creates a new array by invoking the underlying array 
+creation routine. The resulting ghost object represents a dynamic array, 
+which is registered for subsequent array operations.
+* *Array Methods:* Once created, array provide the following methods to 
+manipulate arrays:
 ** *empty:* Returns a numeric boolean indicating whether the array is
 empty.
 ** *size:* Returns the number of elements in the array.
