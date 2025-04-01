@@ -3882,8 +3882,8 @@ number operations. The `+new Number()+` syntax is equivalent to
 * *Parameters:*
 ** `+value+` (number): The numeric value to be created, or a string
 representation of a number, which can be in decimal, hexadecimal 
-(prefixed with `0x`), or binary (prefixedwith `0b`) format, or any 
-other valid number string.
+(prefixed with `0x`), octal (prefixed with `0o`) or binary (prefixed 
+with `0b`) format or any other valid number string.
 ** `+radix+` (number, optional): The base for numeral system
 (2 for binary, 8 for octal, 10 for decimal, 16 for hexadecimal), 
 default is 10. 
