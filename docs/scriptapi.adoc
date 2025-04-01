@@ -4490,6 +4490,22 @@ literal syntax (using double quotes `+""+` or single quotes `+''+`) or
 by using the global String object via factory functions such as
 `+String.create()+` or `+new String()+`.
 
+Strings in POCA are always UTF-8 encoded, and the API provides methods for
+working with both code points and code units. The API includes methods
+for counting code points, converting strings to numbers, checking for
+substring presence, splitting strings, trimming whitespace, and more.
+But POCA's UTF-8 decoder fallbacks to Latin-1 if it detects an invalid
+UTF-8 sequence at a code unit boundary. This allows you to work with
+strings that may contain invalid UTF-8 sequences without raising
+problems. And it allows you to use the same string API for both UTF-8 and
+Latin-1 strings.
+
+* *Note:* The POCA String API is designed to be similar to JavaScript's
+String API, but it also includes some Lua-like features. This
+combination provides a familiar yet powerful string manipulation
+experience for developers coming from both JavaScript and Lua
+environments.
+
 '''''
 
 === Global String Object

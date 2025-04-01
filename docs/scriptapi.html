@@ -8571,6 +8571,28 @@ literal syntax (using double quotes <code>""</code> or single quotes <code>''</c
 by using the global String object via factory functions such as
 <code>String.create()</code> or <code>new String()</code>.</p>
 </div>
+<div class="paragraph">
+<p>Strings in POCA are always UTF-8 encoded, and the API provides methods for
+working with both code points and code units. The API includes methods
+for counting code points, converting strings to numbers, checking for
+substring presence, splitting strings, trimming whitespace, and more.
+But POCA&#8217;s UTF-8 decoder fallbacks to Latin-1 if it detects an invalid
+UTF-8 sequence at a code unit boundary. This allows you to work with
+strings that may contain invalid UTF-8 sequences without raising
+problems. And it allows you to use the same string API for both UTF-8 and
+Latin-1 strings.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Note:</strong> The POCA String API is designed to be similar to JavaScript&#8217;s
+String API, but it also includes some Lua-like features. This
+combination provides a familiar yet powerful string manipulation
+experience for developers coming from both JavaScript and Lua
+environments.</p>
+</li>
+</ul>
+</div>
 <hr>
 </div>
 <div class="sect2">
@@ -10035,7 +10057,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 05:24:48 +0200
+Last updated 2025-04-01 05:28:53 +0200
 </div>
 </div>
 </body>
