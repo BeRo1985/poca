@@ -7622,15 +7622,15 @@ puts(str); // "123.456"</code></pre>
 <ul>
 <li>
 <p><strong>Description:</strong> Converts the number to its exponential notation. The
-argument specifies the number of digits after the decimal point plus the
-leading digit.</p>
+argument specifies the number of digits after the decimal point.</p>
 </li>
 <li>
 <p><strong>Parameters:</strong></p>
 <div class="ulist">
 <ul>
 <li>
-<p><code>precision</code> (number): The number of digits after the decimal point plus the leading digit.</p>
+<p><code>precision</code> (number): The number of digits after the decimal point
+plus. If it is -1, then the full representation is used.</p>
 </li>
 </ul>
 </div>
@@ -7643,7 +7643,7 @@ notation.</p>
 <p><strong>Example:</strong></p>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let expStr = (123.456).toExponential(3);
+<pre class="highlight"><code class="language-js" data-lang="js">let expStr = (123.456).toExponential(2);
 puts(expStr); // e.g., "1.23e+2"</code></pre>
 </div>
 </div>
@@ -10094,7 +10094,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 21:55:18 +0200
+Last updated 2025-04-01 21:58:07 +0200
 </div>
 </div>
 </body>
