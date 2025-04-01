@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-01-08-36-0000';
+const POCAVersion='2025-04-01-18-38-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -22428,6 +22428,7 @@ var TokenList:PPOCAToken;
    end;
    function GenerateScalarConstant(t:PPOCAToken;OutReg:longint):longint;
    var v:longint;
+       Num:Double;
    begin
     if OutReg<0 then begin
      OutReg:=GetRegister(true,false);
@@ -22435,17 +22436,18 @@ var TokenList:PPOCAToken;
     result:=OutReg;
     case t^.Token of
      ptLITERALNUM:begin
-      if t^.Num=0 then begin
+      Num:=t^.Num;
+      if Num=0 then begin
        EmitOpcode(popLOADZERO,result);
        SetRegisterNumber(result,true);
        exit;
-      end else if t^.Num=1 then begin
+      end else if Num=1 then begin
        EmitOpcode(popLOADONE,result);
        SetRegisterNumber(result,true);
        exit;
-      end else if POCAIsFinite(t^.Num) then begin
-       v:=trunc(t^.Num);
-       if v=t^.Num then begin
+      end else if POCAIsFinite(Num) then begin
+       v:=trunc(Num);
+       if longint(v)=Num then begin
         EmitOpcode(popLOADINT32,result,longword(v));
         SetRegisterNumber(result,true);
         exit;
@@ -22455,6 +22457,32 @@ var TokenList:PPOCAToken;
     end;
     EmitOpcode(popLOADCONST,result,FindConstantIndex(t));
     SetRegisterNumber(result,t^.Token=ptLITERALNUM);
+   end;
+   function GenerateNumberConstant(Num:Double;OutReg:longint):longint;
+   var v:longint;
+   begin
+    if OutReg<0 then begin
+     OutReg:=GetRegister(true,false);
+    end;
+    result:=OutReg;
+    if Num=0 then begin
+     EmitOpcode(popLOADZERO,result);
+     SetRegisterNumber(result,true);
+    end else if Num=1 then begin
+     EmitOpcode(popLOADONE,result);
+     SetRegisterNumber(result,true);
+    end else begin
+     if POCAIsFinite(Num) then begin
+      v:=trunc(Num);
+      if longint(v)=Num then begin
+       EmitOpcode(popLOADINT32,result,longword(v));
+       SetRegisterNumber(result,true);
+       exit;
+      end;
+     end;
+     EmitOpcode(popLOADCONST,result,InternConstant(POCANumber(Num)));
+     SetRegisterNumber(result,true);
+    end;
    end;
    function IsSymbolRegister(t:PPOCAToken):boolean;
    var i:longint;
@@ -27096,8 +27124,7 @@ var TokenList:PPOCAToken;
        if Binary(t) then begin
         result:=GenerateBinaryOperation(popSUB,t,OutReg);
        end else if assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM) then begin
-        t^.Right^.Num:=-t^.Right^.Num;
-        result:=GenerateScalarConstant(t^.Right,OutReg);
+        result:=GenerateNumberConstant(-t^.Right^.Num,OutReg);
         SetRegisterNumber(result,true);
        end else begin
         if OutReg<0 then begin

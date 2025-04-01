@@ -1,0 +1,10 @@
+let r = 0.0;
+for (let i = 99; i >= 0; i--) {
+  let w = i / 100;
+  w = ((1.0 / w) + (1 / (w - 1.0))) * 1.5;
+  w = Math.exp(w) / (2.0 * Math.cosh(w));
+  if(Math.isNaN(w)) w = 1.0;
+  r += (((i & 1) ? -4.0 : 4.0) * w) / ((2 * i) + 1);
+  //r += (((i & 1) ? -4.0 : 4.0) * ((w != w) ? 1.0 : w)) / ((2 * i) + 1);
+}
+puts(r, " Error: ", r - Math.PI);
