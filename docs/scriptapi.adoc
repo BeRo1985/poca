@@ -3864,7 +3864,7 @@ or equivalently,
 
 [source,js]
 ----
-let num = new Number(value);
+let num = new Number(value, radix);
 ----
 
 or
@@ -3881,6 +3881,9 @@ number operations. The `+new Number()+` syntax is equivalent to
 
 * *Parameters:*
 ** `+value+` (number): The numeric value to be created.
+** `+radix+` (number, optional): The base for numeral system
+(2 for binary, 8 for octal, 10 for decimal, 16 for hexadecimal), 
+default is 10. 
 * *Return Value:* A number literal representing the specified value.
 * *Example:*
 +

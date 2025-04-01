@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-01-22-00-0000';
+const POCAVersion='2025-04-01-23-35-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -12693,7 +12693,21 @@ end;
 function POCANumberFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
-  result:=POCANumberValue(Context,Arguments^[0]);
+  if CountArguments>1 then begin
+   case POCAGetValueType(Arguments^[0]) of
+    pvtNULL:begin
+     result.Num:=0;
+    end;
+    pvtNUMBER:begin
+     result:=POCANumberValue(Context,Arguments^[0]);
+    end;
+    else begin
+     result.Num:=ConvertStringToDouble(POCAGetStringValue(Context,Arguments^[0]),rmNearest,nil,trunc(POCAGetNumberValue(Context,Arguments^[1])));
+    end;
+   end;
+  end else begin
+   result:=POCANumberValue(Context,Arguments^[0]);
+  end;
  end else begin
   result.Num:=0;
  end;

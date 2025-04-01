@@ -7521,7 +7521,7 @@ hash and can be invoked directly on any number literal.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let num = new Number(value);</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let num = new Number(value, radix);</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -7547,6 +7547,11 @@ number operations. The <code>new Number()</code> syntax is equivalent to
 <ul>
 <li>
 <p><code>value</code> (number): The numeric value to be created.</p>
+</li>
+<li>
+<p><code>radix</code> (number, optional): The base for numeral system
+(2 for binary, 8 for octal, 10 for decimal, 16 for hexadecimal),
+default is 10.</p>
 </li>
 </ul>
 </div>
@@ -10122,7 +10127,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 22:13:46 +0200
+Last updated 2025-04-01 23:33:13 +0200
 </div>
 </div>
 </body>
