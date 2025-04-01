@@ -553,8 +553,8 @@ let co = new Coroutine(function(a, b) {
 }, arg1, arg2);
 ----
 
-* *Description:* `+Coroutine.create+` or `+new Coroutine+` compiles 
-the provided function into a coroutine ghost object. The first argument 
+* *Description:* `+Coroutine.create+` or `+new Coroutine+` creates 
+a coroutine ghost object with the provided function. The first argument 
 must be a function, and any additional arguments will be passed to that 
 function when the coroutine is first executed. Internally, a new 
 execution context is created for the coroutine, and the coroutine ghost 
@@ -739,7 +739,7 @@ puts("Final result: " + finalResult);
 
 * *Global Object:* The *Coroutine* object provides the following
 functions:
-** *create:* Compiles a function into a coroutine ghost object.
+** *create:* Creates a coroutine ghost object for a provided function.
 ** *yield:* Suspends the execution of a running coroutine, optionally
 yielding a value.
 ** *get:* Retrieves the value passed to the coroutine when it is
@@ -5169,9 +5169,9 @@ let th = Thread.create(function(a, b) {
 }, arg1, arg2);
 ----
 
-* *Description:* `+Thread.create+` compiles the provided function into a
-new thread ghost object. The first argument must be a function; any
-additional arguments will be passed to that function when the thread
+* *Description:* `+Thread.create+` creates a new thread ghost object
+with the the provided function. The first argument must be a function; 
+any additional arguments will be passed to that function when the thread
 starts. Internally, a new execution context is created, and the thread
 ghost object is registered in the global thread hash.
 * *Parameters:*
@@ -5348,8 +5348,8 @@ if (th.wait(1000)) {
 === Summary
 
 * *Global Object:* The Thread object acts as a factory for creating
-thread ghost objects. The Thread.create function compiles a POCA
-function into a thread ghost object, registering it for execution
+thread ghost objects. The Thread.create function creates a thread 
+ghost object with a POCA function, registering it for execution
 management.
 * *Thread Ghost Object Methods:* Once created, thread ghost objects
 provide the following methods to manage their execution:

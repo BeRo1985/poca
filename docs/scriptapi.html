@@ -1753,8 +1753,8 @@ you resume a suspended coroutine.</p>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> <code>Coroutine.create</code> or <code>new Coroutine</code> compiles
-the provided function into a coroutine ghost object. The first argument
+<p><strong>Description:</strong> <code>Coroutine.create</code> or <code>new Coroutine</code> creates
+a coroutine ghost object with the provided function. The first argument
 must be a function, and any additional arguments will be passed to that
 function when the coroutine is first executed. Internally, a new
 execution context is created for the coroutine, and the coroutine ghost
@@ -2022,7 +2022,7 @@ functions:</p>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>create:</strong> Compiles a function into a coroutine ghost object.</p>
+<p><strong>create:</strong> Creates a coroutine ghost object for a provided function.</p>
 </li>
 <li>
 <p><strong>yield:</strong> Suspends the execution of a running coroutine, optionally
@@ -9711,9 +9711,9 @@ within your POCA scripts.</p>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> <code>Thread.create</code> compiles the provided function into a
-new thread ghost object. The first argument must be a function; any
-additional arguments will be passed to that function when the thread
+<p><strong>Description:</strong> <code>Thread.create</code> creates a new thread ghost object
+with the the provided function. The first argument must be a function;
+any additional arguments will be passed to that function when the thread
 starts. Internally, a new execution context is created, and the thread
 ghost object is registered in the global thread hash.</p>
 </li>
@@ -9987,8 +9987,8 @@ if (th.wait(1000)) {
 <ul>
 <li>
 <p><strong>Global Object:</strong> The Thread object acts as a factory for creating
-thread ghost objects. The Thread.create function compiles a POCA
-function into a thread ghost object, registering it for execution
+thread ghost objects. The Thread.create function creates a thread
+ghost object with a POCA function, registering it for execution
 management.</p>
 </li>
 <li>
@@ -10033,7 +10033,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 04:49:15 +0200
+Last updated 2025-04-01 05:21:02 +0200
 </div>
 </div>
 </body>
