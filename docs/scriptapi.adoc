@@ -1955,13 +1955,18 @@ meta-events. The array is sorted.
 
 *Global Functions in POCA*
 
-The global namespace contains a variety of utilities that let you: 1.
-*Interact with arrays, hashes, and strings* using `+size+`, `+ownKeys+`,
-`+keys+`, etc. 2. *Perform console I/O* with `+print+`, `+puts+`, and
-`+readLine+`. 3. *Manage or query modules* with `+import+`, `+require+`
-(duplicates of ModuleManager’s functions). 4. *Evaluate code* with
+The global namespace contains a variety of utilities that let you: 
+
+1. *Interact with arrays, hashes, and strings* using `+size+`, `+ownKeys+`,
+`+keys+`, etc. 
+2. *Perform console I/O* with `+print+`, `+puts+`, and
+`+readLine+`. 
+3. *Manage or query modules* with `+import+`, `+require+`
+(duplicates of ModuleManager’s functions). 
+4. *Evaluate code* with
 `+eval+` and `+compile+`, manipulate function closures with `+caller+`,
-`+closure+`, `+bind+`, and `+call+`. 5. *Control or bypass hash
+`+closure+`, `+bind+`, and `+call+`. 
+5. *Control or bypass hash
 meta-events* with `+rawGet+`, `+rawSet+`, etc.
 
 These functions enable rapid scripting and flexible data handling in
