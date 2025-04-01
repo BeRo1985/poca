@@ -3857,7 +3857,7 @@ hash and can be invoked directly on any number literal.
 *Usage:*
 [source,js]
 ----
-let num = Number.create(value);
+let num = Number.create(value, radix);
 ----
 
 or equivalently,
