@@ -1,4 +1,7 @@
-Go to the [syntax documentation](./syntax.adoc)
-Go to the [script API documentation](./scriptapi.adoc)
-Go to the [garbage collector documentation](./garbagecollector.md)
-Go to the [compiler pipeline documentation](./compiler.md)
+
+Here you can find the documentation for the following:
+
+- [Syntax](./syntax.adoc)
+- [Script API](./scriptapi.adoc)
+- [Garbage Collector](./garbagecollector.md)
+- [Compiler Pipeline](./compiler.md)
