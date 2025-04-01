@@ -3927,17 +3927,17 @@ let expStr = (123.456).toExponential(3);
 ----
 
 * *Description:* Converts the number to its exponential notation. The
-argument specifies the number of digits after the decimal point plus the
-leading digit.
+argument specifies the number of digits after the decimal point.
 * *Parameters:*
-** `+precision+` (number): The number of digits after the decimal point plus the leading digit. 
+** `+precision+` (number): The number of digits after the decimal point 
+plus. If it is -1, then the full representation is used. 
 * *Return Value:* A string representing the number in exponential
 notation.
 * *Example:*
 +
 [source,js]
 ----
-let expStr = (123.456).toExponential(3);
+let expStr = (123.456).toExponential(2);
 puts(expStr); // e.g., "1.23e+2"
 ----
 

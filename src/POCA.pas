@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-01-18-38-0000';
+const POCAVersion='2025-04-01-21-59-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -13963,7 +13963,7 @@ begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "toExponential"');
  end;
- result:=POCANewString(Context,ConvertDoubleToString(POCAGetNumberValue(Context,This),omExponential,trunc(POCAGetNumberValue(Context,Arguments^[0]))));
+ result:=POCANewString(Context,ConvertDoubleToString(POCAGetNumberValue(Context,This),omExponential,trunc(POCAGetNumberValue(Context,Arguments^[0]))-1));
 end;
 
 function POCANumberFunctionTOFIXED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
