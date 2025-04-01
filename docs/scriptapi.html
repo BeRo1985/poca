@@ -8580,7 +8580,15 @@ But POCA&#8217;s UTF-8 decoder fallbacks to Latin-1 if it detects an invalid
 UTF-8 sequence at a code unit boundary. This allows you to work with
 strings that may contain invalid UTF-8 sequences without raising
 problems. And it allows you to use the same string API for both UTF-8 and
-Latin-1 strings.</p>
+Latin-1 strings, and even mixed strings containing both encodings.</p>
+</div>
+<div class="paragraph">
+<p>In contrast, JavaScript/ECMAScript strings are UTF-16 encoded, which can
+lead to issues when working with characters outside the Basic Multilingual
+Plane (BMP). POCA strings are always UTF-8 encoded, which means they can
+handle a wider range of characters without the complications of surrogate
+pairs. This makes POCA strings more straightforward to work with, especially
+for internationalization and localization.</p>
 </div>
 <div class="ulist">
 <ul>
@@ -10057,7 +10065,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 05:28:53 +0200
+Last updated 2025-04-01 05:32:15 +0200
 </div>
 </div>
 </body>
