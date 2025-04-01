@@ -3589,9 +3589,8 @@ Modules are tracked internally by three global hashes:
 - *moduleScopes*: Stores the top-level scope (hash) of each loaded module. 
 - *moduleValues*: Stores the exported object returned by the module
 (relevant for `+require+`). 
-- *moduleTimes*: Stores a timestamp
-indicating when the module was last loaded (used for conditional
-reloads).
+- *moduleTimes*: Stores a timestamp indicating when the module was last 
+loaded (used for conditional reloads).
 
 The POCA engine also provides "`module loader functions`" that know how
 to locate module files, load them, and return their code. When a module
