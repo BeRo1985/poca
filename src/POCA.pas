@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-01-23-35-0000';
+const POCAVersion='2025-04-02-00-20-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -22784,6 +22784,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptMINUS:begin
@@ -22806,6 +22808,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptMUL:begin
@@ -22819,6 +22823,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -22837,6 +22843,8 @@ var TokenList:PPOCAToken;
            end;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptMOD:begin
@@ -22854,6 +22862,8 @@ var TokenList:PPOCAToken;
            end;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptPOW:begin
@@ -22867,6 +22877,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -22890,6 +22902,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptNOT:begin
@@ -22901,6 +22915,8 @@ var TokenList:PPOCAToken;
            t^.Num:=ord(ToNum(t^.Left)=0);
            t^.Left^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -22914,6 +22930,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptBNOT:begin
@@ -22926,6 +22944,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptNUM:begin
@@ -22937,6 +22957,8 @@ var TokenList:PPOCAToken;
            t^.Num:=ToNum(t^.Left);
            t^.Left^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -22957,6 +22979,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptLTEQ:begin
@@ -22975,6 +22999,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -22995,6 +23021,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptGTEQ:begin
@@ -23013,6 +23041,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -23033,6 +23063,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptNEQ:begin
@@ -23051,6 +23083,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -23083,6 +23117,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptBAND:begin
@@ -23096,6 +23132,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -23111,6 +23149,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptBOR:begin
@@ -23124,6 +23164,8 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
          end;
         end;
        end;
@@ -23139,6 +23181,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptBSHR:begin
@@ -23153,6 +23197,8 @@ var TokenList:PPOCAToken;
            t^.Right^.Token:=ptEMPTY;
           end;
          end;
+         else begin
+         end;
         end;
        end;
        ptBUSHR:begin
@@ -23166,6 +23212,35 @@ var TokenList:PPOCAToken;
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
+         end;
+         else begin
+         end;
+        end;
+       end;
+       ptNULLISHOR:begin
+        case t^.Rule of
+         prBINARY:begin
+          ScanToken(t^.Left,t,true);
+          ScanToken(t^.Right,t,true);
+          if assigned(t^.Left) and (t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) then begin
+           t^.Token:=t^.Left^.Token;
+           t^.Str:=t^.Left^.Str;
+           t^.Num:=t^.Left^.Num;
+           t^.Left^.Token:=ptEMPTY;
+           t^.Right^.Token:=ptEMPTY;
+          end else if (assigned(t^.Left) and (t^.Left^.Token=ptNULL)) and
+                      (assigned(t^.Right) and (t^.Right^.Token in [ptLITERALNUM,ptLITERALSTR])) then begin
+           t^.Token:=t^.Right^.Token;
+           t^.Str:=t^.Right^.Str;
+           t^.Num:=t^.Right^.Num;
+           t^.Left^.Token:=ptEMPTY;
+           t^.Right^.Token:=ptEMPTY;
+          end;
+         end;
+         else begin
+          ScanToken(t^.Children,t,false);
+          ScanToken(t^.LastChild,t,false);
+          ScanToken(t^.Next,t,false);
          end;
         end;
        end;
