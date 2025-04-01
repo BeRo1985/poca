@@ -1555,7 +1555,9 @@ to the console. For each argument, it converts the value to a string:</p>
 </li>
 <li>
 <p>If the value is a string, it converts the internal UTF‑8
-representation to UTF‑16 before writing.</p>
+representation to UTF‑16 before writing, when it is necessary for
+the underlying I/O function, otherwise it writes the UTF‑8 string
+directly.</p>
 </li>
 <li>
 <p>If the value is a number, it converts the number to its string
@@ -7854,7 +7856,7 @@ manipulate regular expressions before they are used in pattern matching.</p>
 <p><strong>Description:</strong> These functions compile the provided pattern into a
 RegExp ghost object. The function accepts a plain string (or, if given a
 RegExp ghost object, its source pattern is used) and compiles it after
-checking its UTF8 status. The resulting ghost object is registered in
+checking its UTF-8 status. The resulting ghost object is registered in
 the global RegExp hash so that its methods become available dynamically.
 In POCA, the <code>new</code> operator is simply an alias for
 <code>RegExp.create</code>—there is no separate constructor.</p>
@@ -10033,7 +10035,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 05:21:02 +0200
+Last updated 2025-04-01 05:24:48 +0200
 </div>
 </div>
 </body>

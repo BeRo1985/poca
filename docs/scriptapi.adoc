@@ -423,7 +423,9 @@ Console.log(value1, value2, ...);
 to the console. For each argument, it converts the value to a string:
 ** If the value is `+null+`, it outputs `+"null"+`.
 ** If the value is a string, it converts the internal UTF‑8
-representation to UTF‑16 before writing.
+representation to UTF‑16 before writing, when it is necessary for
+the underlying I/O function, otherwise it writes the UTF‑8 string
+directly.
 ** If the value is a number, it converts the number to its string
 representation.
 +
@@ -4077,7 +4079,7 @@ let re = RegExp.compile("foo(bar)?");
 * *Description:* These functions compile the provided pattern into a
 RegExp ghost object. The function accepts a plain string (or, if given a
 RegExp ghost object, its source pattern is used) and compiles it after
-checking its UTF8 status. The resulting ghost object is registered in
+checking its UTF-8 status. The resulting ghost object is registered in
 the global RegExp hash so that its methods become available dynamically.
 In POCA, the `+new+` operator is simply an alias for
 `+RegExp.create+`—there is no separate constructor.
