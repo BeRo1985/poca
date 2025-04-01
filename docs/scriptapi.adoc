@@ -5072,13 +5072,30 @@ value.
 
 [source,js]
 ----
-let info = "test".dump();
+let info = String.dump(input);
 ----
 
 * *Description:* Returns a detailed dump (debug representation) of the
-string’s internal state.
-* *Parameters:* None.
+input parameter. This is useful for debugging and inspecting the
+internal representation of the input.
+* *Parameters:* Input parameter (any type).
 * *Return Value:* A string containing the dump information.
+
+* *Example:*
++
+[source,js]
+----
+let dumpInfo = String.dump({a: 1, b: "text", c: [1, 2, 3]});
+puts(dumpInfo);
+----
+* *Output:*
+```
+{"a":1,"b":"text","c":[1,2,3]}
+```
+* *Note:* The output format may vary based on the input type and
+implementation details. The dump function provides a human-readable
+representation of the input, which can be useful for debugging and
+inspecting complex data structures.
 
 '''''
 

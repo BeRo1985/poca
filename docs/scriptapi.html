@@ -9570,20 +9570,48 @@ value.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let info = "test".dump();</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let info = String.dump(input);</code></pre>
 </div>
 </div>
 <div class="ulist">
 <ul>
 <li>
 <p><strong>Description:</strong> Returns a detailed dump (debug representation) of the
-string’s internal state.</p>
+input parameter. This is useful for debugging and inspecting the
+internal representation of the input.</p>
 </li>
 <li>
-<p><strong>Parameters:</strong> None.</p>
+<p><strong>Parameters:</strong> Input parameter (any type).</p>
 </li>
 <li>
 <p><strong>Return Value:</strong> A string containing the dump information.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let dumpInfo = String.dump({a: 1, b: "text", c: [1, 2, 3]});
+puts(dumpInfo);</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p><strong>Output:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code>{"a":1,"b":"text","c":[1,2,3]}</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Note:</strong> The output format may vary based on the input type and
+implementation details. The dump function provides a human-readable
+representation of the input, which can be useful for debugging and
+inspecting complex data structures.</p>
 </li>
 </ul>
 </div>
@@ -10094,7 +10122,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-01 21:58:07 +0200
+Last updated 2025-04-01 22:13:46 +0200
 </div>
 </div>
 </body>
