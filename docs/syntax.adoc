@@ -152,6 +152,13 @@ function Func1(){
     // b and d are accessible here, but a and c are not
     // ...
   }
+
+  if(1){
+
+    // b, c and d are accessible here, because still same execution context frame, but a is not accessible here
+
+  }
+
 }
 
 ----
