@@ -3,8 +3,7 @@
 (function(){
   const (canvasWidth, canvasHeight) = (80, 24);
   const canvasSize = canvasHeight * canvasWidth;
-  const (xOffset, yOffset, innerRadius, fov, w) = (40, 12, 2, 5, 30);
-  const (tau, u) = (Math.PI * 2.0, '.,-~:;=!*#$@');
+  const (xOffset, yOffset, innerRadius, fov, w, tau, u) = (40, 12, 2, 5, 30, Math.PI * 2.0, '.,-~:;=!*#$@');
   const q = (((u.length() + 1) * 2) / 3) << 0;      
   let (A, B, b, z) = (0, 0, new Array(canvasSize), new Array(7040));
   do{
