@@ -5,10 +5,10 @@
 
 function aStar(grid, start, goal) {
 
-  var openList = [];
-  var closedList = [];
-  var nodes = [];
-  var i, j;
+  let openList = [];
+  let closedList = [];
+  let nodes = [];
+  let i, j;
 
   // Create a node for each grid cell
   for (i = 0; i < grid.size(); i++) {
