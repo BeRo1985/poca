@@ -313,6 +313,28 @@ arr.sort();
 
 '''''
 
+==== Array.toSorted
+
+*Usage:*
+[source,js]
+----
+let sortedArray = arr.toSorted();
+----
+
+* *Description:* Returns a new array with the elements sorted, without
+modifying the original array.
+* *Parameters:* None.
+* *Return Value:* A new array with the elements sorted.
+* *Example:*
++
+[source,js]
+----
+let sortedArr = arr.toSorted();
+puts("Sorted array: ", String.dump(sortedArr));
+----
+
+'''''
+
 ==== Array.join
 
 *Usage:*

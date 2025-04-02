@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-02-20-13-0000';
+const POCAVersion='2025-04-02-20-19-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -14153,6 +14153,20 @@ begin
  result:=This;
 end;
 
+function POCAArrayFunctionTOSORTED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i:longint;
+begin
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "toSorted"');
+ end;
+ result:=POCANewArray(Context);
+ POCAArraySetSize(result,POCAArraySize(This));
+ for i:=0 to POCAArraySize(This)-1 do begin
+  POCAArraySet(result,i,POCAArrayGet(This,i));
+ end;
+ POCAArraySort(Context,result);
+end;
+
 function POCAArrayFunctionJOIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var i,Size:longint;
     SeparatorValue:TPOCAValue;
@@ -14341,6 +14355,7 @@ begin
  POCAAddNativeFunction(Context,result,'splice',POCAArrayFunctionSPLICE);
  POCAAddNativeFunction(Context,result,'toSpliced',POCAArrayFunctionTOSPLICED);
  POCAAddNativeFunction(Context,result,'sort',POCAArrayFunctionSORT);
+ POCAAddNativeFunction(Context,result,'toSorted',POCAArrayFunctionTOSORTED);
  POCAAddNativeFunction(Context,result,'join',POCAArrayFunctionJOIN);
  POCAAddNativeFunction(Context,result,'fill',POCAArrayFunctionFILL);
  POCAAddNativeFunction(Context,result,'delete',POCAArrayFunctionDELETE);

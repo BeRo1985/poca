@@ -466,6 +466,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_array_splice">Array.splice</a></li>
 <li><a href="#_array_tospliced">Array.toSpliced</a></li>
 <li><a href="#_array_sort">Array.sort</a></li>
+<li><a href="#_array_tosorted">Array.toSorted</a></li>
 <li><a href="#_array_join">Array.join</a></li>
 <li><a href="#_array_fill">Array.fill</a></li>
 <li><a href="#_array_delete">Array.delete</a></li>
@@ -1391,6 +1392,41 @@ comparison.</p>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-js" data-lang="js">arr.sort();</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_array_tosorted">Array.toSorted</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let sortedArray = arr.toSorted();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns a new array with the elements sorted, without
+modifying the original array.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new array with the elements sorted.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let sortedArr = arr.toSorted();
+puts("Sorted array: ", String.dump(sortedArr));</code></pre>
 </div>
 </div>
 </li>
@@ -11051,7 +11087,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-02 20:13:30 +0200
+Last updated 2025-04-02 20:19:41 +0200
 </div>
 </div>
 </body>
