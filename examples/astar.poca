@@ -35,8 +35,8 @@ function aStar(grid, start, goal) {
   }
   
   // Initialize start and goal nodes
-  var startNode = nodes[start.y][start.x];
-  var goalNode = nodes[goal.y][goal.x];
+  let startNode = nodes[start.y][start.x];
+  let goalNode = nodes[goal.y][goal.x];
   openList.push(startNode);
 
   // Main loop
@@ -53,8 +53,8 @@ function aStar(grid, start, goal) {
 
     // If we reached the goal, reconstruct and return the path
     if (currentNode === goalNode) {
-      var curr = currentNode;
-      var path = [];
+      let curr = currentNode;
+      let path = [];
       while (curr.parent) {
         path.push({ x: curr.x, y: curr.y });
         curr = curr.parent;
@@ -69,9 +69,9 @@ function aStar(grid, start, goal) {
     closedList.push(currentNode);
 
     // Get neighboring nodes (up, down, left, right)
-    var neighbors = [];
-    var x = currentNode.x;
-    var y = currentNode.y;
+    let neighbors = [];
+    let x = currentNode.x;
+    let y = currentNode.y;
     if (y > 0) { // up
       neighbors.push(nodes[y - 1][x]);
     }
@@ -105,9 +105,9 @@ function aStar(grid, start, goal) {
       }
       
       // Calculate tentative g score (assumes cost of 1 to move to a neighbor)
-      var tentativeG = currentNode.g + 1;
+      let tentativeG = currentNode.g + 1;
 
-      var inOpen = false;
+      let inOpen = false;
       for (j = 0; j < openList.size(); j++) {
         if (openList[j] === neighbor) {
           inOpen = true;
