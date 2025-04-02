@@ -249,15 +249,44 @@ removed. You can also add new elements by providing additional
 arguments after `+deleteCount+`.
 * *Parameters:*
 ** `+start+` (number): The index at which to start modifying the array.
-** `+deleteCount+` (number): The number of elements to remove
-(optional).
-** `+item1, item2, ...+` (any): The elements to add (optional).
+** `+deleteCount+` (number, optional): The number of elements to remove.
+** `+item1, item2, ...+` (any, optional): The elements to add.
 * *Return Value:* The removed elements (if any).
 * *Example:*
 +
 [source,js]
 ----
 arr.splice(2, 1, "new item");
+----
+
+'''''
+
+==== Array.toSpliced
+
+*Usage:*
+[source,js]
+----
+let newArr = arr.toSpliced(start, deleteCount, item1, item2, ...);
+----
+
+* *Description:* Returns a new array with the specified elements
+removed and/or replaced, without modifying the original array. The
+`+start+` parameter specifies the index at which to start modifying the
+array, and `+deleteCount+` specifies how many elements to remove. If
+`+deleteCount+` is omitted, all elements from `+start+` to the end of the
+array are removed. You can also add new elements by providing
+additional arguments after `+deleteCount+`.
+* *Parameters:*
+** `+start+` (number): The index at which to start modifying the array.
+** `+deleteCount+` (number, optional): The number of elements to remove.
+** `+item1, item2, ...+` (any, optional): The elements to add.
+* *Return Value:* A new array with the specified elements removed and/or
+added.
+* *Example:*
++
+[source,js]
+----
+let newArr = arr.toSpliced(2, 1, "new item");
 ----
 
 '''''

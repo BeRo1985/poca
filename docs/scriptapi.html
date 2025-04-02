@@ -464,6 +464,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_array_pop">Array.pop</a></li>
 <li><a href="#_array_slice">Array.slice</a></li>
 <li><a href="#_array_splice">Array.splice</a></li>
+<li><a href="#_array_tospliced">Array.toSpliced</a></li>
 <li><a href="#_array_sort">Array.sort</a></li>
 <li><a href="#_array_join">Array.join</a></li>
 <li><a href="#_array_fill">Array.fill</a></li>
@@ -1287,11 +1288,10 @@ arguments after <code>deleteCount</code>.</p>
 <p><code>start</code> (number): The index at which to start modifying the array.</p>
 </li>
 <li>
-<p><code>deleteCount</code> (number): The number of elements to remove
-(optional).</p>
+<p><code>deleteCount</code> (number, optional): The number of elements to remove.</p>
 </li>
 <li>
-<p><code>item1, item2, ...</code> (any): The elements to add (optional).</p>
+<p><code>item1, item2, ...</code> (any, optional): The elements to add.</p>
 </li>
 </ul>
 </div>
@@ -1304,6 +1304,59 @@ arguments after <code>deleteCount</code>.</p>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-js" data-lang="js">arr.splice(2, 1, "new item");</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_array_tospliced">Array.toSpliced</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let newArr = arr.toSpliced(start, deleteCount, item1, item2, ...);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns a new array with the specified elements
+removed and/or replaced, without modifying the original array. The
+<code>start</code> parameter specifies the index at which to start modifying the
+array, and <code>deleteCount</code> specifies how many elements to remove. If
+<code>deleteCount</code> is omitted, all elements from <code>start</code> to the end of the
+array are removed. You can also add new elements by providing
+additional arguments after <code>deleteCount</code>.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>start</code> (number): The index at which to start modifying the array.</p>
+</li>
+<li>
+<p><code>deleteCount</code> (number, optional): The number of elements to remove.</p>
+</li>
+<li>
+<p><code>item1, item2, ...</code> (any, optional): The elements to add.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new array with the specified elements removed and/or
+added.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let newArr = arr.toSpliced(2, 1, "new item");</code></pre>
 </div>
 </div>
 </li>
@@ -10998,7 +11051,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-02 16:35:35 +0200
+Last updated 2025-04-02 20:13:30 +0200
 </div>
 </div>
 </body>
