@@ -308,6 +308,152 @@ let newArr = arr.fill("x", 2, 5);
 
 '''''
 
+==== Array.delete
+
+*Usage:*
+[source,js]
+----
+arr.delete(index...);
+----
+
+* *Description:* Deletes the element at the specified index/indices from 
+the array. The array is resized accordingly.
+* *Parameters:*
+** `+index+` (number): The index/indices of the element to delete.
+* *Return Value:* The array itself.
+* *Example:*
++
+[source,js]
+----
+arr.delete(2);
+----
+
+'''''
+
+==== Array.remove
+
+*Usage:*
+[source,js]
+----
+arr.remove(element...);
+----
+
+* *Description:* Removes all occurrences of the specified element(s)
+from the array.
+* *Parameters:*
+** `+element+` (any): The element(s) to remove.
+* *Return Value:* The array itself.
+* *Example:*
++
+[source,js]
+----
+arr.remove("x");
+----
+
+'''''
+
+==== Array.indexOf
+
+*Usage:*
+[source,js]
+----
+let index = arr.indexOf(element);
+----
+
+* *Description:* Returns the index of the first occurrence of the
+specified element in the array. If the element is not found, it
+returns -1.
+* *Parameters:*
+** `+element+` (any): The element to search for.
+* *Return Value:* The index of the element, or -1 if not found.
+* *Example:*
++
+[source,js]
+----
+let idx = arr.indexOf("x");
+if (idx !== -1) {
+  puts("Element found at index: " + idx);
+} else {
+  puts("Element not found.");
+}
+----
+
+'''''
+
+==== Array.lastIndexOf
+
+*Usage:*
+[source,js]
+----
+let index = arr.lastIndexOf(element);
+----
+
+* *Description:* Returns the index of the last occurrence of the
+specified element in the array. If the element is not found, it
+returns -1.
+* *Parameters:*
+** `+element+` (any): The element to search for.
+* *Return Value:* The index of the element, or -1 if not found.
+* *Example:*
++
+[source,js]
+----
+let idx = arr.lastIndexOf("x");
+if (idx !== -1) {
+  puts("Element found at index: " + idx);
+} else {
+  puts("Element not found.");
+}
+----
+
+'''''
+
+==== Array.reverse
+
+*Usage:*
+[source,js]
+----
+arr.reverse();
+----
+
+* *Description:* Reverses the order of the elements in the array to
+a new array.
+* *Parameters:* None.
+* *Return Value:* The new array with elements in reverse order.
+* *Example:*
++
+[source,js]
+----
+let reversedArray = arr.reverse();
+----
+
+'''''
+
+==== Array.includes
+
+*Usage:*
+[source,js]
+----
+let exists = arr.includes(element);
+----
+
+* *Description:* Checks if the specified element exists in the array.
+* *Parameters:*
+** `+element+` (any): The element to check for.
+* *Return Value:* A numeric boolean (1 for true, 0 for false).
+* *Example:*
++
+[source,js]
+----
+if (arr.includes("x")) {
+  puts("Element exists in the array.");
+} else {
+  puts("Element does not exist.");
+}
+----
+
+'''''
+
 === Summary
 
 * *Global Object:* The Array object acts as a factory for creating array

@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-02-13-19-0000';
+const POCAVersion='2025-04-02-15-24-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1782,6 +1782,10 @@ procedure POCAArraySet(const ArrayObject:TPOCAValue;i:longint;const Value:TPOCAV
 function POCAArraySize(const ArrayObject:TPOCAValue):longword;
 function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longword;
 function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):longword;
+function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:longint):longword;
+function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longword;
+function POCAArrayIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longint;
+function POCAArrayLastIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longint;
 procedure POCAArraySetSize(const ArrayObject:TPOCAValue;Size:longint);
 function POCAArrayPop(const ArrayObject:TPOCAValue):TPOCAValue;
 procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue);
@@ -7525,6 +7529,109 @@ begin
   end;
  end;
  result:=0;
+end;
+
+function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:longint):longword;
+var ArrayInstance:PPOCAArray;
+    ArrayRecord:PPOCAArrayRecord;
+    i,j:longint;
+begin
+ if POCAIsValueArray(ArrayObject) then begin
+  ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
+  ArrayRecord:=ArrayInstance^.ArrayRecord;
+  if assigned(ArrayRecord) then begin
+   i:=Index;
+   while i<0 do begin
+    inc(i,ArrayRecord^.Size);
+   end;
+   if (i>=0) and (i<ArrayRecord^.Size) then begin
+    if (i+1)<ArrayRecord^.Size then begin
+     for j:=(i+1) to ArrayRecord^.Size-1 do begin
+      ArrayRecord^.Data[j-1]:=ArrayRecord^.Data[j];
+     end;
+    end;
+    TPasMPInterlocked.Decrement(ArrayRecord^.Size);
+    if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
+     POCAArrayResize(ArrayInstance);
+    end;
+   end;
+  end;
+ end;
+ result:=0;
+end;
+
+function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longword;
+var ArrayInstance:PPOCAArray;
+    ArrayRecord:PPOCAArrayRecord;
+    i,j:longint;
+begin
+ if POCAIsValueArray(ArrayObject) then begin
+  ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
+  ArrayRecord:=ArrayInstance^.ArrayRecord;
+  if assigned(ArrayRecord) then begin
+   i:=ArrayRecord^.Size-1;
+   while i>=0 do begin
+    if POCAEqual(ArrayRecord^.Data[i],Value) then begin
+     if (i+1)<ArrayRecord^.Size then begin
+      for j:=(i+1) to ArrayRecord^.Size-1 do begin
+       ArrayRecord^.Data[j-1]:=ArrayRecord^.Data[j];
+      end;
+     end;
+     TPasMPInterlocked.Decrement(ArrayRecord^.Size);
+     if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
+      POCAArrayResize(ArrayInstance);
+     end;
+    end else begin
+     dec(i);
+    end;
+   end;
+  end;
+ end;
+ result:=0;
+end;
+
+function POCAArrayIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longint;
+var ArrayInstance:PPOCAArray;
+    ArrayRecord:PPOCAArrayRecord;
+    i:longint;
+begin
+ if POCAIsValueArray(ArrayObject) then begin
+  ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
+  ArrayRecord:=ArrayInstance^.ArrayRecord;
+  if assigned(ArrayRecord) then begin
+   i:=0;
+   while i<ArrayRecord^.Size do begin
+    if POCAEqual(ArrayRecord^.Data[i],Value) then begin
+     result:=i;
+     exit;
+    end;
+    inc(i);
+   end;
+  end;
+ end;
+ result:=-1;
+end;
+
+function POCAArrayLastIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longint;
+var ArrayInstance:PPOCAArray;
+    ArrayRecord:PPOCAArrayRecord;
+    i:longint;
+begin
+ if POCAIsValueArray(ArrayObject) then begin
+  ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
+  ArrayRecord:=ArrayInstance^.ArrayRecord;
+  if assigned(ArrayRecord) then begin
+   i:=ArrayRecord^.Size;
+   while i>=0 do begin
+    dec(i);
+    if POCAEqual(ArrayRecord^.Data[i],Value) then begin
+     result:=i;
+     exit;
+    end;
+   end;
+  end;
+ end;
+ result:=-1;
 end;
 
 procedure POCAArraySetSize(const ArrayObject:TPOCAValue;Size:longint);
@@ -13955,6 +14062,84 @@ begin
  end;
 end;
 
+function POCAArrayFunctionDELETE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i:longint;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "delete"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "delete"');
+ end;
+ for i:=0 to CountArguments-1 do begin
+  POCAArrayDelete(This,trunc(POCAGetNumberValue(Context,Arguments^[i])));
+ end;
+ result:=This;
+end;
+
+function POCAArrayFunctionREMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i:longint;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "remove"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "remove"');
+ end;
+ for i:=0 to CountArguments-1 do begin
+  POCAArrayRemove(This,Arguments^[i]);
+ end;
+ result:=This;
+end;
+
+function POCAArrayFunctionINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "indexOf"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "indexOf"');
+ end;
+ result.Num:=POCAArrayIndexOf(This,Arguments^[0]);
+end;
+
+function POCAArrayFunctionLASTINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "lastIndexOf"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "lastIndexOf"');
+ end;
+ result.Num:=POCAArrayLastIndexOf(This,Arguments^[0]);
+end;
+
+function POCAArrayFunctionREVERSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i,Size:longint;
+begin
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "reverse"');
+ end;
+ result:=POCANewArray(Context);
+ Size:=POCAArraySize(This);
+ if Size>0 then begin
+  for i:=Size-1 downto 0 do begin
+   POCAArrayPush(result,POCAArrayGet(This,i));
+  end;
+ end;
+end;
+
+function POCAArrayFunctionINCLUDES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "includes"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "includes"');
+ end;
+ result.Num:=ord(POCAArrayIndexOf(This,Arguments^[0])>=0) and 1;
+end;
+
 function POCAInitArrayHash(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
@@ -13967,6 +14152,12 @@ begin
  POCAAddNativeFunction(Context,result,'sort',POCAArrayFunctionSORT);
  POCAAddNativeFunction(Context,result,'join',POCAArrayFunctionJOIN);
  POCAAddNativeFunction(Context,result,'fill',POCAArrayFunctionFILL);
+ POCAAddNativeFunction(Context,result,'delete',POCAArrayFunctionDELETE);
+ POCAAddNativeFunction(Context,result,'remove',POCAArrayFunctionREMOVE);
+ POCAAddNativeFunction(Context,result,'indexOf',POCAArrayFunctionINDEXOF);
+ POCAAddNativeFunction(Context,result,'lastIndexOf',POCAArrayFunctionLASTINDEXOF);
+ POCAAddNativeFunction(Context,result,'reverse',POCAArrayFunctionREVERSE);
+ POCAAddNativeFunction(Context,result,'includes',POCAArrayFunctionINCLUDES);
 end;
 
 function POCAHashFunctionEMPTY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
