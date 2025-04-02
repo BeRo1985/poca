@@ -1,0 +1,52 @@
+// OLdschool Plasma Effect in POCA
+
+(function(){
+  // Define canvas dimensions and palette characters.
+  const (canvasWidth, canvasHeight) = (80, 24);
+  const canvasSize = canvasWidth * canvasHeight;
+  // A simple palette from light to dark.
+  const palette = " .:-=+*#%@";
+  
+  // Preallocate a frame buffer.
+  let frameBuffer = new Array(canvasSize);
+  
+  // Infinite loop to render frames.
+  do {
+    // Use the fractional part of the current time scaled appropriately.
+    let time = Math.frac(DateTime.now()) * 864000000.0;
+    // Adjust time to control the animation speed.
+    let t = time * 0.0003;
+    
+    // Compute plasma values for each position.
+    for (let y = 0; y < canvasHeight; y++) {
+      for (let x = 0; x < canvasWidth; x++) {
+        // Combine several sine waves to produce a plasma effect.
+        let value = Math.sin((x * 0.3) + (t * 0.891)) +
+                    Math.sin((y * 0.3) + (t * 1.362)) +
+                    Math.sin(((x + y) * 0.15) + (t * 0.673));
+        // Normalize value from [-3,3] to [0,1].
+        let normalized = (value + 3) / 6;
+        // Map normalized value to a character index in the palette.
+        let charIndex = (normalized * (palette.length() - 1)) << 0;
+        // Map normalized value to an ANSI 256-color code (from 16 to about 232).
+        let colorCode = 16 + ((normalized * 216) << 0);
+        let pos = y * canvasWidth + x;
+        // Compose the ANSI escape code with the selected character.
+        frameBuffer[pos] = "\x1b[38;5;" ~ colorCode.toString() ~ "m" 
+                           ~ palette.charAt(charIndex) ~ "\x1b[0m";
+      }
+    }
+    
+    // Clear the screen and reposition the cursor.
+    print("\x1b[2J\x1b[H");
+    // Output the frame row by row.
+    for (let y = 0, pos = 0; y < canvasHeight; y++) {
+      let line = "";
+      for (let x = 0; x < canvasWidth; x++, pos++) {
+        line ~= frameBuffer[pos];
+      }
+      print(line, "\n");
+    }
+    
+  } while(1);
+})();
