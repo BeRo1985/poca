@@ -14225,11 +14225,11 @@ begin
  result:=This;
 end;
 
-function POCAArrayFunctionTOREVERSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionTOREVERSED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 var i,Size:longint;
 begin
  if not POCAIsValueArray(This) then begin
-  POCARuntimeError(Context,'Bad this value to "toReverse"');
+  POCARuntimeError(Context,'Bad this value to "toReversed"');
  end;
  result:=POCANewArray(Context);
  Size:=POCAArraySize(This);
@@ -14269,7 +14269,7 @@ begin
  POCAAddNativeFunction(Context,result,'indexOf',POCAArrayFunctionINDEXOF);
  POCAAddNativeFunction(Context,result,'lastIndexOf',POCAArrayFunctionLASTINDEXOF);
  POCAAddNativeFunction(Context,result,'reverse',POCAArrayFunctionREVERSE);
- POCAAddNativeFunction(Context,result,'toReverse',POCAArrayFunctionTOREVERSE);
+ POCAAddNativeFunction(Context,result,'toReversed',POCAArrayFunctionTOREVERSED);
  POCAAddNativeFunction(Context,result,'includes',POCAArrayFunctionINCLUDES);
 end;
 

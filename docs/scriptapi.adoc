@@ -458,12 +458,12 @@ arr.reverse();
 
 '''''
 
-==== Array.toReverse
+==== Array.toReversed
 
 *Usage:*
 [source,js]
 ----
-let reversedArray = arr.toReverse();
+let reversedArray = arr.toReversed();
 ----
 
 * *Description:* Returns a new array with the elements in reverse
@@ -474,7 +474,7 @@ order, without modifying the original array.
 +
 [source,js]
 ----
-let reversed = arr.toReverse();
+let reversed = arr.toReversed();
 puts("Reversed array: ", String.dump(reversed));
 ----
 
