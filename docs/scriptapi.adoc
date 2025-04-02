@@ -1981,6 +1981,282 @@ developers. They provide a consistent interface for common tasks,
 allowing you to focus on your application logic rather than low-level
 details.
 
+== Hash
+
+=== Overview
+
+The POCA Hash API provides a set of functions to manipulate hash objects
+(dictionaries) in POCA scripts. Hashes are key–value collections with
+their own built-in methods for querying, modifying, and managing
+properties. The API includes functions to check if a hash is empty, get
+its size, add entries from another hash, query for keys, and even bypass
+meta-event handling with "`raw`" operations.
+
+'''''
+
+=== API Functions
+
+==== Hash.empty
+
+*Usage:*
+
+[source,js]
+----
+let isEmpty = myHash.empty();
+----
+
+* *Description:* Checks if the hash contains no entries. Returns `+1+`
+(true) if the hash is empty, or `+0+` (false) otherwise.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 if empty, 0 otherwise).
+
+'''''
+
+==== Hash.size
+
+*Usage:*
+
+[source,js]
+----
+let n = myHash.size();
+----
+
+* *Description:* Returns the number of entries in the hash.
+* *Parameters:* None.
+* *Return Value:* A numeric value representing the number of key–value
+pairs.
+
+'''''
+
+==== Hash.merge
+
+*Usage:*
+
+[source,js]
+----
+myHash.merge(anotherHash);
+----
+
+* *Description:* Merges entries from one or more hash objects into the
+current hash. Only arguments that are hashes are processed; others are
+ignored.
+* *Parameters:* One or more hash objects to merge.
+* *Return Value:* The original hash (after merging).
+
+'''''
+
+==== Hash.contains
+
+*Usage:*
+
+[source,js]
+----
+let present = myHash.contains("keyName");
+----
+
+* *Description:* Checks whether the hash contains a given key. Returns
+`+1+` (true) if the key is present, or `+0+` (false) otherwise.
+* *Parameters:*
+** `+key+` (any): The key to look for.
+* *Return Value:* A numeric boolean.
+
+'''''
+
+==== Hash.keys
+
+*Usage:*
+
+[source,js]
+----
+let keysArray = myHash.keys();
+----
+
+* *Description:* Returns a sorted array of all keys in the hash
+(including inherited ones, depending on the implementation).
+* *Parameters:* None.
+* *Return Value:* An array of keys.
+
+'''''
+
+==== Hash.ownKeys
+
+*Usage:*
+
+[source,js]
+----
+let ownKeysArray = myHash.ownKeys();
+----
+
+* *Description:* Returns a sorted array of the hash’s own keys
+(excluding keys inherited from prototypes).
+* *Parameters:* None.
+* *Return Value:* An array of strings representing the hash’s own keys.
+
+'''''
+
+==== Hash.setHashEvents
+
+*Usage:*
+
+[source,js]
+----
+myHash.setHashEvents(eventsHash);
+----
+
+* *Description:* Attaches a special events hash to the hash. These
+events can override standard meta-operations like property access or
+modification. Returns the original hash.
+* *Parameters:*
+** `+eventsHash+` (hash): A hash containing event handlers.
+* *Return Value:* The original `+myHash+`.
+
+'''''
+
+==== Hash.getHashEvents
+
+*Usage:*
+
+[source,js]
+----
+let events = myHash.getHashEvents();
+----
+
+* *Description:* Retrieves the events hash associated with the hash, if
+any.
+* *Parameters:* None.
+* *Return Value:* A hash representing the events, or `+null+` if no
+special events are assigned.
+
+'''''
+
+==== Hash.rawDelete
+
+*Usage:*
+
+[source,js]
+----
+let success = myHash.rawDelete("keyName");
+----
+
+* *Description:* Deletes a key in the hash *without* invoking
+meta-events. Returns `+1+` if a key was deleted, `+0+` otherwise.
+* *Parameters:*
+** `+key+` (any): The key to delete.
+* *Return Value:* A numeric boolean (1 or 0).
+
+'''''
+
+==== Hash.rawExist
+
+*Usage:*
+
+[source,js]
+----
+let exists = myHash.rawExist("keyName");
+----
+
+* *Description:* Checks if a key exists in the hash *without* invoking
+meta-events. Returns `+1+` if present, `+0+` if not.
+* *Parameters:*
+** `+key+` (any): The key to check.
+* *Return Value:* A numeric boolean (1 or 0).
+
+'''''
+
+==== Hash.rawGet
+
+*Usage:*
+
+[source,js]
+----
+let value = myHash.rawGet("keyName");
+----
+
+* *Description:* Retrieves the value from a hash for a given key
+*without* triggering meta-events.
+* *Parameters:*
+** `+key+` (any): The key to look up.
+* *Return Value:* The value associated with `+key+`, or `+null+` if not
+found.
+
+'''''
+
+==== Hash.rawSet
+
+*Usage:*
+
+[source,js]
+----
+myHash.rawSet("keyName", someValue);
+----
+
+* *Description:* Sets a key in the hash *without* meta-events.
+* *Parameters:*
+[arabic]
+. `+key+` (any): The key to set.
+. `+value+` (any): The value to assign.
+* *Return Value:* Returns the original `+myHash+`.
+
+'''''
+
+==== Hash.rawSize
+
+*Usage:*
+
+[source,js]
+----
+let n = myHash.rawSize();
+----
+
+* *Description:* Returns the number of entries in the hash *without*
+meta-events. Equivalent to the internal hash size.
+* *Parameters:* None.
+* *Return Value:* A numeric value representing the entry count.
+
+'''''
+
+==== Hash.rawKeys
+
+*Usage:*
+
+[source,js]
+----
+let kArray = myHash.rawKeys();
+----
+
+* *Description:* Returns an array of key strings from the hash *without*
+meta-events. The array is sorted.
+* *Parameters:* None.
+* *Return Value:* A sorted array of keys.
+
+'''''
+
+=== Summary
+
+* *Global Object:* The Hash object is a native collection type in POCA
+used for key–value storage. It provides a comprehensive suite of
+functions for querying and manipulating its entries.
+* *Hash API Functions:*
+** *Hash.empty:* Checks if the hash is empty.
+** *Hash.size:* Returns the number of entries.
+** *Hash.merge:* Merges other hash objects into the current hash.
+** *Hash.contains:* Checks for the presence of a key.
+** *Hash.keys / Hash.ownKeys:* Retrieve sorted arrays of keys.
+** *Hash.setHashEvents / Hash.getHashEvents:* Attach or retrieve custom
+event handlers for hash operations.
+** *Hash.rawDelete, Hash.rawExist, Hash.rawGet, Hash.rawSet,
+Hash.rawSize, Hash.rawKeys:* Perform low-level operations on the hash
+bypassing meta-events.
+* *Usage:* These global functions enable flexible and efficient
+manipulation of hash objects in POCA. They support both standard
+high-level operations and low-level "`raw`" operations that bypass
+additional event processing, providing developers with fine-grained
+control over data structures in a dynamic, typeless environment.
+* *Note:* The Hash API is designed to be intuitive and easy to use,
+allowing developers to work with hash objects without needing to
+understand the underlying implementation details. The functions are
+optimized for performance and can handle large datasets efficiently.
+
 == IO
 
 === Overview
