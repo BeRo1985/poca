@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-02-15-24-0000';
+const POCAVersion='2025-04-02-15-32-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -13952,7 +13952,7 @@ begin
   POCARuntimeError(Context,'Bad this value to "slice"');
  end;
  Start:=trunc(POCAGetNumberValue(Context,Arguments^[0]));
- if CountArguments>2 then begin
+ if CountArguments>1 then begin
   LenValue:=POCANumberValue(Context,Arguments^[1]);
  end else begin
 //LenValue:=POCAValueNull;
@@ -13972,6 +13972,7 @@ begin
  end;
  result:=POCANewArray(Context);
  if Len>0 then begin
+  POCAArraySetSize(result,Len);
   for i:=0 to Len-1 do begin
    POCAArraySet(result,i,POCAArrayGet(This,Start+i));
   end;
