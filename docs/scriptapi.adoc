@@ -556,6 +556,48 @@ if (arr.includes("x")) {
 
 '''''
 
+==== Array.shift
+
+*Usage:*
+[source,js]
+----
+let firstElement = arr.shift();
+----
+
+* *Description:* Removes and returns the first element from the array.
+* *Parameters:* None.
+* *Return Value:* The removed element.
+* *Example:*
++
+[source,js]
+----
+let first = arr.shift();
+puts("First element removed: ", first);
+----
+
+'''''
+
+==== Array.unshift
+
+*Usage:*
+[source,js]
+----
+arr.unshift(element1, element2, ...);
+----
+
+* *Description:* Adds one or more elements to the beginning of the
+array.
+* *Parameters:* One or more elements to be added.
+* *Return Value:* The array itself.
+* *Example:*
++
+[source,js]
+----
+arr.unshift("new item");
+----
+
+'''''
+
 === Summary
 
 * *Global Object:* The Array object acts as a factory for creating array

@@ -476,6 +476,8 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_array_reverse">Array.reverse</a></li>
 <li><a href="#_array_toreversed">Array.toReversed</a></li>
 <li><a href="#_array_includes">Array.includes</a></li>
+<li><a href="#_array_shift">Array.shift</a></li>
+<li><a href="#_array_unshift">Array.unshift</a></li>
 </ul>
 </li>
 <li><a href="#_summary">Summary</a></li>
@@ -1809,6 +1811,74 @@ puts("Reversed array: ", String.dump(reversed));</code></pre>
 } else {
   puts("Element does not exist.");
 }</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_array_shift">Array.shift</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let firstElement = arr.shift();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Removes and returns the first element from the array.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> The removed element.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let first = arr.shift();
+puts("First element removed: ", first);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_array_unshift">Array.unshift</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">arr.unshift(element1, element2, ...);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Adds one or more elements to the beginning of the
+array.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> One or more elements to be added.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> The array itself.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">arr.unshift("new item");</code></pre>
 </div>
 </div>
 </li>
@@ -11087,7 +11157,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-02 20:19:41 +0200
+Last updated 2025-04-02 20:24:41 +0200
 </div>
 </div>
 </body>

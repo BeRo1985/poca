@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-02-20-19-0000';
+const POCAVersion='2025-04-02-20-24-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -14343,6 +14343,44 @@ begin
  result.Num:=ord(POCAArrayIndexOf(This,Arguments^[0])>=0) and 1;
 end;
 
+function POCAArrayFunctionSHIFT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i,Size:longint;
+begin
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "shift"');
+ end;
+ Size:=POCAArraySize(This);
+ if Size>0 then begin
+  result:=POCAArrayGet(This,0);
+  for i:=1 to Size-1 do begin
+   POCAArraySet(This,i-1,POCAArrayGet(This,i));
+  end;
+  POCAArraySetSize(This,Size-1);
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAArrayFunctionUNSHIFT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i,Size:longint;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "unshift"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "unshift"');
+ end;
+ Size:=POCAArraySize(This);
+ POCAArraySetSize(This,Size+CountArguments);
+ for i:=(Size+CountArguments)-1 downto CountArguments do begin
+  POCAArraySet(This,i,POCAArrayGet(This,i-CountArguments));
+ end;
+ for i:=0 to CountArguments-1 do begin
+  POCAArraySet(This,i,Arguments^[i]);
+ end;
+ result:=This;
+end;
+
 function POCAInitArrayHash(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
@@ -14365,6 +14403,8 @@ begin
  POCAAddNativeFunction(Context,result,'reverse',POCAArrayFunctionREVERSE);
  POCAAddNativeFunction(Context,result,'toReversed',POCAArrayFunctionTOREVERSED);
  POCAAddNativeFunction(Context,result,'includes',POCAArrayFunctionINCLUDES);
+ POCAAddNativeFunction(Context,result,'shift',POCAArrayFunctionSHIFT);
+ POCAAddNativeFunction(Context,result,'unshift',POCAArrayFunctionUNSHIFT);
 end;
 
 function POCAHashFunctionEMPTY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
