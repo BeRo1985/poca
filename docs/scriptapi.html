@@ -469,6 +469,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_array_tosorted">Array.toSorted</a></li>
 <li><a href="#_array_join">Array.join</a></li>
 <li><a href="#_array_fill">Array.fill</a></li>
+<li><a href="#_array_tofilled">Array.toFilled</a></li>
 <li><a href="#_array_delete">Array.delete</a></li>
 <li><a href="#_array_remove">Array.remove</a></li>
 <li><a href="#_array_indexof">Array.indexOf</a></li>
@@ -1507,10 +1508,60 @@ array size.</p>
 <p><code>value</code> (any): The value to fill with.</p>
 </li>
 <li>
-<p><code>start</code> (number): The starting index (optional).</p>
+<p><code>start</code> (number, optional): The starting index.</p>
 </li>
 <li>
-<p><code>end</code> (number): The ending index (optional).</p>
+<p><code>end</code> (number, optional): The ending index.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The array itself.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">arr.fill("x", 2, 5);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_array_tofilled">Array.toFilled</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">arr.toFilled(value, start, end);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Replaces a range of elements in the array with the
+specified value. The filling starts at the index specified by <code>start</code>
+and ends just before the index specified by <code>end</code>. If <code>start</code> is
+omitted, it defaults to 0; if <code>end</code> is omitted, it defaults to the
+array size.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>value</code> (any): The value to fill with.</p>
+</li>
+<li>
+<p><code>start</code> (number, optional): The starting index.</p>
+</li>
+<li>
+<p><code>end</code> (number, optional): The ending index.</p>
 </li>
 </ul>
 </div>
@@ -1522,7 +1573,7 @@ array size.</p>
 <p><strong>Example:</strong></p>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let newArr = arr.fill("x", 2, 5);</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let newArr = arr.toFilled("x", 2, 5);</code></pre>
 </div>
 </div>
 </li>
@@ -11157,7 +11208,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-02 20:24:41 +0200
+Last updated 2025-04-02 21:25:39 +0200
 </div>
 </div>
 </body>

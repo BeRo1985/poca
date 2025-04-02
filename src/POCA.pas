@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-02-20-24-0000';
+const POCAVersion='2025-04-02-21-25-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -14224,6 +14224,39 @@ begin
  if ((Start<0) or (Start>=Size)) or ((End_<0) or (End_>Size)) then begin
   POCARuntimeError(Context,'Bad arguments to "fill"');
  end;
+ if Start<End_ then begin
+  for i:=Start to End_-1 do begin
+   POCAArraySet(This,i,FillValue);
+  end;
+ end;
+ result:=This;
+end;
+
+function POCAArrayFunctionTOFILLED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i,Start,End_,Size:longint;
+    FillValue:TPOCAValue;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "toFilled"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "toFilled"');
+ end;
+ FillValue:=Arguments^[0];
+ if CountArguments>1 then begin
+  Start:=trunc(POCAGetNumberValue(Context,Arguments^[1]));
+ end else begin
+  Start:=0;
+ end;
+ Size:=POCAArraySize(This);
+ if CountArguments>2 then begin
+  End_:=trunc(POCAGetNumberValue(Context,Arguments^[2]));
+ end else begin
+  End_:=Size;
+ end;
+ if ((Start<0) or (Start>=Size)) or ((End_<0) or (End_>Size)) then begin
+  POCARuntimeError(Context,'Bad arguments to "fill"');
+ end;
  result:=POCANewArray(Context);
  if Start<End_ then begin
   for i:=0 to Start-1 do begin
@@ -14396,6 +14429,7 @@ begin
  POCAAddNativeFunction(Context,result,'toSorted',POCAArrayFunctionTOSORTED);
  POCAAddNativeFunction(Context,result,'join',POCAArrayFunctionJOIN);
  POCAAddNativeFunction(Context,result,'fill',POCAArrayFunctionFILL);
+ POCAAddNativeFunction(Context,result,'toFilled',POCAArrayFunctionTOFILLED);
  POCAAddNativeFunction(Context,result,'delete',POCAArrayFunctionDELETE);
  POCAAddNativeFunction(Context,result,'remove',POCAArrayFunctionREMOVE);
  POCAAddNativeFunction(Context,result,'indexOf',POCAArrayFunctionINDEXOF);

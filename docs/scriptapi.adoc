@@ -377,14 +377,42 @@ omitted, it defaults to 0; if `+end+` is omitted, it defaults to the
 array size.
 * *Parameters:*
 ** `+value+` (any): The value to fill with.
-** `+start+` (number): The starting index (optional).
-** `+end+` (number): The ending index (optional).
+** `+start+` (number, optional): The starting index.
+** `+end+` (number, optional): The ending index.
+* *Return Value:* The array itself.
+* *Example:*
++
+[source,js]
+----
+arr.fill("x", 2, 5);
+----
+
+'''''
+
+==== Array.toFilled
+
+*Usage:*
+
+[source,js]
+----
+arr.toFilled(value, start, end);
+----
+
+* *Description:* Replaces a range of elements in the array with the
+specified value. The filling starts at the index specified by `+start+`
+and ends just before the index specified by `+end+`. If `+start+` is
+omitted, it defaults to 0; if `+end+` is omitted, it defaults to the
+array size.
+* *Parameters:*
+** `+value+` (any): The value to fill with.
+** `+start+` (number, optional): The starting index.
+** `+end+` (number, optional): The ending index.
 * *Return Value:* A new array with the specified range filled.
 * *Example:*
 +
 [source,js]
 ----
-let newArr = arr.fill("x", 2, 5);
+let newArr = arr.toFilled("x", 2, 5);
 ----
 
 '''''
