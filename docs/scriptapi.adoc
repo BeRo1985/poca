@@ -446,15 +446,36 @@ if (idx !== -1) {
 arr.reverse();
 ----
 
-* *Description:* Reverses the order of the elements in the array to
-a new array.
+* *Description:* Reverses the order of the elements in the array.
 * *Parameters:* None.
-* *Return Value:* The new array with elements in reverse order.
+* *Return Value:* The reversed array itself.
 * *Example:*
 +
 [source,js]
 ----
-let reversedArray = arr.reverse();
+arr.reverse();
+----
+
+'''''
+
+==== Array.toReverse
+
+*Usage:*
+[source,js]
+----
+let reversedArray = arr.toReverse();
+----
+
+* *Description:* Returns a new array with the elements in reverse
+order, without modifying the original array.
+* *Parameters:* None.
+* *Return Value:* A new array with the elements in reverse order.
+* *Example:*
++
+[source,js]
+----
+let reversed = arr.toReverse();
+puts("Reversed array: ", String.dump(reversed));
 ----
 
 '''''

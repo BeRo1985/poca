@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-02-16-08-0000';
+const POCAVersion='2025-04-02-16-19-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -14203,10 +14203,33 @@ begin
 end;
 
 function POCAArrayFunctionREVERSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,Size:longint;
+var i,j,Size:longint;
+    a,b:TPOCAValue; 
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "reverse"');
+ end;
+ Size:=POCAArraySize(This);
+ if Size>0 then begin
+  i:=0;
+  j:=Size-1;
+  while i<j do begin
+   a:=POCAArrayGet(This,i);
+   b:=POCAArrayGet(This,j);
+   POCAArraySet(This,i,b);
+   POCAArraySet(This,j,a);
+   inc(i);
+   dec(j);
+  end;
+ end;
+ result:=This;
+end;
+
+function POCAArrayFunctionTOREVERSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var i,Size:longint;
+begin
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "toReverse"');
  end;
  result:=POCANewArray(Context);
  Size:=POCAArraySize(This);
@@ -14215,7 +14238,7 @@ begin
    POCAArrayPush(result,POCAArrayGet(This,i));
   end;
  end;
-end;
+end; 
 
 function POCAArrayFunctionINCLUDES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
@@ -14246,6 +14269,7 @@ begin
  POCAAddNativeFunction(Context,result,'indexOf',POCAArrayFunctionINDEXOF);
  POCAAddNativeFunction(Context,result,'lastIndexOf',POCAArrayFunctionLASTINDEXOF);
  POCAAddNativeFunction(Context,result,'reverse',POCAArrayFunctionREVERSE);
+ POCAAddNativeFunction(Context,result,'toReverse',POCAArrayFunctionTOREVERSE);
  POCAAddNativeFunction(Context,result,'includes',POCAArrayFunctionINCLUDES);
 end;
 
