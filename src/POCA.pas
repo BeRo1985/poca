@@ -323,7 +323,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-02-15-32-0000';
+const POCAVersion='2025-04-02-16-08-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -13979,6 +13979,93 @@ begin
  end;
 end;
 
+function POCAArrayFunctionSPLICE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+var Start,DeleteCount,InsertionCount,Size,NewSize,i:longint;
+begin
+ 
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "splice"');
+ end;
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "splice"');
+ end;
+
+ Size:=POCAArraySize(This);
+ Start:=trunc(POCAGetNumberValue(Context,Arguments^[0]));
+
+ // Adjust start for negative values
+ if Start<0 then begin
+  Start:=Size+Start;
+  if Start<0 then begin
+   Start:=0;
+  end;
+ end;
+ if Start>Size then begin
+  Start:=Size;
+ end;
+
+ // Determine delete count
+ if CountArguments>=2 then begin
+  DeleteCount:=trunc(POCAGetNumberValue(Context,Arguments^[1]));
+  if DeleteCount<0 then begin
+   DeleteCount:=0;
+  end;
+  if DeleteCount>(Size-Start) then begin
+   DeleteCount:=Size-Start;
+  end;
+ end else begin
+  DeleteCount:=Size-Start; // delete all elements from Start to end
+ end;
+
+ // Count insertion items
+ if CountArguments>2 then begin
+  InsertionCount:=CountArguments-2;
+ end else begin
+  InsertionCount:=0;
+ end;
+
+ // Build removed elements array
+ result:=POCANewArray(Context);
+ if DeleteCount>0 then begin
+  POCAArraySetSize(result,DeleteCount);
+  for i:=0 to DeleteCount-1 do begin
+   POCAArraySet(result,i,POCAArrayGet(This,Start+i));
+  end;
+ end;
+
+ // Adjust the original array
+ NewSize:=(Size+InsertionCount)-DeleteCount;
+ if InsertionCount>DeleteCount then begin
+  
+  // Increase size first
+  POCAArraySetSize(This,NewSize);
+  
+  // Shift trailing elements right
+  for i:=Size-1 downto Start+DeleteCount do begin
+   POCAArraySet(This,(i+InsertionCount)-DeleteCount,POCAArrayGet(This,i));
+  end;
+
+ end else if InsertionCount<DeleteCount then begin
+  
+  // Shift trailing elements left
+  for i:=Start+DeleteCount to Size-1 do begin
+   POCAArraySet(This,i-(DeleteCount-InsertionCount),POCAArrayGet(This,i));
+  end;
+
+  // Then shrink the array
+  POCAArraySetSize(This,NewSize);
+
+ end else begin
+  // If InsertionCount equals DeleteCount, no shifting is needed.
+ end;
+
+ // Insert new elements
+ for i:=0 to InsertionCount-1 do begin
+  POCAArraySet(This,Start+i,Arguments^[2+i]);
+ end;
+
+end;
+
 function POCAArrayFunctionSORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
 begin
  if not POCAIsValueArray(This) then begin
@@ -14150,6 +14237,7 @@ begin
  POCAAddNativeFunction(Context,result,'push',POCAArrayFunctionPUSH);
  POCAAddNativeFunction(Context,result,'pop',POCAArrayFunctionPOP);
  POCAAddNativeFunction(Context,result,'slice',POCAArrayFunctionSLICE);
+ POCAAddNativeFunction(Context,result,'splice',POCAArrayFunctionSPLICE);
  POCAAddNativeFunction(Context,result,'sort',POCAArrayFunctionSORT);
  POCAAddNativeFunction(Context,result,'join',POCAArrayFunctionJOIN);
  POCAAddNativeFunction(Context,result,'fill',POCAArrayFunctionFILL);

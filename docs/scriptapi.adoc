@@ -232,6 +232,36 @@ let part = arr.slice(2, 3);
 
 '''''
 
+==== Array.splice
+
+*Usage:*
+[source,js]
+----
+arr.splice(start, deleteCount, item1, item2, ...);
+----
+
+* *Description:* Modifies the array by removing or replacing existing
+elements and/or adding new elements in place. The `+start+` parameter
+specifies the index at which to start modifying the array, and
+`+deleteCount+` specifies how many elements to remove. If `+deleteCount+`
+is omitted, all elements from `+start+` to the end of the array are
+removed. You can also add new elements by providing additional
+arguments after `+deleteCount+`.
+* *Parameters:*
+** `+start+` (number): The index at which to start modifying the array.
+** `+deleteCount+` (number): The number of elements to remove
+(optional).
+** `+item1, item2, ...+` (any): The elements to add (optional).
+* *Return Value:* The removed elements (if any).
+* *Example:*
++
+[source,js]
+----
+arr.splice(2, 1, "new item");
+----
+
+'''''
+
 ==== Array.sort
 
 *Usage:*
