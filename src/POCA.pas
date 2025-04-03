@@ -13165,8 +13165,8 @@ begin
      tkLString{$ifdef fpc},tkAString,tkSString{$endif}:begin
       Value:=POCANewString(Context,TPOCAUTF8String(GetStrProp(self,PropInfo)));
      end;
-     tkWString{$ifdef fpc},tkUString{$endif}{$ifdef BESENEmbarcaderoNextGen},tkUString{$endif}:begin
-      Value:=POCANewString(Context,PUCUUTF16ToUTF8({$ifdef BESENEmbarcaderoNextGen}GetStrProp{$else}GetWideStrProp{$endif}(self,PropInfo)));
+     tkWString{$ifdef fpc},tkUString{$endif}{$ifdef POCAEmbarcaderoNextGen},tkUString{$endif}:begin
+      Value:=POCANewString(Context,PUCUUTF16ToUTF8({$ifdef POCAEmbarcaderoNextGen}GetStrProp{$else}GetWideStrProp{$endif}(self,PropInfo)));
      end;
      tkEnumeration:begin
       Value:=POCANewString(Context,TPOCAUTF8String(GetEnumProp(self,PropInfo)));
@@ -13232,8 +13232,8 @@ begin
     tkLString{$ifdef fpc},tkAString,tkSString{$endif}:begin
      SetStrProp(self,PropInfo,String(POCAGetStringValue(Context,Value)));
     end;
-    tkWString{$ifdef fpc},tkUString{$endif}{$ifdef BESENEmbarcaderoNextGen},tkUString{$endif}:begin
-     {$ifdef BESENEmbarcaderoNextGen}SetStrProp{$else}SetWideStrProp{$endif}(self,PropInfo,PUCUUTF8ToUTF16(POCAGetStringValue(Context,Value)));
+    tkWString{$ifdef fpc},tkUString{$endif}{$ifdef POCAEmbarcaderoNextGen},tkUString{$endif}:begin
+     {$ifdef POCAEmbarcaderoNextGen}SetStrProp{$else}SetWideStrProp{$endif}(self,PropInfo,PUCUUTF8ToUTF16(POCAGetStringValue(Context,Value)));
     end;
     tkEnumeration:begin
      SetEnumProp(self,PropInfo,String(POCAGetStringValue(Context,Value)));
