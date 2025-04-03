@@ -16,11 +16,13 @@ uses
   cthreads,
 {$endif}
 {$endif}
-  FLRE in 'FLRE.pas',
+  PasMP in '../externals/pasmp/src/PasMP.pas',
+  PUCU in '../externals/pucu/src/PUCU.pas',
+  PasDblStrUtils in '../externals/pasdblstrutils/src/PasDblStrUtils.pas',
+  PasJSON in '../externals/pasjson/src/PasJSON.pas',
+  FLRE in '../externals/flre/src/FLRE.pas',
   POCA in 'POCA.pas',
-  PUCU in 'PUCU.pas',
-  POCARunCore in 'POCARunCore.pas',
-  PasMP in 'PasMP.pas';
+  POCARunCore in 'POCARunCore.pas';
 
 begin
  MainProc;

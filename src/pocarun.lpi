@@ -30,10 +30,6 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="FLRE.pas"/>
-        <IsPartOfProject Value="True"/>
-      </Unit>
-      <Unit>
         <Filename Value="POCARunCore.pas"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="pocaruncore"/>
@@ -43,11 +39,23 @@
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="PUCU.pas"/>
+        <Filename Value="..\externals\flre\src\FLRE.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
       <Unit>
-        <Filename Value="PasMP.pas"/>
+        <Filename Value="..\externals\pasjson\src\PasJSON.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\externals\pucu\src\PUCU.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\externals\pasmp\src\PasMP.pas"/>
+        <IsPartOfProject Value="True"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\externals\pasdblstrutils\src\PasDblStrUtils.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit>
     </Units>
@@ -60,6 +68,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
+      <OtherUnitFiles Value="..\externals\flre\src;..\externals\pasjson\src;..\externals\pucu\src;..\externals\pasmp\src;..\externals\pasdblstrutils\src"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <Parsing>
