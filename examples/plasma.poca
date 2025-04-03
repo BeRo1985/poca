@@ -38,15 +38,17 @@
     }
     
     // Clear the screen and reposition the cursor.
-    print("\x1b[2J\x1b[H");
+    let output = "\x1b[2J\x1b[H";
     // Output the frame row by row.
     for (let y = 0, pos = 0; y < canvasHeight; y++) {
       let line = "";
       for (let x = 0; x < canvasWidth; x++, pos++) {
         line ~= frameBuffer[pos];
       }
-      print(line, "\n");
+      line ~= "\n";
+      output ~= line;
     }
+    print(output);
     
   } while(1);
 })();
