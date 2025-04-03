@@ -508,13 +508,6 @@ const POCAVersion='2025-04-02-21-25-0000';
       POCAIdentifierCharsAfterBegin=['a'..'z','A'..'Z','0'..'9','_'];
       POCAIdentifierChars=POCAIdentifierCharsAtBegin+POCAIdentifierCharsAfterBegin;
 
-{$ifdef cpu64}
-      POCAValueReferenceMask=UInt64(UInt64(UInt64(1) shl 48)-1);
-      POCAValueReferenceSignalMask=UInt64(not POCAValueReferenceMask);
-{$else}
-      POCAValueReferenceTag=longword($7fff6789); // $7ff56789
-{$endif}
-
       pcsNONE=0;
       pcsOUTSIDE=1;
       pcsINSIDE=2;
@@ -565,6 +558,9 @@ type PPOCAInt8=^TPOCAInt8;
      PPOCAUInt64=^TPOCAUInt64;
      TPOCAUInt64=UInt64;
 
+     PPOCABool32=^TPOCABool32;
+     TPOCABool32=LongBool;
+
      PPOCAPtrUInt=^TPOCAPtrUInt;
      PPOCAPtrInt=^TPOCAPtrInt;
 
@@ -577,8 +573,8 @@ type PPOCAInt8=^TPOCAInt8;
      TPOCAPtrInt=NativeInt;
 {$else}
 {$ifdef cpu64}
-     TPOCAPtrUInt=UInt64;
-     TPOCAPtrInt=int64;
+     TPOCAPtrUInt=TPOCAUInt64;
+     TPOCAPtrInt=TPOCAInt64;
 {$else}
      TPOCAPtrUInt=TPOCAUInt32;
      TPOCAPtrInt=TPOCAInt32;
@@ -591,34 +587,42 @@ type PPOCAInt8=^TPOCAInt8;
      TPOCANativeUInt=TPOCAPtrUInt;
      TPOCANativeInt=TPOCAPtrInt;
 
-     PWords=^TWords;
-     TWords=array[0..($7fffffff div sizeof(word))-1] of word;
+     PPOCAUInt16Array=^TPOCAUInt16Array;
+     TPOCAUInt16Array=array[0..($7fffffff div sizeof(TPOCAUInt16))-1] of TPOCAUInt16;
 
-     PLongbools=^TLongbools;
-     TLongbools=array[0..($7fffffff div sizeof(longbool))-1] of longbool;
+     PPOCABool32Array=^TPOCABool32Array;
+     TPOCABool32Array=array[0..($7fffffff div sizeof(TPOCABool32))-1] of TPOCABool32;
 
-     PLongints=^TLongints;
-     TLongints=array[0..($7fffffff div sizeof(longint))-1] of longint;
+     PPOCAInt32Array=^TPOCAInt32Array;
+     TPOCAInt32Array=array[0..($7fffffff div sizeof(TPOCAInt32))-1] of TPOCAInt32;
 
-     PLongwords=^TLongwords;
-     TLongwords=array[0..($7fffffff div sizeof(longword))-1] of longword;
+     PPOCAUInt32Array=^TPOCAUInt32Array;
+     TPOCAUInt32Array=array[0..($7fffffff div sizeof(TPOCAUInt32))-1] of TPOCAUInt32;
 
-     PPointer=^pointer;
+     PPOCAPointer=^TPOCAPointer;
+     TPOCAPointer=Pointer;
 
-     PPointers=^TPointers;
-     TPointers=array[0..($7fffffff div sizeof(pointer))-1] of pointer;
+     PPOCAPointerArray=^TPOCAPointerArray;
+     TPOCAPointerArray=array[0..($7fffffff div sizeof(TPOCAPointer))-1] of TPOCAPointer;
 
-     PPOCADoubleHiLo=^TPOCADoubleHiLo;
+{$ifdef cpu64}
+const POCAValueReferenceMask=TPOCAUInt64(TPOCAUInt64(TPOCAUInt64(1) shl 48)-1);
+      POCAValueReferenceSignalMask=TPOCAUInt64(not POCAValueReferenceMask);
+{$else}
+const POCAValueReferenceTag=TPOCAUInt32($7fff6789); // $7ff56789
+{$endif}
+
+type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCADoubleHiLo=packed record
 {$ifdef BIG_ENDIAN}
-      Hi,Lo:longword;
+      Hi,Lo:TPOCAUInt32;
 {$else}
-      Lo,Hi:longword;
+      Lo,Hi:TPOCAUInt32;
 {$endif}
      end;
 
      PPOCADoubleBytes=^TPOCADoubleBytes;
-     TPOCADoubleBytes=array[0..sizeof(double)-1] of byte;
+     TPOCADoubleBytes=array[0..sizeof(double)-1] of TPOCAUInt8;
 
      TPOCAKeywordChars='a'..'z';
 
@@ -630,9 +634,9 @@ type PPOCAInt8=^TPOCAInt8;
 
      TPOCARawByteString=TPUCURawByteString;
 
-     TPOCAUCS4Char=longint;
+     TPOCAUCS4Char=TPOCAInt32;
 
-     TPOCAUCS4CharSigned=longword;
+     TPOCAUCS4CharSigned=TPOCAUInt32;
 
      TPOCAUCS4String=array of TPOCAUCS4Char;
 
@@ -837,7 +841,7 @@ type PPOCAInt8=^TPOCAInt8;
      PPOCATokenTypes=^TPOCATokenTypes;
      TPOCATokenTypes=set of TPOCATokenType;
 
-     TPOCAStringTreeData=int64;
+     TPOCAStringTreeData=TPOCAInt64;
 
      PPOCAStringTreeNode=^TPOCAStringTreeNode;
      TPOCAStringTreeNode=record
@@ -864,15 +868,15 @@ type PPOCAInt8=^TPOCAInt8;
        function Add(Content:TPOCARawByteString;Data:TPOCAStringTreeData;Replace:boolean=false):boolean;
        function Delete(Content:TPOCARawByteString):boolean;
        function Find(Content:TPOCARawByteString;var Data:TPOCAStringTreeData):boolean;
-       function FindEx(Content:TPOCARawByteString;var Data:TPOCAStringTreeData;var Len:longint):boolean;
+       function FindEx(Content:TPOCARawByteString;var Data:TPOCAStringTreeData;var Len:TPOCAInt32):boolean;
      end;
 
      PPOCAStringHashMapItem=^TPOCAStringHashMapItem;
      TPOCAStringHashMapItem=record
       Previous,Next,HashPrevious,HashNext:PPOCAStringHashMapItem;
-      Hash:longword;
+      Hash:TPOCAUInt32;
       Key:TPOCARawByteString;
-      Value:int64;
+      Value:TPOCAInt64;
      end;
 
      TPOCAStringHashMapHashBucket=record
@@ -886,50 +890,47 @@ type PPOCAInt8=^TPOCAInt8;
        LastUsedItem:PPOCAStringHashMapItem;
        procedure GrowAndRehashIfNeeded;
       protected
-       function GetValue(const Key:TPOCARawByteString):int64;
-       procedure SetValue(const Key:TPOCARawByteString;const Value:int64);
+       function GetValue(const Key:TPOCARawByteString):TPOCAInt64;
+       procedure SetValue(const Key:TPOCARawByteString;const Value:TPOCAInt64);
       public
        First,Last:PPOCAStringHashMapItem;
        HashBuckets:TPOCAStringHashMapHashBuckets;
-       HashSize:longword;
-       HashSizeMask:longword;
-       HashedItems:longword;
-       HashBucketsUsed:longword;
-       Optimize:longbool;
-       constructor Create(AOptimize:longbool);
+       HashSize:TPOCAUInt32;
+       HashSizeMask:TPOCAUInt32;
+       HashedItems:TPOCAUInt32;
+       HashBucketsUsed:TPOCAUInt32;
+       Optimize:TPOCABool32;
+       constructor Create(AOptimize:TPOCABool32);
        destructor Destroy; override;
        procedure Clear;
        function GetKey(const Key:TPOCARawByteString):PPOCAStringHashMapItem;
        function NewKey(const Key:TPOCARawByteString;Force:boolean=false):PPOCAStringHashMapItem;
        function DeleteKey(const Item:PPOCAStringHashMapItem):boolean;
-       property Values[const Key:TPOCARawByteString]:int64 read GetValue write SetValue; default;
+       property Values[const Key:TPOCARawByteString]:TPOCAInt64 read GetValue write SetValue; default;
      end;
-
-     PPOCAPointerArray=^TPOCAPointerArray;
-     TPOCAPointerArray=array[0..(2147483647 div sizeof(pointer))-1] of pointer;
 
      TPOCAPointerList=class
       private
        List:PPOCAPointerArray;
-       ListCount,ListCapacity:longint;
-       function GetItem(Index:longint):pointer;
-       procedure SetItem(Index:longint;Value:pointer);
+       ListCount,ListCapacity:TPOCAInt32;
+       function GetItem(Index:TPOCAInt32):TPOCAPointer;
+       procedure SetItem(Index:TPOCAInt32;Value:TPOCAPointer);
       public
        constructor Create;
        destructor Destroy; override;
        procedure Clear;
-       function Add(Item:pointer):longint;
-       procedure Insert(Index:longint;Item:pointer);
-       function Find(Item:pointer):longint;
-       function IndexOf(Item:pointer):longint;
-       procedure Delete(Index:longint);
-       function Remove(Item:pointer):longint;
-       procedure Exchange(Index1,Index2:longint);
-       procedure SetCapacity(NewCapacity:longint);
-       procedure SetCount(NewCount:longint);
-       property Count:longint read ListCount write SetCount;
-       property Capacity:longint read ListCapacity write SetCapacity;
-       property Items[Index:longint]:pointer read GetItem write SetItem; default;
+       function Add(Item:TPOCAPointer):TPOCAInt32;
+       procedure Insert(Index:TPOCAInt32;Item:TPOCAPointer);
+       function Find(Item:TPOCAPointer):TPOCAInt32;
+       function IndexOf(Item:TPOCAPointer):TPOCAInt32;
+       procedure Delete(Index:TPOCAInt32);
+       function Remove(Item:TPOCAPointer):TPOCAInt32;
+       procedure Exchange(Index1,Index2:TPOCAInt32);
+       procedure SetCapacity(NewCapacity:TPOCAInt32);
+       procedure SetCount(NewCount:TPOCAInt32);
+       property Count:TPOCAInt32 read ListCount write SetCount;
+       property Capacity:TPOCAInt32 read ListCapacity write SetCapacity;
+       property Items[Index:TPOCAInt32]:TPOCAPointer read GetItem write SetItem; default;
      end;
 
      PPOCAInstance=^TPOCAInstance;
@@ -939,13 +940,13 @@ type PPOCAInt8=^TPOCAInt8;
      TPOCACoroutineEntrypoint=procedure(Coroutine:PPOCACoroutine);
 
      TPOCACoroutine=record
-      Fiber,Back:pointer;
+      Fiber,Back:TPOCAPointer;
 {$ifdef windows}
-      FiberFPUCW,BackFPUCW:longword;
+      FiberFPUCW,BackFPUCW:TPOCAUInt32;
 {$endif}
       Entrypoint:TPOCACoroutineEntrypoint;
-      Parameter:pointer;
-      State:longint;
+      Parameter:TPOCAPointer;
+      State:TPOCAInt32;
       Event:{$ifdef fpc}PRTLEvent{$else}TEvent{$endif};
      end;
 
@@ -967,7 +968,7 @@ type PPOCAInt8=^TPOCAInt8;
      TPOCANativeCodeMemoryManagerBlockContainer=record
       Previous:PPOCANativeCodeMemoryManagerBlockContainer;
       Next:PPOCANativeCodeMemoryManagerBlockContainer;
-      Base:pointer;
+      Base:TPOCAPointer;
       Size:TPOCAPtrUInt;
       Used:TPOCAPtrUInt;
       First:PPOCANativeCodeMemoryManagerBlock;
@@ -985,7 +986,7 @@ type PPOCAInt8=^TPOCAInt8;
 
      PPOCAMRSWLock=^TPOCAMRSWLock;
      TPOCAMRSWLock=record
-      State:longint; // Sign bit is writer flag! 1.31 bit layout (1 bit writer count . 31 bit reader count)
+      State:TPOCAInt32; // Sign bit is writer flag! 1.31 bit layout (1 bit writer count . 31 bit reader count)
      end;
 
      PPOCAPoolBlock=^TPOCAPoolBlock;
@@ -999,7 +1000,7 @@ type PPOCAInt8=^TPOCAInt8;
      PPOCAGarbageCollectorHeader=^TPOCAGarbageCollectorHeader;
      TPOCAGarbageCollectorHeader=packed record
       LinkedList:TPOCAGarbageCollectorLinkedList;
-      State:longword; // High 24 bits = survived cycles, low 8 bits = info bits
+      State:TPOCAUInt32; // High 24 bits = survived cycles, low 8 bits = info bits
      end;
 
      PPOCAObjectHeader=^TPOCAObjectHeader;
@@ -1021,20 +1022,20 @@ type PPOCAInt8=^TPOCAInt8;
      PPPOCAObjects=^TPPOCAObjects;
      TPPOCAObjects=array[0..($7fffffff div sizeof(PPOCAObject))-1] of PPOCAObject;
 
-     TPOCAStringUTF8Indices=array[0..2] of pointer;
+     TPOCAStringUTF8Indices=array[0..2] of TPOCAPointer;
 
      PPOCAString=^TPOCAString;
      TPOCAString=packed record
       Header:TPOCAObjectHeader;
       Data:TPOCARawByteString;
-      DataLength:longint;
-      HashCode:longword;
-      UTF8Length:longint;
-      UTF8CodePointsToCodeUnitsIndex:pointer;
-      UTF8CodeUnitsToCodePointsIndex:pointer;
-      UTF8CodePointsToCodeUnitsIndexSize:byte;
-      UTF8CodeUnitsToCodePointsIndexSize:byte;
-      UTF8:byte;
+      DataLength:TPOCAInt32;
+      HashCode:TPOCAUInt32;
+      UTF8Length:TPOCAInt32;
+      UTF8CodePointsToCodeUnitsIndex:TPOCAPointer;
+      UTF8CodeUnitsToCodePointsIndex:TPOCAPointer;
+      UTF8CodePointsToCodeUnitsIndexSize:TPOCAUInt8;
+      UTF8CodeUnitsToCodePointsIndexSize:TPOCAUInt8;
+      UTF8:TPOCAUInt8;
       Dirty:bytebool;
      end;
 
@@ -1059,7 +1060,7 @@ type PPOCAInt8=^TPOCAInt8;
      PPOCAGhost=^TPOCAGhost;
 
      TPOCAValueReference=packed record
-      case byte of
+      case TPOCAUInt8 of
        pvtREFERENCE:(Obj:PPOCAObject);
        pvtSTRING:(StringObject:PPOCAString);
        pvtARRAY:(ArrayObject:PPOCAArray);
@@ -1068,16 +1069,16 @@ type PPOCAInt8=^TPOCAInt8;
        pvtFUNCTION:(FunctionObject:PPOCAFunction);
        pvtNATIVECODE:(NativeCodeObject:PPOCANativeCode);
        pvtGHOST:(GhostObject:PPOCAGhost);
-       pvtCOUNT:(Ptr:pointer);
+       pvtCOUNT:(Ptr:TPOCAPointer);
      end;
 
      TPOCAValue=packed record
-      case byte of
+      case TPOCAUInt8 of
        0:(Num:double);
-       1:({$ifdef cpu64}Reference:TPOCAValueReference;{$else}{$ifdef LITTLE_ENDIAN}Reference:TPOCAValueReference;ReferenceTag:longword;{$else}ReferenceTag:longword;Reference:TPOCAValueReference;{$endif}{$endif});
-       2:(CastedInt64:int64);
+       1:({$ifdef cpu64}Reference:TPOCAValueReference;{$else}{$ifdef LITTLE_ENDIAN}Reference:TPOCAValueReference;ReferenceTag:TPOCAUInt32;{$else}ReferenceTag:TPOCAUInt32;Reference:TPOCAValueReference;{$endif}{$endif});
+       2:(CastedInt64:TPOCAInt64);
        3:(CastedUInt64:TPOCAUInt64);
-       4:({$ifdef LITTLE_ENDIAN}CastedLo,CastedHi{$else}CastedHi,CastedLo{$endif}:longword);
+       4:({$ifdef LITTLE_ENDIAN}CastedLo,CastedHi{$else}CastedHi,CastedLo{$endif}:TPOCAUInt32);
      end;
 
      TPOCAValueArray=array of TPOCAValue;
@@ -1091,7 +1092,7 @@ type PPOCAInt8=^TPOCAInt8;
      end;
 
      PPOCAHashEntityIndex=^TPOCAHashEntityIndex;
-     TPOCAHashEntityIndex=array[0..($7fffffff div sizeof(longint))-1] of longint;
+     TPOCAHashEntityIndex=array[0..($7fffffff div sizeof(TPOCAInt32))-1] of TPOCAInt32;
 
      PPOCAHashEntities=^TPOCAHashEntities;
      TPOCAHashEntities=array[0..($7fffffff div sizeof(TPOCAHashEntity))-1] of TPOCAHashEntity;
@@ -1103,9 +1104,9 @@ type PPOCAInt8=^TPOCAInt8;
      TPOCAHashEvents=array[TPOCAMetaOp] of TPOCAValue;
 
      TPOCAHashRecord=record
-      RealSize:longint;
-      LogSize:longint;
-      Size:longint;
+      RealSize:TPOCAInt32;
+      LogSize:TPOCAInt32;
+      Size:TPOCAInt32;
       CellToEntityIndex:PPOCAHashEntityIndex;
       EntityToCellIndex:PPOCAHashEntityIndex;
       Entities:PPOCAHashEntities;
@@ -1119,8 +1120,8 @@ type PPOCAInt8=^TPOCAInt8;
 
      TPOCAHashCache=record
       MRSWLock:TPOCAMRSWLock;
-      Ready:longbool;
-      ChainCount:longint;
+      Ready:TPOCABool32;
+      ChainCount:TPOCAInt32;
       ChainEntities:PPPOCAHashEntities;
      end;
 
@@ -1132,20 +1133,20 @@ type PPOCAInt8=^TPOCAInt8;
       Constructor_:PPOCAObject;
       Events:PPOCAHash;
       Ghost:PPOCAGhost;
-      Kind:longint;
+      Kind:TPOCAInt32;
       Cache:TPOCAHashCache;
      end;
 
      TPOCAArrayRecord=record
-      Size:longint;
-      Allocated:longint;
+      Size:TPOCAInt32;
+      Allocated:TPOCAInt32;
       Data:array[0..0] of TPOCAValue;
      end;
 
      PPOCACodeLine=^TPOCACodeLine;
      TPOCACodeLine=record
-      InstructionPointer:longword;
-      Line:longword;
+      InstructionPointer:TPOCAUInt32;
+      Line:TPOCAUInt32;
      end;
 
      TPOCACodeLines=array of TPOCACodeLine;
@@ -1153,35 +1154,35 @@ type PPOCAInt8=^TPOCAInt8;
      TPOCACode=packed record
       Header:TPOCAObjectHeader;
       Name:TPOCARawByteString;
-      ClassFunction:longbool;
-      FastFunction:longbool;
-      IsEmpty:longbool;
-      LocalsAsThisObj:longbool;
-      CountRegisters:longword;
-      CountArguments:longword;
-      CountOptionalArguments:longword;
-      NeedArgumentArray:longbool;
-      HasArguments:longbool;
-      HasRestArguments:longbool;
-      ConstantCount:longword;
-      ByteCode:PLongwords;
-      ByteCodeSize:longword;
+      ClassFunction:TPOCABool32;
+      FastFunction:TPOCABool32;
+      IsEmpty:TPOCABool32;
+      LocalsAsThisObj:TPOCABool32;
+      CountRegisters:TPOCAUInt32;
+      CountArguments:TPOCAUInt32;
+      CountOptionalArguments:TPOCAUInt32;
+      NeedArgumentArray:TPOCABool32;
+      HasArguments:TPOCABool32;
+      HasRestArguments:TPOCABool32;
+      ConstantCount:TPOCAUInt32;
+      ByteCode:PPOCAUInt32Array;
+      ByteCodeSize:TPOCAUInt32;
       Constants:PPOCAValues;
-      HasArgumentLocals:longbool;
-      ArgumentSymbols:PLongints;
-      ArgumentLocals:PLongints;
-      OptionalArgumentSymbols:PLongints;
-      OptionalArgumentLocals:PLongints;
-      OptionalArgumentValues:PLongints;
+      HasArgumentLocals:TPOCABool32;
+      ArgumentSymbols:PPOCAInt32Array;
+      ArgumentLocals:PPOCAInt32Array;
+      OptionalArgumentSymbols:PPOCAInt32Array;
+      OptionalArgumentLocals:PPOCAInt32Array;
+      OptionalArgumentValues:PPOCAInt32Array;
       RegExps:PPOCAValues;
-      CountRegExps:longword;
+      CountRegExps:TPOCAUInt32;
       Lines:TPOCACodeLines;
-      SourceFile:longint;
-      RestArgSym:longword;
+      SourceFile:TPOCAInt32;
+      RestArgSym:TPOCAUInt32;
 {$ifdef POCAHasJIT}
-      NativeCode:pointer;
-      NativeCodeSize:longword;
-      ByteCodeToNativeCodeMap:array of longword;
+      NativeCode:TPOCAPointer;
+      NativeCodeSize:TPOCAUInt32;
+      ByteCodeToNativeCodeMap:array of TPOCAUInt32;
       InterpretByteCodeMap:array of bytebool;
 {$endif}
      end;
@@ -1199,33 +1200,33 @@ type PPOCAInt8=^TPOCAInt8;
       Func:TPOCAValue;
       Locals:TPOCAValue;
       Obj:TPOCAValue;
-      InstructionPointer:longint;
-      ResultRegister:longword;
+      InstructionPointer:TPOCAInt32;
+      ResultRegister:TPOCAUInt32;
       Registers:TPOCAValueArray;
-      CountRegisters:longint;
+      CountRegisters:TPOCAInt32;
       Arguments:TPOCAValueArray;
-      CountArguments:longint;
+      CountArguments:TPOCAInt32;
      end;
 
-     TPOCANativeFunction=function(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+     TPOCANativeFunction=function(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 
-     TPOCANativeDestroyFunction=procedure(const UserData:pointer);
+     TPOCANativeDestroyFunction=procedure(const UserData:TPOCAPointer);
 
      TPOCANativeCode=record
       Header:TPOCAObjectHeader;
       FunctionPointer:TPOCANativeFunction;
       DestroyFunctionPointer:TPOCANativeDestroyFunction;
-      UserData:pointer;
+      UserData:TPOCAPointer;
      end;
 
      PPOCAGhostType=^TPOCAGhostType;
      TPOCAGhostType=record
       Destroy:procedure(const Ghost:PPOCAGhost);
-      CanDestroy:function(const Ghost:PPOCAGhost):longbool;
-      Mark:function(const Ghost:PPOCAGhost):longbool;
-      ExistKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue):longbool;
-      GetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;out aValue:TPOCAValue):longbool;
-      SetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;const aValue:TPOCAValue):longbool;
+      CanDestroy:function(const Ghost:PPOCAGhost):TPOCABool32;
+      Mark:function(const Ghost:PPOCAGhost):TPOCABool32;
+      ExistKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue):TPOCABool32;
+      GetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;out aValue:TPOCAValue):TPOCABool32;
+      SetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;const aValue:TPOCAValue):TPOCABool32;
       Name:TPOCARawByteString;
      end;
 
@@ -1236,21 +1237,21 @@ type PPOCAInt8=^TPOCAInt8;
       Header:TPOCAObjectHeader;
       GhostType:PPOCAGhostType;
       PtrType:TPOCAGhostPtrType;
-      Ptr:pointer;
+      Ptr:TPOCAPointer;
       Hash:PPOCAHash;
      end;
 
      TPOCAPoolBlock=record
       GrayList:PPOCAGarbageCollectorLinkedList;
 {$ifdef POCAGarbageCollectorPoolBlockReferenceCounting}
-      ReferenceCounter:longint;
+      ReferenceCounter:TPOCAInt32;
 {$endif}
 {$ifdef POCAGarbageCollectorPoolBlockInstance}
       Instance:PPOCAInstance;
 {$endif}
-      Data:pointer;
-      Size:longint;
-      Spin:longint;
+      Data:TPOCAPointer;
+      Size:TPOCAInt32;
+      Spin:TPOCAInt32;
       Previous:PPOCAPoolBlock;
       Next:PPOCAPoolBlock;
      end;
@@ -1258,14 +1259,14 @@ type PPOCAInt8=^TPOCAInt8;
      PPOCAPool=^TPOCAPool;
      TPOCAPool=record
       Instance:PPOCAInstance;
-      ValueType:longint;
-      ElementRealSize:longint;
-      ElementSize:longint;
-      Size:longint;
+      ValueType:TPOCAInt32;
+      ElementRealSize:TPOCAInt32;
+      ElementSize:TPOCAInt32;
+      Size:TPOCAInt32;
       FreeObjects:PPPOCAObjects;
-      FreeSize:longint;
-      FreeCount:longint;
-      FreeLock:longint;
+      FreeSize:TPOCAInt32;
+      FreeCount:TPOCAInt32;
+      FreeLock:TPOCAInt32;
       FirstBlock:PPOCAPoolBlock;
       LastBlock:PPOCAPoolBlock;
      end;
@@ -1303,26 +1304,26 @@ type PPOCAInt8=^TPOCAInt8;
 
       // Other stuff
       State:TPOCAGarbageCollectorState;
-      Lock:pointer;
+      Lock:TPOCAPointer;
       ProtectList:TPOCAPointerList;
-      Allocated:longint;
-      FreeCount:longint;
-      AllocationCounter:longint;
-      PersistentCycleCounter:longint;
-      PersistentForceScan:longbool;
-      StepFactor:longint;
-      IntervalFactor:longint;
-      GhostFactor:longint;
-      SweepFactor:longint;
-      FlipFactor:longint;
-      PersistentThreshold:longint;
-      PersistentInterval:longint;
-      FullCollect:longbool;
-      LocalContextPoolSize:longint;
-      ContextCacheSize:longint;
-      MinimumBlockSize:longint;
-      ScanContextGrays:longint;
-      ScanPoolGrays:longint;
+      Allocated:TPOCAInt32;
+      FreeCount:TPOCAInt32;
+      AllocationCounter:TPOCAInt32;
+      PersistentCycleCounter:TPOCAInt32;
+      PersistentForceScan:TPOCABool32;
+      StepFactor:TPOCAInt32;
+      IntervalFactor:TPOCAInt32;
+      GhostFactor:TPOCAInt32;
+      SweepFactor:TPOCAInt32;
+      FlipFactor:TPOCAInt32;
+      PersistentThreshold:TPOCAInt32;
+      PersistentInterval:TPOCAInt32;
+      FullCollect:TPOCABool32;
+      LocalContextPoolSize:TPOCAInt32;
+      ContextCacheSize:TPOCAInt32;
+      MinimumBlockSize:TPOCAInt32;
+      ScanContextGrays:TPOCAInt32;
+      ScanPoolGrays:TPOCAInt32;
       
      end;
 
@@ -1337,7 +1338,7 @@ type PPOCAInt8=^TPOCAInt8;
 
       Instance:PPOCAInstance;
 
-      StrictMode:longbool;
+      StrictMode:TPOCABool32;
 
       Pools:TPOCAPools;
 
@@ -1347,23 +1348,23 @@ type PPOCAInt8=^TPOCAInt8;
 
       GarbageCollector:TPOCAGarbageCollector;
 
-      DeadBlocks:PPointer;
-      DeadSize:longint;
-      DeadCount:longint;
-      DeadAllocationCount:longint;
+      DeadBlocks:PPOCAPointer;
+      DeadSize:TPOCAInt32;
+      DeadCount:TPOCAInt32;
+      DeadAllocationCount:TPOCAInt32;
 
-      ThreadCount:longint;
-      WaitCount:longint;
+      ThreadCount:TPOCAInt32;
+      WaitCount:TPOCAInt32;
       RequestGarbageCollection:TPOCARequestGarbageCollection;
-      Bottleneck:longbool;
-      Lock:pointer;
-      Semaphore:pointer;
+      Bottleneck:TPOCABool32;
+      Lock:TPOCAPointer;
+      Semaphore:TPOCAPointer;
 
       SourceFiles:TPOCAValue;
 
       UniqueStringArray:TPOCAValue;
       UniqueStringHashMap:TPOCAStringHashMap;
-      UniqueStringLock:pointer;
+      UniqueStringLock:TPOCAPointer;
 
       ArgumentsValueReference:TPOCAValue;
       ConstructorValueReference:TPOCAValue;
@@ -1416,17 +1417,17 @@ type PPOCAInt8=^TPOCAInt8;
       LockHash:TPOCAValue;
       SemaphoreHash:TPOCAValue;
 
-      FreeContextCount:longint;
+      FreeContextCount:TPOCAInt32;
       FreeContexts:PPOCAContext;
 
       ModuleLoaderFunctions:TPOCAModuleLoaderFunctions;
-      CountModuleLoaderFunctions:longint;
+      CountModuleLoaderFunctions:TPOCAInt32;
 
       FirstContext:PPOCAContext;
       LastContext:PPOCAContext;
 
-      HostData:Pointer;
-      HostDataFreeable:LongBool;
+      HostData:TPOCAPointer;
+      HostDataFreeable:TPOCABool32;
 
      end;
 
@@ -1442,30 +1443,30 @@ type PPOCAInt8=^TPOCAInt8;
 
       Instance:PPOCAInstance;
 
-      Active:longbool;
+      Active:TPOCABool32;
 
-      GarbageCollectorLockCount:longint;
+      GarbageCollectorLockCount:TPOCAInt32;
 
       ContextObjectPools:TPOCAContextObjectPools;
 
       FrameStack:TPOCAFrameStack;
-      FrameTop:longint;
+      FrameTop:TPOCAInt32;
 
       TemporarySavedObjects:PPPOCAObjects;
-      TemporarySavedObjectCount:longint;
-      TemporarySavedObjectSize:longint;
+      TemporarySavedObjectCount:TPOCAInt32;
+      TemporarySavedObjectSize:TPOCAInt32;
 
       GrayList:PPOCAGarbageCollectorLinkedList;
 
-      CallDepth:longint;
+      CallDepth:TPOCAInt32;
       CallParent:PPOCAContext;
       CallChild:PPOCAContext;
 
-      CoroutineData:pointer;
+      CoroutineData:TPOCAPointer;
 
-      ThreadData:pointer;
+      ThreadData:TPOCAPointer;
 
-      UserData:pointer;
+      UserData:TPOCAPointer;
 
       UserIOWrite:TPOCAUserIOWrite;
       UserIOWriteLn:TPOCAUserIOWriteLn;
@@ -1488,12 +1489,12 @@ type PPOCAInt8=^TPOCAInt8;
 
      EPOCAError=class(Exception)
       public
-       SourceFile,SourceLine,SourceColumn:longint;
+       SourceFile,SourceLine,SourceColumn:TPOCAInt32;
        Value:TPOCAValue;
        constructor Create(const AMessage:TPOCAUTF8String); overload;
-       constructor Create(const ASourceFile,ASourceLine,ASourceColumn:longint;const AMessage:TPOCAUTF8String); overload;
+       constructor Create(const ASourceFile,ASourceLine,ASourceColumn:TPOCAInt32;const AMessage:TPOCAUTF8String); overload;
        constructor Create(const AValue:TPOCAValue); overload;
-       constructor Create(const ASourceFile,ASourceLine,ASourceColumn:longint;const AValue:TPOCAValue); overload;
+       constructor Create(const ASourceFile,ASourceLine,ASourceColumn:TPOCAInt32;const AValue:TPOCAValue); overload;
      end;
 
      EPOCASyntaxError=class(EPOCAError);
@@ -1504,7 +1505,7 @@ type PPOCAInt8=^TPOCAInt8;
 
      EPOCARegExpNFACollectError=class(EPOCAError);
 
-     TPOCANativeObjectMethod=function(const Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint):TPOCAValue of object;
+     TPOCANativeObjectMethod=function(const Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32):TPOCAValue of object;
 
      PPOCANativeObjectProperty=^TPOCANativeObjectProperty;
      TPOCANativeObjectProperty=record
@@ -1521,10 +1522,10 @@ type PPOCAInt8=^TPOCAInt8;
        fInstance:PPOCAInstance;
        fExpandable:boolean;
        fPropList:PPropList;
-       fPropListLen:longint;
+       fPropListLen:TPOCAInt32;
        fPropHashMap:TPOCAStringHashMap;
        fProperties:TPOCANativeObjectProperties;
-       fCountProperties:longint;
+       fCountProperties:TPOCAInt32;
        fGhostType:TPOCAGhostType;
        fGhostValue:TPOCAValue;
        fHashValue:TPOCAValue;
@@ -1533,9 +1534,9 @@ type PPOCAInt8=^TPOCAInt8;
        constructor Create(const pInstance:PPOCAInstance;const pContext:PPOCAContext;const pPrototype,pConstructor:PPOCAValue;const pExpandable:boolean); reintroduce; virtual;
        destructor Destroy; override;
        function Mark:boolean; virtual;
-       function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):longint; virtual;
-       function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:longint;var Value:TPOCAValue):boolean; virtual;
-       function SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:longint;const Value:TPOCAValue):boolean; virtual;
+       function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32; virtual;
+       function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean; virtual;
+       function SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;const Value:TPOCAValue):boolean; virtual;
        property Instance:PPOCAInstance read fInstance;
        property Expandable:boolean read fExpandable;
        property GhostValue:TPOCAValue read fGhostValue;
@@ -1543,10 +1544,10 @@ type PPOCAInt8=^TPOCAInt8;
        property EventsHashValue:TPOCAValue read fEventsHashValue;
      end;
 
-const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:pointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
+const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
       POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAUInt64(POCAValueReferenceTag) shl 32){$endif};
 
-      POCATypeSizes:array[pvtNULL..pvtGHOST] of longint=(-1, // pvtNULL
+      POCATypeSizes:array[pvtNULL..pvtGHOST] of TPOCAInt32=(-1, // pvtNULL
                                                          -1, // pvtNUMBER
                                                          -1, // pvtREFERENCE
                                                          sizeof(TPOCAString),
@@ -1625,7 +1626,7 @@ var POCALocaleFormatSettings:TFormatSettings;
 
 {$ifdef POCAHasJIT}
 {$ifdef unix}
-    fpmprotect:function(__addr:pointer;__len:cardinal;__prot:longint):longint; cdecl;// external 'c' name 'mprotect';
+    fpmprotect:function(__addr:TPOCAPointer;__len:cardinal;__prot:TPOCAInt32):TPOCAInt32; cdecl;// external 'c' name 'mprotect';
 {$endif}
 {$endif}
 
@@ -1646,11 +1647,11 @@ function POCADoubleAbsolute(const AValue:double):double; {$ifdef caninline}inlin
 
 function POCADoubleToString(const AValue:double):TPOCARawByteString;
 
-function POCARegExpCompile(Context:PPOCAContext;const s:TPOCARawByteString;IsUTF8:longint):TFLRE;
+function POCARegExpCompile(Context:PPOCAContext;const s:TPOCARawByteString;IsUTF8:TPOCAInt32):TFLRE;
 
-function POCAGetValueType(const v:TPOCAValue):longint; {$ifdef caninline}inline;{$endif}
-function POCAGetValueReferencePointer(const v:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
-procedure POCASetValueReferencePointer(out v:TPOCAValue;const Ptr:pointer); {$ifdef caninline}inline;{$endif}
+function POCAGetValueType(const v:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
+function POCAGetValueReferencePointer(const v:TPOCAValue):TPOCAPointer; {$ifdef caninline}inline;{$endif}
+procedure POCASetValueReferencePointer(out v:TPOCAValue;const Ptr:TPOCAPointer); {$ifdef caninline}inline;{$endif}
 procedure POCASetValueNumber(out v:TPOCAValue;const n:double); {$ifdef caninline}inline;{$endif}
 
 function POCAIsValueReference(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
@@ -1658,12 +1659,12 @@ function POCAIsValueNumber(const v:TPOCAValue):boolean; {$ifdef caninline}inline
 function POCAIsValueObject(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 function POCAIsValueObjectAndGetReferencePointer(const v:TPOCAValue;var p):boolean;
 function POCAIsValueNull(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
-function POCAIsValueReferenceType(const v:TPOCAValue;t:longint):boolean; {$ifdef caninline}inline;{$endif}
+function POCAIsValueReferenceType(const v:TPOCAValue;t:TPOCAInt32):boolean; {$ifdef caninline}inline;{$endif}
 function POCAIsValueHash(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 function POCAIsValueSimpleHash(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 function POCAIsValueEventHash(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 function POCAIsValueGhostEventHash(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
-function POCAGetValueHashType(const v:TPOCAValue):longint; {$ifdef caninline}inline;{$endif}
+function POCAGetValueHashType(const v:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
 function POCAIsValueCode(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 function POCAIsValueFunction(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 function POCAIsValueFunctionOrNativeCode(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
@@ -1672,15 +1673,15 @@ function POCAIsValueGhost(const v:TPOCAValue):boolean; {$ifdef caninline}inline;
 function POCAIsValueScalarType(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 function POCAIsValueIdentical(const a,b:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 
-function POCALockCreate:pointer;
-procedure POCALockDestroy(var Lock:pointer);
-procedure POCALockEnter(Lock:pointer);
-procedure POCALockLeave(Lock:pointer);
+function POCALockCreate:TPOCAPointer;
+procedure POCALockDestroy(var Lock:TPOCAPointer);
+procedure POCALockEnter(Lock:TPOCAPointer);
+procedure POCALockLeave(Lock:TPOCAPointer);
 
-function POCASemaphoreCreate:pointer;
-procedure POCASemaphoreDestroy(var Semaphore:pointer);
-procedure POCASemaphoreDown(Semaphore:pointer);
-procedure POCASemaphoreUp(Semaphore:pointer;Count:longint);
+function POCASemaphoreCreate:TPOCAPointer;
+procedure POCASemaphoreDestroy(var Semaphore:TPOCAPointer);
+procedure POCASemaphoreDown(Semaphore:TPOCAPointer);
+procedure POCASemaphoreUp(Semaphore:TPOCAPointer;Count:TPOCAInt32);
 
 procedure POCAWait; {$ifdef cpu386}register;{$endif}
 
@@ -1692,8 +1693,8 @@ procedure POCAMRSWLockWriteLock(MRSWLock:PPOCAMRSWLock); {$ifdef cpu386}register
 procedure POCAMRSWLockWriteUnlock(MRSWLock:PPOCAMRSWLock); {$ifdef cpu386}register;{$endif}
 procedure POCAMRSWLockReadToWrite(MRSWLock:PPOCAMRSWLock); {$ifdef cpu386}register;{$endif}
 procedure POCAMRSWLockWriteToRead(MRSWLock:PPOCAMRSWLock); {$ifdef cpu386}register;{$endif}
-function POCAMRSWLockReaders(MRSWLock:PPOCAMRSWLock):longint; {$ifdef cpu386}register;{$endif}
-function POCAMRSWLockWriters(MRSWLock:PPOCAMRSWLock):longint; {$ifdef cpu386}register;{$endif}
+function POCAMRSWLockReaders(MRSWLock:PPOCAMRSWLock):TPOCAInt32; {$ifdef cpu386}register;{$endif}
+function POCAMRSWLockWriters(MRSWLock:PPOCAMRSWLock):TPOCAInt32; {$ifdef cpu386}register;{$endif}
 
 procedure POCAGarbageCollectorWriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue);
 
@@ -1708,7 +1709,7 @@ function POCAIDOf(Context:PPOCAContext;const Value:TPOCAValue):TPOCAValue;
 
 function POCAGhostTypeOf(Context:PPOCAContext;const Value:TPOCAValue):TPOCAValue;
 
-function POCAObject(Instance:PPOCAInstance;ValueType:longint;Obj:PPOCAObject):TPOCAValue;
+function POCAObject(Instance:PPOCAInstance;ValueType:TPOCAInt32;Obj:PPOCAObject):TPOCAValue;
 
 function POCAIsValueTrue(Context:PPOCAContext;const Value:TPOCAValue):boolean; {$ifdef UseRegister}register;{$endif}
 
@@ -1722,14 +1723,14 @@ function POCAGetStringValue(Context:PPOCAContext;const Value:TPOCAValue):TPOCARa
 function POCAGetVariantValue(Context:PPOCAContext;const Value:TPOCAValue):Variant; {$ifdef caninline}inline;{$endif}
 
 function POCAIsStringUTF8(Context:PPOCAContext;const Value:TPOCAValue):boolean;
-function POCAGetStringUTF8(Context:PPOCAContext;const Value:TPOCAValue):longint;
-function POCAGetStringUTF8Length(Context:PPOCAContext;const Value:TPOCAValue):longint;
+function POCAGetStringUTF8(Context:PPOCAContext;const Value:TPOCAValue):TPOCAInt32;
+function POCAGetStringUTF8Length(Context:PPOCAContext;const Value:TPOCAValue):TPOCAInt32;
 
-function POCANew(Context:PPOCAContext;ValueType:longint;var Obj:PPOCAObject):TPOCAValue;
+function POCANew(Context:PPOCAContext;ValueType:TPOCAInt32;var Obj:PPOCAObject):TPOCAValue;
 
-function POCAStringUTF8GetCodeUnit(Context:PPOCAContext;const Value:TPOCAValue;CodePoint:longint):longint;
-function POCAStringUTF8GetCodePoint(Context:PPOCAContext;const Value:TPOCAValue;CodeUnit:longint):longint;
-function POCAStringUTF8CopyCodePointRange(Context:PPOCAContext;const Value:TPOCAValue;FromCodePoint,ToCodePoint:longint):TPOCARawByteString;
+function POCAStringUTF8GetCodeUnit(Context:PPOCAContext;const Value:TPOCAValue;CodePoint:TPOCAInt32):TPOCAInt32;
+function POCAStringUTF8GetCodePoint(Context:PPOCAContext;const Value:TPOCAValue;CodeUnit:TPOCAInt32):TPOCAInt32;
+function POCAStringUTF8CopyCodePointRange(Context:PPOCAContext;const Value:TPOCAValue;FromCodePoint,ToCodePoint:TPOCAInt32):TPOCARawByteString;
 procedure POCAStringUpdate(Context:PPOCAContext;const Value:TPOCAValue);
 
 function POCANewNumber(Context:PPOCAContext;const Data:double=0.0):TPOCAValue;
@@ -1738,15 +1739,15 @@ function POCANewUniqueString(Context:PPOCAContext;const Data:TPOCARawByteString=
 function POCANewArray(Context:PPOCAContext):TPOCAValue;
 function POCANewHash(Context:PPOCAContext):TPOCAValue;
 function POCANewCode(Context:PPOCAContext):TPOCAValue;
-function POCANewNativeCode(Context:PPOCAContext;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:pointer=nil):TPOCAValue;
+function POCANewNativeCode(Context:PPOCAContext;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:TPOCAPointer=nil):TPOCAValue;
 function POCANewFunction(Context:PPOCAContext;const Code:TPOCAValue):TPOCAValue;
-function POCANewGhost(Context:PPOCAContext;const GhostType:PPOCAGhostType;const Ptr:pointer;const Hash:PPOCAHash=nil;const PtrType:TPOCAGhostPtrType=pgptRAW):TPOCAValue;
+function POCANewGhost(Context:PPOCAContext;const GhostType:PPOCAGhostType;const Ptr:TPOCAPointer;const Hash:PPOCAHash=nil;const PtrType:TPOCAGhostPtrType=pgptRAW):TPOCAValue;
 function POCANewNativeObject(Context:PPOCAContext;const NativeObjectValue:TPOCANativeObject):TPOCAValue;
 function POCANewValueFromVariant(Context:PPOCAContext;const VariantValue:Variant):TPOCAValue;
 
 function POCAGhostGetType(const r:TPOCAValue):PPOCAGhostType; {$ifdef caninline}inline;{$endif}
-function POCAGhostGetPointer(const r:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
-function POCAGhostFastGetPointer(const r:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
+function POCAGhostGetPointer(const r:TPOCAValue):TPOCAPointer; {$ifdef caninline}inline;{$endif}
+function POCAGhostFastGetPointer(const r:TPOCAValue):TPOCAPointer; {$ifdef caninline}inline;{$endif}
 function POCAGhostGetHash(const r:TPOCAValue):PPOCAHash; {$ifdef caninline}inline;{$endif}
 function POCAGhostGetHashValue(const r:TPOCAValue):TPOCAValue; {$ifdef caninline}inline;{$endif}
 function POCAGhostSetHash(const r:TPOCAValue;const h:PPOCAHash):boolean; {$ifdef caninline}inline;{$endif}
@@ -1759,40 +1760,40 @@ function POCANumber(Num:double):TPOCAValue; {$ifdef caninline}inline;{$endif}
 function POCAString(Context:PPOCAContext;const Str:TPOCARawByteString):TPOCAValue; {$ifdef caninline}inline;{$endif}
 function POCAEqual(const a,b:TPOCAValue):boolean; overload;
 function POCAStrictEqual(const a,b:TPOCAValue):boolean; overload;
-function POCACompareString(const a,b:TPOCARawByteString):longint;
-function POCACompare(Context:PPOCAContext;const a,b:TPOCAValue):longint;
+function POCACompareString(const a,b:TPOCARawByteString):TPOCAInt32;
+function POCACompare(Context:PPOCAContext;const a,b:TPOCAValue):TPOCAInt32;
 function POCAEqual(const a:TPOCAValue;const s:TPOCARawByteString):boolean; overload;
 function POCAStrictEqual(const a:TPOCAValue;const s:TPOCARawByteString):boolean; overload;
 function POCAStringEqual(const a,b:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 function POCAObjectEqual(const a,b:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 
-procedure POCASetUserData(Context:PPOCAContext;p:pointer); {$ifdef caninline}inline;{$endif}
-function POCAGetUserData(Context:PPOCAContext):pointer; {$ifdef caninline}inline;{$endif}
+procedure POCASetUserData(Context:PPOCAContext;p:TPOCAPointer); {$ifdef caninline}inline;{$endif}
+function POCAGetUserData(Context:PPOCAContext):TPOCAPointer; {$ifdef caninline}inline;{$endif}
 
 procedure POCAAddSymbol(Context:PPOCAContext;const Dst:TPOCAValue;Symbol:TPOCARawByteString;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
 
-procedure POCAAddNativeFunction(Context:PPOCAContext;const Hash:TPOCAValue;const FunctionName:TPOCARawByteString;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:pointer=nil); {$ifdef caninline}inline;{$endif}
+procedure POCAAddNativeFunction(Context:PPOCAContext;const Hash:TPOCAValue;const FunctionName:TPOCARawByteString;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:TPOCAPointer=nil); {$ifdef caninline}inline;{$endif}
 
 function POCAInternSymbol(Context:PPOCAContext;Instance:PPOCAInstance;const Symbol:TPOCAValue):TPOCAValue; {$ifdef caninline}inline;{$endif}
 
-function POCAMarkValue(Instance:PPOCAInstance;const Value:TPOCAValue):longbool;
+function POCAMarkValue(Instance:PPOCAInstance;const Value:TPOCAValue):TPOCABool32;
 
-function POCAArrayGet(const ArrayObject:TPOCAValue;i:longint):TPOCAValue;
-procedure POCAArraySet(const ArrayObject:TPOCAValue;i:longint;const Value:TPOCAValue);
-function POCAArraySize(const ArrayObject:TPOCAValue):longword;
-function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longword;
-function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):longword;
-function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:longint):longword;
-function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longword;
-function POCAArrayIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longint;
-function POCAArrayLastIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longint;
-procedure POCAArraySetSize(const ArrayObject:TPOCAValue;Size:longint);
+function POCAArrayGet(const ArrayObject:TPOCAValue;i:TPOCAInt32):TPOCAValue;
+procedure POCAArraySet(const ArrayObject:TPOCAValue;i:TPOCAInt32;const Value:TPOCAValue);
+function POCAArraySize(const ArrayObject:TPOCAValue):TPOCAUInt32;
+function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
+function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):TPOCAUInt32;
+function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:TPOCAInt32):TPOCAUInt32;
+function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
+function POCAArrayIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAInt32;
+function POCAArrayLastIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAInt32;
+procedure POCAArraySetSize(const ArrayObject:TPOCAValue;Size:TPOCAInt32);
 function POCAArrayPop(const ArrayObject:TPOCAValue):TPOCAValue;
 procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue);
 
-function POCAHashString(const Str:TPOCARawByteString):longword;
-function POCAHashNumber(const Num:double):longword;
-function POCAHashObj(const Obj:pointer):longword;
+function POCAHashString(const Str:TPOCARawByteString):TPOCAUInt32;
+function POCAHashNumber(const Num:double):TPOCAUInt32;
+function POCAHashObj(const Obj:TPOCAPointer):TPOCAUInt32;
 
 procedure POCAHashLockInvalidate(Hash:PPOCAHash);
 procedure POCAHashInvalidate(Hash:PPOCAHash);
@@ -1800,39 +1801,39 @@ procedure POCAHashInvalidate(Hash:PPOCAHash);
 procedure POCAHashRebuildCache(Hash:PPOCAHash);
 
 procedure POCAHashClearPrototype(Hash:PPOCAHash);
-function POCAHashSetPrototype(Context:PPOCAContext;const Hash:TPOCAValue;const Prototype:PPOCAHash):longbool;
-function POCAHashSetPrototypeValue(Context:PPOCAContext;const Hash,Prototype:TPOCAValue):longbool;
+function POCAHashSetPrototype(Context:PPOCAContext;const Hash:TPOCAValue;const Prototype:PPOCAHash):TPOCABool32;
+function POCAHashSetPrototypeValue(Context:PPOCAContext;const Hash,Prototype:TPOCAValue):TPOCABool32;
 function POCAHashGetPrototype(const Hash:TPOCAValue):PPOCAHash;
 function POCAHashGetPrototypeValue(const Hash:TPOCAValue):TPOCAValue;
 
 procedure POCAHashClearConstructor(Hash:PPOCAHash);
-function POCAHashSetConstructor(Context:PPOCAContext;const Hash:TPOCAValue;const Constructor_:PPOCAObject):longbool;
-function POCAHashSetConstructorValue(Context:PPOCAContext;const Hash,Constructor_:TPOCAValue):longbool;
+function POCAHashSetConstructor(Context:PPOCAContext;const Hash:TPOCAValue;const Constructor_:PPOCAObject):TPOCABool32;
+function POCAHashSetConstructorValue(Context:PPOCAContext;const Hash,Constructor_:TPOCAValue):TPOCABool32;
 function POCAHashGetConstructor(const Hash:TPOCAValue):PPOCAObject;
 function POCAHashGetConstructorValue(const Hash:TPOCAValue):TPOCAValue;
 
-function POCAHashSetHashEvents(Context:PPOCAContext;const ToHash,FromHash:TPOCAValue):longbool;
+function POCAHashSetHashEvents(Context:PPOCAContext;const ToHash,FromHash:TPOCAValue):TPOCABool32;
 function POCAHashGetHashEventsHash(const Hash:TPOCAValue):TPOCAValue;
 function POCAHashGetHashEvents(const Hash:TPOCAValue):PPOCAHashEvents; overload;
 function POCAHashGetHashEvents(const Hash:TPOCAValue;const Operation:TPOCAMetaOp):PPOCAHashEvents; overload;
 function POCAHashGetHashEvents(const v1,v2:TPOCAValue;const Operation:TPOCAMetaOp):PPOCAHashEvents; overload;
 function POCAHashGetHashEvents(const v1,v2,v3:TPOCAValue;const Operation:TPOCAMetaOp):PPOCAHashEvents; overload;
 
-function POCAHashSetGhost(Context:PPOCAContext;const Hash:TPOCAValue;Ghost:PPOCAGhost):longbool;
-function POCAHashSetGhostValue(Context:PPOCAContext;const Hash,Ghost:TPOCAValue):longbool;
+function POCAHashSetGhost(Context:PPOCAContext;const Hash:TPOCAValue;Ghost:PPOCAGhost):TPOCABool32;
+function POCAHashSetGhostValue(Context:PPOCAContext;const Hash,Ghost:TPOCAValue):TPOCABool32;
 function POCAHashGetGhost(const Hash:TPOCAValue):PPOCAGhost;
 function POCAHashGetGhostValue(const Hash:TPOCAValue):TPOCAValue;
 
-function POCAHashSetKind(Context:PPOCAContext;const Hash:TPOCAValue;Kind:longint):longbool;
-function POCAHashGetKind(const Hash:TPOCAValue):longint;
+function POCAHashSetKind(Context:PPOCAContext;const Hash:TPOCAValue;Kind:TPOCAInt32):TPOCABool32;
+function POCAHashGetKind(const Hash:TPOCAValue):TPOCAInt32;
 
-function POCAHashRawSize(const Hash:TPOCAValue):longint;
+function POCAHashRawSize(const Hash:TPOCAValue):TPOCAInt32;
 function POCAHashRawExist(const Hash:TPOCAValue;const Key:TPOCAValue):boolean;
 function POCAHashRawGet(const Hash:TPOCAValue;const Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
 function POCAHashRawSet(const Hash,Key,Value:TPOCAValue):boolean;
 function POCAHashRawDelete(const Hash,Key:TPOCAValue):boolean;
 procedure POCAHashRawKeys(const Dst,Hash:TPOCAValue);
-function POCAHashSize(Context:PPOCAContext;const Hash:TPOCAValue):longint;
+function POCAHashSize(Context:PPOCAContext;const Hash:TPOCAValue):TPOCAInt32;
 function POCAHashExist(Context:PPOCAContext;const Hash,Key:TPOCAValue):boolean;
 function POCAHashGet(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
 function POCAHashGetInherited(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
@@ -1843,11 +1844,11 @@ procedure POCAHashKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
 function POCAHashGetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString):TPOCAValue;
 procedure POCAHashSetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString;const Value:TPOCAValue);
 procedure POCAHashCombine(Context:PPOCAContext;const Hash,Source:TPOCAValue);
-function POCAHashInstanceOf(Context:PPOCAContext;const Hash,OfHash:TPOCAValue):longbool;
-function POCAHashIs(Context:PPOCAContext;const Hash,OfObject:TPOCAValue):longbool;
+function POCAHashInstanceOf(Context:PPOCAContext;const Hash,OfHash:TPOCAValue):TPOCABool32;
+function POCAHashIs(Context:PPOCAContext;const Hash,OfObject:TPOCAValue):TPOCABool32;
 
-function POCAObjectInstanceOf(Context:PPOCAContext;const Value,OfValue:TPOCAValue):longbool; {$ifdef caninline}inline;{$endif}
-function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):longbool; {$ifdef caninline}inline;{$endif}
+function POCAObjectInstanceOf(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
+function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
 
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 procedure POCAContextDestroy(Context:PPOCAContext);
@@ -1862,17 +1863,17 @@ function POCACompile(Instance:PPOCAInstance;Context:PPOCAContext;const Source:TP
 
 procedure POCASave(Context:PPOCAContext;Obj:TPOCAValue);
 
-function POCAStackDepth(Context:PPOCAContext):longint;
+function POCAStackDepth(Context:PPOCAContext):TPOCAInt32;
 
-function POCAFindFrame(Context:PPOCAContext;var OutContext:PPOCAContext;FrameNumber:longint):longint;
+function POCAFindFrame(Context:PPOCAContext;var OutContext:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAInt32;
 
-function POCAGetSourceLine(Context:PPOCAContext;FrameNumber:longint):longint;
+function POCAGetSourceLine(Context:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAInt32;
 
-function POCAGetSourceFile(Context:PPOCAContext;FrameNumber:longint):longint;
+function POCAGetSourceFile(Context:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAInt32;
 
 function POCABindToContext(Context:PPOCAContext;Code:TPOCAValue):TPOCAValue;
 
-function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:longint;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue;
+function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue;
 
 procedure POCARuntimeError(Context:PPOCAContext;const Msg:TPOCAUTF8String);
 
@@ -1909,7 +1910,7 @@ const POCAInitialized:boolean=false;
       FPURoundingMode:TFPURoundingMode=rmNearest;
       FPUPrecisionMode:TFPUPrecisionMode={$ifdef HAS_TYPE_EXTENDED}pmEXTENDED{$else}pmDOUBLE{$endif};
 
-//    HASH_MAGIC=longword(2654435769);
+//    HASH_MAGIC=TPOCAUInt32(2654435769);
 
       CELL_EMPTY=-1;
       CELL_DELETED=-2;
@@ -1927,7 +1928,7 @@ var LexerKeywordTokens:TPOCALexerKeywordTokens;
 procedure InitializeLocaleFormatSettings;
 {$ifdef windows}
 {$ifdef fpc}
-var i:longint;
+var i:TPOCAInt32;
 begin
  POCALocaleCharset:='ISO-8859-1';
  POCALocaleFormatSettings:=POCADefaultFormatSettings;
@@ -1958,7 +1959,7 @@ end;
 {$else}
 var HourFormat,TimePrefix,TimePostfix:TPOCAUTF8String;
     LID:LCID;
-    i,LCP,Day:longint;
+    i,LCP,Day:TPOCAInt32;
 begin
  POCALocaleFormatSettings:=POCADefaultFormatSettings;
  LID:=GetThreadLocale;
@@ -2023,7 +2024,7 @@ begin
 end;
 {$endif}
 {$else}
-var i:longint;
+var i:TPOCAInt32;
 begin
  POCALocaleCharset:='ISO-8859-1';
  POCALocaleFormatSettings:=POCADefaultFormatSettings;
@@ -2140,8 +2141,8 @@ begin
 end;
 {$ifend}
 
-function PosEx(const SubStr,s:TPOCARawByteString;Offset:longint=1):longint;
-var i,x,LenSubStr:longint;
+function PosEx(const SubStr,s:TPOCARawByteString;Offset:TPOCAInt32=1):TPOCAInt32;
+var i,x,LenSubStr:TPOCAInt32;
 begin
  if Offset=1 then begin
   result:=System.Pos(SubStr,s);
@@ -2166,7 +2167,7 @@ end;
 {$if defined(fpc) and defined(Linux)}
 type TReadLine_readline=function(_para1:PAnsiChar):PAnsiChar; cdecl;
      TReadLine_add_history=procedure(_para1:PAnsiChar); cdecl;
-     TReadLine_free=procedure(_para1:Pointer); cdecl;
+     TReadLine_free=procedure(_para1:TPOCAPointer); cdecl;
 
 var ReadLine_readline:TReadLine_readline=nil;
     ReadLine_add_history:TReadLine_add_history=nil;
@@ -2274,8 +2275,8 @@ begin
 end;
 {$ifend}
 
-function CompareEx(const SubStr,s:TPOCARawByteString;Offset:longint=1):boolean;
-var i,x,LenSubStr:longint;
+function CompareEx(const SubStr,s:TPOCARawByteString;Offset:TPOCAInt32=1):boolean;
+var i,x,LenSubStr:TPOCAInt32;
 begin
  result:=false;
  i:=Offset;
@@ -2330,104 +2331,104 @@ end;
 
 function POCAIsPosInfinite(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=PPOCAINT64(@AValue)^=int64($7ff0000000000000);
+ result:=PPOCAINT64(@AValue)^=TPOCAInt64($7ff0000000000000);
 end;
 
 function POCAIsNegInfinite(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
 {$ifdef fpc}
- result:=UInt64(pointer(@AValue)^)=UInt64($fff0000000000000);
+ result:=TPOCAUInt64(TPOCAPointer(@AValue)^)=TPOCAUInt64($fff0000000000000);
 {$else}
- result:=PPOCAINT64(@AValue)^=int64($fff0000000000000);
+ result:=PPOCAInt64(@AValue)^=TPOCAInt64($fff0000000000000);
 {$endif}
 end;
 
 function POCAIsPosZero(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=PPOCAINT64(@AValue)^=int64($0000000000000000);
+ result:=PPOCAINT64(@AValue)^=TPOCAInt64($0000000000000000);
 end;
 
 function POCAIsNegZero(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
 {$ifdef fpc}
- result:=UInt64(pointer(@AValue)^)=UInt64($8000000000000000);
+ result:=TPOCAUInt64(TPOCAPointer(@AValue)^)=TPOCAUInt64($8000000000000000);
 {$else}
- result:=PPOCAINT64(@AValue)^=int64($8000000000000000);
+ result:=PPOCAInt64(@AValue)^=TPOCAInt64($8000000000000000);
 {$endif}
 end;
 
 function POCAIsZero(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
 {$ifdef fpc}
- result:=(UInt64(pointer(@AValue)^) and UInt64($7fffffffffffffff))=UInt64($0000000000000000);
+ result:=(TPOCAUInt64(TPOCAPointer(@AValue)^) and TPOCAUInt64($7fffffffffffffff))=UInt64($0000000000000000);
 {$else}
- result:=(PPOCAINT64(@AValue)^ and int64($7fffffffffffffff))=int64($0000000000000000);
+ result:=(PPOCAInt64(@AValue)^ and TPOCAInt64($7fffffffffffffff))=TPOCAInt64($0000000000000000);
 {$endif}
 end;
 
 function POCAIsNegative(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
 {$ifdef fpc}
- result:=(UInt64(pointer(@AValue)^) and UInt64($8000000000000000))<>0;
+ result:=(TPOCAUInt64(TPOCAPointer(@AValue)^) and TPOCAUInt64($8000000000000000))<>0;
 {$else}
- result:=(PPOCAINT64(@AValue)^ shr 63)<>0;
+ result:=(PPOCAInt64(@AValue)^ shr 63)<>0;
 {$endif}
 end;
 {$else}
 {$ifdef TrickyNumberChecks}
 function POCAIsNaN(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
-var l:longword;
+var l:TPOCAUInt32;
 begin
  l:=PPOCADoubleHiLo(@AValue)^.Lo;
- result:=(longword($7ff00000-longword(longword(PPOCADoubleHiLo(@AValue)^.Hi and $7fffffff) or ((l or (-l)) shr 31))) shr 31)<>0;
+ result:=(TPOCAUInt32($7ff00000-TPOCAUInt32(TPOCAUInt32(PPOCADoubleHiLo(@AValue)^.Hi and $7fffffff) or ((l or (-l)) shr 31))) shr 31)<>0;
 end;
 
 function POCAIsInfinite(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=longword((longword(PPOCADoubleHiLo(@AValue)^.Hi and $7fffffff) xor $7ff00000) or PPOCADoubleHiLo(@AValue)^.Lo)=0;
+ result:=TPOCAUInt32((TPOCAUInt32(PPOCADoubleHiLo(@AValue)^.Hi and $7fffffff) xor $7ff00000) or PPOCADoubleHiLo(@AValue)^.Lo)=0;
 end;
 
 function POCAIsFinite(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=(longword((PPOCADoubleHiLo(@AValue)^.Hi and $7fffffff)-$7ff00000) shr 31)<>0;
+ result:=(TPOCAUInt32((PPOCADoubleHiLo(@AValue)^.Hi and $7fffffff)-$7ff00000) shr 31)<>0;
 end;
 
 function POCAIsPosInfinite(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
-var h:longword;
+var h:TPOCAUInt32;
 begin
  h:=PPOCADoubleHiLo(@AValue)^.Hi;
- result:=longword(((longword(h and $7fffffff) xor $7ff00000) or PPOCADoubleHiLo(@AValue)^.Lo) or longword(h shr 31))=0;
+ result:=TPOCAUInt32(((TPOCAUInt32(h and $7fffffff) xor $7ff00000) or PPOCADoubleHiLo(@AValue)^.Lo) or TPOCAUInt32(h shr 31))=0;
 end;
 
 function POCAIsNegInfinite(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
-var h:longword;
+var h:TPOCAUInt32;
 begin
  h:=PPOCADoubleHiLo(@AValue)^.Hi;
- result:=longword(((longword(h and $7fffffff) xor $7ff00000) or PPOCADoubleHiLo(@AValue)^.Lo) or longword(longword(not h) shr 31))=0;
+ result:=TPOCAUInt32(((TPOCAUInt32(h and $7fffffff) xor $7ff00000) or PPOCADoubleHiLo(@AValue)^.Lo) or TPOCAUInt32(TPOCAUInt32(not h) shr 31))=0;
 end;
 
 function POCAIsPosZero(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
-var h:longword;
+var h:TPOCAUInt32;
 begin
  h:=PPOCADoubleHiLo(@AValue)^.Hi;
- result:=longword(longword(longword(h and $7fffffff) or PPOCADoubleHiLo(@AValue)^.Lo) or longword(h shr 31))=0;
+ result:=TPOCAUInt32(TPOCAUInt32(TPOCAUInt32(h and $7fffffff) or PPOCADoubleHiLo(@AValue)^.Lo) or TPOCAUInt32(h shr 31))=0;
 end;
 
 function POCAIsNegZero(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
-var h:longword;
+var h:TPOCAUInt32;
 begin
  h:=PPOCADoubleHiLo(@AValue)^.Hi;
- result:=longword(longword(longword(h and $7fffffff) or PPOCADoubleHiLo(@AValue)^.Lo) or longword(longword(not h) shr 31))=0;
+ result:=TPOCAUInt32(TPOCAUInt32(TPOCAUInt32(h and $7fffffff) or PPOCADoubleHiLo(@AValue)^.Lo) or TPOCAUInt32(TPOCAUInt32(not h) shr 31))=0;
 end;
 
 function POCAIsZero(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=longword(longword(PPOCADoubleHiLo(@AValue)^.Hi and $7fffffff) or PPOCADoubleHiLo(@AValue)^.Lo)=0;
+ result:=TPOCAUInt32(TPOCAUInt32(PPOCADoubleHiLo(@AValue)^.Hi and $7fffffff) or PPOCADoubleHiLo(@AValue)^.Lo)=0;
 end;
 
 function POCAIsNegative(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=longword(PPOCADoubleHiLo(@AValue)^.Hi and longword($80000000))<>0;
+ result:=TPOCAUInt32(PPOCADoubleHiLo(@AValue)^.Hi and TPOCAUInt32($80000000))<>0;
 end;
 {$else}
 function POCAIsNaN(const AValue:double):boolean; {$ifdef caninline}inline;{$endif}
@@ -2548,11 +2549,11 @@ end;
 procedure GetMemAligned(var p;Size:TPOCAPtrInt;Align:TPOCAPtrUInt=16);
 {$ifdef DelphiXE2AndUp}
 begin
- GetMem(pointer(p),Size);
+ GetMem(TPOCAPointer(p),Size);
 end;
 {$else}
-var Original,Aligned:pointer;
-    Temp:PPointer;
+var Original,Aligned:TPOCAPointer;
+    Temp:PPOCAPointer;
     Mask:TPOCAPtrUInt;
 begin
  if (Align and (Align-1))<>0 then begin
@@ -2568,16 +2569,16 @@ begin
   inc(Align);
  end;
  Mask:=Align-1;
- inc(Size,((Align shl 1)+sizeof(pointer)));
+ inc(Size,((Align shl 1)+sizeof(TPOCAPointer)));
  GetMem(Original,Size);
  FillChar(Original^,Size,#0);
- Aligned:=pointer(TPOCAPtrUInt(TPOCAPtrUInt(Original)+sizeof(pointer)));
+ Aligned:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(Original)+sizeof(TPOCAPointer)));
  if (Align>1) and ((TPOCAPtrUInt(Aligned) and Mask)<>0) then begin
   inc(TPOCAPtrUInt(Aligned),TPOCAPtrUInt(TPOCAPtrUInt(Align)-(TPOCAPtrUInt(Aligned) and Mask)));
  end;
- Temp:=pointer(TPOCAPtrUInt(TPOCAPtrUInt(Aligned)-sizeof(pointer)));
+ Temp:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(Aligned)-sizeof(TPOCAPointer)));
  Temp^:=Original;
- Temp:=pointer(@p);
+ Temp:=TPOCAPointer(@p);
  Temp^:=Aligned;
 end;
 {$endif}
@@ -2585,14 +2586,14 @@ end;
 procedure FreeMemAligned(const p);
 {$ifdef DelphiXE2AndUp}
 begin
- FreeMem(pointer(p));
+ FreeMem(TPOCAPointer(p));
 end;
 {$else}
-var pp:pointer;
+var pp:TPOCAPointer;
 begin
- pp:=pointer(pointer(@p)^);
+ pp:=TPOCAPointer(TPOCAPointer(@p)^);
  if assigned(pp) then begin
-  pp:=pointer(pointer(TPOCAPtrUInt(TPOCAPtrUInt(pp)-sizeof(pointer)))^);
+  pp:=TPOCAPointer(TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(pp)-sizeof(TPOCAPointer)))^);
   FreeMem(pp);
  end;
 end;
@@ -2681,7 +2682,7 @@ begin
   end;
   FillChar(result^.Base^,result^.Size,#0);
   result^.First:=result^.Base;
-  result^.Last:=pointer(@pansichar(result^.Base)[result^.Size-sizeof(TPOCANativeCodeMemoryManagerBlock)]);
+  result^.Last:=TPOCAPointer(@pansichar(result^.Base)[result^.Size-sizeof(TPOCANativeCodeMemoryManagerBlock)]);
   Block:=result^.First;
   Block^.Signature:=bncmmMemoryBlockSignature;
   Block^.Previous:=nil;
@@ -2721,7 +2722,7 @@ begin
  Dispose(BlockContainer);
 end;
 
-function POCANativeCodeMemoryManagerGetMemory(NativeCodeMemoryManager:PPOCANativeCodeMemoryManager;Size:TPOCAPtrUInt):pointer;
+function POCANativeCodeMemoryManagerGetMemory(NativeCodeMemoryManager:PPOCANativeCodeMemoryManager;Size:TPOCAPtrUInt):TPOCAPointer;
 var BlockContainer:PPOCANativeCodeMemoryManagerBlockContainer;
     CurrentBlock,NewBlock:PPOCANativeCodeMemoryManagerBlock;
     DestSize,BlockContainerSize:TPOCAPtrUInt;
@@ -2735,7 +2736,7 @@ begin
     if (BlockContainer^.Used+DestSize)<=BlockContainer^.Size then begin
      CurrentBlock:=BlockContainer^.First;
      while assigned(CurrentBlock) and (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and assigned(CurrentBlock^.Next) do begin
-      NewBlock:=pointer(TPOCAPtrUInt(POCARoundUpToMask(TPOCAPtrUInt(pointer(@pansichar(CurrentBlock)[(sizeof(TPOCANativeCodeMemoryManagerBlock)*2)+CurrentBlock^.Size])),NativeCodeMemoryManager^.Alignment)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
+      NewBlock:=TPOCAPointer(TPOCAPtrUInt(POCARoundUpToMask(TPOCAPtrUInt(TPOCAPointer(@pansichar(CurrentBlock)[(sizeof(TPOCANativeCodeMemoryManagerBlock)*2)+CurrentBlock^.Size])),NativeCodeMemoryManager^.Alignment)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
       if (TPOCAPtrUInt(CurrentBlock^.Next)-TPOCAPtrUInt(NewBlock))>=DestSize then begin
        NewBlock^.Signature:=bncmmMemoryBlockSignature;
        NewBlock^.Previous:=CurrentBlock;
@@ -2743,7 +2744,7 @@ begin
        NewBlock^.Size:=Size;
        CurrentBlock^.Next^.Previous:=NewBlock;
        CurrentBlock^.Next:=NewBlock;
-       result:=pointer(@pansichar(NewBlock)[sizeof(TPOCANativeCodeMemoryManagerBlock)]);
+       result:=TPOCAPointer(@pansichar(NewBlock)[sizeof(TPOCANativeCodeMemoryManagerBlock)]);
        inc(BlockContainer^.Used,DestSize);
        exit;
       end else begin
@@ -2766,14 +2767,14 @@ begin
  end;
 end;
 
-procedure POCANativeCodeMemoryManagerFreeMemory(NativeCodeMemoryManager:PPOCANativeCodeMemoryManager;p:pointer);
+procedure POCANativeCodeMemoryManagerFreeMemory(NativeCodeMemoryManager:PPOCANativeCodeMemoryManager;p:TPOCAPointer);
 var BlockContainer:PPOCANativeCodeMemoryManagerBlockContainer;
     CurrentBlock:PPOCANativeCodeMemoryManagerBlock;
 begin
  BlockContainer:=NativeCodeMemoryManager^.First;
  while assigned(BlockContainer) do begin
   if ((TPOCAPtrUInt(BlockContainer^.Base)+sizeof(TPOCANativeCodeMemoryManagerBlock))<=TPOCAPtrUInt(p)) and ((TPOCAPtrUInt(p)+sizeof(TPOCANativeCodeMemoryManagerBlock))<(TPOCAPtrUInt(BlockContainer^.Base)+BlockContainer^.Size)) then begin
-   CurrentBlock:=pointer(TPOCAPtrUInt(TPOCAPtrUInt(p)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
+   CurrentBlock:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(p)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
    if (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and (CurrentBlock<>BlockContainer^.First) and (CurrentBlock<>BlockContainer^.Last) then begin
     dec(BlockContainer^.Used,CurrentBlock^.Size+sizeof(TPOCANativeCodeMemoryManagerBlock));
     CurrentBlock^.Signature:=0;
@@ -2789,7 +2790,7 @@ begin
  end;
 end;
 
-function POCANativeCodeMemoryManagerReallocateMemory(NativeCodeMemoryManager:PPOCANativeCodeMemoryManager;p:pointer;Size:TPOCAPtrUInt):pointer;
+function POCANativeCodeMemoryManagerReallocateMemory(NativeCodeMemoryManager:PPOCANativeCodeMemoryManager;p:TPOCAPointer;Size:TPOCAPtrUInt):TPOCAPointer;
 var BlockContainer:PPOCANativeCodeMemoryManagerBlockContainer;
     CurrentBlock:PPOCANativeCodeMemoryManagerBlock;
     DestSize:TPOCAPtrUInt;
@@ -2803,7 +2804,7 @@ begin
    BlockContainer:=NativeCodeMemoryManager^.First;
    while assigned(BlockContainer) do begin
     if ((TPOCAPtrUInt(BlockContainer^.Base)+sizeof(TPOCANativeCodeMemoryManagerBlock))<=TPOCAPtrUInt(p)) and ((TPOCAPtrUInt(p)+sizeof(TPOCANativeCodeMemoryManagerBlock))<(TPOCAPtrUInt(BlockContainer^.Base)+BlockContainer^.Size)) then begin
-     CurrentBlock:=pointer(TPOCAPtrUInt(TPOCAPtrUInt(p)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
+     CurrentBlock:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(p)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
      if (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and (CurrentBlock<>BlockContainer^.First) and (CurrentBlock<>BlockContainer^.Last) then begin
       if (TPOCAPtrUInt(CurrentBlock^.Next)-TPOCAPtrUInt(CurrentBlock))>=DestSize then begin
        CurrentBlock^.Size:=Size;
@@ -2863,7 +2864,7 @@ begin
  Node:=List^.Next;
  result:=Node<>List;
  if result then begin
-  Obj:=pointer(Node);
+  Obj:=TPOCAPointer(Node);
   Node^.Previous^.Next:=Node^.Next;
   Node^.Next^.Previous:=Node^.Previous;
   Node^.Previous:=Node;
@@ -2894,7 +2895,7 @@ begin
  end;
 end;}
 
-procedure POCAGarbageCollectorLinkedListMoveMark(FromList,ToList:PPOCAGarbageCollectorLinkedList;BitsToAdd:longword); //{$ifdef caninline}inline;{$endif}
+procedure POCAGarbageCollectorLinkedListMoveMark(FromList,ToList:PPOCAGarbageCollectorLinkedList;BitsToAdd:TPOCAUInt32); //{$ifdef caninline}inline;{$endif}
 var Obj:PPOCAObject;
 begin
  Obj:=nil;
@@ -3086,7 +3087,7 @@ asm
  @TryLoopDone:
 end;
 {$else}
-var Current:longint;
+var Current:TPOCAInt32;
 begin
  repeat
   Current:=MRSWLock^.State and $fffffffe;
@@ -3121,7 +3122,7 @@ asm
  @TryLoopDone:
 end;
 {$else}
-var Current:longint;
+var Current:TPOCAInt32;
 begin
  repeat
   Current:=MRSWLock^.State and $fffffffe;
@@ -3160,7 +3161,7 @@ asm
  @TryLoopDone:
 end;
 {$else}
-var Current:longint;
+var Current:TPOCAInt32;
 begin
  repeat
   Current:=MRSWLock^.State and $fffffffe;
@@ -3181,21 +3182,21 @@ begin
 end;
 {$endif}
 
-function POCAMRSWLockReaders(MRSWLock:PPOCAMRSWLock):longint; {$ifdef cpu386}register;{$endif}
+function POCAMRSWLockReaders(MRSWLock:PPOCAMRSWLock):TPOCAInt32; {$ifdef cpu386}register;{$endif}
 begin
 {$ifdef cpu386}
- result:=longint(longword(MRSWLock^.State and $7fffffff));
+ result:=TPOCAInt32(TPOCAUInt32(MRSWLock^.State and $7fffffff));
 {$else}
- result:=longint(longword(MRSWLock^.State shr 1));
+ result:=TPOCAInt32(TPOCAUInt32(MRSWLock^.State shr 1));
 {$endif}
 end;
 
-function POCAMRSWLockWriters(MRSWLock:PPOCAMRSWLock):longint; {$ifdef cpu386}register;{$endif}
+function POCAMRSWLockWriters(MRSWLock:PPOCAMRSWLock):TPOCAInt32; {$ifdef cpu386}register;{$endif}
 begin
 {$ifdef cpu386}
- result:=longint(longword(MRSWLock^.State shr 31));
+ result:=TPOCAInt32(TPOCAUInt32(MRSWLock^.State shr 31));
 {$else}
- result:=longint(longword(MRSWLock^.State and 1));
+ result:=TPOCAInt32(TPOCAUInt32(MRSWLock^.State and 1));
 {$endif}
 end;
 
@@ -3224,22 +3225,22 @@ begin
  end;
 end;
 
-procedure TPOCAPointerList.SetCapacity(NewCapacity:longint);
+procedure TPOCAPointerList.SetCapacity(NewCapacity:TPOCAInt32);
 begin
  if (NewCapacity>=0) and (NewCapacity<MaxListSize) then begin
-  ReallocMem(List,NewCapacity*sizeof(pointer));
+  ReallocMem(List,NewCapacity*sizeof(TPOCAPointer));
   ListCapacity:=NewCapacity;
   if ListCapacity<ListCount then begin
    ListCount:=ListCapacity;
   end;
   if ListCapacity<NewCapacity then begin
-   FillChar(List^[ListCapacity],(NewCapacity-ListCapacity)*sizeof(pointer),#0);
+   FillChar(List^[ListCapacity],(NewCapacity-ListCapacity)*sizeof(TPOCAPointer),#0);
   end;
  end;
 end;
 
-procedure TPOCAPointerList.SetCount(NewCount:longint);
-var NewCapacity:longint;
+procedure TPOCAPointerList.SetCount(NewCount:TPOCAInt32);
+var NewCapacity:TPOCAInt32;
 begin
  if NewCount<ListCount then begin
   if NewCount<1024 then begin
@@ -3248,7 +3249,7 @@ begin
    NewCapacity:=POCARoundUpToPowerOfTwo(NewCount);
   end;
   if NewCapacity<>ListCapacity then begin
-   ReallocMem(List,NewCapacity*sizeof(pointer));
+   ReallocMem(List,NewCapacity*sizeof(TPOCAPointer));
    ListCapacity:=NewCapacity;
   end;
  end else if NewCount>ListCount then begin
@@ -3258,11 +3259,11 @@ begin
    end else begin
     NewCapacity:=POCARoundUpToPowerOfTwo(NewCount);
    end;
-   ReallocMem(List,NewCapacity*sizeof(pointer));
+   ReallocMem(List,NewCapacity*sizeof(TPOCAPointer));
    if ListCount<NewCapacity then begin
-    FillChar(List^[ListCount],(NewCapacity-ListCount)*sizeof(pointer),#0);
+    FillChar(List^[ListCount],(NewCapacity-ListCount)*sizeof(TPOCAPointer),#0);
    end else if ListCapacity<NewCapacity then begin
-    FillChar(List^[ListCapacity],(NewCapacity-ListCapacity)*sizeof(pointer),#0);
+    FillChar(List^[ListCapacity],(NewCapacity-ListCapacity)*sizeof(TPOCAPointer),#0);
    end;
    ListCapacity:=NewCapacity;
   end;
@@ -3270,15 +3271,15 @@ begin
  ListCount:=NewCount;
 end;
 
-function TPOCAPointerList.Add(Item:pointer):longint;
+function TPOCAPointerList.Add(Item:TPOCAPointer):TPOCAInt32;
 begin
  result:=ListCount;
  SetCount(result+1);
  List^[result]:=Item;
 end;
 
-procedure TPOCAPointerList.Insert(Index:longint;Item:pointer);
-var i:longint;
+procedure TPOCAPointerList.Insert(Index:TPOCAInt32;Item:TPOCAPointer);
+var i:TPOCAInt32;
 begin
  if (Index>=0) and (Index<ListCount) then begin
   SetCount(ListCount+1);
@@ -3294,8 +3295,8 @@ begin
  end;
 end;
 
-function TPOCAPointerList.Find(Item:pointer):longint;
-var i:longint;
+function TPOCAPointerList.Find(Item:TPOCAPointer):TPOCAInt32;
+var i:TPOCAInt32;
 begin
  for i:=0 to ListCount-1 do begin
   if List^[i]=Item then begin
@@ -3306,13 +3307,13 @@ begin
  result:=-1;
 end;
 
-function TPOCAPointerList.IndexOf(Item:pointer):longint;
+function TPOCAPointerList.IndexOf(Item:TPOCAPointer):TPOCAInt32;
 begin
  result:=Find(Item);
 end;
 
-procedure TPOCAPointerList.Delete(Index:longint);
-var i,j,k:longint;
+procedure TPOCAPointerList.Delete(Index:TPOCAInt32);
+var i,j,k:TPOCAInt32;
 begin
  if (Index>=0) and (Index<ListCount) then begin
   k:=ListCount-1;
@@ -3325,7 +3326,7 @@ begin
  end;
 end;
 
-function TPOCAPointerList.Remove(Item:pointer):longint;
+function TPOCAPointerList.Remove(Item:TPOCAPointer):TPOCAInt32;
 begin
  result:=Find(Item);
  if result>=0 then begin
@@ -3333,8 +3334,8 @@ begin
  end;
 end;
 
-procedure TPOCAPointerList.Exchange(Index1,Index2:longint);
-var TempPointer:pointer;
+procedure TPOCAPointerList.Exchange(Index1,Index2:TPOCAInt32);
+var TempPointer:TPOCAPointer;
 begin
  if (Index1>=0) and (Index1<ListCount) and (Index2>=0) and (Index2<ListCount) then begin
   TempPointer:=List^[Index1];
@@ -3343,7 +3344,7 @@ begin
  end;
 end;
 
-function TPOCAPointerList.GetItem(Index:longint):pointer;
+function TPOCAPointerList.GetItem(Index:TPOCAInt32):TPOCAPointer;
 begin
  if (Index>=0) and (Index<ListCount) then begin
   result:=List^[Index];
@@ -3352,14 +3353,14 @@ begin
  end;
 end;
 
-procedure TPOCAPointerList.SetItem(Index:longint;Value:pointer);
+procedure TPOCAPointerList.SetItem(Index:TPOCAInt32;Value:TPOCAPointer);
 begin
  if (Index>=0) and (Index<ListCount) then begin
   List^[Index]:=Value;
  end;
 end;
 
-function POCARegExpCompile(Context:PPOCAContext;const s:TPOCARawByteString;IsUTF8:longint):TFLRE;
+function POCARegExpCompile(Context:PPOCAContext;const s:TPOCARawByteString;IsUTF8:TPOCAInt32):TFLRE;
 begin
  result:=nil;
  try
@@ -3380,12 +3381,12 @@ end;
 
 {$ifndef UseThreadsForCoroutines}
 {$ifdef windows}
-function CreateFiber(dwStackSize:longword;lpStartAddress,lpParameter:pointer):pointer; stdcall; external 'kernel32.dll' name 'CreateFiber';
-procedure DeleteFiber(lpFiber:pointer); stdcall; external 'kernel32.dll' name 'DeleteFiber';
-procedure SwitchToFiber(lpFiber:pointer); stdcall; external 'kernel32.dll' name 'SwitchToFiber';
-function ConvertThreadToFiber(lpParameter:pointer):pointer; stdcall; external 'kernel32.dll' name 'ConvertThreadToFiber';
+function CreateFiber(dwStackSize:TPOCAUInt32;lpStartAddress,lpParameter:TPOCAPointer):TPOCAPointer; stdcall; external 'kernel32.dll' name 'CreateFiber';
+procedure DeleteFiber(lpFiber:TPOCAPointer); stdcall; external 'kernel32.dll' name 'DeleteFiber';
+procedure SwitchToFiber(lpFiber:TPOCAPointer); stdcall; external 'kernel32.dll' name 'SwitchToFiber';
+function ConvertThreadToFiber(lpParameter:TPOCAPointer):TPOCAPointer; stdcall; external 'kernel32.dll' name 'ConvertThreadToFiber';
 
-function GetCurrentFiber:pointer; assembler; register;
+function GetCurrentFiber:TPOCAPointer; assembler; register;
 asm
 {$ifdef cpu386}
  mov eax,dword ptr fs:[$10] // $1016
@@ -3396,7 +3397,7 @@ asm
 {$endif}
 end;
 
-function GetFiberData:pointer; assembler; register;
+function GetFiberData:TPOCAPointer; assembler; register;
 asm
 {$ifdef cpu386}
  mov eax,dword ptr fs:[$10] // $1016
@@ -3412,18 +3413,18 @@ end;
 {$ifdef cpu386}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
      TPOCACoroutineContextJmpBuf=record
-      RegEBX,RegESI,RegEDI,RegESP,RegEBP,RegEIP:longword;
-      FPUCW:word;
+      RegEBX,RegESI,RegEDI,RegESP,RegEBP,RegEIP:TPOCAUInt32;
+      FPUCW:TPOCAUInt16;
      end;
 
      PPOCACoroutineContext=^TPOCACoroutineContext;
      TPOCACoroutineContext=record
       JmpBuf:TPOCACoroutineContextJmpBuf;
-      Stack:pointer;
-      StackSize:longint;
+      Stack:TPOCAPointer;
+      StackSize:TPOCAInt32;
      end;
 
-function POCACoroutineContextSetJmp(JmpBuf:PPOCACoroutineContextJmpBuf):longint; assembler; register; {$ifdef fpc}nostackframe;{$endif}
+function POCACoroutineContextSetJmp(JmpBuf:PPOCACoroutineContextJmpBuf):TPOCAInt32; assembler; register; {$ifdef fpc}nostackframe;{$endif}
 asm
  fstcw word ptr [eax+TPOCACoroutineContextJmpBuf.FPUCW]
  mov dword ptr [eax+TPOCACoroutineContextJmpBuf.RegEBX],ebx
@@ -3437,7 +3438,7 @@ asm
  xor eax,eax
 end;
 
-procedure POCACoroutineContextLongJmp(JmpBuf:PPOCACoroutineContextJmpBuf;ResultValue:longint); assembler; register; {$ifdef fpc}nostackframe;{$endif}
+procedure POCACoroutineContextLongJmp(JmpBuf:PPOCACoroutineContextJmpBuf;ResultValue:TPOCAInt32); assembler; register; {$ifdef fpc}nostackframe;{$endif}
 asm
  xchg edx,eax
  fldcw word ptr [edx+TPOCACoroutineContextJmpBuf.FPUCW]
@@ -3449,7 +3450,7 @@ asm
  jmp dword ptr [edx+TPOCACoroutineContextJmpBuf.RegEIP]
 end;
 
-function POCACoroutineContextCreate(StackSize:longint;Entrypoint,Parameter:pointer):PPOCACoroutineContext;
+function POCACoroutineContextCreate(StackSize:TPOCAInt32;Entrypoint,Parameter:TPOCAPointer):PPOCACoroutineContext;
 begin
  New(result);
  FillChar(result^,sizeof(TPOCACoroutineContext),#0);
@@ -3458,10 +3459,10 @@ begin
   GetMem(result^.Stack,StackSize);
   FillChar(result^.Stack^,StackSize,#0);
   POCACoroutineContextSetJmp(@result^.JmpBuf);
-  result^.JmpBuf.RegESP:={$ifdef fpc}TPOCAPtrUInt{$else}longword{$endif}(result^.Stack)+longword(StackSize-longint(sizeof(pointer)*2));
-  pointer(pointer({$ifdef fpc}TPOCAPtrUInt{$else}longword{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}longword{$endif}(result^.JmpBuf.RegESP+sizeof(pointer))))^):=Parameter;
+  result^.JmpBuf.RegESP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(result^.Stack)+TPOCAUInt32(StackSize-TPOCAInt32(sizeof(TPOCAPointer)*2));
+  TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(result^.JmpBuf.RegESP+sizeof(TPOCAPointer))))^):=Parameter;
   result^.JmpBuf.RegEBP:=0;
-  result^.JmpBuf.RegEIP:={$ifdef fpc}TPOCAPtrUInt{$else}longword{$endif}(Entrypoint);
+  result^.JmpBuf.RegEIP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(Entrypoint);
  end;
 end;
 
@@ -3492,17 +3493,17 @@ end;
 {$ifdef cpuamd64}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
      TPOCACoroutineContextJmpBuf=record
-      RegRBX{$ifdef win64},RegRCX{$endif},RegRBP,RegR12,RegR13,RegR14,RegR15,RegRSP,RegRIP{$ifdef win64},RegRSI,RegRDI{$else},RegRDI{$endif}:UInt64;
+      RegRBX{$ifdef win64},RegRCX{$endif},RegRBP,RegR12,RegR13,RegR14,RegR15,RegRSP,RegRIP{$ifdef win64},RegRSI,RegRDI{$else},RegRDI{$endif}:TPOCAUInt64;
      end;
 
      PPOCACoroutineContext=^TPOCACoroutineContext;
      TPOCACoroutineContext=record
       JmpBuf:TPOCACoroutineContextJmpBuf;
-      Stack:pointer;
-      StackSize:longint;
+      Stack:TPOCAPointer;
+      StackSize:TPOCAInt32;
      end;
 
-function POCACoroutineContextSetJmp(JmpBuf:PPOCACoroutineContextJmpBuf):longint; assembler; register; {$ifdef fpc}nostackframe;{$endif}
+function POCACoroutineContextSetJmp(JmpBuf:PPOCACoroutineContextJmpBuf):TPOCAInt32; assembler; register; {$ifdef fpc}nostackframe;{$endif}
 asm
 {$ifdef win64}
  mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRBX],rbx
@@ -3535,7 +3536,7 @@ asm
 {$endif}
 end;
 
-procedure POCACoroutineContextLongJmp(JmpBuf:PPOCACoroutineContextJmpBuf;ResultValue:longint); assembler; register; {$ifdef fpc}nostackframe;{$endif}
+procedure POCACoroutineContextLongJmp(JmpBuf:PPOCACoroutineContextJmpBuf;ResultValue:TPOCAInt32); assembler; register; {$ifdef fpc}nostackframe;{$endif}
 asm
 {$ifdef win64}
  mov rbx,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRBX]
@@ -3574,7 +3575,7 @@ asm
 {$endif}
 end;
 
-function POCACoroutineContextCreate(StackSize:longint;Entrypoint,Parameter:pointer):PPOCACoroutineContext;
+function POCACoroutineContextCreate(StackSize:TPOCAInt32;Entrypoint,Parameter:TPOCAPointer):PPOCACoroutineContext;
 begin
  New(result);
  FillChar(result^,sizeof(TPOCACoroutineContext),#0);
@@ -3583,8 +3584,8 @@ begin
   GetMem(result^.Stack,StackSize);
   FillChar(result^.Stack^,StackSize,#0);
   POCACoroutineContextSetJmp(@result^.JmpBuf);
-  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}int64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}int64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}int64{$endif}(sizeof(pointer)*2));
-  pointer(pointer({$ifdef fpc}TPOCAPtrUInt{$else}longword{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}int64{$endif}(result^.JmpBuf.RegRSP+sizeof(pointer))))^):=Parameter;
+  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(sizeof(TPOCAPointer)*2));
+  TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;
 {$ifdef win64}
   result^.JmpBuf.RegRCX:={$ifdef fpc}TPOCAPtrUInt{$else}{$endif}(Parameter);
 {$else}
@@ -3648,9 +3649,9 @@ type PPOCACoroutineContext=^TPOCACoroutineContext;
      end;
 
 {$ifdef fpc}
-function POCACoroutineContextEntrypoint(CoroutineContext:Pointer):TPOCAPtrInt;
+function POCACoroutineContextEntrypoint(CoroutineContext:TPOCAPointer):TPOCAPtrInt;
 {$else}
-function POCACoroutineContextEntrypoint(CoroutineContext:Pointer):longword;
+function POCACoroutineContextEntrypoint(CoroutineContext:TPOCAPointer):TPOCAUInt32;
 {$endif}
 begin
  if assigned(CoroutineContext) then begin
@@ -3665,7 +3666,7 @@ begin
  end;
 end;
 
-function POCACoroutineContextCreate(StackSize:longint;Entrypoint:pointer;Coroutine:PPOCACoroutine):PPOCACoroutineContext;
+function POCACoroutineContextCreate(StackSize:TPOCAInt32;Entrypoint:TPOCAPointer;Coroutine:PPOCACoroutine):PPOCACoroutineContext;
 begin
  New(result);
  FillChar(result^,sizeof(TPOCACoroutineContext),#0);
@@ -3712,7 +3713,7 @@ begin
 end;
 {$endif}
 
-function POCACoroutineCreate(EntryPoint:pointer;StackSize:longint;Parameter:pointer):PPOCACoroutine;
+function POCACoroutineCreate(EntryPoint:TPOCAPointer;StackSize:TPOCAInt32;Parameter:TPOCAPointer):PPOCACoroutine;
 begin
  if StackSize=0 then begin
   StackSize:=65536;
@@ -3775,7 +3776,7 @@ end;
 
 procedure POCACoroutineResume(Coroutine:PPOCACoroutine);
 {$ifdef windows}
-var Current:pointer;
+var Current:TPOCAPointer;
 {$endif}
 begin
  if assigned(Coroutine) then begin
@@ -3805,7 +3806,7 @@ begin
 {$else}
 {$ifdef windows}
     Current:=GetCurrentFiber;
-    if (not assigned(Current)) or (Current=pointer(TPOCAPtrUInt($1e00))) then begin
+    if (not assigned(Current)) or (Current=TPOCAPointer(TPOCAPtrUInt($1e00))) then begin
      Coroutine^.Back:=ConvertThreadToFiber(nil);
     end else begin
      Coroutine^.Back:=Current;
@@ -3916,10 +3917,10 @@ begin
 end;
 
 procedure TPOCAStringTree.DumpTree;
-var Ident:longint;
+var Ident:TPOCAInt32;
  procedure DumpNode(Node:PPOCAStringTreeNode);
  var SubNode:PPOCAStringTreeNode;
-     IdentCounter,IdentOld:longint;
+     IdentCounter,IdentOld:TPOCAInt32;
  begin
   for IdentCounter:=1 to Ident do begin
    write(' ');
@@ -4024,7 +4025,7 @@ begin
 end;
 
 function TPOCAStringTree.Add(Content:TPOCARawByteString;Data:TPOCAStringTreeData;Replace:boolean=false):boolean;
-var StringLength,Position,PositionCounter:longint;
+var StringLength,Position,PositionCounter:TPOCAInt32;
     NewNode,LastNode,Node:PPOCAStringTreeNode;
     StringChar,NodeChar:ansichar;
 begin
@@ -4106,7 +4107,7 @@ begin
 end;
 
 function TPOCAStringTree.Delete(Content:TPOCARawByteString):boolean;
-var StringLength,Position:longint;
+var StringLength,Position:TPOCAInt32;
     Node:PPOCAStringTreeNode;
     StringChar,NodeChar:ansichar;
 begin
@@ -4140,7 +4141,7 @@ begin
 end;
 
 function TPOCAStringTree.Find(Content:TPOCARawByteString;var Data:TPOCAStringTreeData):boolean;
-var StringLength,Position:longint;
+var StringLength,Position:TPOCAInt32;
     Node:PPOCAStringTreeNode;
     StringChar,NodeChar:ansichar;
 begin
@@ -4173,8 +4174,8 @@ begin
  end;
 end;
 
-function TPOCAStringTree.FindEx(Content:TPOCARawByteString;var Data:TPOCAStringTreeData;var Len:longint):boolean;
-var StringLength,Position:longint;
+function TPOCAStringTree.FindEx(Content:TPOCARawByteString;var Data:TPOCAStringTreeData;var Len:TPOCAInt32):boolean;
+var StringLength,Position:TPOCAInt32;
     Node:PPOCAStringTreeNode;
     StringChar,NodeChar:ansichar;
 begin
@@ -4208,8 +4209,8 @@ begin
  end;
 end;
 
-constructor TPOCAStringHashMap.Create(AOptimize:longbool);
-var Hash:longword;
+constructor TPOCAStringHashMap.Create(AOptimize:TPOCABool32);
+var Hash:TPOCAUInt32;
 begin
  inherited Create;
  FillChar(HashBuckets,sizeof(TPOCAStringHashMapHashBuckets),#0);
@@ -4237,7 +4238,7 @@ begin
 end;
 
 procedure TPOCAStringHashMap.Clear;
-var Hash:longword;
+var Hash:TPOCAUInt32;
     Item,NextItem:PPOCAStringHashMapItem;
 begin
  Item:=First;
@@ -4264,7 +4265,7 @@ begin
 end;
 
 procedure TPOCAStringHashMap.GrowAndRehashIfNeeded;
-var Hash:longword;
+var Hash:TPOCAUInt32;
     Item:PPOCAStringHashMapItem;
 begin
  if (HashSize<POCAHashMapMaxSize) and (HashedItems>=(HashBucketsUsed*POCAHashMapItemsPerBucketsThreshold)) then begin
@@ -4314,7 +4315,7 @@ begin
 end;
 
 function TPOCAStringHashMap.GetKey(const Key:TPOCARawByteString):PPOCAStringHashMapItem;
-var Hash:longword;
+var Hash:TPOCAUInt32;
 begin
  if assigned(LastUsedItem) and (LastUsedItem^.Key=Key) then begin
   result:=LastUsedItem;
@@ -4346,7 +4347,7 @@ begin
 end;
 
 function TPOCAStringHashMap.NewKey(const Key:TPOCARawByteString;Force:boolean=false):PPOCAStringHashMapItem;
-var Hash:longword;
+var Hash:TPOCAUInt32;
 begin
  if Force then begin
   result:=nil;
@@ -4439,7 +4440,7 @@ begin
  end;
 end;
 
-function TPOCAStringHashMap.GetValue(const Key:TPOCARawByteString):int64;
+function TPOCAStringHashMap.GetValue(const Key:TPOCARawByteString):TPOCAInt64;
 var Item:PPOCAStringHashMapItem;
 begin
  Item:=GetKey(Key);
@@ -4450,7 +4451,7 @@ begin
  end;
 end;
 
-procedure TPOCAStringHashMap.SetValue(const Key:TPOCARawByteString;const Value:int64);
+procedure TPOCAStringHashMap.SetValue(const Key:TPOCARawByteString;const Value:TPOCAInt64);
 var Item:PPOCAStringHashMapItem;
 begin
  Item:=GetKey(Key);
@@ -4462,12 +4463,12 @@ begin
  end;
 end;
 
-function POCAGetValueType(const v:TPOCAValue):longint; {$ifdef caninline}inline;{$endif}
+function POCAGetValueType(const v:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
 {$ifdef cpu64}
 var p:PPOCAObject;
 begin
- if (UInt64(pointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask then begin
-  p:=pointer(TPOCAPtrUInt(v.Reference.Obj) and POCAValueReferenceMask);
+ if (TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask then begin
+  p:=TPOCAPointer(TPOCAPtrUInt(v.Reference.Obj) and POCAValueReferenceMask);
   if assigned(p) then begin
    result:=p^.Header.ValueType;
   end else begin
@@ -4491,15 +4492,15 @@ begin
 end;
 {$endif}
 
-function POCAGetValueReferencePointer(const v:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
+function POCAGetValueReferencePointer(const v:TPOCAValue):TPOCAPointer; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}pointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask){$else}v.Reference.Ptr{$endif};
+ result:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask){$else}v.Reference.Ptr{$endif};
 end;
 
-procedure POCASetValueReferencePointer(out v:TPOCAValue;const Ptr:pointer); {$ifdef caninline}inline;{$endif}
+procedure POCASetValueReferencePointer(out v:TPOCAValue;const Ptr:TPOCAPointer); {$ifdef caninline}inline;{$endif}
 begin
 {$ifdef cpu64}
- v.Reference.Ptr:=pointer(TPOCAPtrUInt((TPOCAPtrUInt(Ptr) and POCAValueReferenceMask) or POCAValueReferenceSignalMask));
+ v.Reference.Ptr:=TPOCAPointer(TPOCAPtrUInt((TPOCAPtrUInt(Ptr) and POCAValueReferenceMask) or POCAValueReferenceSignalMask));
 {$else}
  v.ReferenceTag:=POCAValueReferenceTag;
  v.Reference.Ptr:=Ptr;
@@ -4509,41 +4510,41 @@ end;
 procedure POCASetValueNumber(out v:TPOCAValue;const n:double); {$ifdef caninline}inline;{$endif}
 begin
 {$ifdef cpu64}
- UInt64(pointer(@v.Num)^):=UInt64(pointer(@n)^);
+ TPOCAUInt64(TPOCAPointer(@v.Num)^):=TPOCAUInt64(TPOCAPointer(@n)^);
 {$else}
 {v.ReferenceTag:=not POCAValueReferenceTag;
  v.Num:=n;(*{}
- int64(pointer(@v.Num)^):=int64(pointer(@n)^);(**)
+ TPOCAInt64(TPOCAPointer(@v.Num)^):=TPOCAInt64(TPOCAPointer(@n)^);(**)
 {$endif}
 end;
 
 function POCAIsValueReference(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}(UInt64(pointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask{$else}v.ReferenceTag=POCAValueReferenceTag{$endif};
+ result:={$ifdef cpu64}(TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask{$else}v.ReferenceTag=POCAValueReferenceTag{$endif};
 end;
 
 function POCAIsValueNumber(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}(UInt64(pointer(@v.Num)^) and POCAValueReferenceSignalMask)<>POCAValueReferenceSignalMask{$else}v.ReferenceTag<>POCAValueReferenceTag{$endif};
+ result:={$ifdef cpu64}(TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)<>POCAValueReferenceSignalMask{$else}v.ReferenceTag<>POCAValueReferenceTag{$endif};
 end;
 
 function POCAIsValueObject(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}((UInt64(pointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(pointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(v.Reference.Ptr){$endif};
+ result:={$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(v.Reference.Ptr){$endif};
 end;
 
 function POCAIsValueObjectAndGetReferencePointer(const v:TPOCAValue;var p):boolean;
 begin
- pointer(p):={$ifdef cpu64}pointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask){$else}v.Reference.Ptr{$endif};
- result:={$ifdef cpu64}((UInt64(pointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(pointer(p)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(pointer(p)){$endif};
+ TPOCAPointer(p):={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask){$else}v.Reference.Ptr{$endif};
+ result:={$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(p)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(TPOCAPointer(p)){$endif};
 end;
 
 function POCAIsValueNull(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}((UInt64(pointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and not assigned(pointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask)){$else}(v.ReferenceTag=POCAValueReferenceTag) and not assigned(v.Reference.Ptr){$endif};
+ result:={$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and not assigned(TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask)){$else}(v.ReferenceTag=POCAValueReferenceTag) and not assigned(v.Reference.Ptr){$endif};
 end;
 
-function POCAIsValueReferenceType(const v:TPOCAValue;t:longint):boolean; {$ifdef caninline}inline;{$endif}
+function POCAIsValueReferenceType(const v:TPOCAValue;t:TPOCAInt32):boolean; {$ifdef caninline}inline;{$endif}
 begin
  result:=POCAIsValueObject(v) and (PPOCAObject(POCAGetValueReferencePointer(v))^.Header.ValueType=t);
 end;
@@ -4584,7 +4585,7 @@ begin
  result:=(POCAIsValueObject(v) and (Ghost^.Header.ValueType=pvtGHOST)) and assigned(Ghost^.Hash) and assigned(Ghost^.Hash^.Events);
 end;
 
-function POCAGetValueHashType(const v:TPOCAValue):longint; {$ifdef caninline}inline;{$endif}
+function POCAGetValueHashType(const v:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
 var Hash:PPOCAHash;
 begin
  Hash:=PPOCAHash(POCAGetValueReferencePointer(v));
@@ -4634,7 +4635,7 @@ begin
  result:=(POCAIsValueReference(a) and POCAIsValueReference(b)) and (POCAGetValueReferencePointer(a)=POCAGetValueReferencePointer(b));
 end;
 
-function Hex2Byte(c:ansichar):byte;
+function Hex2Byte(c:ansichar):TPOCAUInt8;
 begin
  case c of
   '0'..'9':begin
@@ -4652,7 +4653,7 @@ begin
  end;
 end;
 
-function sar(Value,Shift:longint):longint;
+function sar(Value,Shift:TPOCAInt32):TPOCAInt32;
 {$ifdef HasSAR} inline;
 begin
 result:=SARLongint(Value,Shift);
@@ -4681,20 +4682,20 @@ begin
  result:=SARLongint(Value,Shift);
 {$else}
  Shift:=Shift and 31;
- result:=(longword(Value) shr Shift) or (longword(longint(longword(0-longword(longword(Value) shr 31)) and longword(0-longword(ord(Shift<>0) and 1)))) shl (32-Shift));
+ result:=(TPOCAUInt32(Value) shr Shift) or (TPOCAUInt32(TPOCAInt32(TPOCAUInt32(0-TPOCAUInt32(TPOCAUInt32(Value) shr 31)) and TPOCAUInt32(0-TPOCAUInt32(ord(Shift<>0) and 1)))) shl (32-Shift));
 {$endif}
 end;
 {$endif}
 {$endif}
 {$endif}
 
-function sar64(Value:int64;Shift:longint):int64; {$ifdef caninline}inline;{$endif}
+function sar64(Value:TPOCAInt64;Shift:TPOCAInt32):TPOCAInt64; {$ifdef caninline}inline;{$endif}
 begin
 {$ifdef HasSAR}
  result:=SARInt64(Value,Shift);
 {$else}
  Shift:=Shift and 63;
- result:=int64(UInt64(UInt64(UInt64(Value) shr Shift) or (UInt64(int64(UInt64(0-UInt64(UInt64(Value) shr 63)) and UInt64(int64(0-(ord(Shift<>0) and 1))))) shl (64-Shift))));
+ result:=TPOCAInt64(TPOCAUInt64(TPOCAUInt64(TPOCAUInt64(Value) shr Shift) or (TPOCAUInt64(TPOCAInt64(TPOCAUInt64(0-TPOCAUInt64(TPOCAUInt64(Value) shr 63)) and TPOCAUInt64(TPOCAInt64(0-(ord(Shift<>0) and 1))))) shl (64-Shift))));
 {$endif}
 end;
 
@@ -4706,7 +4707,7 @@ begin
  SourceColumn:=-1;
 end;
 
-constructor EPOCAError.Create(const ASourceFile,ASourceLine,ASourceColumn:longint;const AMessage:TPOCAUTF8String);
+constructor EPOCAError.Create(const ASourceFile,ASourceLine,ASourceColumn:TPOCAInt32;const AMessage:TPOCAUTF8String);
 begin
  inherited Create(String(AMessage));
  SourceFile:=ASourceFile;
@@ -4723,7 +4724,7 @@ begin
  Value:=AValue;
 end;
 
-constructor EPOCAError.Create(const ASourceFile,ASourceLine,ASourceColumn:longint;const AValue:TPOCAValue);
+constructor EPOCAError.Create(const ASourceFile,ASourceLine,ASourceColumn:TPOCAInt32;const AValue:TPOCAValue);
 begin
  inherited Create('');
  SourceFile:=ASourceFile;
@@ -4732,12 +4733,12 @@ begin
  Value:=AValue;
 end;
 
-function POCALockCreate:pointer;
+function POCALockCreate:TPOCAPointer;
 begin
  result:=TPasMPCriticalSection.Create;
 end;
 
-procedure POCALockDestroy(var Lock:pointer);
+procedure POCALockDestroy(var Lock:TPOCAPointer);
 begin
  if assigned(Lock) then begin
   TPasMPCriticalSection(Lock).Free;
@@ -4745,26 +4746,26 @@ begin
  end;
 end;
 
-procedure POCALockEnter(Lock:pointer);
+procedure POCALockEnter(Lock:TPOCAPointer);
 begin
  if assigned(Lock) then begin
   TPasMPCriticalSection(Lock).Acquire;
  end;
 end;
 
-procedure POCALockLeave(Lock:pointer);
+procedure POCALockLeave(Lock:TPOCAPointer);
 begin
  if assigned(Lock) then begin
   TPasMPCriticalSection(Lock).Release;
  end;
 end;
 
-function POCASemaphoreCreate:pointer;
+function POCASemaphoreCreate:TPOCAPointer;
 begin
  result:=TPasMPSemaphore.Create(0,$7fffffff);
 end;
 
-procedure POCASemaphoreDestroy(var Semaphore:pointer);
+procedure POCASemaphoreDestroy(var Semaphore:TPOCAPointer);
 begin
  if assigned(Semaphore) then begin
   TPasMPSemaphore(Semaphore).Free;
@@ -4772,14 +4773,14 @@ begin
  end;
 end;
 
-procedure POCASemaphoreDown(Semaphore:pointer);
+procedure POCASemaphoreDown(Semaphore:TPOCAPointer);
 begin
  if assigned(Semaphore) then begin
   TPasMPSemaphore(Semaphore).Acquire(1);
  end;
 end;
 
-procedure POCASemaphoreUp(Semaphore:pointer;Count:longint);
+procedure POCASemaphoreUp(Semaphore:TPOCAPointer;Count:TPOCAInt32);
 begin
  if assigned(Semaphore) then begin
   TPasMPSemaphore(Semaphore).Release(Count);
@@ -4789,7 +4790,7 @@ end;
 type PPOCAThreadData=^TPOCAThreadData;
      TPOCAThreadData=record
       Handle:{$ifdef fpc}TThreadID{$else}THandle{$endif};
-      StartSemaphore:pointer;
+      StartSemaphore:TPOCAPointer;
       Started:TPasMPBool32;
       Terminated:TPasMPBool32;
       ThreadID:{$ifdef fpc}TThreadID{$else}Cardinal{$endif};
@@ -4800,9 +4801,9 @@ type PPOCAThreadData=^TPOCAThreadData;
      end;
 
 {$ifdef fpc}
-function POCAThreadProc(ThreadData:Pointer):TPOCAPtrInt;
+function POCAThreadProc(ThreadData:TPOCAPointer):TPOCAPtrInt;
 {$else}
-function POCAThreadProc(ThreadData:Pointer):longword;
+function POCAThreadProc(ThreadData:TPOCAPointer):TPOCAUInt32;
 {$endif}
 begin
  result:=0;
@@ -4941,8 +4942,8 @@ begin
  end;
 end;
 
-procedure POCAPoolNewBlock(Pool:PPOCAPool;Size:longint); {$ifdef UseRegister}register;{$endif}
-var PoolBlockSize,GrayListSize,BlockSize,i:longint;
+procedure POCAPoolNewBlock(Pool:PPOCAPool;Size:TPOCAInt32); {$ifdef UseRegister}register;{$endif}
+var PoolBlockSize,GrayListSize,BlockSize,i:TPOCAInt32;
     Block:PPOCAPoolBlock;
     Obj:PPOCAObject;
 begin
@@ -4959,7 +4960,7 @@ begin
    BlockSize:=PoolBlockSize+GrayListSize+(Size*Pool^.ElementSize);
    GetMemAligned(Block,BlockSize,16);
    FillChar(Block^,BlockSize,#0);
-   Block^.GrayList:=pointer(TPOCAPtrUInt(TPOCAPtrUInt(Block)+TPOCAPtrUInt(PoolBlockSize)));
+   Block^.GrayList:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(Block)+TPOCAPtrUInt(PoolBlockSize)));
    POCAGarbageCollectorLinkedListReset(Block^.GrayList);
 {$ifdef POCAGarbageCollectorPoolBlockReferenceCounting}
    Block^.ReferenceCounter:=0;
@@ -4967,7 +4968,7 @@ begin
 {$ifdef POCAGarbageCollectorPoolBlockInstance}
    Block^.Instance:=Pool^.Instance;
 {$endif}
-   Block^.Data:=pointer(@PAnsiChar(Block)[PoolBlockSize+GrayListSize]);
+   Block^.Data:=TPOCAPointer(@PAnsiChar(Block)[PoolBlockSize+GrayListSize]);
    Block^.Size:=Size;
    Block^.Spin:=0;
    Block^.Next:=nil;
@@ -4991,7 +4992,7 @@ begin
   end;
   begin
    for i:=0 to Size-1 do begin
-    Obj:=PPOCAObject(pointer(@pansichar(Block^.Data)[i*Pool^.ElementSize]));
+    Obj:=PPOCAObject(TPOCAPointer(@pansichar(Block^.Data)[i*Pool^.ElementSize]));
     Obj^.Header.ValueType:=Pool^.ValueType;
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
     Obj^.Header.Instance:=Pool^.Instance;
@@ -5011,12 +5012,12 @@ end;
 procedure POCAPoolCleanElement(Pool:PPOCAPool;Obj:PPOCAObject); {$ifdef UseRegister}register;{$endif} forward;
 
 procedure POCAPoolFreeBlock(Pool:PPOCAPool;Block:PPOCAPoolBlock); {$ifdef UseRegister}register;{$endif}
-var Element,OtherElement:longint;
+var Element,OtherElement:TPOCAInt32;
     Obj,OtherObj:PPOCAObject;
 begin
  POCAGarbageCollectorLinkedListMove(Block^.GrayList,Pool^.Instance.Globals.GarbageCollector.GrayList);
  for Element:=0 to Block^.Size-1 do begin
-  Obj:=PPOCAObject(pointer(@pansichar(Block^.Data)[Element*Pool^.ElementSize]));
+  Obj:=PPOCAObject(TPOCAPointer(@pansichar(Block^.Data)[Element*Pool^.ElementSize]));
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
   Obj^.Header.Instance:=Pool^.Instance;
 {$endif}
@@ -5058,25 +5059,25 @@ begin
  if assigned(Obj) then begin
   case Pool^.ValueType of
    pvtSTRING:begin
-    POCAFinalizeString(pointer(Obj));
+    POCAFinalizeString(TPOCAPointer(Obj));
    end;
    pvtARRAY:begin
-    POCAFinalizeArray(pointer(Obj));
+    POCAFinalizeArray(TPOCAPointer(Obj));
    end;
    pvtHASH:begin
-    POCAFinalizeHash(pointer(Obj));
+    POCAFinalizeHash(TPOCAPointer(Obj));
    end;
    pvtCODE:begin
-    POCACodeGCClean(pointer(Obj));
+    POCACodeGCClean(TPOCAPointer(Obj));
    end;
    pvtFUNCTION:begin
-    POCAFuncGCClean(pointer(Obj));
+    POCAFuncGCClean(TPOCAPointer(Obj));
    end;
    pvtNATIVECODE:begin
-    POCANativeCodeGCClean(pointer(Obj));
+    POCANativeCodeGCClean(TPOCAPointer(Obj));
    end;
    pvtGHOST:begin
-    POCAGhostGCClean(pointer(Obj));
+    POCAGhostGCClean(TPOCAPointer(Obj));
    end;
   end;
   if assigned(Obj^.Header.GarbageCollector.LinkedList.Previous) then begin
@@ -5102,7 +5103,7 @@ begin
  end;
 end;
 
-procedure POCAPoolInit(Instance:PPOCAInstance;Pool:PPOCAPool;ValueType:longint); {$ifdef UseRegister}register;{$endif}
+procedure POCAPoolInit(Instance:PPOCAInstance;Pool:PPOCAPool;ValueType:TPOCAInt32); {$ifdef UseRegister}register;{$endif}
 begin
  FillChar(Pool^,sizeof(TPOCAPool),#0);
  Pool^.Instance:=Instance;
@@ -5126,7 +5127,7 @@ end;
 procedure POCAPoolDone(Pool:PPOCAPool); {$ifdef UseRegister}register;{$endif}
 var Instance:PPOCAInstance;
     CurrentBlock,NextBlock:PPOCAPoolBlock;
-    Element:longint;
+    Element:TPOCAInt32;
     Obj:PPOCAObject;
 begin
  Instance:=Pool^.Instance;
@@ -5137,7 +5138,7 @@ begin
    NextBlock:=CurrentBlock^.Next;
    if assigned(CurrentBlock^.Data) then begin
     for Element:=0 to CurrentBlock^.Size-1 do begin
-     Obj:=PPOCAObject(pointer(@pansichar(CurrentBlock^.Data)[Element*Pool^.ElementSize]));
+     Obj:=PPOCAObject(TPOCAPointer(@pansichar(CurrentBlock^.Data)[Element*Pool^.ElementSize]));
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
      Obj^.Header.Instance:=Instance;
 {$endif}
@@ -5159,35 +5160,35 @@ begin
 end;
 
 procedure POCAFreeDead(Instance:PPOCAInstance); {$ifdef UseRegister}register;{$endif}
-var i:longint;
-    p:pointer;
+var i:TPOCAInt32;
+    p:TPOCAPointer;
 begin
  for i:=0 to Instance^.Globals.DeadCount-1 do begin
-  p:=PPointers(Instance^.Globals.DeadBlocks)^[i];
+  p:=PPOCAPointerArray(Instance^.Globals.DeadBlocks)^[i];
   if assigned(p) then begin
-   PPointers(Instance^.Globals.DeadBlocks)^[i]:=nil;
+   PPOCAPointerArray(Instance^.Globals.DeadBlocks)^[i]:=nil;
    FreeMem(p);
   end;
  end;
  Instance^.Globals.DeadCount:=0;
 end;
 
-function POCAGarbageCollectorFree(Instance:PPOCAInstance):longint; {$ifdef UseRegister}register;{$endif}
+function POCAGarbageCollectorFree(Instance:PPOCAInstance):TPOCAInt32; {$ifdef UseRegister}register;{$endif}
 var GarbageCollector:PPOCAGarbageCollector;
 begin
  GarbageCollector:=@Instance^.Globals.GarbageCollector;
  result:=GarbageCollector^.FreeCount;
 end;
 
-function POCAGarbageCollectorUsed(Instance:PPOCAInstance):longint; {$ifdef UseRegister}register;{$endif}
+function POCAGarbageCollectorUsed(Instance:PPOCAInstance):TPOCAInt32; {$ifdef UseRegister}register;{$endif}
 var GarbageCollector:PPOCAGarbageCollector;
 begin
  GarbageCollector:=@Instance^.Globals.GarbageCollector;
  result:=GarbageCollector^.Allocated-GarbageCollector^.FreeCount;
 end;
 
-function POCAMarkValue(Instance:PPOCAInstance;const Value:TPOCAValue):longbool;
- function MarkObjectAsGray(Obj:PPOCAObject):longbool;
+function POCAMarkValue(Instance:PPOCAInstance;const Value:TPOCAValue):TPOCABool32;
+ function MarkObjectAsGray(Obj:PPOCAObject):TPOCABool32;
  var GarbageCollector:PPOCAGarbageCollector;
  begin
   GarbageCollector:=@Instance^.Globals.GarbageCollector;
@@ -5210,8 +5211,8 @@ begin
  end;
 end;
 
-function POCACoroutineGhostMarkEx(const Data:pointer):longbool; forward;
-function POCAThreadGhostMarkEx(const Data:pointer):longbool; forward;
+function POCACoroutineGhostMarkEx(const Data:TPOCAPointer):TPOCABool32; forward;
+function POCAThreadGhostMarkEx(const Data:TPOCAPointer):TPOCABool32; forward;
 
 function POCAGarbageCollectorCollectCycle(Instance:PPOCAInstance):boolean; {$ifdef UseRegister}register;{$endif}
 var GarbageCollector:PPOCAGarbageCollector;
@@ -5238,7 +5239,7 @@ var GarbageCollector:PPOCAGarbageCollector;
  end;
  function MarkArrayAsGray(Obj:PPOCAArray):boolean;
  var ArrayRecord:PPOCAArrayRecord;
-     i:longint;
+     i:TPOCAInt32;
  begin
   result:=false;
   ArrayRecord:=Obj^.ArrayRecord;
@@ -5253,8 +5254,8 @@ var GarbageCollector:PPOCAGarbageCollector;
  function MarkHashAsGray(Obj:PPOCAHash):boolean;
  var HashRec:PPOCAHashRecord;
      HashEntity:PPOCAHashEntity;
-     i:longint;
-     j:longint;
+     i:TPOCAInt32;
+     j:TPOCAInt32;
      mo:TPOCAMetaOp;
  begin
   result:=false;
@@ -5281,23 +5282,23 @@ var GarbageCollector:PPOCAGarbageCollector;
    end;
   end;
   if assigned(Obj^.Prototype) then begin
-   if MarkObjectAsGray(pointer(Obj^.Prototype)) then begin
+   if MarkObjectAsGray(TPOCAPointer(Obj^.Prototype)) then begin
     result:=true;
    end;
   end;
   if assigned(Obj^.Events) then begin
-   if MarkObjectAsGray(pointer(Obj^.Events)) then begin
+   if MarkObjectAsGray(TPOCAPointer(Obj^.Events)) then begin
     result:=true;
    end;
   end;
   if assigned(Obj^.Ghost) then begin
-   if MarkObjectAsGray(pointer(Obj^.Ghost)) then begin
+   if MarkObjectAsGray(TPOCAPointer(Obj^.Ghost)) then begin
     result:=true;
    end;
   end;
  end;
  function MarkCodeAsGray(Obj:PPOCACode):boolean;
- var i:longint;
+ var i:TPOCAInt32;
  begin
   result:=false;
   for i:=0 to Obj^.ConstantCount-1 do begin
@@ -5336,7 +5337,7 @@ var GarbageCollector:PPOCAGarbageCollector;
    end;
   end;
   if assigned(Obj^.Hash) then begin
-   if MarkObjectAsGray(pointer(Obj^.Hash)) then begin
+   if MarkObjectAsGray(TPOCAPointer(Obj^.Hash)) then begin
     result:=true;
    end;
   end;
@@ -5344,35 +5345,35 @@ var GarbageCollector:PPOCAGarbageCollector;
  procedure TryMarkGhostAsGray(Obj:PPOCAObject);
  begin
   if Obj^.Header.ValueType=pvtGHOST then begin
-   MarkGhostAsGray(pointer(Obj));
+   MarkGhostAsGray(TPOCAPointer(Obj));
   end;
  end;
  function MarkObjectContent(Obj:PPOCAObject):boolean;
  begin
   case Obj^.Header.ValueType of
    pvtREFERENCE:begin
-    result:=MarkObjectAsGray(pointer(Obj));
+    result:=MarkObjectAsGray(TPOCAPointer(Obj));
    end;
    pvtSTRING:begin
-    result:=MarkObjectAsGray(pointer(Obj));
+    result:=MarkObjectAsGray(TPOCAPointer(Obj));
    end;
    pvtARRAY:begin
-    result:=MarkArrayAsGray(pointer(Obj));
+    result:=MarkArrayAsGray(TPOCAPointer(Obj));
    end;
    pvtHASH:begin
-    result:=MarkHashAsGray(pointer(Obj));
+    result:=MarkHashAsGray(TPOCAPointer(Obj));
    end;
    pvtCODE:begin
-    result:=MarkCodeAsGray(pointer(Obj));
+    result:=MarkCodeAsGray(TPOCAPointer(Obj));
    end;
    pvtFUNCTION:begin
-    result:=MarkFunctionAsGray(pointer(Obj));
+    result:=MarkFunctionAsGray(TPOCAPointer(Obj));
    end;
    pvtNATIVECODE:begin
-    result:=MarkObjectAsGray(pointer(Obj));
+    result:=MarkObjectAsGray(TPOCAPointer(Obj));
    end;
    pvtGHOST:begin
-    result:=MarkGhostAsGray(pointer(Obj));
+    result:=MarkGhostAsGray(TPOCAPointer(Obj));
    end;
    else begin
     result:=false;
@@ -5380,7 +5381,7 @@ var GarbageCollector:PPOCAGarbageCollector;
   end;
  end;
  procedure MarkObject(Obj:PPOCAObject);
- var Temp:longword;
+ var Temp:TPOCAUInt32;
  begin
   case Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT or pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT) of
    pgcbWASPERSISTENT:begin
@@ -5415,7 +5416,7 @@ var GarbageCollector:PPOCAGarbageCollector;
   end;
  end;
  procedure MarkTemporarySavedObjects(Context:PPOCAContext);
- var i:longint;
+ var i:TPOCAInt32;
  begin
   for i:=0 to Context^.TemporarySavedObjectCount-1 do begin
    MarkObjectAsGray(Context^.TemporarySavedObjects^[i]);
@@ -5470,7 +5471,7 @@ var GarbageCollector:PPOCAGarbageCollector;
  function MarkContexts:boolean;
  var Context:PPOCAContext;
      Frame:PPOCAFrame;
-     i,j:longint;
+     i,j:TPOCAInt32;
  begin
   Context:=Instance^.Globals.FirstContext;
   while assigned(Context) do begin
@@ -5499,7 +5500,7 @@ var GarbageCollector:PPOCAGarbageCollector;
   result:=GarbageCollector^.GrayList.Next<>GarbageCollector^.GrayList;
  end;
  function MarkPoolGrays:boolean;
- var ValueType:longint;
+ var ValueType:TPOCAInt32;
      Pool:PPOCAPool;
      PoolBlock:PPOCAPoolBlock;
  begin
@@ -5540,9 +5541,9 @@ var GarbageCollector:PPOCAGarbageCollector;
  begin
   for Ghost:=false to true do begin
    List:=GarbageCollector^.PersistentRootLists[Ghost];
-   Obj:=pointer(List^.Next);      
-   while pointer(Obj)<>List do begin
-    NextObj:=pointer(Obj^.Header.GarbageCollector.LinkedList.Next);
+   Obj:=TPOCAPointer(List^.Next);      
+   while TPOCAPointer(Obj)<>List do begin
+    NextObj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
     if not MarkObjectContent(Obj) then begin
      // No more references to ephemeral generation objects, so move from the
      // persistent root list to the persistent list
@@ -5556,7 +5557,7 @@ var GarbageCollector:PPOCAGarbageCollector;
  end;
  procedure MarkProtected;
  var Obj:PPOCAObject;
-     i:longint;
+     i:TPOCAInt32;
  begin
   for i:=0 to Instance^.Globals.GarbageCollector.ProtectList.Count-1 do begin
    Obj:=Instance^.Globals.GarbageCollector.ProtectList[i];
@@ -5574,19 +5575,19 @@ var GarbageCollector:PPOCAGarbageCollector;
    POCAGarbageCollectorLinkedListMove(GarbageCollector^.BlackLists[Ghost],GarbageCollector^.WhiteLists[Ghost]);
    POCAGarbageCollectorLinkedListMove(GarbageCollector^.PersistentLists[Ghost],GarbageCollector^.WhiteLists[Ghost]);
    POCAGarbageCollectorLinkedListMove(GarbageCollector^.PersistentRootLists[Ghost],GarbageCollector^.WhiteLists[Ghost]);
-   Obj:=pointer(GarbageCollector^.WhiteLists[Ghost].Next);
-   while pointer(Obj)<>GarbageCollector^.WhiteLists[Ghost] do begin
+   Obj:=TPOCAPointer(GarbageCollector^.WhiteLists[Ghost].Next);
+   while TPOCAPointer(Obj)<>GarbageCollector^.WhiteLists[Ghost] do begin
     Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST);
-    Obj:=pointer(Obj^.Header.GarbageCollector.LinkedList.Next);
+    Obj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
    end;
   end;
-  Obj:=pointer(GarbageCollector^.GrayList.Next);
-  while pointer(Obj)<>GarbageCollector^.GrayList do begin
+  Obj:=TPOCAPointer(GarbageCollector^.GrayList.Next);
+  while TPOCAPointer(Obj)<>GarbageCollector^.GrayList do begin
    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbGRAY;
-   Obj:=pointer(Obj^.Header.GarbageCollector.LinkedList.Next);
+   Obj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
   end;
  end;
-var i:longint;
+var i:TPOCAInt32;
 //  WhiteGhostList:PPOCAGarbageCollectorLinkedList;
     Obj:PPOCAObject;
     Ghost:boolean;
@@ -5664,7 +5665,7 @@ begin
       end;
       while (i<>0) and POCAGarbageCollectorLinkedListPop(GarbageCollector^.GrayList,Obj) do begin
        dec(i);
-       MarkObject(pointer(Obj));
+       MarkObject(TPOCAPointer(Obj));
       end;
       if GarbageCollector^.GrayList.Next=GarbageCollector^.GrayList then begin
        if GarbageCollector^.State=pgcsMARKWHITEGHOSTGREYS then begin
@@ -5831,7 +5832,7 @@ end;
 
 procedure POCAGarbageCollectorCollectAll(Instance:PPOCAInstance); {$ifdef UseRegister}register;{$endif}
 var GarbageCollector:PPOCAGarbageCollector;
-    i:longint;
+    i:TPOCAInt32;
 begin
  GarbageCollector:=@Instance^.Globals.GarbageCollector;
  if GarbageCollector^.State<>pgcsINIT then begin
@@ -5853,15 +5854,15 @@ begin
     Instance^.Globals.DeadSize:=256;
    end;
    FreeMem(Instance^.Globals.DeadBlocks);
-   GetMem(Instance^.Globals.DeadBlocks,Instance^.Globals.DeadSize*sizeof(pointer));
-   FillChar(Instance^.Globals.DeadBlocks^,Instance^.Globals.DeadSize*sizeof(pointer),#0);
+   GetMem(Instance^.Globals.DeadBlocks,Instance^.Globals.DeadSize*sizeof(TPOCAPointer));
+   FillChar(Instance^.Globals.DeadBlocks^,Instance^.Globals.DeadSize*sizeof(TPOCAPointer),#0);
   end;
  end;
 end;
 
 procedure POCAGarbageCollectorBottleneck(Instance:PPOCAInstance); {$ifdef UseRegister}register;{$endif}
 begin
- TPasMPInterlocked.Exchange(longint(Instance^.Globals.Bottleneck),longint(longbool(true)));
+ TPasMPInterlocked.Exchange(TPOCAInt32(Instance^.Globals.Bottleneck),TPOCAInt32(TPOCABool32(true)));
  while Instance^.Globals.Bottleneck and (Instance^.Globals.WaitCount<(Instance^.Globals.ThreadCount-1)) do begin
   TPasMPInterlocked.Increment(Instance^.Globals.WaitCount);
   POCALockLeave(Instance^.Globals.Lock);
@@ -5885,7 +5886,7 @@ begin
   if Instance^.Globals.WaitCount<>0 then begin
    POCASemaphoreUp(Instance^.Globals.Semaphore,Instance^.Globals.WaitCount);
   end;
-  TPasMPInterlocked.Exchange(longint(Instance^.Globals.Bottleneck),longint(longbool(false)));
+  TPasMPInterlocked.Exchange(TPOCAInt32(Instance^.Globals.Bottleneck),TPOCAInt32(TPOCABool32(false)));
  end;
 end;
 
@@ -5943,8 +5944,8 @@ begin
  end;
 end;
 
-procedure POCAGarbageCollectorSwapFree(Instance:PPOCAInstance;Target:PPointer;Value:pointer); {$ifdef UseRegister}register;{$endif}
-var Old:pointer;
+procedure POCAGarbageCollectorSwapFree(Instance:PPOCAInstance;Target:PPOCAPointer;Value:TPOCAPointer); {$ifdef UseRegister}register;{$endif}
+var Old:TPOCAPointer;
 begin
  POCALockEnter(Instance^.Globals.Lock);
  try
@@ -5958,7 +5959,7 @@ begin
     while Instance^.Globals.DeadCount>=Instance^.Globals.DeadSize do begin
      POCAGarbageCollectorBottleneck(Instance);
     end;
-    PPointers(Instance^.Globals.DeadBlocks)^[Instance^.Globals.DeadCount]:=Old;
+    PPOCAPointerArray(Instance^.Globals.DeadBlocks)^[Instance^.Globals.DeadCount]:=Old;
     inc(Instance^.Globals.DeadCount);
    end;
   end;
@@ -6264,7 +6265,7 @@ begin
  end;
 end;
 
-function POCAObject(Instance:PPOCAInstance;ValueType:longint;Obj:PPOCAObject):TPOCAValue;
+function POCAObject(Instance:PPOCAInstance;ValueType:TPOCAInt32;Obj:PPOCAObject):TPOCAValue;
 begin
  POCASetValueReferencePointer(result,Obj);
  if assigned(Obj) then begin
@@ -6495,7 +6496,7 @@ begin
  end;
 end;
 
-function POCAGetStringUTF8(Context:PPOCAContext;const Value:TPOCAValue):longint;
+function POCAGetStringUTF8(Context:PPOCAContext;const Value:TPOCAValue):TPOCAInt32;
 var s:TPOCARawByteString;
 begin
  case POCAGetValueType(Value) of
@@ -6516,7 +6517,7 @@ begin
  end;
 end;
 
-function POCAGetStringUTF8Length(Context:PPOCAContext;const Value:TPOCAValue):longint;
+function POCAGetStringUTF8Length(Context:PPOCAContext;const Value:TPOCAValue):TPOCAInt32;
 var s:TPOCARawByteString;
 begin
  case POCAGetValueType(Value) of
@@ -6547,10 +6548,10 @@ end;
 
 procedure POCAReleaseContextObjectPools(Instance:PPOCAInstance); forward;
 
-procedure POCAGarbageCollectorContextAllocate(Context:PPOCAContext;ValueType:longint);
+procedure POCAGarbageCollectorContextAllocate(Context:PPOCAContext;ValueType:TPOCAInt32);
 var ContextObjectPool:PPOCAContextObjectPool;
     Pool:PPOCAPool;
-    Count:longint;
+    Count:TPOCAInt32;
 begin
  POCALockEnter(Context^.Instance^.Globals.Lock);
  try
@@ -6587,10 +6588,10 @@ begin
  end;
 end;
 
-function POCANew(Context:PPOCAContext;ValueType:longint;var Obj:PPOCAObject):TPOCAValue;
+function POCANew(Context:PPOCAContext;ValueType:TPOCAInt32;var Obj:PPOCAObject):TPOCAValue;
 var GarbageCollector:PPOCAGarbageCollector;
     ContextObjectPool:PPOCAContextObjectPool;
-    Count:longint;
+    Count:TPOCAInt32;
 begin
  GarbageCollector:=@Context^.Instance^.Globals.GarbageCollector;
  if GarbageCollector^.IntervalFactor>0 then begin
@@ -6633,7 +6634,7 @@ begin
 
 end;
 
-function POCAStringUTF8GetCodeUnit(Context:PPOCAContext;const Value:TPOCAValue;CodePoint:longint):longint;
+function POCAStringUTF8GetCodeUnit(Context:PPOCAContext;const Value:TPOCAValue;CodePoint:TPOCAInt32):TPOCAInt32;
 var Str:PPOCAString;
 begin
  if POCAIsValueString(Value) then begin
@@ -6644,13 +6645,13 @@ begin
     if assigned(Str^.UTF8CodePointsToCodeUnitsIndex) then begin
      case Str^.UTF8CodePointsToCodeUnitsIndexSize of
       1:begin
-       result:=byte(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint])^);
+       result:=TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint])^);
       end;
       2:begin
-       result:=word(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint shl 1])^);
+       result:=TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint shl 1])^);
       end;
       4:begin
-       result:=longword(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint shl 2])^);
+       result:=TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint shl 2])^);
       end;
      end;
     end else begin
@@ -6671,7 +6672,7 @@ begin
  end;
 end;
 
-function POCAStringUTF8GetCodePoint(Context:PPOCAContext;const Value:TPOCAValue;CodeUnit:longint):longint;
+function POCAStringUTF8GetCodePoint(Context:PPOCAContext;const Value:TPOCAValue;CodeUnit:TPOCAInt32):TPOCAInt32;
 var Str:PPOCAString;
 begin
  if POCAIsValueString(Value) then begin
@@ -6682,13 +6683,13 @@ begin
     if assigned(Str^.UTF8CodeUnitsToCodePointsIndex) then begin
      case Str^.UTF8CodeUnitsToCodePointsIndexSize of
       1:begin
-       result:=byte(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit])^);
+       result:=TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit])^);
       end;
       2:begin
-       result:=word(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit shl 1])^);
+       result:=TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit shl 1])^);
       end;
       4:begin
-       result:=longword(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit shl 2])^);
+       result:=TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit shl 2])^);
       end;
      end;
     end else begin
@@ -6709,9 +6710,9 @@ begin
  end;
 end;
 
-function POCAStringUTF8CopyCodePointRange(Context:PPOCAContext;const Value:TPOCAValue;FromCodePoint,ToCodePoint:longint):TPOCARawByteString;
+function POCAStringUTF8CopyCodePointRange(Context:PPOCAContext;const Value:TPOCAValue;FromCodePoint,ToCodePoint:TPOCAInt32):TPOCARawByteString;
 var Str:PPOCAString;
-    FromCodeUnit,ToCodeUnit:longint;
+    FromCodeUnit,ToCodeUnit:TPOCAInt32;
 begin
  if ((FromCodePoint>=0) and (ToCodePoint>=FromCodePoint)) and POCAIsValueString(Value) then begin
   Str:=PPOCAString(POCAGetValueReferencePointer(Value));
@@ -6735,8 +6736,8 @@ end;
 procedure POCAStringUpdate(Context:PPOCAContext;const Value:TPOCAValue);
 var Str:PPOCAString;
     s:TPOCARawByteString;
-    UTF8State:longword;
-    UTF8CodeUnit,UTF8CodePoint:longint;
+    UTF8State:TPOCAUInt32;
+    UTF8CodeUnit,UTF8CodePoint:TPOCAInt32;
 begin
  if POCAIsValueString(Value) then begin
   Str:=POCAGetValueReferencePointer(Value);
@@ -6811,24 +6812,24 @@ begin
     while UTF8CodeUnit<=Str^.DataLength do begin
      case Str^.UTF8CodePointsToCodeUnitsIndexSize of
       1:begin
-       byte(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint])^):=UTF8CodeUnit;
+       TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint])^):=UTF8CodeUnit;
       end;
       2:begin
-       word(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 1])^):=UTF8CodeUnit;
+       TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 1])^):=UTF8CodeUnit;
       end;
       4:begin
-       longword(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 2])^):=UTF8CodeUnit;
+       TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 2])^):=UTF8CodeUnit;
       end;
      end;
      case Str^.UTF8CodeUnitsToCodePointsIndexSize of
       1:begin
-       byte(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1)])^):=UTF8CodePoint;
+       TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1)])^):=UTF8CodePoint;
       end;
       2:begin
-       word(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 1])^):=UTF8CodePoint;
+       TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 1])^):=UTF8CodePoint;
       end;
       4:begin
-       longword(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
+       TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
       end;
      end;
      inc(UTF8CodeUnit,PUCUUTF8CharSteps[Str^.Data[UTF8CodeUnit]]);
@@ -6837,24 +6838,24 @@ begin
     begin
      case Str^.UTF8CodePointsToCodeUnitsIndexSize of
       1:begin
-       byte(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint])^):=UTF8CodeUnit;
+       TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint])^):=UTF8CodeUnit;
       end;
       2:begin
-       word(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 1])^):=UTF8CodeUnit;
+       TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 1])^):=UTF8CodeUnit;
       end;
       4:begin
-       longword(pointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 2])^):=UTF8CodeUnit;
+       TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 2])^):=UTF8CodeUnit;
       end;
      end;
      case Str^.UTF8CodeUnitsToCodePointsIndexSize of
       1:begin
-       byte(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1)])^):=UTF8CodePoint;
+       TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1)])^):=UTF8CodePoint;
       end;
       2:begin
-       word(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 1])^):=UTF8CodePoint;
+       TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 1])^):=UTF8CodePoint;
       end;
       4:begin
-       longword(pointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
+       TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
       end;
      end;
     end;
@@ -6886,7 +6887,7 @@ end;
 function POCANewUniqueString(Context:PPOCAContext;const Data:TPOCARawByteString=''):TPOCAValue;
 var Str:PPOCAString;
     Item:PPOCAStringHashMapItem;
-    Value:int64;
+    Value:TPOCAInt64;
 begin
  POCALockEnter(Context^.Instance^.Globals.UniqueStringLock);
  try
@@ -6949,7 +6950,7 @@ begin
  result:=POCANew(Context,pvtCODE,PPOCAObject(Obj));
 end;
 
-function POCANewNativeCode(Context:PPOCAContext;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:pointer=nil):TPOCAValue;
+function POCANewNativeCode(Context:PPOCAContext;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:TPOCAPointer=nil):TPOCAValue;
 var Obj:PPOCANativeCode;
 begin
  result:=POCANew(Context,pvtNATIVECODE,PPOCAObject(Obj));
@@ -6971,7 +6972,7 @@ begin
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
-function POCANewGhost(Context:PPOCAContext;const GhostType:PPOCAGhostType;const Ptr:pointer;const Hash:PPOCAHash=nil;const PtrType:TPOCAGhostPtrType=pgptRAW):TPOCAValue;
+function POCANewGhost(Context:PPOCAContext;const GhostType:PPOCAGhostType;const Ptr:TPOCAPointer;const Hash:PPOCAHash=nil;const PtrType:TPOCAGhostPtrType=pgptRAW):TPOCAValue;
 var Ghost:PPOCAGhost;
 begin
  result:=POCANew(Context,pvtGHOST,PPOCAObject(Ghost));
@@ -7026,7 +7027,7 @@ begin
  end;
 end;
 
-function POCAGhostGetPointer(const r:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
+function POCAGhostGetPointer(const r:TPOCAValue):TPOCAPointer; {$ifdef caninline}inline;{$endif}
 begin
  if POCAIsValueGhost(r) then begin
   result:=PPOCAGhost(POCAGetValueReferencePointer(r))^.Ptr;
@@ -7035,7 +7036,7 @@ begin
  end;
 end;
 
-function POCAGhostFastGetPointer(const r:TPOCAValue):pointer; {$ifdef caninline}inline;{$endif}
+function POCAGhostFastGetPointer(const r:TPOCAValue):TPOCAPointer; {$ifdef caninline}inline;{$endif}
 begin
  result:=PPOCAGhost(POCAGetValueReferencePointer(r))^.Ptr;
 end;
@@ -7050,7 +7051,7 @@ begin
 end;
 
 function POCAGhostGetHashValue(const r:TPOCAValue):TPOCAValue; {$ifdef caninline}inline;{$endif}
-var p:pointer;
+var p:TPOCAPointer;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -7091,7 +7092,7 @@ end;
 
 function POCAEndToken:TPOCAValue; {$ifdef caninline}inline;{$endif}
 begin
- POCASetValueReferencePointer(result,pointer(TPOCAPtrUInt(1)));
+ POCASetValueReferencePointer(result,TPOCAPointer(TPOCAPtrUInt(1)));
 end;
 
 function POCANumber(Num:double):TPOCAValue; {$ifdef caninline}inline;{$endif}
@@ -7158,7 +7159,7 @@ begin
 end;
 
 function POCAStrictEqual(const a,b:TPOCAValue):boolean; overload;
-var t:longint;
+var t:TPOCAInt32;
 begin
  t:=POCAGetValueType(a);
  if t=POCAGetValueType(b) then begin
@@ -7181,7 +7182,7 @@ begin
  end;
 end;
 
-function POCACompareString(const a,b:TPOCARawByteString):longint;
+function POCACompareString(const a,b:TPOCARawByteString):TPOCAInt32;
 var c1,c2:pansichar;
 begin
  result:=0;
@@ -7219,7 +7220,7 @@ begin
  end;
 end;
             
-function POCACompareEvent(Context:PPOCAContext;const a,b:TPOCAValue):longint;
+function POCACompareEvent(Context:PPOCAContext;const a,b:TPOCAValue):TPOCAInt32;
 var HashEvents:PPOCAHashEvents;
     SubContext:PPOCAContext;
     Values:array[0..1] of TPOCAValue;
@@ -7241,7 +7242,7 @@ begin
  end;
 end;
 
-function POCACompare(Context:PPOCAContext;const a,b:TPOCAValue):longint;
+function POCACompare(Context:PPOCAContext;const a,b:TPOCAValue):TPOCAInt32;
 var na,nb:double;
     OK:TPasDblStrUtilsBoolean;
 begin
@@ -7369,12 +7370,12 @@ begin
  result:=(POCAIsValueObject(a) and POCAIsValueObject(b)) and (POCAGetValueReferencePointer(a)=POCAGetValueReferencePointer(b));
 end;
 
-procedure POCASetUserData(Context:PPOCAContext;p:pointer); {$ifdef caninline}inline;{$endif}
+procedure POCASetUserData(Context:PPOCAContext;p:TPOCAPointer); {$ifdef caninline}inline;{$endif}
 begin
  Context^.UserData:=p;
 end;
 
-function POCAGetUserData(Context:PPOCAContext):pointer; {$ifdef caninline}inline;{$endif}
+function POCAGetUserData(Context:PPOCAContext):TPOCAPointer; {$ifdef caninline}inline;{$endif}
 begin
  result:=Context^.UserData;
  if (not assigned(result)) and assigned(Context^.CallParent) then begin
@@ -7387,13 +7388,13 @@ begin
  POCAHashSet(Context,Dst,POCAInternSymbol(Context,Context^.Instance,POCANewString(Context,Symbol)),Value);
 end;
 
-procedure POCAAddNativeFunction(Context:PPOCAContext;const Hash:TPOCAValue;const FunctionName:TPOCARawByteString;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:pointer=nil); {$ifdef caninline}inline;{$endif}
+procedure POCAAddNativeFunction(Context:PPOCAContext;const Hash:TPOCAValue;const FunctionName:TPOCARawByteString;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:TPOCAPointer=nil); {$ifdef caninline}inline;{$endif}
 begin
  POCAAddSymbol(Context,Hash,FunctionName,POCANewFunction(Context,POCANewNativeCode(Context,FunctionPointer,DestroyFunctionPointer,UserData)));
 end;
 
 function POCAArrayNewRecord(Old:PPOCAArrayRecord):PPOCAArrayRecord;
-var i,OldSize,NewSize:longword;
+var i,OldSize,NewSize:TPOCAUInt32;
 begin
  if assigned(Old) then begin
   OldSize:=Old^.Size;
@@ -7418,7 +7419,7 @@ begin
  POCAGarbageCollectorSwapFree(ArrayObject^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@ArrayObject^.ArrayRecord,result);
 end;
 
-function POCAArrayGet(const ArrayObject:TPOCAValue;i:longint):TPOCAValue;
+function POCAArrayGet(const ArrayObject:TPOCAValue;i:TPOCAInt32):TPOCAValue;
 var ArrayRecord:PPOCAArrayRecord;
 begin
  if POCAIsValueArray(ArrayObject) then begin
@@ -7437,7 +7438,7 @@ begin
  result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
-procedure POCAArraySet(const ArrayObject:TPOCAValue;i:longint;const Value:TPOCAValue);
+procedure POCAArraySet(const ArrayObject:TPOCAValue;i:TPOCAInt32;const Value:TPOCAValue);
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
 begin
@@ -7450,13 +7451,13 @@ begin
    end;
    if (i>=0) and (i<ArrayRecord^.Size) then begin
     ArrayRecord^.Data[i]:=Value;
-    POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(ArrayInstance)),Value);
+    POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
    end;
   end;
  end;
 end;
 
-function POCAArraySize(const ArrayObject:TPOCAValue):longword;
+function POCAArraySize(const ArrayObject:TPOCAValue):TPOCAUInt32;
 var ArrayRecord:PPOCAArrayRecord;
 begin
  if POCAIsValueArray(ArrayObject) then begin
@@ -7469,7 +7470,7 @@ begin
  result:=0;
 end;
 
-function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longword;
+function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
 begin
@@ -7481,7 +7482,7 @@ begin
   end;
   if assigned(ArrayRecord) then begin
    ArrayRecord^.Data[ArrayRecord^.Size]:=Value;
-   POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(ArrayInstance)),Value);
+   POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
    result:=ArrayRecord^.Size;
    TPasMPInterlocked.Increment(ArrayRecord^.Size);
    exit;
@@ -7490,11 +7491,11 @@ begin
  result:=0;
 end;
 
-function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):longword;
+function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):TPOCAUInt32;
 var Value:TPOCAValue;
     ToNumber:double;
     sFrom,sTo:TPUCURawByteString;
-    c:longword;
+    c:TPOCAUInt32;
     UTF8:boolean;
 begin
  if POCAIsValueArray(ArrayObject) then begin
@@ -7531,10 +7532,10 @@ begin
  result:=0;
 end;
 
-function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:longint):longword;
+function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:TPOCAInt32):TPOCAUInt32;
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
-    i,j:longint;
+    i,j:TPOCAInt32;
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
@@ -7560,10 +7561,10 @@ begin
  result:=0;
 end;
 
-function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longword;
+function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
-    i,j:longint;
+    i,j:TPOCAInt32;
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
@@ -7590,10 +7591,10 @@ begin
  result:=0;
 end;
 
-function POCAArrayIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longint;
+function POCAArrayIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAInt32;
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
-    i:longint;
+    i:TPOCAInt32;
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
@@ -7612,10 +7613,10 @@ begin
  result:=-1;
 end;
 
-function POCAArrayLastIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):longint;
+function POCAArrayLastIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAInt32;
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
-    i:longint;
+    i:TPOCAInt32;
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
@@ -7634,10 +7635,10 @@ begin
  result:=-1;
 end;
 
-procedure POCAArraySetSize(const ArrayObject:TPOCAValue;Size:longint);
+procedure POCAArraySetSize(const ArrayObject:TPOCAValue;Size:TPOCAInt32);
 var ArrayInstance:PPOCAArray;
     ArrayRecord,NewVecRec:PPOCAArrayRecord;
-    i:longint;
+    i:TPOCAInt32;
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
@@ -7675,7 +7676,7 @@ begin
   if assigned(ArrayRecord) then begin
    if ArrayRecord^.Size>0 then begin
     result:=ArrayRecord^.Data[ArrayRecord^.Size-1];
-    POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(ArrayInstance)),result);
+    POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),result);
     TPasMPInterlocked.Decrement(ArrayRecord^.Size);
     if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
      POCAArrayResize(ArrayInstance);
@@ -7689,13 +7690,11 @@ begin
 end;
 
 procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue);
-type PPointers=^TPointers;
-     TPointers=array[0..$ffff] of pointer;
-     PStackItem=^TStackItem;
+type PStackItem=^TStackItem;
      TStackItem=record
-      Left,Right,Depth:longint;
+      Left,Right,Depth:TPOCAInt32;
      end;
- function IntLog2(x:longword):longword; {$ifdef cpu386}assembler; register;
+ function IntLog2(x:TPOCAUInt32):TPOCAUInt32; {$ifdef cpu386}assembler; register;
  asm
   test eax,eax
   jz @Done
@@ -7718,7 +7717,7 @@ type PPointers=^TPointers;
   result:=x and $3f;
  end;
 {$endif}
-var Left,Right,Depth,i,j,Middle,Size,Parent,Child:int64;
+var Left,Right,Depth,i,j,Middle,Size,Parent,Child:TPOCAInt64;
     Pivot,Temp:TPOCAValue;
     ArrayRecord:PPOCAArrayRecord;
     StackItem:PStackItem;
@@ -7735,7 +7734,7 @@ begin
     StackItem^.Right:=Right;
     StackItem^.Depth:=IntLog2((Right-Left)+1) shl 1;
     inc(StackItem);
-    while TPOCAPtrUInt(pointer(StackItem))>TPOCAPtrUInt(pointer(@Stack[0])) do begin
+    while TPOCAPtrUInt(TPOCAPointer(StackItem))>TPOCAPtrUInt(TPOCAPointer(@Stack[0])) do begin
      dec(StackItem);
      Left:=StackItem^.Left;
      Right:=StackItem^.Right;
@@ -7756,7 +7755,7 @@ begin
        inc(i);
       end;
      end else begin
-      if (Depth=0) or (TPOCAPtrUInt(pointer(StackItem))>=TPOCAPtrUInt(pointer(@Stack[high(Stack)-1]))) then begin
+      if (Depth=0) or (TPOCAPtrUInt(TPOCAPointer(StackItem))>=TPOCAPtrUInt(TPOCAPointer(@Stack[high(Stack)-1]))) then begin
        // Heap sort
        Size:=(Right-Left)+1;
        i:=Size div 2;
@@ -7852,7 +7851,7 @@ begin
  end;
 end;
 
-function POCAHashMix(const h:longword):longword; {$ifdef caninline}inline;{$endif}
+function POCAHashMix(const h:TPOCAUInt32):TPOCAUInt32; {$ifdef caninline}inline;{$endif}
 begin
  result:=h;
  result:=(not result)+(result shr 23);
@@ -7868,10 +7867,10 @@ begin
  result:=result xor (result shl 2) or (result shr (32-2));
 end;
 
-function POCAHashString(const Str:TPOCARawByteString):longword;
+function POCAHashString(const Str:TPOCARawByteString):TPOCAUInt32;
 {$ifdef cpuarm}
 var b:pansichar;
-    len,h,i:longword;
+    len,h,i:TPOCAUInt32;
 begin
  result:=2166136261;
  len:=length(Str);
@@ -7879,7 +7878,7 @@ begin
  if len>0 then begin
   b:=pansichar(Str);
   while len>3 do begin
-   i:=longword(pointer(b)^);
+   i:=TPOCAUInt32(TPOCAPointer(b)^);
    h:=(h xor i) xor $2e63823a;
    inc(h,(h shl 15) or (h shr (32-15)));
    dec(h,(h shl 9) or (h shr (32-9)));
@@ -7892,7 +7891,7 @@ begin
    dec(len,4);
   end;
   if len>1 then begin
-   i:=word(pointer(b)^);
+   i:=TPOCAUInt16(TPOCAPointer(b)^);
    h:=(h xor i) xor $2e63823a;
    inc(h,(h shl 15) or (h shr (32-15)));
    dec(h,(h shl 9) or (h shr (32-9)));
@@ -7905,7 +7904,7 @@ begin
    dec(len,2);
   end;
   if len>0 then begin
-   i:=byte(b^);
+   i:=TPOCAUInt8(b^);
    h:=(h xor i) xor $2e63823a;
    inc(h,(h shl 15) or (h shr (32-15)));
    dec(h,(h shl 9) or (h shr (32-9)));
@@ -7922,11 +7921,11 @@ begin
  end;
 end;
 {$else}
-const m=longword($57559429);
-      n=longword($5052acdb);
+const m=TPOCAUInt32($57559429);
+      n=TPOCAUInt32($5052acdb);
 var b:pansichar;
-    h,k,len:longword;
-    p:{$ifdef fpc}UInt64{$else}int64{$endif};
+    h,k,len:TPOCAUInt32;
+    p:{$ifdef fpc}TPOCAUInt64{$else}TPOCAInt64{$endif};
 begin
  len:=length(Str);
  h:=len;
@@ -7935,46 +7934,46 @@ begin
   b:=pansichar(Str);
   while len>7 do begin
    begin
-    p:=longword(pointer(b)^)*UInt64(n);
-    h:=h xor longword(p and $ffffffff);
-    k:=k xor longword(p shr 32);
+    p:=TPOCAUInt32(TPOCAPointer(b)^)*TPOCAUInt64(n);
+    h:=h xor TPOCAUInt32(p and $ffffffff);
+    k:=k xor TPOCAUInt32(p shr 32);
     inc(b,4);
    end;
    begin
-    p:=longword(pointer(b)^)*UInt64(m);
-    k:=k xor longword(p and $ffffffff);
-    h:=h xor longword(p shr 32);
+    p:=TPOCAUInt32(TPOCAPointer(b)^)*TPOCAUInt64(m);
+    k:=k xor TPOCAUInt32(p and $ffffffff);
+    h:=h xor TPOCAUInt32(p shr 32);
     inc(b,4);
    end;
    dec(len,8);
   end;
   if len>3 then begin
-   p:=longword(pointer(b)^)*UInt64(n);
-   h:=h xor longword(p and $ffffffff);
-   k:=k xor longword(p shr 32);
+   p:=TPOCAUInt32(TPOCAPointer(b)^)*TPOCAUInt64(n);
+   h:=h xor TPOCAUInt32(p and $ffffffff);
+   k:=k xor TPOCAUInt32(p shr 32);
    inc(b,4);
    dec(len,4);
   end;
   if len>0 then begin
    if len>1 then begin
-    p:=word(pointer(b)^);
+    p:=TPOCAUInt16(TPOCAPointer(b)^);
     inc(b,2);
     dec(len,2);
    end else begin
     p:=0;
    end;
    if len>0 then begin
-    p:=p or (byte(b^) shl 16);
+    p:=p or (TPOCAUInt8(b^) shl 16);
    end;
-   p:=p*UInt64(m);
-   k:=k xor longword(p and $ffffffff);
-   h:=h xor longword(p shr 32);
+   p:=p*TPOCAUInt64(m);
+   k:=k xor TPOCAUInt32(p and $ffffffff);
+   h:=h xor TPOCAUInt32(p shr 32);
   end;
  end;
  begin
-  p:=(h xor (k+n))*UInt64(n);
-  h:=h xor longword(p and $ffffffff);
-  k:=k xor longword(p shr 32);
+  p:=(h xor (k+n))*TPOCAUInt64(n);
+  h:=h xor TPOCAUInt32(p and $ffffffff);
+  k:=k xor TPOCAUInt32(p shr 32);
  end;
  result:=k xor h;
  if result=0 then begin
@@ -7983,14 +7982,14 @@ begin
 end;
 {$endif}
 
-function POCAHashNumber(const Num:double):longword;
+function POCAHashNumber(const Num:double):TPOCAUInt32;
 begin
- result:=longword(pointer(@Num)^) xor $2e63823a;
+ result:=TPOCAUInt32(TPOCAPointer(@Num)^) xor $2e63823a;
  inc(result,(result shl 15) or (result shr (32-15)));
  dec(result,(result shl 9) or (result shr (32-9)));
  inc(result,(result shl 4) or (result shr (32-4)));
  dec(result,(result shl 1) or (result shr (32-1)));
- result:=((result xor (result shl 2) or (result shr (32-2))) xor longword(pointer(@pansichar(pointer(@Num))[sizeof(longword)])^)) xor $2e63823a;
+ result:=((result xor (result shl 2) or (result shr (32-2))) xor TPOCAUInt32(TPOCAPointer(@pansichar(TPOCAPointer(@Num))[sizeof(TPOCAUInt32)])^)) xor $2e63823a;
  inc(result,(result shl 15) or (result shr (32-15)));
  dec(result,(result shl 9) or (result shr (32-9)));
  inc(result,(result shl 4) or (result shr (32-4)));
@@ -7999,7 +7998,7 @@ begin
  dec(result,ord(result=0) and 1);
 end;
 
-function POCAHashObj(const Obj:pointer):longword;
+function POCAHashObj(const Obj:TPOCAPointer):TPOCAUInt32;
 begin
 {$ifdef cpu64}
  result:=TPOCAUInt32(TPOCAPtrUInt(Obj) and $ffffffff) xor $2e63823a;
@@ -8014,7 +8013,7 @@ begin
  dec(result,(result shl 1) or (result shr (32-1)));
  result:=result xor (result shl 2) or (result shr (32-2));
 {$else}
- result:=longword(pointer(@Obj)^) xor $2e63823a;
+ result:=TPOCAUInt32(TPOCAPointer(@Obj)^) xor $2e63823a;
  inc(result,(result shl 15) or (result shr (32-15)));
  dec(result,(result shl 9) or (result shr (32-9)));
  inc(result,(result shl 4) or (result shr (32-4)));
@@ -8024,7 +8023,7 @@ begin
  dec(result,ord(result=0) and 1);
 end;
 
-function POCAValueHash(const r:TPOCAValue):longword;
+function POCAValueHash(const r:TPOCAValue):TPOCAUInt32;
 var Str:PPOCAString;
 begin
  case POCAGetValueType(r) of
@@ -8045,9 +8044,9 @@ begin
  end;
 end;
 
-function POCAHashFindCell(HashRec:PPOCAHashRecord;const Key:TPOCAValue;HashCode:longword):longword; overload;
-var Mask,Step:longword;
-    Entity:longint;
+function POCAHashFindCell(HashRec:PPOCAHashRecord;const Key:TPOCAValue;HashCode:TPOCAUInt32):TPOCAUInt32; overload;
+var Mask,Step:TPOCAUInt32;
+    Entity:TPOCAInt32;
 begin
  Mask:=(2 shl HashRec^.LogSize)-1;
  Step:=((HashCode shl 1)+1) and Mask;
@@ -8065,9 +8064,9 @@ begin
  until false;
 end;
 
-function POCAHashFindCell(HashRec:PPOCAHashRecord;const Key:TPOCARawByteString;HashCode:longword):longword; overload;
-var Mask,Step:longword;
-    Entity:longint;
+function POCAHashFindCell(HashRec:PPOCAHashRecord;const Key:TPOCARawByteString;HashCode:TPOCAUInt32):TPOCAUInt32; overload;
+var Mask,Step:TPOCAUInt32;
+    Entity:TPOCAInt32;
 begin
  Mask:=(2 shl HashRec^.LogSize)-1;
  Step:=((HashCode shl 1)+1) and Mask;
@@ -8085,23 +8084,23 @@ begin
  until false;
 end;
 
-function POCAHashRecordSize(LogSize:longint;Events:boolean):longword;
+function POCAHashRecordSize(LogSize:TPOCAInt32;Events:boolean):TPOCAUInt32;
 begin
- result:=sizeof(TPOCAHashRecord)+((1 shl LogSize)*((4*sizeof(longint))+sizeof(TPOCAHashEntity)));
+ result:=sizeof(TPOCAHashRecord)+((1 shl LogSize)*((4*sizeof(TPOCAInt32))+sizeof(TPOCAHashEntity)));
  if Events then begin
   inc(result,sizeof(TPOCAHashEvents));
  end;
 end;
 
-function POCAHashResize(Instance:PPOCAInstance;Hash:PPOCAHash;Events:longbool=false):PPOCAHashRecord; forward;
+function POCAHashResize(Instance:PPOCAInstance;Hash:PPOCAHash;Events:TPOCABool32=false):PPOCAHashRecord; forward;
 
 function POCAHashCreateEvents(Instance:PPOCAInstance;Hash:PPOCAHash):PPOCAHashRecord;
 var HashRec:PPOCAHashRecord;
     EntityRec:PPOCAHashEntity;
-    Size,Entity:longint;
-    i,j:longword;
+    Size,Entity:TPOCAInt32;
+    i,j:TPOCAUInt32;
     Str:PPOCAString;
-    Op:longint;
+    Op:TPOCAInt32;
 begin
  HashRec:=Hash^.HashRecord;
  if not assigned(HashRec) then begin
@@ -8114,10 +8113,10 @@ begin
  result^.Size:=HashRec^.Size;
  result^.RealSize:=HashRec^.RealSize;
  result^.LogSize:=HashRec^.LogSize;
- result^.CellToEntityIndex:=pointer(@pansichar(pointer(result))[sizeof(TPOCAHashRecord)]);
- result^.EntityToCellIndex:=pointer(@result^.CellToEntityIndex^[2 shl HashRec^.LogSize]);
- result^.Entities:=pointer(@result^.EntityToCellIndex^[2 shl HashRec^.LogSize]);
- result^.Events:=pointer(@result^.Entities^[1 shl HashRec^.LogSize]);
+ result^.CellToEntityIndex:=TPOCAPointer(@pansichar(TPOCAPointer(result))[sizeof(TPOCAHashRecord)]);
+ result^.EntityToCellIndex:=TPOCAPointer(@result^.CellToEntityIndex^[2 shl HashRec^.LogSize]);
+ result^.Entities:=TPOCAPointer(@result^.EntityToCellIndex^[2 shl HashRec^.LogSize]);
+ result^.Events:=TPOCAPointer(@result^.Entities^[1 shl HashRec^.LogSize]);
  if (assigned(HashRec) and assigned(HashRec^.Events)) then begin
   result^.Events^:=HashRec^.Events^;
  end;
@@ -8157,7 +8156,7 @@ begin
  if assigned(Hash) then begin
   POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
   try
-   TPasMPInterlocked.Exchange(longint(Hash^.Cache.Ready),0);
+   TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),0);
    Current:=Hash^.Children.First;
    while assigned(Current) do begin
     POCAHashLockInvalidate(Current);
@@ -8173,7 +8172,7 @@ procedure POCAHashInvalidate(Hash:PPOCAHash);
 var Current:PPOCAHash;
 begin
  if assigned(Hash) then begin
-  TPasMPInterlocked.Exchange(longint(Hash^.Cache.Ready),0);
+  TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),0);
   Current:=Hash^.Children.First;
   while assigned(Current) do begin
    POCAHashLockInvalidate(Current);
@@ -8183,12 +8182,12 @@ begin
 end;
 
 procedure POCAHashRebuildCache(Hash:PPOCAHash);
-var CountItems:longint;
+var CountItems:TPOCAInt32;
     Cachable:boolean;
  procedure Process(CurrentHash:PPOCAHash);
  var Current:PPOCAHash;
      OldEntities,Entities:PPPOCAHashEntities;
-     Index,i:longint;
+     Index,i:TPOCAInt32;
  begin
   if assigned(CurrentHash) then begin
    if assigned(CurrentHash^.Events) or not Cachable then begin
@@ -8224,7 +8223,7 @@ var CountItems:longint;
    end else begin
     Entities:=nil;
    end;
-   TPasMPInterlocked.Exchange(pointer(Hash^.Cache.ChainEntities),pointer(Entities));
+   TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Cache.ChainEntities),TPOCAPointer(Entities));
    if assigned(OldEntities) then begin
     FreeMem(OldEntities);
    end;
@@ -8242,7 +8241,7 @@ begin
    Cachable:=true;
    Process(Hash^.Prototype);
    TPasMPInterlocked.Exchange(Hash^.Cache.ChainCount,CountItems);
-   TPasMPInterlocked.Exchange(longint(Hash^.Cache.Ready),longint(longword($ffffffff)));
+   TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),TPOCAInt32(TPOCAUInt32($ffffffff)));
   finally
    POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
   end;
@@ -8295,7 +8294,7 @@ begin
      POCAMRSWLockWriteUnlock(@OldPrototype^.Cache.MRSWLock);
     end;
    end;
-   TPasMPInterlocked.Exchange(pointer(Hash^.Prototype),nil);
+   TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Prototype),nil);
    POCAHashInvalidate(Hash);
   finally
    POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
@@ -8303,7 +8302,7 @@ begin
  end;
 end;
 
-function POCAHashSetPrototype(Context:PPOCAContext;const Hash:TPOCAValue;const Prototype:PPOCAHash):longbool;
+function POCAHashSetPrototype(Context:PPOCAContext;const Hash:TPOCAValue;const Prototype:PPOCAHash):TPOCABool32;
 var HashPtr,HashInstance,OldPrototype,Previous,Next,First,Last:PPOCAHash;
 begin
  result:=POCAIsValueHash(Hash);
@@ -8364,7 +8363,7 @@ begin
        POCAMRSWLockWriteUnlock(@OldPrototype^.Cache.MRSWLock);
       end;
      end;
-     TPasMPInterlocked.Exchange(pointer(HashInstance^.Prototype),pointer(Prototype));
+     TPasMPInterlocked.Exchange(TPOCAPointer(HashInstance^.Prototype),TPOCAPointer(Prototype));
      if assigned(Prototype) then begin
       POCAMRSWLockWriteLock(@Prototype^.Cache.MRSWLock);
       try
@@ -8410,7 +8409,7 @@ begin
  end;
 end;
 
-function POCAHashSetPrototypeValue(Context:PPOCAContext;const Hash,Prototype:TPOCAValue):longbool;
+function POCAHashSetPrototypeValue(Context:PPOCAContext;const Hash,Prototype:TPOCAValue):TPOCABool32;
 begin
  case POCAGetValueType(Prototype) of
   pvtHASH:begin
@@ -8426,7 +8425,7 @@ begin
  end;
 end;
 
-function POCAValueSetPrototypeValue(Context:PPOCAContext;const Hash,Prototype:TPOCAValue;const Level:longint):longbool;
+function POCAValueSetPrototypeValue(Context:PPOCAContext;const Hash,Prototype:TPOCAValue;const Level:TPOCAInt32):TPOCABool32;
 begin
  result:=false;
  if Level<POCA_PROTOTYPE_RECURSION_LIMIT then begin
@@ -8472,7 +8471,7 @@ begin
 end;
 
 function POCAHashGetPrototypeValue(const Hash:TPOCAValue):TPOCAValue;
-var p:pointer;
+var p:TPOCAPointer;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -8484,8 +8483,8 @@ begin
  end;
 end;
 
-function POCAValueGetPrototypeValue(Context:PPOCAContext;const Hash:TPOCAValue;const Level:longint):TPOCAValue;
-var p:pointer;
+function POCAValueGetPrototypeValue(Context:PPOCAContext;const Hash:TPOCAValue;const Level:TPOCAInt32):TPOCAValue;
+var p:TPOCAPointer;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -8520,7 +8519,7 @@ begin
  if assigned(Hash) and assigned(Hash^.Constructor_) then begin
   POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
   try
-   TPasMPInterlocked.Exchange(pointer(Hash^.Constructor_),nil);
+   TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Constructor_),nil);
    POCAHashInvalidate(Hash);
   finally
    POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
@@ -8528,7 +8527,7 @@ begin
  end;
 end;
 
-function POCAHashSetConstructor(Context:PPOCAContext;const Hash:TPOCAValue;const Constructor_:PPOCAObject):longbool;
+function POCAHashSetConstructor(Context:PPOCAContext;const Hash:TPOCAValue;const Constructor_:PPOCAObject):TPOCABool32;
 var HashInstance:PPOCAHash;
 begin
  result:=POCAIsValueHash(Hash);
@@ -8537,7 +8536,7 @@ begin
   if HashInstance^.Constructor_<>Constructor_ then begin
    POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
    try
-    TPasMPInterlocked.Exchange(pointer(HashInstance^.Constructor_),pointer(Constructor_));
+    TPasMPInterlocked.Exchange(TPOCAPointer(HashInstance^.Constructor_),TPOCAPointer(Constructor_));
     POCAHashInvalidate(HashInstance);
    finally
     POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
@@ -8546,7 +8545,7 @@ begin
  end;
 end;
 
-function POCAHashSetConstructorValue(Context:PPOCAContext;const Hash,Constructor_:TPOCAValue):longbool;
+function POCAHashSetConstructorValue(Context:PPOCAContext;const Hash,Constructor_:TPOCAValue):TPOCABool32;
 begin
  case POCAGetValueType(Constructor_) of
   pvtHASH:begin
@@ -8565,7 +8564,7 @@ begin
  end;
 end;                                                          
 
-function POCAValueSetConstructorValue(Context:PPOCAContext;const Hash,Constructor_:TPOCAValue;const Level:longint):longbool;
+function POCAValueSetConstructorValue(Context:PPOCAContext;const Hash,Constructor_:TPOCAValue;const Level:TPOCAInt32):TPOCABool32;
 begin
  result:=false;
  if Level<POCA_CONSTRUCTOR_RECURSION_LIMIT then begin
@@ -8614,7 +8613,7 @@ begin
 end;
 
 function POCAHashGetConstructorValue(const Hash:TPOCAValue):TPOCAValue;
-var p:pointer;
+var p:TPOCAPointer;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -8626,8 +8625,8 @@ begin
  end;
 end;
 
-function POCAValueGetConstructorValue(Context:PPOCAContext;const Hash:TPOCAValue;const Level:longint):TPOCAValue;
-var p:pointer;
+function POCAValueGetConstructorValue(Context:PPOCAContext;const Hash:TPOCAValue;const Level:TPOCAInt32):TPOCAValue;
+var p:TPOCAPointer;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -8657,7 +8656,7 @@ begin
  end;
 end;
 
-function POCAHashSetHashEvents(Context:PPOCAContext;const ToHash,FromHash:TPOCAValue):longbool;
+function POCAHashSetHashEvents(Context:PPOCAContext;const ToHash,FromHash:TPOCAValue):TPOCABool32;
 var Hashs:array[0..1] of PPOCAHash;
 begin
  result:=false;
@@ -8669,11 +8668,11 @@ begin
     POCAHashCreateEvents(Context^.Instance,Hashs[1]);
    end;
    POCAHashLockInvalidate(Hashs[0]);
-   TPasMPInterlocked.Exchange(pointer(Hashs[0]^.Events),pointer(Hashs[1]));
+   TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),TPOCAPointer(Hashs[1]));
    result:=true;
   end else if POCAIsValueNull(FromHash) then begin
    POCAHashLockInvalidate(Hashs[0]);
-   TPasMPInterlocked.Exchange(pointer(Hashs[0]^.Events),nil);
+   TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),nil);
    result:=true;
   end;
  end;
@@ -8783,18 +8782,18 @@ begin
  end;
 end;
 
-function POCAHashSetGhost(Context:PPOCAContext;const Hash:TPOCAValue;Ghost:PPOCAGhost):longbool;
+function POCAHashSetGhost(Context:PPOCAContext;const Hash:TPOCAValue;Ghost:PPOCAGhost):TPOCABool32;
 var HashPtr:PPOCAHash;
 begin
  result:=POCAIsValueHash(Hash);
  if result then begin
   HashPtr:=PPOCAHash(POCAGetValueReferencePointer(Hash));
-  TPasMPInterlocked.Exchange(pointer(HashPtr^.Ghost),pointer(Ghost));
+  TPasMPInterlocked.Exchange(TPOCAPointer(HashPtr^.Ghost),TPOCAPointer(Ghost));
   POCAHashLockInvalidate(HashPtr);
  end;
 end;
 
-function POCAHashSetGhostValue(Context:PPOCAContext;const Hash,Ghost:TPOCAValue):longbool;
+function POCAHashSetGhostValue(Context:PPOCAContext;const Hash,Ghost:TPOCAValue):TPOCABool32;
 begin
  case POCAGetValueType(Ghost) of
   pvtGHOST:begin
@@ -8819,7 +8818,7 @@ begin
 end;
 
 function POCAHashGetGhostValue(const Hash:TPOCAValue):TPOCAValue;
-var p:pointer;
+var p:TPOCAPointer;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -8831,7 +8830,7 @@ begin
  end;
 end;
 
-function POCAHashSetKind(Context:PPOCAContext;const Hash:TPOCAValue;Kind:longint):longbool;
+function POCAHashSetKind(Context:PPOCAContext;const Hash:TPOCAValue;Kind:TPOCAInt32):TPOCABool32;
 var HashPtr:PPOCAHash;
 begin
  result:=POCAIsValueHash(Hash);
@@ -8842,7 +8841,7 @@ begin
  end;
 end;
 
-function POCAHashGetKind(const Hash:TPOCAValue):longint;
+function POCAHashGetKind(const Hash:TPOCAValue):TPOCAInt32;
 begin
  result:=0;
  if POCAIsValueHash(Hash) then begin
@@ -8853,7 +8852,7 @@ end;
 procedure POCAHashPutHashEvents(Hash:PPOCAHash;var HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue);
 var Instance:PPOCAInstance;
     Str:PPOCAString;
-    Op:longint;
+    Op:TPOCAInt32;
 begin
  Instance:=Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance;
  if POCAIsValueString(Key) then begin
@@ -8874,14 +8873,14 @@ begin
 end;
 
 procedure POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue);
-var Entity:longint;
-    Cell:longword;
+var Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
  Entity:=HashRec^.CellToEntityIndex^[Cell];
  if Entity>=0 then begin
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(Hash)),Value);
+  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -8895,7 +8894,7 @@ begin
   TPasMPInterlocked.Increment(HashRec^.RealSize);
   HashRec^.Entities^[Entity].Key:=Key;
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(Hash)),Value);
+  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -8903,14 +8902,14 @@ begin
  end;
 end;
 
-procedure POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;var CacheIndex:longword);
-var Entity:longint;
-    Cell:longword;
+procedure POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;var CacheIndex:TPOCAUInt32);
+var Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  Entity:=CacheIndex;
- if ((longword(Entity)<longword(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
+ if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(Hash)),Value);
+  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -8919,9 +8918,9 @@ begin
  Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
  Entity:=HashRec^.CellToEntityIndex^[Cell];
  if Entity>=0 then begin
-  TPasMPInterlocked.Exchange(longint(CacheIndex),Entity);
+  TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(Hash)),Value);
+  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -8930,13 +8929,13 @@ begin
  Entity:=HashRec^.Size;
  TPasMPInterlocked.Increment(HashRec^.Size);
  if Entity<(2 shl HashRec^.LogSize) then begin
-  TPasMPInterlocked.Exchange(longint(CacheIndex),Entity);
+  TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
   TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
   TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
   TPasMPInterlocked.Increment(HashRec^.RealSize);
   HashRec^.Entities^[Entity].Key:=Key;
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(Hash)),Value);
+  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -8944,10 +8943,10 @@ begin
  end;
 end;
 
-function POCAHashResize(Instance:PPOCAInstance;Hash:PPOCAHash;Events:longbool=false):PPOCAHashRecord;
+function POCAHashResize(Instance:PPOCAInstance;Hash:PPOCAHash;Events:TPOCABool32=false):PPOCAHashRecord;
 var HashRec:PPOCAHashRecord;
-    LogSize,Size,Cell,Entity:longint;
-    i,j:longword;
+    LogSize,Size,Cell,Entity:TPOCAInt32;
+    i,j:TPOCAUInt32;
 begin
  HashRec:=Hash^.HashRecord;
  LogSize:=0;
@@ -8970,11 +8969,11 @@ begin
  result^.Size:=0;
  result^.RealSize:=0;
  result^.LogSize:=LogSize;
- result^.CellToEntityIndex:=pointer(@pansichar(pointer(result))[sizeof(TPOCAHashRecord)]);
- result^.EntityToCellIndex:=pointer(@result^.CellToEntityIndex^[2 shl LogSize]);
- result^.Entities:=pointer(@result^.EntityToCellIndex^[2 shl LogSize]);
+ result^.CellToEntityIndex:=TPOCAPointer(@pansichar(TPOCAPointer(result))[sizeof(TPOCAHashRecord)]);
+ result^.EntityToCellIndex:=TPOCAPointer(@result^.CellToEntityIndex^[2 shl LogSize]);
+ result^.Entities:=TPOCAPointer(@result^.EntityToCellIndex^[2 shl LogSize]);
  if Events then begin
-  result^.Events:=pointer(@result^.Entities^[1 shl LogSize]);
+  result^.Events:=TPOCAPointer(@result^.Entities^[1 shl LogSize]);
   if (assigned(HashRec) and assigned(HashRec^.Events)) then begin
    result^.Events^:=HashRec^.Events^;
   end;
@@ -9013,7 +9012,7 @@ begin
  end;
 end;
 
-function POCAHashRawSize(const Hash:TPOCAValue):longint;
+function POCAHashRawSize(const Hash:TPOCAValue):TPOCAInt32;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
 begin
@@ -9033,8 +9032,8 @@ end;
 function POCAHashRawExist(const Hash:TPOCAValue;const Key:TPOCAValue):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Entity:longint;
-    Cell:longword;
+    Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -9057,8 +9056,8 @@ end;
 function POCAHashRawGet(const Hash:TPOCAValue;const Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Entity:longint;
-    Cell:longword;
+    Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -9100,8 +9099,8 @@ end;
 function POCAHashRawDelete(const Hash,Key:TPOCAValue):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Cell:longword;
-    Entity:longint;
+    Cell:TPOCAUInt32;
+    Entity:TPOCAInt32;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -9129,7 +9128,7 @@ end;
 
 procedure POCAHashRawKeys(const Dst,Hash:TPOCAValue);
 var HashRec:PPOCAHashRecord;
-    Index,Cell,Entity:longint;
+    Index,Cell,Entity:TPOCAInt32;
 begin
  if POCAIsValueHash(Hash) then begin
   HashRec:=PPOCAHash(POCAGetValueReferencePointer(Hash))^.HashRecord;
@@ -9149,15 +9148,15 @@ end;
 
 function POCAHashSymbol(Hash:PPOCAHash;Sym:PPOCAString;var OutValue:TPOCAValue):boolean;
 var HashRec:PPOCAHashRecord;
-    HashCode,Cell,Mask,Step:longword;
-    Entity:longint;
+    HashCode,Cell,Mask,Step:TPOCAUInt32;
+    Entity:TPOCAInt32;
     he:PPOCAHashEntity;
 begin
  result:=false;
  HashCode:=Sym^.HashCode;
  if HashCode=0 then begin
   HashCode:=POCAHashString(Sym^.Data);
-  TPasMPInterlocked.Exchange(longint(Sym^.HashCode),HashCode);
+  TPasMPInterlocked.Exchange(TPOCAInt32(Sym^.HashCode),HashCode);
  end;
  while assigned(Hash) do begin
   HashRec:=Hash^.HashRecord;
@@ -9187,10 +9186,10 @@ begin
  end;
 end;
 
-function POCAHashSymbolCache(Hash:PPOCAHash;const Sym:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:longword):longint;
+function POCAHashSymbolCache(Hash:PPOCAHash;const Sym:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32):TPOCAInt32;
 var HashRec:PPOCAHashRecord;
-    HashCode,Cell,Mask,Step:longword;
-    Entity:longint;
+    HashCode,Cell,Mask,Step:TPOCAUInt32;
+    Entity:TPOCAInt32;
     he:PPOCAHashEntity;
     Str:PPOCAString;
 begin
@@ -9205,7 +9204,7 @@ begin
   if assigned(HashRec) then begin
    Mask:=(2 shl HashRec^.LogSize)-1;
    Entity:=CacheIndex;
-   if (longword(Entity)<longword(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0) then begin
+   if (TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0) then begin
     he:=@HashRec^.Entities^[Entity];
     if he^.Key.CastedInt64=Sym.CastedInt64 then begin
      OutValue:=he^.Value;
@@ -9217,13 +9216,13 @@ begin
 {$ifdef cpu32}
     Str:=Sym.Reference.StringObject;
 {$else}
-    Str:=PPOCAString(pointer(TPOCAPtrUInt(Sym.Reference.Ptr) and POCAValueReferenceMask));
+    Str:=PPOCAString(TPOCAPointer(TPOCAPtrUInt(Sym.Reference.Ptr) and POCAValueReferenceMask));
 {$endif}
 /// Str:=PPOCAString(POCAGetValueReferencePointer(Sym));
     HashCode:=Str^.HashCode;
     if HashCode=0 then begin
      HashCode:=POCAHashString(Str^.Data);
-     TPasMPInterlocked.Exchange(longint(Str^.HashCode),HashCode);
+     TPasMPInterlocked.Exchange(TPOCAInt32(Str^.HashCode),HashCode);
     end;
    end;
    Step:=((HashCode shl 1)+1) and Mask;
@@ -9240,7 +9239,7 @@ begin
     he:=@HashRec^.Entities^[Entity];
     if he^.Key.CastedInt64=Sym.CastedInt64 then begin
      OutValue:=he^.Value;
-     TPasMPInterlocked.Exchange(longint(CacheIndex),Entity);
+     TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
      result:=1;
      exit;
     end;
@@ -9251,10 +9250,10 @@ begin
  end;
 end;
 
-function POCAHashSymbolChainCache(Hash:PPOCAHash;const Sym:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:longword):longint;
+function POCAHashSymbolChainCache(Hash:PPOCAHash;const Sym:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32):TPOCAInt32;
 var HashRec:PPOCAHashRecord;
-    HashCode,Cell,Mask,Step:longword;
-    Entity,Index:longint;
+    HashCode,Cell,Mask,Step:TPOCAUInt32;
+    Entity,Index:TPOCAInt32;
     he:PPOCAHashEntity;
     Str:PPOCAString;
 begin
@@ -9271,7 +9270,7 @@ begin
 {$endif}
       if Hash^.Cache.Ready and assigned(Hash^.Cache.ChainEntities) then begin
        Entity:=CacheIndex;
-       if longword(Entity)<longword(Hash^.Cache.ChainCount) then begin
+       if TPOCAUInt32(Entity)<TPOCAUInt32(Hash^.Cache.ChainCount) then begin
         he:=Hash^.Cache.ChainEntities^[Entity];
         if he^.Key.CastedInt64=Sym.CastedInt64 then begin
          OutValue:=he^.Value;
@@ -9299,7 +9298,7 @@ begin
    HashCode:=Str^.HashCode;
    if HashCode=0 then begin
     HashCode:=POCAHashString(Str^.Data);
-    TPasMPInterlocked.Exchange(longint(Str^.HashCode),HashCode);
+    TPasMPInterlocked.Exchange(TPOCAInt32(Str^.HashCode),HashCode);
    end;
    while assigned(Hash) do begin
     HashRec:=Hash^.HashRecord;
@@ -9321,7 +9320,7 @@ begin
       he:=@HashRec^.Entities^[Entity];
       if he^.Key.CastedInt64=Sym.CastedInt64 then begin
        OutValue:=he^.Value;
-       TPasMPInterlocked.Exchange(longint(CacheIndex),Index+Entity);
+       TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Index+Entity);
        result:=1;
        exit;
       end;
@@ -9336,8 +9335,8 @@ end;
 
 function POCAHashNewSymbol(Instance:PPOCAInstance;Hash:PPOCAHash;const Key,Value:TPOCAValue):boolean;
 var HashRec:PPOCAHashRecord;
-    Mask,Step,Cell:longword;
-    Entity:longint;
+    Mask,Step,Cell:TPOCAUInt32;
+    Entity:TPOCAInt32;
     s:PPOCAString;
     he:PPOCAHashEntity;
 begin
@@ -9345,7 +9344,7 @@ begin
  HashRec:=Hash^.HashRecord;
  s:=PPOCAString(POCAGetValueReferencePointer(Key));
  if s^.HashCode=0 then begin
-  TPasMPInterlocked.Exchange(longint(s^.HashCode),POCAHashString(s^.Data));
+  TPasMPInterlocked.Exchange(TPOCAInt32(s^.HashCode),POCAHashString(s^.Data));
  end;
  while (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) do begin
   HashRec:=POCAHashResize(Instance,Hash,false);
@@ -9369,7 +9368,7 @@ begin
   he:=@HashRec^.Entities^[Entity];
   he^.Key:=Key;
   he^.Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(Hash)),Value);
+  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -9381,8 +9380,8 @@ end;
 function POCAHashTrySet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Cell:longword;
-    Entity:longint;
+    Cell:TPOCAUInt32;
+    Entity:TPOCAInt32;
     SubContext:PPOCAContext;
 begin
  result:=false;
@@ -9404,7 +9403,7 @@ begin
     Entity:=HashRec^.CellToEntityIndex^[Cell];
     if Entity>=0 then begin
      HashRec^.Entities^[Entity].Value:=Value;
-     POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(HashInstance)),Value);
+     POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
      if assigned(HashRec^.Events) then begin
       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
      end;
@@ -9415,11 +9414,11 @@ begin
  end;
 end;
 
-function POCAHashTrySetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;var CacheIndex:longword):boolean;
+function POCAHashTrySetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Cell:longword;
-    Entity:longint;
+    Cell:TPOCAUInt32;
+    Entity:TPOCAInt32;
     SubContext:PPOCAContext;
 begin
  result:=false;
@@ -9438,9 +9437,9 @@ begin
    HashRec:=HashInstance^.HashRecord;
    if assigned(HashRec) then begin
     Entity:=CacheIndex;
-    if ((longword(Entity)<longword(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and POCAEqual(HashRec^.Entities^[Entity].Key,Key) then begin
+    if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and POCAEqual(HashRec^.Entities^[Entity].Key,Key) then begin
      HashRec^.Entities^[Entity].Value:=Value;
-     POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(HashInstance)),Value);
+     POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
      if assigned(HashRec^.Events) then begin
       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
      end;
@@ -9450,9 +9449,9 @@ begin
     Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
     Entity:=HashRec^.CellToEntityIndex^[Cell];
     if Entity>=0 then begin
-     TPasMPInterlocked.Exchange(longint(CacheIndex),Entity);
+     TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
      HashRec^.Entities^[Entity].Value:=Value;
-     POCAGarbageCollectorWriteBarrier(PPOCAObject(pointer(HashInstance)),Value);
+     POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
      if assigned(HashRec^.Events) then begin
       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
      end;
@@ -9463,7 +9462,7 @@ begin
  end;
 end;
 
-function POCAHashSize(Context:PPOCAContext;const Hash:TPOCAValue):longint;
+function POCAHashSize(Context:PPOCAContext;const Hash:TPOCAValue):TPOCAInt32;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     SubContext:PPOCAContext;
@@ -9493,8 +9492,8 @@ end;
 function POCAHashExist(Context:PPOCAContext;const Hash,Key:TPOCAValue):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Entity:longint;
-    Cell:longword;
+    Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
     SubContext:PPOCAContext;
 begin
  result:=false;
@@ -9556,8 +9555,8 @@ end;
 function POCAHashGet(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Entity:longint;
-    Cell:longword;
+    Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -9588,8 +9587,8 @@ end;
 function POCAHashGetInherited(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Entity:longint;
-    Cell:longword;
+    Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -9620,11 +9619,11 @@ begin
  end;
 end;
 
-function POCAHashGetCache(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:longword):boolean;
+function POCAHashGetCache(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Entity,Index:longint;
-    Cell:longword;
+    Entity,Index:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -9639,7 +9638,7 @@ begin
 {$endif}
        if HashInstance^.Cache.Ready and assigned(HashInstance^.Cache.ChainEntities) then begin
         Entity:=CacheIndex;
-        if (longword(Entity)<longword(HashInstance^.Cache.ChainCount)) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
+        if (TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
          OutValue:=HashInstance^.Cache.ChainEntities^[Entity]^.Value;
 {$ifndef POCAUseSafeMRSWLocks}
          POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
@@ -9673,7 +9672,7 @@ begin
        Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
        Entity:=HashRec^.CellToEntityIndex^[Cell];
        if Entity>=0 then begin
-        TPasMPInterlocked.Exchange(longint(CacheIndex),Index+Entity);
+        TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Index+Entity);
         OutValue:=HashRec^.Entities^[Entity].Value;
         result:=true;
         break;
@@ -9692,7 +9691,7 @@ begin
      if assigned(HashRec) then begin
       if CacheIndex<>$ffffffff then begin
        Entity:=CacheIndex;
-       if ((longword(Entity)<longword(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
+       if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
         OutValue:=HashRec^.Entities^[Entity].Value;
         result:=true;
         exit;
@@ -9701,7 +9700,7 @@ begin
       Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
       Entity:=HashRec^.CellToEntityIndex^[Cell];
       if Entity>=0 then begin
-       TPasMPInterlocked.Exchange(longint(CacheIndex),Entity);
+       TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
        OutValue:=HashRec^.Entities^[Entity].Value;
        result:=true;
       end;
@@ -9712,11 +9711,11 @@ begin
  end;
 end;
 
-function POCAHashGetInheritedCache(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:longword):boolean;
+function POCAHashGetInheritedCache(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Entity,Index:longint;
-    Cell:longword;
+    Entity,Index:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -9730,7 +9729,7 @@ begin
 {$endif}
       if HashInstance^.Cache.Ready and assigned(HashInstance^.Cache.ChainEntities) then begin
        Entity:=CacheIndex;
-       if (longword(Entity)<longword(HashInstance^.Cache.ChainCount)) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
+       if (TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
         OutValue:=HashInstance^.Cache.ChainEntities^[Entity]^.Value;
 {$ifndef POCAUseSafeMRSWLocks}
         POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
@@ -9769,7 +9768,7 @@ begin
       Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
       Entity:=HashRec^.CellToEntityIndex^[Cell];
       if Entity>=0 then begin
-       TPasMPInterlocked.Exchange(longint(CacheIndex),Index+Entity);
+       TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Index+Entity);
        OutValue:=HashRec^.Entities^[Entity].Value;
        result:=true;
        break;
@@ -9818,7 +9817,7 @@ begin
  end;
 end;
 
-function POCAHashSetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;var CacheIndex:longword):boolean;
+function POCAHashSetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
 begin
@@ -9854,8 +9853,8 @@ end;
 function POCAHashDelete(Context:PPOCAContext;const Hash,Key:TPOCAValue):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    Entity:longint;
-    Cell:longword;
+    Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -9907,7 +9906,7 @@ end;
 
 procedure POCAHashKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
  procedure Combine(const DstHash:TPOCAValue;SrcHash:TPOCAValue);
- var i:longint;
+ var i:TPOCAInt32;
      Keys,Key,DstValue,SrcValue:TPOCAValue;
      HashInstance:PPOCAHash;
  begin
@@ -9965,7 +9964,7 @@ end;
 procedure POCAHashCombine(Context:PPOCAContext;const Hash,Source:TPOCAValue);
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
-    i,Entity:longint;
+    i,Entity:TPOCAInt32;
     Keys,Key,Value:TPOCAValue;
 begin
  if POCAIsValueHash(Hash) then begin
@@ -9998,7 +9997,7 @@ begin
  end;
 end;
 
-function POCAHashInstanceOf(Context:PPOCAContext;const Hash,OfHash:TPOCAValue):longbool;
+function POCAHashInstanceOf(Context:PPOCAContext;const Hash,OfHash:TPOCAValue):TPOCABool32;
 var HashInstance,OfHashInstance:PPOCAHash;
 begin
  result:=false;
@@ -10015,7 +10014,7 @@ begin
  end;
 end;
 
-function POCAHashIs(Context:PPOCAContext;const Hash,OfObject:TPOCAValue):longbool;
+function POCAHashIs(Context:PPOCAContext;const Hash,OfObject:TPOCAValue):TPOCABool32;
 var HashInstance:PPOCAHash;
     OfObjectInstance:PPOCAObject;
 begin
@@ -10047,7 +10046,7 @@ begin
  end;
 end;
 
-function POCAObjectInstanceOf(Context:PPOCAContext;const Value,OfValue:TPOCAValue):longbool; {$ifdef caninline}inline;{$endif}
+function POCAObjectInstanceOf(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
 begin
  if POCAIsValueGhost(Value) then begin
   result:=POCAHashInstanceOf(Context,POCAGhostGetHashValue(Value),OfValue);
@@ -10056,7 +10055,7 @@ begin
  end;
 end;
 
-function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):longbool; {$ifdef caninline}inline;{$endif}
+function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
 begin
  if POCAIsValueGhost(Value) then begin
   result:=POCAHashIs(Context,POCAGhostGetHashValue(Value),OfValue);
@@ -10164,7 +10163,7 @@ begin
 end;
 
 procedure POCAContextReleaseObjectPool(Context:PPOCAContext);
-var ValueType:longint;
+var ValueType:TPOCAInt32;
     ContextObjectPool:PPOCAContextObjectPool;
     Pool:PPOCAPool;
 begin
@@ -10199,7 +10198,7 @@ begin
 end;
 
 procedure POCAContextFree(Context:PPOCAContext);
-var i:longint;
+var i:TPOCAInt32;
     ContextObjectPool:PPOCAContextObjectPool;
 begin
  if assigned(Context^.Previous) then begin
@@ -10300,7 +10299,7 @@ end;
 function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
 var OutputString:TPOCARawByteString;
  procedure DumpValue(const Value:TPOCAValue);
- var i:longint;
+ var i:TPOCAInt32;
      Keys,Temp:TPOCAValue;
  begin
   case POCAGetValueType(Value) of
@@ -10380,62 +10379,62 @@ begin
  result:=OutputString;
 end;
 
-function POCAGarbageCollectorFunctionGETSTEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETSTEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.StepFactor;
 end;
 
-function POCAGarbageCollectorFunctionGETINTERVALFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETINTERVALFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.IntervalFactor;
 end;
 
-function POCAGarbageCollectorFunctionGETGHOSTFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETGHOSTFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.GhostFactor;
 end;
 
-function POCAGarbageCollectorFunctionGETSWEEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETSWEEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.SweepFactor;
 end;
 
-function POCAGarbageCollectorFunctionGETFLIPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETFLIPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.FlipFactor;
 end;
 
-function POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.PersistentInterval;
 end;
 
-function POCAGarbageCollectorFunctionGETPERSISTENTTHRESHOLD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETPERSISTENTTHRESHOLD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.PersistentThreshold;
 end;
 
-function POCAGarbageCollectorFunctionGETFULLCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETFULLCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.FullCollect) and 1;
 end;
 
-function POCAGarbageCollectorFunctionGETLOCALCONTEXTPOOLSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETLOCALCONTEXTPOOLSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.LocalContextPoolSize;
 end;
 
-function POCAGarbageCollectorFunctionGETCONTEXTCACHESIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETCONTEXTCACHESIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.ContextCacheSize;
 end;
 
-function POCAGarbageCollectorFunctionGETMINIMUMBLOCKSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETMINIMUMBLOCKSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.MinimumBlockSize;
 end;
 
-function POCAGarbageCollectorFunctionSETSTEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETSTEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setStepFactor"');
@@ -10444,7 +10443,7 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.StepFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETINTERVALFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETINTERVALFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setIntervalFactor"');
@@ -10453,7 +10452,7 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.IntervalFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETGHOSTFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETGHOSTFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setGhostFactor"');
@@ -10462,7 +10461,7 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.GhostFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETSWEEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETSWEEPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setSweepFactor"');
@@ -10471,7 +10470,7 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.SweepFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETFLIPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETFLIPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setFlipFactor"');
@@ -10480,7 +10479,7 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.FlipFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setPersistentInterval"');
@@ -10489,7 +10488,7 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.PersistentInterval,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETPERSISTENTTHRESHOLD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETPERSISTENTTHRESHOLD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setPersistentThreshold"');
@@ -10498,16 +10497,16 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.PersistentThreshold,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETFULLCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETFULLCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setFullCollect"');
  end;
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.FullCollect) and 1;
- TPasMPInterlocked.Exchange(longint(Context^.Instance^.Globals.GarbageCollector.FullCollect),longint(longbool(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
+ TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.FullCollect),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
 end;
 
-function POCAGarbageCollectorFunctionSETLOCALCONTEXTPOOLSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETLOCALCONTEXTPOOLSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setLocalContextSize"');
@@ -10516,7 +10515,7 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.LocalContextPoolSize,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETCONTEXTCACHESIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETCONTEXTCACHESIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setContextCacheSize"');
@@ -10525,7 +10524,7 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.ContextCacheSize,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETMINIMUMBLOCKSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETMINIMUMBLOCKSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "garbagecollector.setMinimumBlockSize"');
@@ -10534,31 +10533,31 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.MinimumBlockSize,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULL;
  POCAGarbageCollectorBottleneck(Context^.Instance);
  result.Num:=1;
 end;
 
-function POCAGarbageCollectorFunctionCYCLE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionCYCLE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  Context^.Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
  POCAGarbageCollectorBottleneck(Context^.Instance);
  result.Num:=1;
 end;
 
-function POCAGarbageCollectorFunctionALLOCATED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionALLOCATED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.Allocated;
 end;
 
-function POCAGarbageCollectorFunctionUSED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionUSED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=POCAGarbageCollectorUsed(Context^.Instance);
 end;
 
-function POCAGarbageCollectorFunctionFree(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGarbageCollectorFunctionFree(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=POCAGarbageCollectorFree(Context^.Instance);
 end;
@@ -10600,9 +10599,9 @@ begin
  result:=StringReplace(ChangeFileExt(ExtractFileName(aModuleFileName),''),'\','/',[rfReplaceAll]);
 end;
 
-function POCAGlobalFunctionIMPORTREQUIRE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer;const IsRequire:Boolean):TPOCAValue;
-var ModuleLoaderFunctionIndex:longint;
-    Index:longword;
+function POCAGlobalFunctionIMPORTREQUIRE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer;const IsRequire:Boolean):TPOCAValue;
+var ModuleLoaderFunctionIndex:TPOCAInt32;
+    Index:TPOCAUInt32;
     SubContext:PPOCAContext;
     Code,Imports,ModuleScope,Import,Value,ExportValue,ModuleValue,ModuleTime:TPOCAValue;
     ModuleName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
@@ -10772,17 +10771,17 @@ begin
 
 end;
 
-function POCAGlobalFunctionIMPORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionIMPORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=POCAGlobalFunctionIMPORTREQUIRE(Context,This,Arguments,CountArguments,UserData,false);
 end;
 
-function POCAGlobalFunctionREQUIRE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionREQUIRE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=POCAGlobalFunctionIMPORTREQUIRE(Context,This,Arguments,CountArguments,UserData,true);
 end;
 
-function POCAModuleManagerFunctionLOADED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAModuleManagerFunctionLOADED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ModuleScope,ModuleValue,ModuleTime:TPOCAValue;
     ModuleName,CleanedModuleName:TPOCAUTF8String;
 begin
@@ -10801,7 +10800,7 @@ begin
  end;
 end;
 
-function POCAModuleManagerFunctionREMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAModuleManagerFunctionREMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ModuleScope,Value,ModuleValue,ModuleTime:TPOCAValue;
     ModuleName,CleanedModuleName:TPOCAUTF8String;
 begin
@@ -10829,8 +10828,8 @@ begin
  end;
 end;
 
-function POCAModuleManagerFunctionGETMODULEFILETIME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var ModuleLoaderFunctionIndex:longint;
+function POCAModuleManagerFunctionGETMODULEFILETIME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var ModuleLoaderFunctionIndex:TPOCAInt32;
     ModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
     ModuleDateTime:TDateTime;
     OK:Boolean;
@@ -10867,7 +10866,7 @@ begin
  POCAAddNativeFunction(Context,result,'getModuleFileTime',POCAModuleManagerFunctionGETMODULEFILETIME);
 end;
 
-function POCAMathFunctionMIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionMIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<2 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.min"');
@@ -10875,7 +10874,7 @@ begin
  result.Num:=Min(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1]));
 end;
 
-function POCAMathFunctionMAX(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionMAX(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<2 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.max"');
@@ -10883,7 +10882,7 @@ begin
  result.Num:=Max(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1]));
 end;
 
-function POCAMathFunctionCLAMP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionCLAMP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<3 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.clamp"');
@@ -10891,7 +10890,7 @@ begin
  result.Num:=Min(Max(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1])),POCAGetNumberValue(Context,Arguments^[2]));
 end;
 
-function POCAMathFunctionABS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionABS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.abs"');
@@ -10899,7 +10898,7 @@ begin
  result.Num:=abs(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionSIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionSIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.sin"');
@@ -10907,7 +10906,7 @@ begin
  result.Num:=sin(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionCOS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionCOS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.cos"');
@@ -10915,7 +10914,7 @@ begin
  result.Num:=cos(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionTAN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionTAN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.tan"');
@@ -10923,7 +10922,7 @@ begin
  result.Num:=tan(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionEXP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionEXP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.exp"');
@@ -10931,7 +10930,7 @@ begin
  result.Num:=exp(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionLN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionLN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.ln"');
@@ -10939,7 +10938,7 @@ begin
  result.Num:=ln(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionLOG(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionLOG(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.log"');
@@ -10947,7 +10946,7 @@ begin
  result.Num:=ln(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionSQR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionSQR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.sqr"');
@@ -10955,7 +10954,7 @@ begin
  result.Num:=sqr(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionSQRT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionSQRT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.sqrt"');
@@ -10963,7 +10962,7 @@ begin
  result.Num:=sqrt(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionATAN2(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionATAN2(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<2 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.atan2"');
@@ -10971,7 +10970,7 @@ begin
  result.Num:=ArcTan2(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1]));
 end;
 
-function POCAMathFunctionACOS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionACOS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.acos"');
@@ -10979,7 +10978,7 @@ begin
  result.Num:=ArcCos(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionASIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionASIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.asin"');
@@ -10987,7 +10986,7 @@ begin
  result.Num:=ArcSin(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionATAN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionATAN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.atan"');
@@ -10995,7 +10994,7 @@ begin
  result.Num:=ArcTan(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionCOTAN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionCOTAN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.cotan"');
@@ -11003,7 +11002,7 @@ begin
  result.Num:=Cotan(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionSECANT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionSECANT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.secant"');
@@ -11011,7 +11010,7 @@ begin
  result.Num:=Secant(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionCOSECANT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionCOSECANT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.cosecant"');
@@ -11019,7 +11018,7 @@ begin
  result.Num:=Cosecant(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionHYPOT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionHYPOT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<2 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.hypot"');
@@ -11027,7 +11026,7 @@ begin
  result.Num:=Hypot(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1]));
 end;
 
-function POCAMathFunctionCEIL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionCEIL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.ceil"');
@@ -11035,7 +11034,7 @@ begin
  result.Num:=ceil(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionFLOOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionFLOOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.floor"');
@@ -11043,7 +11042,7 @@ begin
  result.Num:=floor(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionLOG10(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionLOG10(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.log10"');
@@ -11051,7 +11050,7 @@ begin
  result.Num:=Log10(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionLOG2(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionLOG2(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.log2"');
@@ -11059,7 +11058,7 @@ begin
  result.Num:=Log2(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionLOGN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionLOGN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<2 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.logn"');
@@ -11067,7 +11066,7 @@ begin
  result.Num:=LogN(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1]));
 end;
 
-function POCAMathFunctionPOW(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionPOW(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<2 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.pow"');
@@ -11075,7 +11074,7 @@ begin
  result.Num:=Math.Power(POCAGetNumberValue(Context,Arguments^[0]),POCAGetNumberValue(Context,Arguments^[1]));
 end;
 
-function POCAMathFunctionSINH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionSINH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.sinh"');
@@ -11083,7 +11082,7 @@ begin
  result.Num:=sinh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionCOSH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionCOSH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.cosh"');
@@ -11091,7 +11090,7 @@ begin
  result.Num:=cosh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionTANH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionTANH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.tanh"');
@@ -11099,7 +11098,7 @@ begin
  result.Num:=tanh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionASINH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionASINH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.sinh"');
@@ -11107,7 +11106,7 @@ begin
  result.Num:=arcsinh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionACOSH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionACOSH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.acosh"');
@@ -11115,7 +11114,7 @@ begin
  result.Num:=arccosh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionATANH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionATANH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.atanh"');
@@ -11123,7 +11122,7 @@ begin
  result.Num:=arctanh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionCOTH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionCOTH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.coth"');
@@ -11131,7 +11130,7 @@ begin
  result.Num:=1.0/Math.tanh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionSECH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionSECH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.sech"');
@@ -11139,7 +11138,7 @@ begin
  result.Num:=1.0/Math.cosh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionCSCH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionCSCH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.csch"');
@@ -11147,7 +11146,7 @@ begin
  result.Num:=1.0/Math.sinh(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionACOT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionACOT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Value:double;
 begin
  if CountArguments=0 then begin
@@ -11161,7 +11160,7 @@ begin
  end;
 end;
 
-function POCAMathFunctionASEC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionASEC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Value:double;
 begin
  if CountArguments=0 then begin
@@ -11175,7 +11174,7 @@ begin
  end;
 end;
 
-function POCAMathFunctionACSC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionACSC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Value:double;
 begin
  if CountArguments=0 then begin
@@ -11189,7 +11188,7 @@ begin
  end;
 end;
 
-function POCAMathFunctionACOTH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionACOTH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Value:double;
 begin
  if CountArguments=0 then begin
@@ -11205,7 +11204,7 @@ begin
  end;
 end;
 
-function POCAMathFunctionASECH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionASECH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Value:double;
 begin
  if CountArguments=0 then begin
@@ -11221,7 +11220,7 @@ begin
  end;
 end;
 
-function POCAMathFunctionACSCH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionACSCH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Value:double;
 begin
  if CountArguments=0 then begin
@@ -11231,7 +11230,7 @@ begin
  result.Num:=Ln(sqrt(1.0+(1.0/sqr(Value))+(1.0/Value)));
 end;
 
-function POCAMathFunctionROUND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionROUND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.round"');
@@ -11239,7 +11238,7 @@ begin
  result.Num:=System.round(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionTRUNC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionTRUNC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.trunc"');
@@ -11247,20 +11246,20 @@ begin
  result.Num:=System.trunc(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.int"');
  end;
- double(pointer(@result)^):=System.int(POCAGetNumberValue(Context,Arguments^[0]));
+ double(TPOCAPointer(@result)^):=System.int(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
-function POCAMathFunctionRANDOM(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionRANDOM(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=random;
 end;
 
-function POCAMathFunctionISNAN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionISNAN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.isNaN"');
@@ -11268,7 +11267,7 @@ begin
  result.Num:=ord(POCAIsNaN(POCAGetNumberValue(Context,Arguments^[0]))) and 1;
 end;
 
-function POCAMathFunctionISINFINITE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionISINFINITE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.isInfinite"');
@@ -11276,7 +11275,7 @@ begin
  result.Num:=ord(POCAIsInfinite(POCAGetNumberValue(Context,Arguments^[0]))) and 1;
 end;
 
-function POCAMathFunctionISFINITE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionISFINITE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.isFinite"');
@@ -11284,7 +11283,7 @@ begin
  result.Num:=ord(POCAIsFinite(POCAGetNumberValue(Context,Arguments^[0]))) and 1;
 end;
 
-function POCAMathFunctionFRAC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAMathFunctionFRAC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "Math.frac"');
@@ -11408,8 +11407,8 @@ begin
  result^.SystemHandle:=SystemHandle;
 end;
 
-function POCAIOFunctionOPEN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var OldFileMode:byte;
+function POCAIOFunctionOPEN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var OldFileMode:TPOCAUInt8;
     fn,fm:TPOCAUTF8String;
     t:^text;
     f:^file;
@@ -11517,7 +11516,7 @@ begin
  end;
 end;
 
-function POCAIOFunctionCLOSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAIOFunctionCLOSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var IOData:PPOCAIOGhostData;
 begin
  if POCAGhostGetType(This)<>@POCAIOGhost then begin
@@ -11546,7 +11545,7 @@ begin
  IOData^.BinaryHandle:=nil;
 end;
 
-function POCAIOFunctionEOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAIOFunctionEOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var IOData:PPOCAIOGhostData;
 begin
  if POCAGhostGetType(This)<>@POCAIOGhost then begin
@@ -11562,10 +11561,10 @@ begin
  end;
 end;
 
-function POCAIOFunctionREAD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAIOFunctionREAD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var IOData:PPOCAIOGhostData;
     s:TPOCARawByteString;
-    i,Len:longint;
+    i,Len:TPOCAInt32;
 begin
  if POCAGhostGetType(This)<>@POCAIOGhost then begin
   POCARuntimeError(Context,'Bad THIS value');
@@ -11590,7 +11589,7 @@ begin
  end;
 end;
 
-function POCAIOFunctionWRITE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAIOFunctionWRITE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var IOData:PPOCAIOGhostData;
     s:TPOCARawByteString;
 begin
@@ -11616,7 +11615,7 @@ begin
  end;
 end;
 
-function POCAIOFunctionWRITELN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAIOFunctionWRITELN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var IOData:PPOCAIOGhostData;
     s:TPOCARawByteString;
 begin
@@ -11642,7 +11641,7 @@ begin
  end;
 end;
 
-function POCAIOFunctionREADLN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAIOFunctionREADLN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var IOData:PPOCAIOGhostData;
     s:TPOCARawByteString;
 begin
@@ -11690,9 +11689,9 @@ end;
 
 const POCARegExpGhost:TPOCAGhostType=(Destroy:POCARegExpGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'RegExp');
 
-function POCARegExpFunctionESCAPE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCARegExpFunctionESCAPE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var a,b:TPOCARawByteString;
-    i:longint;
+    i:TPOCAInt32;
     c:ansichar;
 begin
  if CountArguments>0 then begin
@@ -11712,9 +11711,9 @@ begin
  end;
 end;
 
-function POCARegExpFunctionCOMPILE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCARegExpFunctionCOMPILE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
-    IsUTF8:longint;
+    IsUTF8:TPOCAInt32;
 begin
  if CountArguments>0 then begin
   if POCAGhostGetType(Arguments^[0])=@POCARegExpGhost then begin
@@ -11735,11 +11734,11 @@ begin
  end;
 end;
 
-function POCARegExpFunctionEXEC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCARegExpFunctionEXEC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var RegExp:TFLRE;
     MultipleCaptures:TFLREMultiCaptures;
     Captures:TFLRECaptures;
-    StartCodeUnit,Limit,mi,mc,i:longint;
+    StartCodeUnit,Limit,mi,mc,i:TPOCAInt32;
     s:TPOCARawByteString;
     CapturesArray,v:TPOCAValue;
 begin
@@ -11812,9 +11811,9 @@ begin
  end;
 end;
 
-function POCARegExpFunctionTEST(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCARegExpFunctionTEST(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var RegExp:TFLRE;
-    StartCodeUnit:longint;
+    StartCodeUnit:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if POCAGhostGetType(This)<>@POCARegExpGhost then begin
@@ -11840,9 +11839,9 @@ begin
  end;
 end;
 
-function POCARegExpFunctionFIND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCARegExpFunctionFIND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var RegExp:TFLRE;
-    StartCodeUnit:longint;
+    StartCodeUnit:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if POCAGhostGetType(This)<>@POCARegExpGhost then begin
@@ -11868,11 +11867,11 @@ begin
  end;
 end;
 
-function POCARegExpFunctionMATCH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCARegExpFunctionMATCH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var RegExp:TFLRE;
     MultipleCaptures:TFLREMultiCaptures;
     Captures:TFLRECaptures;
-    StartCodeUnit,Limit,mi,mc,i:longint;
+    StartCodeUnit,Limit,mi,mc,i:TPOCAInt32;
     s:TPOCARawByteString;
     CapturesArray:TPOCAValue;
 begin
@@ -11935,10 +11934,10 @@ begin
  end;
 end;
 
-function POCARegExpFunctionSPLIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCARegExpFunctionSPLIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var RegExp:TFLRE;
     Strings:TFLREStrings;
-    StartCodeUnit,Limit,i:longint;
+    StartCodeUnit,Limit,i:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if POCAGhostGetType(This)<>@POCARegExpGhost then begin
@@ -11980,9 +11979,9 @@ begin
  end;
 end;
 
-function POCARegExpFunctionREPLACE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCARegExpFunctionREPLACE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var RegExp:TFLRE;
-    ReplacementStringIsUTF8,ReplacementStringLen,StartCodeUnit,Limit:longint;
+    ReplacementStringIsUTF8,ReplacementStringLen,StartCodeUnit,Limit:TPOCAInt32;
     s,ReplacementString,OutputString:TPOCARawByteString;
 begin
  if POCAGhostGetType(This)<>@POCARegExpGhost then begin
@@ -12087,9 +12086,9 @@ begin
  end;
 end;
 
-function POCACoroutineGhostMarkEx(const Data:Pointer):longbool;
+function POCACoroutineGhostMarkEx(const Data:TPOCAPointer):TPOCABool32;
 var DataCasted:PPOCACoroutineData;
-    i:longint;
+    i:TPOCAInt32;
 begin
  result:=false;
  if assigned(Data) then begin
@@ -12114,7 +12113,7 @@ begin
  end;
 end;
 
-function POCACoroutineGhostMark(const Ghost:PPOCAGhost):longbool;
+function POCACoroutineGhostMark(const Ghost:PPOCAGhost):TPOCABool32;
 begin
  if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
   result:=POCACoroutineGhostMarkEx(Ghost^.Ptr);
@@ -12144,9 +12143,9 @@ end;
 
 const POCACoroutineGhost:TPOCAGhostType=(Destroy:POCACoroutineGhostDestroy;CanDestroy:nil;Mark:POCACoroutineGhostMark;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Coroutine');
 
-function POCACoroutineFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCACoroutineFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
-    i:longint;
+    i:TPOCAInt32;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -12155,7 +12154,7 @@ begin
  end;
  begin
   i:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Arguments^[0]))^.Code))^.CountArguments;
-  if (CountArguments-1)<longint(i) then begin
+  if (CountArguments-1)<TPOCAInt32(i) then begin
    POCARuntimeError(Context,'Too few coroutine function arguments (we have '+TPOCARawByteString(IntToStr(CountArguments-1))+' but we do need '+TPOCARawByteString(IntToStr(i))+')');
   end;
  end;
@@ -12192,7 +12191,7 @@ begin
  end;
 end;
 
-function POCACoroutineFunctionRESUME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCACoroutineFunctionRESUME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
 begin
  if POCAGhostGetType(This)=@POCACoroutineGhost then begin
@@ -12225,7 +12224,7 @@ begin
  end;
 end;
 
-function POCACoroutineFunctionYIELD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCACoroutineFunctionYIELD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
 begin
 //result:=POCAValueNull;
@@ -12255,7 +12254,7 @@ begin
  end;
 end;
 
-function POCACoroutineFunctionGET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCACoroutineFunctionGET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
 begin
  if assigned(Context) then begin
@@ -12289,7 +12288,7 @@ begin
  POCAAddNativeFunction(Context,result,'resume',POCACoroutineFunctionRESUME);
 end;
 
-procedure POCAThreadDestroy(Data:pointer);
+procedure POCAThreadDestroy(Data:TPOCAPointer);
 var DataCasted:PPOCAThreadData absolute Data;
 begin
  if assigned(Data) then begin
@@ -12347,9 +12346,9 @@ begin
  end;
 end;
 
-function POCAThreadGhostMarkEx(const Data:Pointer):longbool;
+function POCAThreadGhostMarkEx(const Data:TPOCAPointer):TPOCABool32;
 var DataCasted:PPOCAThreadData;
-    i:longint;
+    i:TPOCAInt32;
 begin
  result:=false;
  if assigned(Data) then begin
@@ -12368,7 +12367,7 @@ begin
  end;
 end;
 
-function POCAThreadGhostMark(const Ghost:PPOCAGhost):longbool;
+function POCAThreadGhostMark(const Ghost:PPOCAGhost):TPOCABool32;
 begin
  if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
   result:=POCAThreadGhostMarkEx(Ghost^.Ptr);
@@ -12379,9 +12378,9 @@ end;
 
 const POCAThreadGhost:TPOCAGhostType=(Destroy:POCAThreadGhostDestroy;CanDestroy:nil;Mark:POCAThreadGhostMark;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Thread');
 
-function POCAThreadFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAThreadFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ThreadData:PPOCAThreadData;
-    i:longint;
+    i:TPOCAInt32;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -12390,7 +12389,7 @@ begin
  end;
  begin
   i:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Arguments^[0]))^.Code))^.CountArguments;
-  if (CountArguments-1)<longint(i) then begin
+  if (CountArguments-1)<TPOCAInt32(i) then begin
    POCARuntimeError(Context,'Too few thread function arguments (we have '+TPOCARawByteString(IntToStr(CountArguments-1))+' but we do need '+TPOCARawByteString(IntToStr(i))+')');
   end;
  end;
@@ -12415,7 +12414,7 @@ begin
 {$ifdef fpc}
   ThreadData^.Handle:=BeginThread(POCAThreadProc,ThreadData,ThreadData^.ThreadID);
 {$else}
-  ThreadData^.Handle:=BeginThread(nil,0,pointer(@POCAThreadProc),ThreadData,{$ifdef Windows}CREATE_SUSPENDED{$else}0{$endif},ThreadData^.ThreadID);
+  ThreadData^.Handle:=BeginThread(nil,0,TPOCAPointer(@POCAThreadProc),ThreadData,{$ifdef Windows}CREATE_SUSPENDED{$else}0{$endif},ThreadData^.ThreadID);
 {$endif}
   if ThreadData^.Handle=0 then begin
    POCARuntimeError(Context,'Thread creation failed');
@@ -12429,7 +12428,7 @@ begin
  end;
 end;
 
-function POCAThreadFunctionRESUME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAThreadFunctionRESUME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ThreadData:PPOCAThreadData;
 begin
  if POCAGhostGetType(This)=@POCAThreadGhost then begin
@@ -12452,7 +12451,7 @@ begin
  end;
 end;
 
-function POCAThreadFunctionSUSPEND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAThreadFunctionSUSPEND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ThreadData:PPOCAThreadData;
 begin
  if POCAGhostGetType(This)=@POCAThreadGhost then begin
@@ -12472,7 +12471,7 @@ begin
  end;
 end;
 
-function POCAThreadFunctionKILL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAThreadFunctionKILL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ThreadData:PPOCAThreadData;
 begin
 //result:=POCAValueNull;
@@ -12507,7 +12506,7 @@ begin
  end;
 end;
 
-function POCAThreadFunctionTERMINATED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAThreadFunctionTERMINATED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ThreadData:PPOCAThreadData;
 begin
  if POCAGhostGetType(This)=@POCAThreadGhost then begin
@@ -12523,9 +12522,9 @@ begin
  end;
 end;
 
-function POCAThreadFunctionWAIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAThreadFunctionWAIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ThreadData:PPOCAThreadData;
-    ms:longint;
+    ms:TPOCAInt32;
 begin
  if POCAGhostGetType(This)=@POCAThreadGhost then begin
   ThreadData:=PPOCAThreadData(POCAGhostGetPointer(This));
@@ -12535,7 +12534,7 @@ begin
     WaitForThreadTerminate(ThreadData^.Handle,0);
 {$else}
 {$ifdef win32}
-    WaitForSingleObject(ThreadData^.Handle,longword(-1));
+    WaitForSingleObject(ThreadData^.Handle,TPOCAUInt32(-1));
 {$endif}
 {$endif}
     TPasMPInterlocked.Write(ThreadData^.Terminated,true);
@@ -12545,7 +12544,7 @@ begin
     WaitForThreadTerminate(ThreadData^.Handle,ms);
 {$else}
 {$ifdef win32}
-    WaitForSingleObject(ThreadData^.Handle,longword(ms));
+    WaitForSingleObject(ThreadData^.Handle,TPOCAUInt32(ms));
 {$endif}
 {$endif}
    end;
@@ -12588,13 +12587,13 @@ end;
 
 const POCALockGhost:TPOCAGhostType=(Destroy:POCALockGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Lock');
 
-function POCALockFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCALockFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=POCANewGhost(Context,@POCALockGhost,POCALockCreate);
  POCAGhostSetHashValue(result,Context^.Instance.Globals.LockHash);
 end;
 
-function POCALockFunctionENTER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCALockFunctionENTER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if POCAGhostGetType(This)=@POCALockGhost then begin
   POCAGarbageCollectorUnlock(Context);
@@ -12609,7 +12608,7 @@ begin
  end;
 end;
 
-function POCALockFunctionLEAVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCALockFunctionLEAVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -12640,13 +12639,13 @@ end;
 
 const POCASemaphoreGhost:TPOCAGhostType=(Destroy:POCASemaphoreGhostDestroy;CanDestroy:nil;Mark:nil;ExistKey:nil;GetKey:nil;SetKey:nil;Name:'Semaphore');
 
-function POCASemaphoreFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCASemaphoreFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=POCANewGhost(Context,@POCASemaphoreGhost,POCASemaphoreCreate);
  POCAGhostSetHashValue(result,Context^.Instance.Globals.SemaphoreHash);
 end;
 
-function POCASemaphoreFunctionDOWN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCASemaphoreFunctionDOWN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -12660,7 +12659,7 @@ begin
  end;
 end;
 
-function POCASemaphoreFunctionUP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCASemaphoreFunctionUP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -12682,17 +12681,17 @@ begin
  POCAAddNativeFunction(Context,result,'up',POCASemaphoreFunctionUP);
 end;
 
-function POCADateTimeFunctionNOW(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCADateTimeFunctionNOW(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=SysUtils.Now;
 end;
 
-function POCADateTimeFunctionNOWUTC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCADateTimeFunctionNOWUTC(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=NowUTC;
 end;
 
-function POCADateTimeFunctionMILLISECONDS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCADateTimeFunctionMILLISECONDS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "DateTime.milliseconds"');
@@ -12708,8 +12707,8 @@ begin
  POCAAddNativeFunction(Context,result,'milliseconds',POCADateTimeFunctionMILLISECONDS);
 end;
 
-function POCAArrayFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAArrayFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
 begin
  result:=POCANewArray(Context);
  if CountArguments>0 then begin
@@ -12726,7 +12725,7 @@ begin
  POCAAddNativeFunction(Context,result,'create',POCAArrayFunctionCREATE);
 end;
 
-function POCAStringFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
   result:=POCAStringValue(Context,Arguments^[0]);
@@ -12735,7 +12734,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionDUMP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionDUMP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
   result:=POCANewString(Context,POCAStringDump(Context,Arguments^[0]));
@@ -12744,9 +12743,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionFROMCODEPOINTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionFROMCODEPOINTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
-    i,j:longint;
+    i,j:TPOCAInt32;
 begin
  if CountArguments>0 then begin
   s:='';
@@ -12766,9 +12765,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionFROMCODEUNITS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionFROMCODEUNITS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
-    i,j:longint;
+    i,j:TPOCAInt32;
 begin
  if CountArguments>0 then begin
   s:='';
@@ -12776,12 +12775,12 @@ begin
    j:=POCAArraySize(Arguments^[0]);
    SetLength(s,j);
    for i:=1 to j do begin
-    s[i]:=AnsiChar(byte(trunc(POCAGetNumberValue(Context,POCAArrayGet(Arguments^[0],i-1)))));
+    s[i]:=AnsiChar(TPOCAUInt8(trunc(POCAGetNumberValue(Context,POCAArrayGet(Arguments^[0],i-1)))));
    end;
   end else begin
    SetLength(s,CountArguments);
    for i:=1 to CountArguments do begin
-    s[i]:=AnsiChar(byte(trunc(POCAGetNumberValue(Context,Arguments^[i-1]))));
+    s[i]:=AnsiChar(TPOCAUInt8(trunc(POCAGetNumberValue(Context,Arguments^[i-1]))));
    end;
   end;
   result:=POCANewString(Context,s);
@@ -12799,7 +12798,7 @@ begin
  POCAAddNativeFunction(Context,result,'fromCodeUnits',POCAStringFunctionFROMCODEUNITS);
 end;
 
-function POCANumberFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCANumberFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
   if CountArguments>1 then begin
@@ -12828,7 +12827,7 @@ begin
  POCAAddNativeFunction(Context,result,'create',POCANumberFunctionCREATE);
 end;
 
-function POCABooleanFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCABooleanFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin                  
  if CountArguments>0 then begin
   result:=POCABooleanValue(Context,Arguments^[0]);
@@ -12843,8 +12842,8 @@ begin
  POCAAddNativeFunction(Context,result,'create',POCABooleanFunctionCREATE);
 end;
 
-function POCAConsoleFunctionLOG(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAConsoleFunctionLOG(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
     Value:TPOCAValue;
     s:String;
 begin
@@ -12892,7 +12891,7 @@ begin
  result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
-function POCAConsoleFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAConsoleFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
   result:=POCANewString(Context,ReadLine(Context,POCAGetStringValue(Context,Arguments^[0])));
@@ -12915,12 +12914,12 @@ begin
  end;
 end;
 
-function TPOCANativeObjectCanDestroy(const Ghost:PPOCAGhost):longbool;
+function TPOCANativeObjectCanDestroy(const Ghost:PPOCAGhost):TPOCABool32;
 begin
  result:=assigned(Ghost) and assigned(Ghost^.Ptr);
 end;
 
-function TPOCANativeObjectFunctionNativeMethodCall(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function TPOCANativeObjectFunctionNativeMethodCall(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var PropertyItem:PPOCANativeObjectProperty;
 begin
  PropertyItem:=UserData;
@@ -12932,7 +12931,7 @@ begin
  end;
 end;
 
-function TPOCANativeObjectMark(const Ghost:PPOCAGhost):longbool;
+function TPOCANativeObjectMark(const Ghost:PPOCAGhost):TPOCABool32;
 begin
  if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
   result:=TPOCANativeObject(Ghost^.Ptr).Mark;
@@ -12949,26 +12948,26 @@ type PMethodNameRec=^TMethodNameRec;
      TMethodNameRec=packed record
 {$ifdef fpc}
       Name:PShortString;
-      Address:pointer;
+      Address:TPOCAPointer;
 {$else}
-      Size:word;
-      Address:pointer;
+      Size:TPOCAUInt16;
+      Address:TPOCAPointer;
       Name:ShortString;
 {$endif}
      end;
-     TMethodNameRecs=packed array[word] of TMethodNameRec;
+     TMethodNameRecs=packed array[TPOCAUInt16] of TMethodNameRec;
      PMethodNameTable=^TMethodNameTable;
      TMethodNameTable=packed record
-      Count:{$ifdef fpc}longword{$else}word{$endif};
+      Count:{$ifdef fpc}TPOCAUInt32{$else}TPOCAUInt16{$endif};
       Methods:TMethodNameRecs;
      end;
-var Index,Count:longint;
+var Index,Count:TPOCAInt32;
     Hash,EventsHash:PPOCAHash;
 //  HashRec,EventsHashRec:PPOCAHashRecord;
     MethodTable:PMethodNameTable;
     MethodNameRec:PMethodNameRec;
     MethodName:string;
-    MethodAddress:pointer;
+    MethodAddress:TPOCAPointer;
     NativeFunction:TPOCANativeObjectMethod;
     IsEvent:boolean;
     PropertyItem:PPOCANativeObjectProperty;
@@ -13012,7 +13011,7 @@ begin
  try
 
   Count:=fPropListLen;
-  MethodTable:=pointer(pointer(TPOCAPtrInt(TPOCAPtrInt(pointer(self)^)+vmtMethodTable))^);
+  MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(self)^)+vmtMethodTable))^);
   if assigned(MethodTable) then begin
    MethodNameRec:=@MethodTable^.Methods[0];
    for Index:=0 to MethodTable^.Count-1 do begin
@@ -13044,7 +13043,7 @@ begin
   end;
 
   Count:=fPropListLen;
-  MethodTable:=pointer(pointer(TPOCAPtrInt(TPOCAPtrInt(pointer(self)^)+vmtMethodTable))^);
+  MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(self)^)+vmtMethodTable))^);
   if assigned(MethodTable) then begin
    MethodNameRec:=@MethodTable^.Methods[0];
    for Index:=0 to MethodTable^.Count-1 do begin
@@ -13110,7 +13109,7 @@ begin
 end;
 
 function TPOCANativeObject.Mark:boolean;
-var PropertyIndex:longint;
+var PropertyIndex:TPOCAInt32;
     PropertyItem:PPOCANativeObjectProperty;
     PropInfo:PPropInfo;
     AObject:TObject;
@@ -13136,10 +13135,10 @@ begin
  result:=true;
 end;
 
-function TPOCANativeObject.FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):longint;
+function TPOCANativeObject.FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32;
 var PropertyItem:PPOCANativeObjectProperty;
 begin
- if assigned(CacheIndex) and ((longint(CacheIndex^)>=0) and (longint(CacheIndex^)<fCountProperties)) then begin
+ if assigned(CacheIndex) and ((TPOCAInt32(CacheIndex^)>=0) and (TPOCAInt32(CacheIndex^)<fCountProperties)) then begin
   PropertyItem:=@fProperties[CacheIndex^];
   if PropertyItem^.Key.CastedInt64=Key.CastedInt64 then begin
    result:=CacheIndex^;
@@ -13153,7 +13152,7 @@ begin
  end;
 end;
 
-function TPOCANativeObject.GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:longint;var Value:TPOCAValue):boolean;
+function TPOCANativeObject.GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean;
 var PropInfo:PPropInfo;
     AObject:TObject;
 begin
@@ -13179,10 +13178,10 @@ begin
       Value.Num:=GetOrdProp(self,PropInfo);
      end;
      tkChar:begin
-      Value:=POCANewString(Context,PUCUUTF16ToUTF8(WideChar(word(GetOrdProp(self,PropInfo)))));
+      Value:=POCANewString(Context,PUCUUTF16ToUTF8(WideChar(TPOCAUInt16(GetOrdProp(self,PropInfo)))));
      end;
      tkWChar{$ifdef fpc},tkUChar{$endif}:begin
-      Value:=POCANewString(Context,PUCUUTF16ToUTF8(WideChar(word(GetOrdProp(self,PropInfo)))));
+      Value:=POCANewString(Context,PUCUUTF16ToUTF8(WideChar(TPOCAUInt16(GetOrdProp(self,PropInfo)))));
      end;
      tkInt64{$ifdef fpc},tkQWORD{$endif}:begin
       Value.Num:=GetOrdProp(self,PropInfo);
@@ -13219,7 +13218,7 @@ begin
  end;
 end;
 
-function TPOCANativeObject.SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:longint;const Value:TPOCAValue):boolean;
+function TPOCANativeObject.SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;const Value:TPOCAValue):boolean;
 var PropInfo:PPropInfo;
 //  AObject:TObject;
     Ghost:PPOCAGhost;
@@ -13290,7 +13289,7 @@ begin
  end;
 end;
 
-function POCAGlobalFunctionSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "size"');
@@ -13315,7 +13314,7 @@ begin
  end;
 end;
 
-function POCAGlobalFunctionOWNKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionOWNKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Hash:TPOCAValue;
 begin
  if CountArguments>0 then begin
@@ -13332,7 +13331,7 @@ begin
  POCAArraySort(Context,result);
 end;
 
-function POCAGlobalFunctionKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Hash:TPOCAValue;
 begin
  if CountArguments>0 then begin
@@ -13349,8 +13348,8 @@ begin
  POCAArraySort(Context,result);
 end;
 
-function POCAGlobalFunctionPRINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAGlobalFunctionPRINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
     Value:TPOCAValue;
     s:String;
 begin
@@ -13393,8 +13392,8 @@ begin
  result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
-function POCAGlobalFunctionPUTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAGlobalFunctionPUTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
     Value:TPOCAValue;
     s:String;
 begin
@@ -13442,7 +13441,7 @@ begin
  result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
-function POCAGlobalFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
   result:=POCANewString(Context,ReadLine(Context,POCAGetStringValue(Context,Arguments^[0])));
@@ -13451,7 +13450,7 @@ begin
  end;
 end;
 
-function POCAGlobalFunctionCHR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionCHR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "chr"');
@@ -13459,7 +13458,7 @@ begin
  result:=POCANewString(Context,PUCUUTF32CharToUTF8(trunc(POCAGetNumberValue(Context,Arguments^[0]))));
 end;
 
-function POCAGlobalFunctionCONTAINS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionCONTAINS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Hash,Key:TPOCAValue;
 begin
  if CountArguments>0 then begin
@@ -13480,7 +13479,7 @@ begin
  result.Num:=ord(POCAHashGet(Context,Hash,Key,Key)) and 1;
 end;
 
-function POCAGlobalFunctionEVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionEVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var SubContext:PPOCAContext;
     Code,CallArguments,CallThis,CallNamespace:TPOCAValue;
     ArrayRecord:PPOCAArrayRecord;
@@ -13545,7 +13544,7 @@ begin
  end;
 end;
 
-function POCAGlobalFunctionCOMPILE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionCOMPILE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Name:TPOCARawByteString;
     RawCode:boolean;
 begin
@@ -13572,8 +13571,8 @@ begin
  end;
 end;
 
-function POCAGlobalFunctionCALLER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var FrameIndex:longint;
+function POCAGlobalFunctionCALLER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var FrameIndex:TPOCAInt32;
     Frame:PPOCAFrame;
     Index:TPOCAValue;
 begin
@@ -13601,8 +13600,8 @@ begin
  end;
 end;
 
-function POCAGlobalFunctionCLOSURE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAGlobalFunctionCLOSURE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
     f:PPOCAFunction;
     Func,Index:TPOCAValue;
 begin
@@ -13636,7 +13635,7 @@ begin
  end;
 end;
 
-function POCAGlobalFunctionBIND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionBIND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Func,Hash,Obj,Next:TPOCAValue;
 begin
  if CountArguments>0 then begin
@@ -13671,7 +13670,7 @@ begin
  PPOCAFunction(POCAGetValueReferencePointer(result))^.Next:=Next;
 end;
 
-function POCAGlobalFunctionCALL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionCALL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Func,CallArguments,CallThis,CallNamespace:TPOCAValue;
     SubContext:PPOCAContext;
     ArrayRecord:PPOCAArrayRecord;
@@ -13730,7 +13729,7 @@ begin
  end;
 end;
 
-function POCAGlobalFunctionSETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionSETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (CountArguments<2) or not POCAHashSetHashEvents(Context,Arguments^[0],Arguments^[1]) then begin
   POCARuntimeError(Context,'Bad arguments to "setHashEvents"');
@@ -13738,7 +13737,7 @@ begin
  result:=Arguments^[0];
 end;
 
-function POCAGlobalFunctionGETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionGETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (CountArguments<1) or not POCAIsValueHash(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "getHashEvents"');
@@ -13746,7 +13745,7 @@ begin
  result:=POCAHashGetHashEventsHash(Arguments^[0]);
 end;
 
-function POCAGlobalFunctionRAWDELETE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionRAWDELETE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (CountArguments<2) or not POCAIsValueHash(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "rawDelete"');
@@ -13754,7 +13753,7 @@ begin
  result.Num:=ord(POCAHashRawDelete(Arguments^[0],Arguments^[1])) and 1;
 end;
 
-function POCAGlobalFunctionRAWEXIST(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionRAWEXIST(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (CountArguments<2) or not POCAIsValueHash(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "rawExist"');
@@ -13762,7 +13761,7 @@ begin
  result.Num:=ord(POCAHashRawExist(Arguments^[0],Arguments^[1])) and 1;
 end;
 
-function POCAGlobalFunctionRAWGET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionRAWGET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (CountArguments<2) or not POCAIsValueHash(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "rawGet"');
@@ -13770,7 +13769,7 @@ begin
  POCAHashRawGet(Arguments^[0],Arguments^[1],result);
 end;
 
-function POCAGlobalFunctionRAWSET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionRAWSET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (CountArguments<3) or not POCAIsValueHash(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "rawSet"');
@@ -13779,7 +13778,7 @@ begin
  result:=Arguments^[0];
 end;
 
-function POCAGlobalFunctionRAWSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionRAWSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (CountArguments<1) or not POCAIsValueHash(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "rawSize"');
@@ -13787,7 +13786,7 @@ begin
  result.Num:=ord(POCAHashRawSize(Arguments^[0])) and 1;
 end;
 
-function POCAGlobalFunctionRAWKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAGlobalFunctionRAWKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Hash:TPOCAValue;
 begin
  if CountArguments>0 then begin
@@ -13848,7 +13847,7 @@ begin
  POCAAddNativeFunction(Context,result,'rawKeys',POCAGlobalFunctionRAWKEYS);
 end;
 
-function POCABaseClassFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCABaseClassFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var ConstructorValue:TPOCAValue;                        
     SubContext:PPOCAContext;
 begin
@@ -13876,7 +13875,7 @@ begin
  POCAHashSetString(Context,Context^.Instance.Globals.Namespace,'BaseClass',result);
 end;
 
-function POCAArrayFunctionEMPTY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionEMPTY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  case POCAGetValueType(This) of
   pvtARRAY:begin
@@ -13889,7 +13888,7 @@ begin
  end;
 end;
 
-function POCAArrayFunctionSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  case POCAGetValueType(This) of
   pvtARRAY:begin
@@ -13902,7 +13901,7 @@ begin
  end;
 end;
 
-function POCAArrayFunctionRESIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionRESIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=This;
  if CountArguments=0 then begin
@@ -13918,8 +13917,8 @@ begin
  end;
 end;
 
-function POCAArrayFunctionPUSH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAArrayFunctionPUSH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "push"');
@@ -13933,7 +13932,7 @@ begin
  result:=This;
 end;
 
-function POCAArrayFunctionPOP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionPOP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "pop"');
@@ -13941,8 +13940,8 @@ begin
  result:=POCAArrayPop(This);
 end;
 
-function POCAArrayFunctionSLICE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,Len,Start,Size:longint;
+function POCAArrayFunctionSLICE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Len,Start,Size:TPOCAInt32;
     LenValue:TPOCAValue;
 begin
  if CountArguments<2 then begin
@@ -13979,8 +13978,8 @@ begin
  end;
 end;
 
-function POCAArrayFunctionSPLICE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var Start,DeleteCount,InsertionCount,Size,NewSize,i:longint;
+function POCAArrayFunctionSPLICE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Start,DeleteCount,InsertionCount,Size,NewSize,i:TPOCAInt32;
 begin
  
  if not POCAIsValueArray(This) then begin
@@ -14066,8 +14065,8 @@ begin
 
 end;
 
-function POCAArrayFunctionTOSPLICED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var Start,DeleteCount,InsertionCount,Size,NewSize,Index,i:longint;
+function POCAArrayFunctionTOSPLICED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Start,DeleteCount,InsertionCount,Size,NewSize,Index,i:TPOCAInt32;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "toSpliced"');
@@ -14144,7 +14143,7 @@ begin
 
 end;
 
-function POCAArrayFunctionSORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionSORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "sort"');
@@ -14153,8 +14152,8 @@ begin
  result:=This;
 end;
 
-function POCAArrayFunctionTOSORTED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAArrayFunctionTOSORTED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "toSorted"');
@@ -14167,8 +14166,8 @@ begin
  POCAArraySort(Context,result);
 end;
 
-function POCAArrayFunctionJOIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,Size:longint;
+function POCAArrayFunctionJOIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Size:TPOCAInt32;
     SeparatorValue:TPOCAValue;
     Separator,StrValue:TPOCAUTF8String;
 begin
@@ -14199,8 +14198,8 @@ begin
  result:=POCANewString(Context,StrValue);
 end;
 
-function POCAArrayFunctionFILL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,Start,End_,Size:longint;
+function POCAArrayFunctionFILL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Start,End_,Size:TPOCAInt32;
     FillValue:TPOCAValue;
 begin
  if CountArguments<1 then begin
@@ -14232,8 +14231,8 @@ begin
  result:=This;
 end;
 
-function POCAArrayFunctionTOFILLED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,Start,End_,Size:longint;
+function POCAArrayFunctionTOFILLED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Start,End_,Size:TPOCAInt32;
     FillValue:TPOCAValue;
 begin
  if CountArguments<1 then begin
@@ -14275,8 +14274,8 @@ begin
  end;
 end;
 
-function POCAArrayFunctionDELETE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAArrayFunctionDELETE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "delete"');
@@ -14290,8 +14289,8 @@ begin
  result:=This;
 end;
 
-function POCAArrayFunctionREMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAArrayFunctionREMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "remove"');
@@ -14305,7 +14304,7 @@ begin
  result:=This;
 end;
 
-function POCAArrayFunctionINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "indexOf"');
@@ -14316,7 +14315,7 @@ begin
  result.Num:=POCAArrayIndexOf(This,Arguments^[0]);
 end;
 
-function POCAArrayFunctionLASTINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionLASTINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "lastIndexOf"');
@@ -14327,8 +14326,8 @@ begin
  result.Num:=POCAArrayLastIndexOf(This,Arguments^[0]);
 end;
 
-function POCAArrayFunctionREVERSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,j,Size:longint;
+function POCAArrayFunctionREVERSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,j,Size:TPOCAInt32;
     a,b:TPOCAValue; 
 begin
  if not POCAIsValueArray(This) then begin
@@ -14350,8 +14349,8 @@ begin
  result:=This;
 end;
 
-function POCAArrayFunctionTOREVERSED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,Size:longint;
+function POCAArrayFunctionTOREVERSED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Size:TPOCAInt32;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "toReversed"');
@@ -14365,7 +14364,7 @@ begin
  end;
 end; 
 
-function POCAArrayFunctionINCLUDES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAArrayFunctionINCLUDES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "includes"');
@@ -14376,8 +14375,8 @@ begin
  result.Num:=ord(POCAArrayIndexOf(This,Arguments^[0])>=0) and 1;
 end;
 
-function POCAArrayFunctionSHIFT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,Size:longint;
+function POCAArrayFunctionSHIFT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Size:TPOCAInt32;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "shift"');
@@ -14394,8 +14393,8 @@ begin
  end;
 end;
 
-function POCAArrayFunctionUNSHIFT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i,Size:longint;
+function POCAArrayFunctionUNSHIFT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Size:TPOCAInt32;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "unshift"');
@@ -14441,7 +14440,7 @@ begin
  POCAAddNativeFunction(Context,result,'unshift',POCAArrayFunctionUNSHIFT);
 end;
 
-function POCAHashFunctionEMPTY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionEMPTY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  case POCAGetValueType(This) of
   pvtHASH:begin
@@ -14454,7 +14453,7 @@ begin
  end;
 end;
 
-function POCAHashFunctionSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  case POCAGetValueType(This) of
   pvtHASH:begin
@@ -14467,8 +14466,8 @@ begin
  end;
 end;
 
-function POCAHashFunctionMERGE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var i:longint;
+function POCAHashFunctionMERGE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "merge"');
@@ -14484,7 +14483,7 @@ begin
  result:=This;
 end;
 
-function POCAHashFunctionCONTAINS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionCONTAINS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Hash,Key:TPOCAValue;
 begin
  Hash:=This;
@@ -14500,7 +14499,7 @@ begin
  result.Num:=ord(POCAHashGet(Context,Hash,Key,Key)) and 1;
 end;
 
-function POCAHashFunctionKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if not POCAIsValueHash(This) then begin
   POCARuntimeError(Context,'Bad this value to "keys"');
@@ -14510,7 +14509,7 @@ begin
  POCAArraySort(Context,result);
 end;
 
-function POCAHashFunctionOWNKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionOWNKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if not POCAIsValueHash(This) then begin
   POCARuntimeError(Context,'Bad this value to "ownKeys"');
@@ -14520,7 +14519,7 @@ begin
  POCAArraySort(Context,result);
 end;
 
-function POCAHashFunctionSETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionSETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (not POCAIsValueHash(This)) or (CountArguments<1) or not POCAHashSetHashEvents(Context,This,Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "setHashEvents"');
@@ -14528,7 +14527,7 @@ begin
  result:=This;
 end;
 
-function POCAHashFunctionGETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionGETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if not POCAIsValueHash(This) then begin
   POCARuntimeError(Context,'Bad arguments to "getHashEvents"');
@@ -14536,7 +14535,7 @@ begin
  result:=POCAHashGetHashEventsHash(This);
 end;
 
-function POCAHashFunctionRAWDELETE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionRAWDELETE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (not POCAIsValueHash(This)) or (CountArguments<1) then begin
   POCARuntimeError(Context,'Bad arguments to "rawDelete"');
@@ -14544,7 +14543,7 @@ begin
  result.Num:=ord(POCAHashRawDelete(This,Arguments^[0])) and 1;
 end;
 
-function POCAHashFunctionRAWEXIST(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionRAWEXIST(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (not POCAIsValueHash(This)) or (CountArguments<1) then begin
   POCARuntimeError(Context,'Bad arguments to "rawExist"');
@@ -14552,7 +14551,7 @@ begin
  result.Num:=ord(POCAHashRawExist(This,Arguments^[0])) and 1;
 end;
 
-function POCAHashFunctionRAWGET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionRAWGET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (not POCAIsValueHash(This)) or (CountArguments<1) then begin
   POCARuntimeError(Context,'Bad arguments to "rawGet"');
@@ -14560,7 +14559,7 @@ begin
  POCAHashRawGet(This,Arguments^[0],result);
 end;
 
-function POCAHashFunctionRAWSET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionRAWSET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (not POCAIsValueHash(This)) or (CountArguments<2) then begin
   POCARuntimeError(Context,'Bad arguments to "rawSet"');
@@ -14569,7 +14568,7 @@ begin
  result:=This;
 end;
 
-function POCAHashFunctionRAWSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionRAWSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if (not POCAIsValueHash(This)) or (CountArguments<0) then begin
   POCARuntimeError(Context,'Bad arguments to "rawSize"');
@@ -14577,7 +14576,7 @@ begin
  result.Num:=POCAHashRawSize(This);
 end;
 
-function POCAHashFunctionRAWKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAHashFunctionRAWKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if not POCAIsValueHash(This) then begin
   POCARuntimeError(Context,'Bad arguments to "rawKeys"');
@@ -14606,12 +14605,12 @@ begin
  POCAAddNativeFunction(Context,result,'rawKeys',POCAHashFunctionRAWKEYS);
 end;
 
-function POCANumberFunctionTOSTRING(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCANumberFunctionTOSTRING(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=POCAStringValue(Context,This);
 end;
 
-function POCANumberFunctionTOEXPONENTIAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCANumberFunctionTOEXPONENTIAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "toExponential"');
@@ -14619,7 +14618,7 @@ begin
  result:=POCANewString(Context,ConvertDoubleToString(POCAGetNumberValue(Context,This),omExponential,trunc(POCAGetNumberValue(Context,Arguments^[0]))+1));
 end;
 
-function POCANumberFunctionTOFIXED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCANumberFunctionTOFIXED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "toFixed"');
@@ -14627,7 +14626,7 @@ begin
  result:=POCANewString(Context,ConvertDoubleToString(POCAGetNumberValue(Context,This),omFixed,trunc(POCAGetNumberValue(Context,Arguments^[0]))));
 end;
 
-function POCANumberFunctionTOPRECISION(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCANumberFunctionTOPRECISION(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "toPrecision"');
@@ -14635,7 +14634,7 @@ begin
  result:=POCANewString(Context,ConvertDoubleToString(POCAGetNumberValue(Context,This),omPrecision,trunc(POCAGetNumberValue(Context,Arguments^[0]))));
 end;
 
-function POCANumberFunctionTORADIX(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCANumberFunctionTORADIX(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "toRadix"');
@@ -14653,7 +14652,7 @@ begin
  POCAAddNativeFunction(Context,result,'toRadix',POCANumberFunctionTORADIX);
 end;
 
-function POCAStringFunctionCOUNTCODEPOINTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCOUNTCODEPOINTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  case POCAGetValueType(This) of
   pvtSTRING:begin
@@ -14671,7 +14670,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionCOUNTCODEUNITS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCOUNTCODEUNITS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  case POCAGetValueType(This) of
   pvtSTRING:begin
@@ -14685,7 +14684,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionLENGTH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionLENGTH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  case POCAGetValueType(This) of
   pvtSTRING:begin
@@ -14703,7 +14702,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionTONUMBER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTONUMBER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var OK:TPasDblStrUtilsBoolean;
 begin
  if CountArguments=0 then begin
@@ -14722,14 +14721,14 @@ begin
  end;
 end;
 
-function POCAStringFunctionTOSTRING(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTOSTRING(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=POCAStringValue(Context,This);
 end;
 
-function POCAStringFunctionINCLUDES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionINCLUDES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var SearchString,InString:TPOCARawByteString;
-    SearchStringIsUTF8,InStringIsUTF8:longint;
+    SearchStringIsUTF8,InStringIsUTF8:TPOCAInt32;
     p:PPOCAString;
 begin
  if CountArguments=0 then begin
@@ -14764,9 +14763,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var SearchString,InString:TPOCARawByteString;
-    SearchStringIsUTF8,InStringIsUTF8:longint;
+    SearchStringIsUTF8,InStringIsUTF8:TPOCAInt32;
     p:PPOCAString;
 begin
  if CountArguments=0 then begin
@@ -14793,9 +14792,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionLASTINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionLASTINDEXOF(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var SearchString,InString:TPOCARawByteString;
-    SearchStringIsUTF8,InStringIsUTF8,i,j:longint;
+    SearchStringIsUTF8,InStringIsUTF8,i,j:TPOCAInt32;
     p:PPOCAString;
     OK:boolean;
 begin
@@ -14836,9 +14835,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionSPLIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionSPLIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var DelimeterString,FromString:TPOCARawByteString;
-    FromStringIsUTF8,i,j:longint;
+    FromStringIsUTF8,i,j:TPOCAInt32;
     p:PPOCAString;
 begin
  if CountArguments=0 then begin
@@ -14883,7 +14882,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionTRIM(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTRIM(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
     p:PPOCAString;
 begin
@@ -14899,7 +14898,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionTRIMLEFT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTRIMLEFT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
     p:PPOCAString;
 begin
@@ -14915,7 +14914,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionTRIMRIGHT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTRIMRIGHT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
     p:PPOCAString;
 begin
@@ -14931,7 +14930,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionTOLOWERCASE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTOLOWERCASE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
     p:PPOCAString;
 begin
@@ -14947,7 +14946,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionTOUPPERCASE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTOUPPERCASE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
     p:PPOCAString;
 begin
@@ -14963,8 +14962,8 @@ begin
  end;
 end;
 
-function POCAStringFunctionSUBSTR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
-var Len,Start,Size,IsUTF8:longint;
+function POCAStringFunctionSUBSTR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Len,Start,Size,IsUTF8:TPOCAInt32;
     LenValue:TPOCAValue;
     Str:TPOCARawByteString;
 begin
@@ -15020,20 +15019,20 @@ begin
 end;
 
 {$ifdef pocastrictutf8}
-function POCAStringFunctionTOLATIN1(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTOLATIN1(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  POCARuntimeError(Context,'"toLatin1" isn''t allowed in a strict-UTF8 Poca build');
 end;
 
-function POCAStringFunctionISLATIN1(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionISLATIN1(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=0;
 end;
 {$else}
-function POCAStringFunctionTOLATIN1(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTOLATIN1(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var d,s:TPOCARawByteString;
-    CodeUnit:longint;
-    CharValue:longword;
+    CodeUnit:TPOCAInt32;
+    CharValue:TPOCAUInt32;
 begin
  if POCAIsValueString(This) then begin
   if PPOCAString(POCAGetValueReferencePointer(This))^.UTF8<>suNOUTF8 then begin
@@ -15045,7 +15044,7 @@ begin
     if CharValue>255 then begin
      CharValue:=128;
     end;
-    d:=d+ansichar(byte(CharValue));
+    d:=d+ansichar(TPOCAUInt8(CharValue));
    end;
    result:=POCANewString(Context,d);
    PPOCAString(POCAGetValueReferencePointer(result))^.UTF8:=suNOUTF8;
@@ -15053,11 +15052,11 @@ begin
    result:=This;
   end;
  end else begin
-  result:=POCANewString(Context,ansichar(byte(trunc(POCAGetNumberValue(Context,This)))));
+  result:=POCANewString(Context,ansichar(TPOCAUInt8(trunc(POCAGetNumberValue(Context,This)))));
  end;
 end;
 
-function POCAStringFunctionISLATIN1(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionISLATIN1(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if POCAIsValueString(This) then begin
   result.Num:=2-PPOCAString(POCAGetValueReferencePointer(This))^.UTF8;
@@ -15067,7 +15066,7 @@ begin
 end;
 {$endif}
 
-function POCAStringFunctionTOUTF8(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionTOUTF8(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if POCAIsValueString(This) then begin
   if PPOCAString(POCAGetValueReferencePointer(This))^.UTF8=suNOUTF8 then begin
@@ -15080,7 +15079,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionISUTF8(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionISUTF8(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if POCAIsValueString(This) then begin
   result.Num:=PPOCAString(POCAGetValueReferencePointer(This))^.UTF8;
@@ -15089,9 +15088,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionCHARAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCHARAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Str:PPOCAString;
-    CodePoint,CodeUnit,Len:longint;
+    CodePoint,CodeUnit,Len:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if CountArguments<1 then begin
@@ -15123,7 +15122,7 @@ begin
     inc(CodePoint,Len);
    end;
    if (CodePoint>=0) and (CodePoint<Len) then begin
-    result:=POCANewString(Context,PUCUUTF32CharToUTF8(byte(ansichar(Str^.Data[CodePoint+1]))));
+    result:=POCANewString(Context,PUCUUTF32CharToUTF8(TPOCAUInt8(ansichar(Str^.Data[CodePoint+1]))));
    end else begin
   //result:=POCAValueNull;
     result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -15150,7 +15149,7 @@ begin
     inc(CodePoint,Len);
    end;
    if (CodePoint>=0) and (CodePoint<Len) then begin
-    result:=POCANewString(Context,PUCUUTF32CharToUTF8(byte(ansichar(s[CodePoint+1]))));
+    result:=POCANewString(Context,PUCUUTF32CharToUTF8(TPOCAUInt8(ansichar(s[CodePoint+1]))));
    end else begin
   //result:=POCAValueNull;
     result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -15159,9 +15158,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionCODEPOINTAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCODEPOINTAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Str:PPOCAString;
-    CodePoint,CodeUnit,Len:longint;
+    CodePoint,CodeUnit,Len:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if CountArguments<1 then begin
@@ -15193,7 +15192,7 @@ begin
     inc(CodePoint,Len);
    end;
    if (CodePoint>=0) and (CodePoint<Len) then begin
-    result.Num:=byte(ansichar(Str^.Data[CodePoint+1]));
+    result.Num:=TPOCAUInt8(ansichar(Str^.Data[CodePoint+1]));
    end else begin
   //result:=POCAValueNull;
     result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -15220,7 +15219,7 @@ begin
     inc(CodePoint,Len);
    end;
    if (CodePoint>=0) and (CodePoint<Len) then begin
-    result.Num:=byte(ansichar(s[CodePoint+1]));
+    result.Num:=TPOCAUInt8(ansichar(s[CodePoint+1]));
    end else begin
   //result:=POCAValueNull;
     result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -15229,9 +15228,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionCODEUNITAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCODEUNITAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Str:PPOCAString;
-    CodePoint,Len:longint;
+    CodePoint,Len:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if CountArguments<1 then begin
@@ -15245,7 +15244,7 @@ begin
    inc(CodePoint,Len);
   end;
   if (CodePoint>=0) and (CodePoint<Len) then begin
-   result.Num:=byte(ansichar(Str^.Data[CodePoint+1]));
+   result.Num:=TPOCAUInt8(ansichar(Str^.Data[CodePoint+1]));
   end else begin
  //result:=POCAValueNull;
    result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -15258,7 +15257,7 @@ begin
    inc(CodePoint,Len);
   end;
   if (CodePoint>=0) and (CodePoint<Len) then begin
-   result.Num:=byte(ansichar(s[CodePoint+1]));
+   result.Num:=TPOCAUInt8(ansichar(s[CodePoint+1]));
   end else begin
  //result:=POCAValueNull;
    result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -15266,9 +15265,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionCODEPOINTTOCODEUNIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCODEPOINTTOCODEUNIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Str:PPOCAString;
-    CodePoint,Len:longint;
+    CodePoint,Len:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if CountArguments<1 then begin
@@ -15331,9 +15330,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionCODEUNITTOCODEPOINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCODEUNITTOCODEPOINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Str:PPOCAString;
-    CodeUnit,Len:longint;
+    CodeUnit,Len:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if CountArguments<1 then begin
@@ -15396,9 +15395,9 @@ begin
  end;
 end;
 
-function POCAStringFunctionCODEPOINTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCODEPOINTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Str:PPOCAString;
-    CodePoint,CodeUnit,Len:longint;
+    CodePoint,CodeUnit,Len:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  result:=POCANewArray(Context);
@@ -15417,7 +15416,7 @@ begin
   end else begin
    Len:=Str^.DataLength;
    for CodeUnit:=1 to Len do begin
-    POCAArrayPush(result,POCANewNumber(Context,byte(ansichar(Str^.Data[CodeUnit]))));
+    POCAArrayPush(result,POCANewNumber(Context,TPOCAUInt8(ansichar(Str^.Data[CodeUnit]))));
    end;
   end;
  end else begin
@@ -15435,15 +15434,15 @@ begin
   end else begin
    Len:=length(s);
    for CodeUnit:=1 to Len do begin
-    POCAArrayPush(result,POCANewNumber(Context,byte(ansichar(s[CodeUnit]))));
+    POCAArrayPush(result,POCANewNumber(Context,TPOCAUInt8(ansichar(s[CodeUnit]))));
    end;
   end;
  end;
 end;
 
-function POCAStringFunctionCODEUNITS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCODEUNITS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Str:PPOCAString;
-    CodeUnit,Len:longint;
+    CodeUnit,Len:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  result:=POCANewArray(Context);
@@ -15451,20 +15450,20 @@ begin
   Str:=PPOCAString(POCAGetValueReferencePointer(This));
   Len:=Str^.DataLength;
   for CodeUnit:=1 to Len do begin
-   POCAArrayPush(result,POCANewNumber(Context,byte(ansichar(Str^.Data[CodeUnit]))));
+   POCAArrayPush(result,POCANewNumber(Context,TPOCAUInt8(ansichar(Str^.Data[CodeUnit]))));
   end;
  end else begin
   s:=POCAGetStringValue(Context,This);
   Len:=length(s);
   for CodeUnit:=1 to Len do begin
-   POCAArrayPush(result,POCANewNumber(Context,byte(ansichar(s[CodeUnit]))));
+   POCAArrayPush(result,POCANewNumber(Context,TPOCAUInt8(ansichar(s[CodeUnit]))));
   end;
  end;
 end;
 
-function POCAStringFunctionCONCAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionCONCAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s:TPOCARawByteString;
-    i,j:longint;
+    i,j:TPOCAInt32;
 begin
  if POCAIsValueString(This) then begin
   s:=PPOCAString(POCAGetValueReferencePointer(This))^.Data;
@@ -15486,9 +15485,9 @@ begin
  result:=POCANewString(Context,s);
 end;
 
-function POCAStringFunctionREPEAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint;const UserData:pointer):TPOCAValue;
+function POCAStringFunctionREPEAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var s,Src:TPOCARawByteString;
-    i,j:longint;
+    i,j:TPOCAInt32;
 begin
  if POCAIsValueString(This) then begin
   Src:=PPOCAString(POCAGetValueReferencePointer(This))^.Data;
@@ -15539,7 +15538,7 @@ begin
 end;
 
 function POCADefaultModuleFunction(const aContext:PPOCAContext;const aModuleName:TPOCAUTF8String;out aModuleCode,aModuleFileName:TPOCAUTF8String;out aModuleDateTime:TDateTime):Boolean;
-var Index:longint;
+var Index:TPOCAInt32;
     Path,FileName:TPOCAUTF8String;
 begin
 
@@ -15589,7 +15588,7 @@ begin
 end;
 
 function POCAInstanceCreate:PPOCAInstance;
-var i:longint;
+var i:TPOCAInt32;
     Context:PPOCAContext;
     Ghost:boolean;
 begin
@@ -15662,8 +15661,8 @@ begin
   end;
   result^.Globals.DeadSize:=256;
   result^.Globals.DeadCount:=0;
-  GetMem(result^.Globals.DeadBlocks,result^.Globals.DeadSize*sizeof(pointer));
-  FillChar(result^.Globals.DeadBlocks^,result^.Globals.DeadSize*sizeof(pointer),#0);
+  GetMem(result^.Globals.DeadBlocks,result^.Globals.DeadSize*sizeof(TPOCAPointer));
+  FillChar(result^.Globals.DeadBlocks^,result^.Globals.DeadSize*sizeof(TPOCAPointer),#0);
  end;
  begin
   result^.Globals.FreeContexts:=nil;
@@ -15760,7 +15759,7 @@ end;
 
 procedure POCAInstanceDestroy(var Instance:PPOCAInstance);
 var CurrentContext{,NextContext}:PPOCAContext;
-    //i:longint;
+    //i:TPOCAInt32;
     Ghost:boolean;
 begin
  if assigned(Instance) then begin
@@ -15928,12 +15927,12 @@ type PPPOCAToken=^PPOCAToken;
      TPOCAToken=packed record
       Token:TPOCATokenType;
       Visited:boolean;
-      SourceFile,SourceLine,SourceColumn:longint;
+      SourceFile,SourceLine,SourceColumn:TPOCAInt32;
       Str:TPOCARawByteString;
       Rule:TPOCATokenPrecedenceRule;
       Num:double;
       TokenListNext,Parent,Next,Previous:PPOCAToken;
-      case byte of
+      case TPOCAUInt8 of
        0:(Children,LastChild:PPOCAToken;);
        1:(Left,Right:PPOCAToken;);
      end;
@@ -15941,25 +15940,25 @@ type PPPOCAToken=^PPOCAToken;
      TPOCAParser=packed record
       Context:PPOCAContext;
       Error:TPOCARawByteString;
-      ErrorLine:longint;
+      ErrorLine:TPOCAInt32;
       Tree:TPOCAToken;
       SrcFile:TPOCAValue;
-      SourceFile:longint;
+      SourceFile:TPOCAInt32;
      end;
      TPOCAPreprocessorInputSourceKind=(iskNONE,iskFILE,iskMACRO);
      TPOCAPreprocessorInputSource=record
       Kind:TPOCAPreprocessorInputSourceKind;
       Name:TPOCARawByteString;
-      Index:longint;
+      Index:TPOCAInt32;
      end;
      TPOCAPreprocessorInputSources=array of TPOCAPreprocessorInputSource;
      TPOCAPreprocessorPragmaInfoItem=record
-      CharPos:longint;
+      CharPos:TPOCAInt32;
       Pragma:TPOCARawByteString;
      end;
      TPOCAPreprocessorPragmaInfo=array of TPOCAPreprocessorPragmaInfoItem;
      TPOCAPreprocessorOutputInfoItem=record
-      FirstCharPos,LastCharPos,Source,Line:longint;
+      FirstCharPos,LastCharPos,Source,Line:TPOCAInt32;
      end;
      TPOCAPreprocessorOutputInfo=array of TPOCAPreprocessorOutputInfoItem;
      TPOCAPreprocessor=record
@@ -15967,18 +15966,18 @@ type PPPOCAToken=^PPOCAToken;
       InputName:TPOCARawByteString;
       InputText:TPOCARawByteString;
       InputSources:TPOCAPreprocessorInputSources;
-      InputSourcesCount:longint;
+      InputSourcesCount:TPOCAInt32;
       PragmaInfo:TPOCAPreprocessorPragmaInfo;
-      PragmaInfoCount:longint;
+      PragmaInfoCount:TPOCAInt32;
       OutputInfo:TPOCAPreprocessorOutputInfo;
-      OutputInfoCount:longint;
+      OutputInfoCount:TPOCAInt32;
       OutputText:TPOCARawByteString;
-      OutputTextLength:longint;
+      OutputTextLength:TPOCAInt32;
      end;
      TPOCAPreprocessorInstance=record
       Preprocessor:TPOCAPreprocessor;
-      Source:longint;
-      Line:longint;
+      Source:TPOCAInt32;
+      Line:TPOCAInt32;
      end;
 var TokenList:PPOCAToken;
     PreprocessorInstance:TPOCAPreprocessorInstance;
@@ -15991,7 +15990,7 @@ var TokenList:PPOCAToken;
    CurrentToken:=CurrentToken^.TokenListNext;
   end;
  end;
- procedure SyntaxError(const AMessage:TPOCAUTF8String;SourceFile,SourceLine,SourceColumn:longint);
+ procedure SyntaxError(const AMessage:TPOCAUTF8String;SourceFile,SourceLine,SourceColumn:TPOCAInt32);
  begin
   raise EPOCASyntaxError.Create(SourceFile,SourceLine,SourceColumn,AMessage);
  end;
@@ -15999,16 +15998,16 @@ var TokenList:PPOCAToken;
  type //TChars=set of ansichar;
       TToken=(tNONE,tCHAR,tNUMBER,tNAME,tSTRING,TSTRINGLONG);
       TInputStackItem=record
-       Source:longint;
+       Source:TPOCAInt32;
        Buffer:TPOCARawByteString;
-       BufferPosition,BufferLine:longint;
+       BufferPosition,BufferLine:TPOCAInt32;
       end;
       TInputStack=array of TInputStackItem;
       TMacroFunction=(mfNONE,mfFILE,mfLINE,mfTIME,mfDATE,mfPRAGMA);
       TMacroBodyItemKind=(mbikTEXT,mbikPARAMETER,mbikVAARGS,mbikSPLITTER);
       TMacroBodyItem=record
        Kind:TMacroBodyItemKind;
-       Value:longint;
+       Value:TPOCAInt32;
        Text:TPOCARawByteString;
        Quote:boolean;
       end;
@@ -16017,7 +16016,7 @@ var TokenList:PPOCAToken;
        Defined:boolean;
        Name:TPOCARawByteString;
        Body:TMacroBody;
-       Parameters:longint;
+       Parameters:TPOCAInt32;
        VaArgs:boolean;
        MacroFunction:TMacroFunction;
       end;
@@ -16048,24 +16047,24 @@ var TokenList:PPOCAToken;
      CurrentTokenChar:TPOCAUCS4Char;
      CurrentTokenString:TPOCARawByteString;
      Macros:TMacros;
-     IFNestedLevel,MacroLevel:longint;
-     LastSource,LastLine:longint;
+     IFNestedLevel,MacroLevel:TPOCAInt32;
+     LastSource,LastLine:TPOCAInt32;
      InEval:boolean;
      MacroStringTree:TPOCAStringTree;
      KeywordStringTree:TPOCAStringTree;
   procedure AddWarning(const s:TPOCAUTF8String); forward;
-  function GetInputSourceIndex(Kind:TPOCAPreprocessorInputSourceKind;Name:TPOCARawByteString):longint; forward;
-  function hex2byte(c:TPOCAUCS4Char):longint;
+  function GetInputSourceIndex(Kind:TPOCAPreprocessorInputSourceKind;Name:TPOCARawByteString):TPOCAInt32; forward;
+  function hex2byte(c:TPOCAUCS4Char):TPOCAInt32;
   begin
    case c of
     ord('0')..ord('9'):begin
-     result:=c-byte('0');
+     result:=c-TPOCAUInt8('0');
     end;
     ord('a')..ord('f'):begin
-     result:=c-byte('a')+$a;
+     result:=c-TPOCAUInt8('a')+$a;
     end;
     ord('A')..ord('F'):begin
-     result:=c-byte('F')+$a;
+     result:=c-TPOCAUInt8('F')+$a;
     end;
     else begin
      result:=0;
@@ -16073,11 +16072,11 @@ var TokenList:PPOCAToken;
    end;
   end;
   function ProprocessInputSourceChars(Kind:TPOCAPreprocessorInputSourceKind;const Name,Body:TPOCARawByteString):TPOCAUTF8String;
-  var i,OutLen,ls,ll:longint;
+  var i,OutLen,ls,ll:TPOCAInt32;
       sc:ansichar;
       OutStr,s:TPOCARawByteString;
    procedure AddChar(NewChar:ansichar);
-   var NewLen:longint;
+   var NewLen:TPOCAInt32;
    begin
     NewLen:=OutLen+1;
     if NewLen>=length(OutStr) then begin
@@ -16087,7 +16086,7 @@ var TokenList:PPOCAToken;
     OutLen:=NewLen;
    end;
    procedure AddString(const NewString:TPOCARawByteString);
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     for i:=1 to length(NewString) do begin
      AddChar(NewString[i]);
@@ -16180,7 +16179,7 @@ var TokenList:PPOCAToken;
     LastLine:=ll;
    end;
   end;
-  function LookUpKeyword(const Name:TPOCARawByteString):longint;
+  function LookUpKeyword(const Name:TPOCARawByteString):TPOCAInt32;
   var d:TPOCAStringTreeData;
   begin
    result:=kwNONE;
@@ -16189,7 +16188,7 @@ var TokenList:PPOCAToken;
     result:=TPOCAPtrInt(d);
    end;
   end;
-  function LookUpEx(const Name:TPOCARawByteString):longint;
+  function LookUpEx(const Name:TPOCARawByteString):TPOCAInt32;
   var d:TPOCAStringTreeData;
   begin
    result:=-1;
@@ -16198,7 +16197,7 @@ var TokenList:PPOCAToken;
     result:=TPOCAPtrInt(d);
    end;
   end;
-  function LookUp(const Name:TPOCARawByteString):longint;
+  function LookUp(const Name:TPOCARawByteString):TPOCAInt32;
   begin
    result:=LookUpEx(Name);
    if result>=0 then begin
@@ -16207,8 +16206,8 @@ var TokenList:PPOCAToken;
     end;
    end;
   end;
-  procedure AddDefine(const Name:TPOCARawByteString;Body:TMacroBody;Parameters:longint;VaArgs:boolean;MacroFunction:TMacroFunction);
-  var i:longint;
+  procedure AddDefine(const Name:TPOCARawByteString;Body:TMacroBody;Parameters:TPOCAInt32;VaArgs:boolean;MacroFunction:TMacroFunction);
+  var i:TPOCAInt32;
   begin
    i:=LookUpEx(Name);
    if i<0 then begin
@@ -16224,15 +16223,15 @@ var TokenList:PPOCAToken;
    MacroStringTree.Add(Name,i,true);
   end;
   procedure RemoveDefine(const Name:TPOCARawByteString);
-  var i:longint;
+  var i:TPOCAInt32;
   begin
    i:=LookUpEx(Name);
    if i>=0 then begin
     Macros[i].Defined:=false;
    end;
   end;
-  function GetInputSourceIndex(Kind:TPOCAPreprocessorInputSourceKind;Name:TPOCARawByteString):longint;
-  var i,j:longint;
+  function GetInputSourceIndex(Kind:TPOCAPreprocessorInputSourceKind;Name:TPOCARawByteString):TPOCAInt32;
+  var i,j:TPOCAInt32;
   begin
    for i:=0 to ParserInstance.Preprocessor.InputSourcesCount-1 do begin
     if (ParserInstance.Preprocessor.InputSources[i].Kind=Kind) and (ParserInstance.Preprocessor.InputSources[i].Name=Name) then begin
@@ -16255,7 +16254,7 @@ var TokenList:PPOCAToken;
    j:=Instance^.SourceFiles.IndexOf(String(Name));
    if j<0 then begin
     j:=Instance^.SourceFiles.Add(String(Name));
-    if j=longint(POCAArraySize(Context^.Instance.Globals.SourceFiles)) then begin
+    if j=TPOCAInt32(POCAArraySize(Context^.Instance.Globals.SourceFiles)) then begin
      POCAArrayPush(Context^.Instance.Globals.SourceFiles,POCANewString(Context,Name));
     end else begin
      POCAArraySetSize(Context^.Instance.Globals.SourceFiles,Instance^.SourceFiles.Count);
@@ -16267,7 +16266,7 @@ var TokenList:PPOCAToken;
    ParserInstance.Preprocessor.InputSources[result].Index:=j;
   end;
   procedure PushInputSource(Kind:TPOCAPreprocessorInputSourceKind;const Name,Text:TPOCARawByteString);
-  var i:longint;
+  var i:TPOCAInt32;
   begin
    i:=length(InputStack);
    SetLength(InputStack,i+1);
@@ -16277,7 +16276,7 @@ var TokenList:PPOCAToken;
    InputStack[i].BufferLine:=0;
   end;
   procedure PopInputSource;
-  var i:longint;
+  var i:TPOCAInt32;
   begin
    if length(InputStack)>0 then begin
     i:=length(InputStack)-1;
@@ -16285,7 +16284,7 @@ var TokenList:PPOCAToken;
    end;
   end;
   function NextChar:TPOCAUCS4Char;
-  var i:longint;
+  var i:TPOCAInt32;
   begin
    result:=0;
    i:=length(InputStack)-1;
@@ -16319,8 +16318,8 @@ var TokenList:PPOCAToken;
     end;
    end;
   end;
-  function GetCharAt(j:longint=0):TPOCAUCS4Char;
-  var i,p:longint;
+  function GetCharAt(j:TPOCAInt32=0):TPOCAUCS4Char;
+  var i,p:TPOCAInt32;
   begin
    result:=0;
    i:=length(InputStack)-1;
@@ -16346,7 +16345,7 @@ var TokenList:PPOCAToken;
   end;
   function GetToken:TToken;
   var lc,c,sc:TPOCAUCS4Char;
-      cc,i,j:longint;
+      cc,i,j:TPOCAInt32;
   begin
    result:=tNONE;
    c:=NextChar;
@@ -16535,7 +16534,7 @@ var TokenList:PPOCAToken;
   procedure AddError(const s:TPOCAUTF8String); forward;
   procedure SkipBlankEx; forward;
   function Destringize(const s:TPOCARawByteString):TPOCARawByteString;
-  var i:longint;
+  var i:TPOCAInt32;
       c,sc,nc:TPOCAUCS4Char;
   begin
    result:='';
@@ -16643,7 +16642,7 @@ var TokenList:PPOCAToken;
   end;
   function Stringize(const s:TPOCARawByteString;q:boolean):TPOCARawByteString;
   const hexchars:array[0..$f] of ansichar='0123456789ABCDEF';
-  var i:longint;
+  var i:TPOCAInt32;
       c:TPOCAUCS4Char;
   begin
   result:='';
@@ -16704,7 +16703,7 @@ var TokenList:PPOCAToken;
    end;
   end;
   procedure ExtGetToken;
-  var mi,i,j,k,NestedLevel,pc:longint;
+  var mi,i,j,k,NestedLevel,pc:TPOCAInt32;
       b:TPOCARawByteString;
       Parameters:array of TPOCARawByteString;
       InputStackItem:TInputStackItem;
@@ -16917,7 +16916,7 @@ var TokenList:PPOCAToken;
    until false;
   end;
   procedure SkipEOL;
-  var i:longint;
+  var i:TPOCAInt32;
   begin
    i:=0;
    while not (GetCharAt(i) in [0,10]) do begin
@@ -16929,7 +16928,7 @@ var TokenList:PPOCAToken;
    end;
   end;
   procedure SkipBlankEx;
-  var i:longint;
+  var i:TPOCAInt32;
   begin
    i:=0;
    while GetCharAt(i) in UCS4WhiteSpaceEx do begin
@@ -16941,7 +16940,7 @@ var TokenList:PPOCAToken;
    end;
   end;
   procedure SkipBlank;
-  var i:longint;
+  var i:TPOCAInt32;
   begin
    i:=0;
    while GetCharAt(i) in UCS4WhiteSpaceEx do begin
@@ -16970,7 +16969,7 @@ var TokenList:PPOCAToken;
   begin
   end;
   procedure AddToOutput(const s:TPOCARawByteString);
-  var l,i:longint;
+  var l,i:TPOCAInt32;
   begin
    l:=length(s);
    if l>0 then begin
@@ -17011,9 +17010,9 @@ var TokenList:PPOCAToken;
     end;
    end;
   end;
-  function ParseNumber(s:TPOCARawByteString):longint;
-  var i:longint;
-      sv:longint;
+  function ParseNumber(s:TPOCARawByteString):TPOCAInt32;
+  var i:TPOCAInt32;
+      sv:TPOCAInt32;
       b:boolean;
   begin
    b:=false;
@@ -17071,8 +17070,8 @@ var TokenList:PPOCAToken;
       OK:boolean;
       t:TPOCARawByteString;
       f:file;
-      fm:byte;
-      i:longint;
+      fm:TPOCAUInt8;
+      i:TPOCAInt32;
   begin
    cfn:='';
    if DoIncludeNext then begin
@@ -17194,7 +17193,7 @@ var TokenList:PPOCAToken;
       Parameters:array of TPOCARawByteString;
       Body:TMacroBody;
       Quote:boolean;
-      i,j,p,b:longint;
+      i,j,p,b:TPOCAInt32;
       VaArgs:boolean;
   begin
    Name:='';
@@ -17361,8 +17360,8 @@ var TokenList:PPOCAToken;
    RemoveDefine(CurrentTokenString);
    SkipEOL;
   end;
-  function SearchELSEENDIF(var Keyword:longint):boolean;
-  var NestedLevel:longint;
+  function SearchELSEENDIF(var Keyword:TPOCAInt32):boolean;
+  var NestedLevel:TPOCAInt32;
   begin
    Keyword:=kwNONE;
    CurrentToken:=tCHAR;
@@ -17413,14 +17412,14 @@ var TokenList:PPOCAToken;
        end;
        TEvalTokenFIFO=record
         Tokens:array of TEvalTokenItem;
-        Index:longint;
+        Index:TPOCAInt32;
        end;
        TValue=record
         case Sign:boolean of
-         false:(us:longword);
-         true:(s:longint);
+         false:(us:TPOCAUInt32);
+         true:(s:TPOCAInt32);
        end;
-       TEvalTokenPrecLUT=array[TEvalToken] of longint;
+       TEvalTokenPrecLUT=array[TEvalToken] of TPOCAInt32;
   const TokenUnary=[etLNOT,etNOT,etUPLUS,etUMINUS];
         TokenBinary=[etMUL,etDIV,etMOD,etPLUS,etMINUS,etLSH,etRSH,etLT,etLEQ,etGT,
                etGEQ,etEQ,etNEQ,etAND,etXOR,etOR,etLAND,etLOR,etCOMMA];
@@ -17460,7 +17459,7 @@ var TokenList:PPOCAToken;
                                     );
   var FIFO:TEvalTokenFIFO;
    procedure AddToken(Token:TEvalToken;const s:TPOCARawByteString);
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     i:=length(FIFO.Tokens);
     SetLength(FIFO.Tokens,i+1);
@@ -17468,7 +17467,7 @@ var TokenList:PPOCAToken;
     FIFO.Tokens[i].s:=s;
    end;
    procedure Tokenize(s:TPOCARawByteString);
-   var i:longint;
+   var i:TPOCAInt32;
        c:TPOCAUCS4Char;
        ns:TPOCARawByteString;
    begin
@@ -17581,7 +17580,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    procedure PreprocessTokens;
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     i:=0;
     while i<length(FIFO.Tokens) do begin
@@ -17597,7 +17596,7 @@ var TokenList:PPOCAToken;
      inc(i);
     end;
    end;
-   function OpPrec(Token:TEvalToken):longint;
+   function OpPrec(Token:TEvalToken):TPOCAInt32;
    begin
     result:=OpPrecLUT[Token];
  {  case Token of
@@ -17654,9 +17653,9 @@ var TokenList:PPOCAToken;
     end;
    end;
    function ParseNumber(s:TPOCARawByteString):TValue;
-   var i:longint;
-       sv:longint;
-       usv:longword;
+   var i:TPOCAInt32;
+       sv:TPOCAInt32;
+       usv:TPOCAUInt32;
        b:boolean;
    begin
     b:=false;
@@ -17745,7 +17744,7 @@ var TokenList:PPOCAToken;
          b:=true;
          AddWarning('TERM: constant too large for destination type');
         end;
-        result.us:=(result.us*8)+longword(ord(s[i])-ord('0'));
+        result.us:=(result.us*8)+TPOCAUInt32(ord(s[i])-ord('0'));
        end;
       end;
      end else begin
@@ -17755,7 +17754,7 @@ var TokenList:PPOCAToken;
         b:=true;
         AddWarning('TERM: constant too large for destination type');
        end;
-       result.us:=(result.us*10)+longword(ord(s[i])-ord('0'));
+       result.us:=(result.us*10)+TPOCAUInt32(ord(s[i])-ord('0'));
       end;
      end;
     end;
@@ -17793,7 +17792,7 @@ var TokenList:PPOCAToken;
    end;
    {$hints off}
    function DoTokenBinary(Token:TEvalToken;v1,v2:TValue):TValue;
-   var iv2:longint;
+   var iv2:TPOCAInt32;
    begin
     fillchar(result,sizeof(TValue),#0);
     iv2:=0;
@@ -18055,9 +18054,9 @@ var TokenList:PPOCAToken;
      end;
     end;
    end;
-   function DoLevel(MinPrec:longint;DoEval:boolean):TValue;
+   function DoLevel(MinPrec:TPOCAInt32;DoEval:boolean):TValue;
    var at:TEvalTokenItem;
-       bp:longint;
+       bp:TPOCAInt32;
        r1,r2,tr:TValue;
        qb:boolean;
    begin
@@ -18163,7 +18162,7 @@ var TokenList:PPOCAToken;
   end;
   function Eval:boolean;
   var s,mn:TPOCARawByteString;
-      i,j,l:longint;
+      i,j,l:TPOCAInt32;
       OldInEval:boolean;
   begin
    s:='';
@@ -18228,7 +18227,7 @@ var TokenList:PPOCAToken;
    InEval:=OldInEval;
   end;
   procedure DoIF;
-  var Keyword:longint;
+  var Keyword:TPOCAInt32;
   begin
    inc(IFNestedLevel);
    if not Eval then begin
@@ -18243,7 +18242,7 @@ var TokenList:PPOCAToken;
    end;
   end;
   procedure DoIFDEF(ShouldResultValue:boolean);
-  var Keyword:longint;
+  var Keyword:TPOCAInt32;
   begin
    SkipGetToken;
    if CurrentToken<>tNAME then begin
@@ -18268,7 +18267,7 @@ var TokenList:PPOCAToken;
    end;
   end;
   procedure DoELSEELIF;
-  var Keyword:longint;
+  var Keyword:TPOCAInt32;
   begin
    if IFNestedLevel=0 then begin
     AddError('missing #if');
@@ -18290,7 +18289,7 @@ var TokenList:PPOCAToken;
    SkipEOL;
   end;
   procedure DoLINE;
-  var l,s:longint;
+  var l,s:TPOCAInt32;
   begin
    SkipExtGetToken;
    if CurrentToken<>tNUMBER then begin
@@ -18335,7 +18334,7 @@ var TokenList:PPOCAToken;
   end;
   procedure DoPRAGMA;
   var s:TPOCARawByteString;
-      i:longint;
+      i:TPOCAInt32;
   begin
    s:='';
    repeat
@@ -19016,11 +19015,11 @@ var TokenList:PPOCAToken;
   end;
  end;
  procedure ProcessLexer(var Parser:TPOCAParser;const Source:TPOCARawByteString);
- var SourcePosition,SourceLength,SourceLine,SourceColumn,LastPragma,LastOutputInfo:longint;
+ var SourcePosition,SourceLength,SourceLine,SourceColumn,LastPragma,LastOutputInfo:TPOCAInt32;
      AutomaticSemicolonInsertion:boolean;
   procedure AddToken(Token:TPOCATokenType;const Str:TPOCARawByteString;Num:double);
   var NewToken:PPOCAToken;
-      i,j:longint;
+      i,j:TPOCAInt32;
   begin
    case Token of
     ptLITERALSTR:begin
@@ -19112,9 +19111,9 @@ var TokenList:PPOCAToken;
    end;
    Parser.Tree.LastChild:=NewToken;
   end;
-  function FindKeywordToken(const Source:TPOCARawByteString;SourcePosition,SourceLength:longint):TPOCATokenType;
+  function FindKeywordToken(const Source:TPOCARawByteString;SourcePosition,SourceLength:TPOCAInt32):TPOCATokenType;
   var Node:PPOCALexerKeywordTokenCharTreeNode;
-      Index:longint;
+      Index:TPOCAInt32;
       CurrentChar:ansichar;
   begin
    result:=ptNONE;
@@ -19150,7 +19149,7 @@ var TokenList:PPOCAToken;
    end;
   end;
   procedure ProcessPragma;
-  var i:longint;
+  var i:TPOCAInt32;
       s:TPOCARawByteString;
   begin
    for i:=LastPragma to PreprocessorInstance.Preprocessor.PragmaInfoCount-1 do begin
@@ -19180,12 +19179,12 @@ var TokenList:PPOCAToken;
     AddToken(ptAUTOSEMI,'',0);
    end;
   end;
-  procedure ScanUntil(IncludingHere:longint);
+  procedure ScanUntil(IncludingHere:TPOCAInt32);
   var SourceToken:TPOCATokenType;
-      Counter,SourceLookaheadPosition,LastSourcePosition,Last,OldSourcePosition,OldSourceColumn,OldSourceLine,OldLastPragma,OldLastOutputInfo,CharValue,Level:longint;
+      Counter,SourceLookaheadPosition,LastSourcePosition,Last,OldSourcePosition,OldSourceColumn,OldSourceLine,OldLastPragma,OldLastOutputInfo,CharValue,Level:TPOCAInt32;
       SourceChar,EndChar,OldSourceChar:ansichar;
       StringContent:TPOCARawByteString;
-      Value:int64;
+      Value:TPOCAInt64;
       DoParseExp,InClass:boolean;
       OK:boolean;
       RegExp:TFLRE;
@@ -20104,7 +20103,7 @@ var TokenList:PPOCAToken;
                 Value:=(Value shl 4) or Hex2Byte(Source[SourcePosition]);
                 inc(Counter);
                 if Counter>1 then begin
-                 StringContent:=StringContent+{$ifdef pocastrictutf8}PUCUUTF32CharToUTF8(Value){$else}ansichar(byte(Value)){$endif};
+                 StringContent:=StringContent+{$ifdef pocastrictutf8}PUCUUTF32CharToUTF8(Value){$else}ansichar(TPOCAUInt8(Value)){$endif};
                  Value:=0;
                  Counter:=0;
                 end;
@@ -20112,7 +20111,7 @@ var TokenList:PPOCAToken;
                 inc(SourceColumn);
                end;
                if Counter<>0 then begin
-                StringContent:=StringContent+{$ifdef pocastrictutf8}PUCUUTF32CharToUTF8(Value){$else}ansichar(byte(Value)){$endif};
+                StringContent:=StringContent+{$ifdef pocastrictutf8}PUCUUTF32CharToUTF8(Value){$else}ansichar(TPOCAUInt8(Value)){$endif};
                end;
               end;
               'u':begin
@@ -20125,9 +20124,9 @@ var TokenList:PPOCAToken;
                StringContent:=StringContent+PUCUUTF32CharToUTF8(Value);
               end;
               '0'..'7':begin
-               Value:=longword(longword(ord(SourceChar))-longword(ord('0')));
+               Value:=TPOCAUInt32(TPOCAUInt32(ord(SourceChar))-TPOCAUInt32(ord('0')));
                while (SourcePosition<=SourceLength) and (Source[SourcePosition] in ['0'..'7']) do begin
-                Value:=(Value shl 3) or longword(ord(Source[SourcePosition])-ord('0'));
+                Value:=(Value shl 3) or TPOCAUInt32(ord(Source[SourcePosition])-ord('0'));
                 inc(SourcePosition);
                 inc(SourceColumn);
                end;
@@ -20368,7 +20367,7 @@ var TokenList:PPOCAToken;
  end;
  function ScanBlockForwards(Token:PPOCAToken):PPOCAToken;
  var BeginToken,EndToken:TPOCATokenType;
-     NestedLevel:longint;
+     NestedLevel:TPOCAInt32;
  begin
   if assigned(Token) and (Token^.Token in [ptLPAR,ptLBRA,ptLCURL,ptSAFELBRA]) then begin
    BeginToken:=Token^.Token;
@@ -20413,7 +20412,7 @@ var TokenList:PPOCAToken;
  end;
  function ScanBlockBackwards(Token:PPOCAToken):PPOCAToken;
  var BeginToken,EndToken:TPOCATokenType;
-     NestedLevel:longint;
+     NestedLevel:TPOCAInt32;
  begin
   if assigned(Token) and (Token^.Token in [ptRPAR,ptRBRA,ptRCURL,ptSAFERBRA]) then begin
    BeginToken:=Token^.Token;
@@ -20846,7 +20845,7 @@ var TokenList:PPOCAToken;
     end;
    end;
   end;
-  type TByteSet=set of byte;
+  type TByteSet=set of TPOCAUInt8;
   function TransformBlock(StartToken:PPOCAToken;EndToken:TPOCATokenTypes;IgnoreVarLocal:boolean):PPOCAToken;
    procedure SkipBraces(var CurrentToken:PPOCAToken);
    var LastToken:PPOCAToken;
@@ -20889,7 +20888,7 @@ var TokenList:PPOCAToken;
    end;
   var LastToken,NextToken,IdentifierTokenList,LastEndToken,SymbolNameToken,AnchorToken,TempToken,TokenA,TokenB,TokenC:PPOCAToken;
       WhichToken:TPOCATokenType;
-      Meta,CountImports,Index:longint;
+      Meta,CountImports,Index:TPOCAInt32;
       CountStatements:TPOCAInt32;
       Imports:array of TPOCARawByteString;
   begin
@@ -21876,7 +21875,7 @@ var TokenList:PPOCAToken;
       AddNewChild(Dest,ParseToken(Dest,List));
      end;
     end;
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     t:=List^;
     if assigned(t) then begin
@@ -22283,7 +22282,7 @@ var TokenList:PPOCAToken;
     end;
    end;
   end;
-  function ParsePrecedences(StartToken,EndToken:PPOCAToken;Level:longint):PPOCAToken;
+  function ParsePrecedences(StartToken,EndToken:PPOCAToken;Level:TPOCAInt32):PPOCAToken;
    function EmptyToken:PPOCAToken;
    begin
     New(result);
@@ -22348,8 +22347,8 @@ var TokenList:PPOCAToken;
    if not (assigned(StartToken) or assigned(EndToken)) then begin
     result:=EmptyToken;
    end else begin
-{   if longint(StartToken^.Token)=39 then begin
-     writeln(longint(StartToken^.Token));
+{   if TPOCAInt32(StartToken^.Token)=39 then begin
+     writeln(TPOCAInt32(StartToken^.Token));
     end;}
     begin
      if not assigned(EndToken) then begin
@@ -22571,16 +22570,16 @@ var TokenList:PPOCAToken;
       TPOCACodeGeneratorRegisters=array of TPOCACodeGeneratorRegister;
       PPOCACodeGeneratorSwitch=^TPOCACodeGeneratorSwitch;
       TPOCACodeGeneratorSwitch=record
-       BreakJumps:array of longword;
-       CountBreakJumps:longint;
+       BreakJumps:array of TPOCAUInt32;
+       CountBreakJumps:TPOCAInt32;
        BreakRegisters:array of TPOCACodeGeneratorRegisters;
       end;
       TPOCACodeGeneratorSwitchs=array of TPOCACodeGeneratorSwitch;
       PPOCACodeGeneratorLoop=^TPOCACodeGeneratorLoop;
       TPOCACodeGeneratorLoop=record
        LabelToken:PPOCAToken;
-       BreakJumps,ContinueJumps:array of longword;
-       CountBreakJumps,CountContinueJumps:longint;
+       BreakJumps,ContinueJumps:array of TPOCAUInt32;
+       CountBreakJumps,CountContinueJumps:TPOCAInt32;
        BreakRegisters,ContinueRegisters:array of TPOCACodeGeneratorRegisters;
       end;
       TPOCACodeGeneratorLoops=array of TPOCACodeGeneratorLoop;
@@ -22592,9 +22591,9 @@ var TokenList:PPOCAToken;
       TPOCACodeGeneratorWhenSwitchCaseBlock=record
        RetryRegisters:TPOCACodeGeneratorRegisters;
        FallthroughRegisters:TPOCACodeGeneratorRegisters;
-       Fallthroughs:array of longword;
-       CountFallthroughs:longint;
-       JumpRetryPos:longword;
+       Fallthroughs:array of TPOCAUInt32;
+       CountFallthroughs:TPOCAInt32;
+       JumpRetryPos:TPOCAUInt32;
        HasRetry:boolean;
        HasFallthrough:boolean;
       end;
@@ -22604,54 +22603,54 @@ var TokenList:PPOCAToken;
       PPOCACodeGeneratorBreakContinueScope=^TPOCACodeGeneratorBreakContinueScope;
       TPOCACodeGeneratorBreakContinueScope=record
        Kind:TPOCACodeGeneratorBreakContinueScopeKind;
-       Index:longint;
+       Index:TPOCAInt32;
       end;
       TPOCACodeGeneratorBreakContinueScopes=array of TPOCACodeGeneratorBreakContinueScope;
       PPOCACodeGenerator=^TPOCACodeGenerator;
       TPOCACodeGenerator=record
-       LastLine:longint;
-       ByteCode:PLongwords;
-       ByteCodeSize:longint;
-       ByteCodeAllocated:longint;
+       LastLine:TPOCAInt32;
+       ByteCode:PPOCAUInt32Array;
+       ByteCodeSize:TPOCAInt32;
+       ByteCodeAllocated:TPOCAInt32;
        Lines:TPOCACodeLines;
-       LineCount:longint;
-       NextLineIP:longint;
-       ArgumentSymbols:PLongints;
-       ArgumentLocals:PLongints;
-       ArgAllocated:longword;
-       OptionalArgumentSymbols:PLongints;
-       OptionalArgumentLocals:PLongints;
-       OptionalArgumentValues:PLongints;
-       OptionalArgumentAllocated:longword;
+       LineCount:TPOCAInt32;
+       NextLineIP:TPOCAInt32;
+       ArgumentSymbols:PPOCAInt32Array;
+       ArgumentLocals:PPOCAInt32Array;
+       ArgAllocated:TPOCAUInt32;
+       OptionalArgumentSymbols:PPOCAInt32Array;
+       OptionalArgumentLocals:PPOCAInt32Array;
+       OptionalArgumentValues:PPOCAInt32Array;
+       OptionalArgumentAllocated:TPOCAUInt32;
        RestArgSymbolString:TPOCAUTF8String;
        RestArgSym:TPOCAValue;
-       HasRestArguments:LongBool;
-       SwitchTop:longint;
-       SwitchAllocated:longint;
+       HasRestArguments:TPOCABool32;
+       SwitchTop:TPOCAInt32;
+       SwitchAllocated:TPOCAInt32;
        Switchs:TPOCACodeGeneratorSwitchs;
-       LoopTop:longint;
-       LoopAllocated:longint;
+       LoopTop:TPOCAInt32;
+       LoopAllocated:TPOCAInt32;
        Loops:TPOCACodeGeneratorLoops;
        Consts:TPOCAValue;
        Scopes:TPOCACodeGeneratorScopes;
-       CountScopes:longint;
+       CountScopes:TPOCAInt32;
        Registers:TPOCACodeGeneratorRegisters;
-       CountRegisters:longword;
-       LocalArguments:array of longint;
-       CountLocalArguments:longint;
-       LocalArgumentIndex:longint;
+       CountRegisters:TPOCAUInt32;
+       LocalArguments:array of TPOCAInt32;
+       CountLocalArguments:TPOCAInt32;
+       LocalArgumentIndex:TPOCAInt32;
        WhenSwitchCaseBlocks:TPOCACodeGeneratorWhenSwitchCaseBlocks;
-       CountWhenSwitchCaseBlocks:longint;
+       CountWhenSwitchCaseBlocks:TPOCAInt32;
        BreakContinueScopes:TPOCACodeGeneratorBreakContinueScopes;
-       CountBreakContinueScopes:longint;
-       Opcodes:array of longint;
-       CountOpcodes:longint;
-       HasLocals:longbool;
-       FastFunction:longbool;
+       CountBreakContinueScopes:TPOCAInt32;
+       Opcodes:array of TPOCAInt32;
+       CountOpcodes:TPOCAInt32;
+       HasLocals:TPOCABool32;
+       FastFunction:TPOCABool32;
        Constants:array of PPOCAToken;
-       ConstantRegisters:array of longint;
-       CountConstants:longint;
-       CountRegExps:longint;
+       ConstantRegisters:array of TPOCAInt32;
+       CountConstants:TPOCAInt32;
+       CountRegExps:TPOCAInt32;
       end;
   function GenerateCode(var Parser:TPOCAParser;Block:PPOCAToken;ArgumentList:PPOCAToken;CodeToken:TPOCATokenType;const CodeName:TPOCARawByteString):TPOCAValue;
   var CodeGenerator:PPOCACodeGenerator;
@@ -22660,7 +22659,7 @@ var TokenList:PPOCAToken;
     result:=copy(CodeGenerator^.Registers,0,CodeGenerator^.CountRegisters);
    end;
    procedure ClearRegisters;
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     for i:=0 to CodeGenerator^.CountRegisters-1 do begin
      CodeGenerator^.Registers[i].IsNumber:=false;
@@ -22670,7 +22669,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    procedure SetRegisters(const Src:TPOCACodeGeneratorRegisters);
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     for i:=0 to CodeGenerator^.CountRegisters-1 do begin
      if i<length(Src) then begin
@@ -22679,7 +22678,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    function AreRegistersEqual(const r1,r2:TPOCACodeGeneratorRegisters;Exact:boolean;Safe:boolean=true):boolean;
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     if (Exact and (length(r1)=length(r2))) or ((not Exact) and (length(r1)<=length(r2))) then begin
      result:=true;
@@ -22694,7 +22693,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    procedure CombineRegisters(var Dst:TPOCACodeGeneratorRegisters;const Src:TPOCACodeGeneratorRegisters;Safe:boolean=false);
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     for i:=0 to length(Dst)-1 do begin
      if i<length(Src) then begin
@@ -22709,7 +22708,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    procedure CombineCurrentRegisters(const Src:TPOCACodeGeneratorRegisters;Safe:boolean=false);
-   var i:longint;
+   var i:TPOCAInt32;
    begin
     for i:=0 to CodeGenerator^.CountRegisters-1 do begin
      if i<length(Src) then begin
@@ -22723,25 +22722,25 @@ var TokenList:PPOCAToken;
      end;
     end;
    end;
-   function GetRegisterNumber(RegNr:longint):boolean;
+   function GetRegisterNumber(RegNr:TPOCAInt32):boolean;
    begin
-    if (RegNr>=0) and (RegNr<longint(CodeGenerator^.CountRegisters)) then begin
+    if (RegNr>=0) and (RegNr<TPOCAInt32(CodeGenerator^.CountRegisters)) then begin
      result:=CodeGenerator^.Registers[RegNr].IsNumber;
     end else begin
      result:=false;
     end;
    end;
-   function GetRegisterConstant(RegNr:longint):boolean;
+   function GetRegisterConstant(RegNr:TPOCAInt32):boolean;
    begin
-    if (RegNr>=0) and (RegNr<longint(CodeGenerator^.CountRegisters)) then begin
+    if (RegNr>=0) and (RegNr<TPOCAInt32(CodeGenerator^.CountRegisters)) then begin
      result:=CodeGenerator^.Registers[RegNr].InUse and CodeGenerator^.Registers[RegNr].IsConst;
     end else begin
      result:=false;
     end;
    end;
-   procedure SetRegisterNumber(RegNr:longint;IsNumber:boolean);
+   procedure SetRegisterNumber(RegNr:TPOCAInt32;IsNumber:boolean);
    begin
-    if (RegNr>=0) and (RegNr<longint(CodeGenerator^.CountRegisters)) then begin
+    if (RegNr>=0) and (RegNr<TPOCAInt32(CodeGenerator^.CountRegisters)) then begin
      CodeGenerator^.Registers[RegNr].IsNumber:=IsNumber;
     end;
    end;
@@ -22753,8 +22752,8 @@ var TokenList:PPOCAToken;
    begin
     result:=(assigned(t^.Children) and assigned(t^.LastChild)) and (t^.Children^.Next=t^.LastChild);
    end;
-   function GetRegister(Freeable,IsConst:boolean):longint;
-   var i:longint;
+   function GetRegister(Freeable,IsConst:boolean):TPOCAInt32;
+   var i:TPOCAInt32;
    begin
     for i:=0 to CodeGenerator^.CountRegisters-1 do begin
      if not CodeGenerator^.Registers[i].InUse then begin
@@ -22766,7 +22765,7 @@ var TokenList:PPOCAToken;
       exit;
      end;
     end;
-    if longint(CodeGenerator^.CountRegisters)>=length(CodeGenerator^.Registers) then begin
+    if TPOCAInt32(CodeGenerator^.CountRegisters)>=length(CodeGenerator^.Registers) then begin
      if CodeGenerator^.CountRegisters=0 then begin
       SetLength(CodeGenerator^.Registers,16);
      end else begin
@@ -22780,28 +22779,28 @@ var TokenList:PPOCAToken;
     CodeGenerator^.Registers[result].IsConst:=IsConst;
     inc(CodeGenerator^.CountRegisters);
    end;
-   procedure FreeRegister(var RegNr:longint;Force:boolean=false);
+   procedure FreeRegister(var RegNr:TPOCAInt32;Force:boolean=false);
    begin
-    if ((RegNr>=0) and (RegNr<longint(CodeGenerator^.CountRegisters))) and (Force or CodeGenerator^.Registers[RegNr].Freeable) then begin
+    if ((RegNr>=0) and (RegNr<TPOCAInt32(CodeGenerator^.CountRegisters))) and (Force or CodeGenerator^.Registers[RegNr].Freeable) then begin
      CodeGenerator^.Registers[RegNr].InUse:=false;
      CodeGenerator^.Registers[RegNr].IsNumber:=false;
      CodeGenerator^.Registers[RegNr].IsConst:=false;
      RegNr:=-1;
     end;
    end;
-   procedure Emit(Value:longword);
-   var NewSize:longint;
-       NewByteCode:pointer;
+   procedure Emit(Value:TPOCAUInt32);
+   var NewSize:TPOCAInt32;
+       NewByteCode:TPOCAPointer;
    begin
     if CodeGenerator^.ByteCodeSize>=CodeGenerator^.ByteCodeAllocated then begin
      NewSize:=CodeGenerator^.ByteCodeAllocated;
      while CodeGenerator^.ByteCodeSize>=NewSize do begin
       inc(NewSize,NewSize);
      end;
-     GetMem(NewByteCode,NewSize*sizeof(longword));
-     FillChar(NewByteCode^,NewSize*sizeof(longword),#0);
+     GetMem(NewByteCode,NewSize*sizeof(TPOCAUInt32));
+     FillChar(NewByteCode^,NewSize*sizeof(TPOCAUInt32),#0);
      if assigned(CodeGenerator^.ByteCode) then begin
-      Move(CodeGenerator^.ByteCode^,NewByteCode^,CodeGenerator^.ByteCodeSize*sizeof(longword));
+      Move(CodeGenerator^.ByteCode^,NewByteCode^,CodeGenerator^.ByteCodeSize*sizeof(TPOCAUInt32));
       FreeMem(CodeGenerator^.ByteCode);
      end;
      CodeGenerator^.ByteCode:=NewByteCode;
@@ -22811,7 +22810,7 @@ var TokenList:PPOCAToken;
     inc(CodeGenerator^.ByteCodeSize);
    end;
    procedure PeepholeOptimize;
-   var Opcode:longword;
+   var Opcode:TPOCAUInt32;
    begin
     while (CodeGenerator^.ByteCodeSize>0) and (CodeGenerator^.CountOpcodes>0) do begin
      Opcode:=CodeGenerator^.ByteCode^[CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-1]];
@@ -22847,7 +22846,7 @@ var TokenList:PPOCAToken;
      break;
     end;
    end;
-   procedure EmitOpcode(Opcode:longword); overload;
+   procedure EmitOpcode(Opcode:TPOCAUInt32); overload;
    begin
     PeepholeOptimize;
     if CodeGenerator^.CountOpcodes>=length(CodeGenerator^.Opcodes) then begin
@@ -22861,29 +22860,29 @@ var TokenList:PPOCAToken;
     inc(CodeGenerator^.CountOpcodes);
     Emit(Opcode);
    end;
-   procedure EmitImmediate(Opcode,Immediate:longword);
+   procedure EmitImmediate(Opcode,Immediate:TPOCAUInt32);
    begin
     EmitOpcode((Opcode and $ff) or ((Immediate and $ffffff) shl 8));
    end;
-   procedure EmitOpcode(Opcode,Operand:longword); overload;
+   procedure EmitOpcode(Opcode,Operand:TPOCAUInt32); overload;
    begin
     EmitImmediate(Opcode,1);
     Emit(Operand);
    end;
-   procedure EmitOpcode(Opcode,OperandA,OperandB:longword); overload;
+   procedure EmitOpcode(Opcode,OperandA,OperandB:TPOCAUInt32); overload;
    begin
     EmitImmediate(Opcode,2);
     Emit(OperandA);
     Emit(OperandB);
    end;
-   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC:longword); overload;
+   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC:TPOCAUInt32); overload;
    begin
     EmitImmediate(Opcode,3);
     Emit(OperandA);
     Emit(OperandB);
     Emit(OperandC);
    end;
-   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD:longword); overload;
+   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD:TPOCAUInt32); overload;
    begin
     EmitImmediate(Opcode,4);
     Emit(OperandA);
@@ -22891,7 +22890,7 @@ var TokenList:PPOCAToken;
     Emit(OperandC);
     Emit(OperandD);
    end;
-   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD,OperandE:longword); overload;
+   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD,OperandE:TPOCAUInt32); overload;
    begin
     EmitImmediate(Opcode,5);
     Emit(OperandA);
@@ -22900,7 +22899,7 @@ var TokenList:PPOCAToken;
     Emit(OperandD);
     Emit(OperandE);
    end;
-   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD,OperandE,OperandF:longword); overload;
+   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD,OperandE,OperandF:TPOCAUInt32); overload;
    begin
     EmitImmediate(Opcode,6);
     Emit(OperandA);
@@ -22910,7 +22909,7 @@ var TokenList:PPOCAToken;
     Emit(OperandE);
     Emit(OperandF);
    end;
-   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD,OperandE,OperandF,OperandG:longword); overload;
+   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD,OperandE,OperandF,OperandG:TPOCAUInt32); overload;
    begin
     EmitImmediate(Opcode,7);
     Emit(OperandA);
@@ -22921,7 +22920,7 @@ var TokenList:PPOCAToken;
     Emit(OperandF);
     Emit(OperandG);
    end;
-   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD,OperandE,OperandF,OperandG,OperandH:longword); overload;
+   procedure EmitOpcode(Opcode,OperandA,OperandB,OperandC,OperandD,OperandE,OperandF,OperandG,OperandH:TPOCAUInt32); overload;
    begin
     EmitImmediate(Opcode,8);
     Emit(OperandA);
@@ -22933,7 +22932,7 @@ var TokenList:PPOCAToken;
     Emit(OperandG);
     Emit(OperandH);
    end;
-   function NewConstant(c:TPOCAValue):longint;
+   function NewConstant(c:TPOCAValue):TPOCAInt32;
    begin
     POCAArrayPush(CodeGenerator^.Consts,c);
     result:=POCAArraySize(CodeGenerator^.Consts)-1;
@@ -22941,8 +22940,8 @@ var TokenList:PPOCAToken;
      SyntaxError('Too many constants in code block',Parser.SourceFile,-1,-1);
     end;
    end;
-   function InternConstant(c:TPOCAValue):longint;
-   var i,n:longint;
+   function InternConstant(c:TPOCAValue):TPOCAInt32;
+   var i,n:TPOCAInt32;
        b:TPOCAValue;
    begin
     n:=POCAArraySize(CodeGenerator^.Consts);
@@ -22984,7 +22983,7 @@ var TokenList:PPOCAToken;
     end;
     result:=GenerateCode(Parser,t^.Right^.Left,ArgList,t^.Token,Name);
    end;
-   function FindConstantIndex(t:PPOCAToken):longint;
+   function FindConstantIndex(t:PPOCAToken):TPOCAInt32;
    var c:TPOCAValue;
    begin
     case t^.Token of
@@ -23021,7 +23020,7 @@ var TokenList:PPOCAToken;
     end;
     result:=InternConstant(c);
    end;
-   function DefineArgument(t:PPOCAToken):longint;
+   function DefineArgument(t:PPOCAToken):TPOCAInt32;
    begin
     if t^.Token=ptLPAR then begin
      if t^.Rule=prSUFFIX then begin
@@ -23033,7 +23032,7 @@ var TokenList:PPOCAToken;
       t^.Right^.Num:=-t^.Right^.Num;
       result:=DefineArgument(t^.Right);
      end else if (t^.Token in [ptCAT,ptBNOT]) and (assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM)) then begin
-      t^.Right^.Num:=not int64(trunc(t^.Right^.Num));
+      t^.Right^.Num:=not TPOCAInt64(trunc(t^.Right^.Num));
       result:=DefineArgument(t^.Right);
      end else if (t^.Token in [ptPLUS,ptNUM]) and (assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM)) then begin
       result:=DefineArgument(t^.Right);
@@ -23043,7 +23042,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    procedure ScopeStart;
-   var OldCount,NewCount,i:longint;
+   var OldCount,NewCount,i:TPOCAInt32;
    begin
     OldCount:=length(CodeGenerator^.Scopes);
     if CodeGenerator^.CountScopes>=OldCount then begin
@@ -23063,7 +23062,7 @@ var TokenList:PPOCAToken;
    procedure ScopeEnd;
    var HashMap:TPOCAStringHashMap;
        Item:PPOCAStringHashMapItem;
-       Reg:longint;
+       Reg:TPOCAInt32;
    begin
     dec(CodeGenerator^.CountScopes);
     HashMap:=CodeGenerator^.Scopes[CodeGenerator^.CountScopes].SymbolRegisterHashMap;
@@ -23081,8 +23080,8 @@ var TokenList:PPOCAToken;
      end;
     end;
    end;
-   function GenerateScalarConstant(t:PPOCAToken;OutReg:longint):longint;
-   var v:longint;
+   function GenerateScalarConstant(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+   var v:TPOCAInt32;
        Num:Double;
    begin
     if OutReg<0 then begin
@@ -23102,8 +23101,8 @@ var TokenList:PPOCAToken;
        exit;
       end else if POCAIsFinite(Num) then begin
        v:=trunc(Num);
-       if longint(v)=Num then begin
-        EmitOpcode(popLOADINT32,result,longword(v));
+       if TPOCAInt32(v)=Num then begin
+        EmitOpcode(popLOADINT32,result,TPOCAUInt32(v));
         SetRegisterNumber(result,true);
         exit;
        end;
@@ -23113,8 +23112,8 @@ var TokenList:PPOCAToken;
     EmitOpcode(popLOADCONST,result,FindConstantIndex(t));
     SetRegisterNumber(result,t^.Token=ptLITERALNUM);
    end;
-   function GenerateNumberConstant(Num:Double;OutReg:longint):longint;
-   var v:longint;
+   function GenerateNumberConstant(Num:Double;OutReg:TPOCAInt32):TPOCAInt32;
+   var v:TPOCAInt32;
    begin
     if OutReg<0 then begin
      OutReg:=GetRegister(true,false);
@@ -23129,8 +23128,8 @@ var TokenList:PPOCAToken;
     end else begin
      if POCAIsFinite(Num) then begin
       v:=trunc(Num);
-      if longint(v)=Num then begin
-       EmitOpcode(popLOADINT32,result,longword(v));
+      if TPOCAInt32(v)=Num then begin
+       EmitOpcode(popLOADINT32,result,TPOCAUInt32(v));
        SetRegisterNumber(result,true);
        exit;
       end;
@@ -23140,7 +23139,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    function IsSymbolRegister(t:PPOCAToken):boolean;
-   var i:longint;
+   var i:TPOCAInt32;
        HashMap:TPOCAStringHashMap;
    begin
     result:=false;
@@ -23155,7 +23154,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    function IsSymbolRegisterConstant(t:PPOCAToken):boolean;
-   var i:longint;
+   var i:TPOCAInt32;
        HashMap:TPOCAStringHashMap;
        Item:PPOCAStringHashMapItem;
    begin
@@ -23173,10 +23172,10 @@ var TokenList:PPOCAToken;
      end;
     end;
    end;
-   function GetSymbolRegister(t:PPOCAToken;CreateIfNotFound,IsConst:boolean):longword;
+   function GetSymbolRegister(t:PPOCAToken;CreateIfNotFound,IsConst:boolean):TPOCAUInt32;
    var HashMap:TPOCAStringHashMap;
        Item:PPOCAStringHashMapItem;
-       i:longint;
+       i:TPOCAInt32;
    begin
     result:=0;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
@@ -23202,10 +23201,10 @@ var TokenList:PPOCAToken;
      end;
     end;
    end;
-   function DeleteSymbolRegister(t:PPOCAToken;Depth:longint):boolean;
+   function DeleteSymbolRegister(t:PPOCAToken;Depth:TPOCAInt32):boolean;
    var HashMap:TPOCAStringHashMap;
        Item:PPOCAStringHashMapItem;
-       i,r:longint;
+       i,r:TPOCAInt32;
    begin
     result:=false;
     if t^.Token=ptSYMBOL then begin
@@ -23229,7 +23228,7 @@ var TokenList:PPOCAToken;
     end;
    end;
    procedure CollectConstant(t:PPOCAToken);
-   var i,r:longint;
+   var i,r:TPOCAInt32;
        c:PPOCAToken;
    begin
     for i:=0 to CodeGenerator^.CountConstants-1 do begin
@@ -23264,7 +23263,7 @@ var TokenList:PPOCAToken;
     CodeGenerator^.Constants[CodeGenerator^.CountConstants]:=t;
     CodeGenerator^.ConstantRegisters[CodeGenerator^.CountConstants]:=r;
     SetRegisterNumber(r,t^.Token=ptLITERALNUM);
-    if (r>=0) and (r<longint(CodeGenerator^.CountRegisters)) then begin
+    if (r>=0) and (r<TPOCAInt32(CodeGenerator^.CountRegisters)) then begin
      CodeGenerator^.Registers[r].InUse:=true;
      CodeGenerator^.Registers[r].Freeable:=false;
      CodeGenerator^.Registers[r].IsConst:=true;
@@ -23302,8 +23301,8 @@ var TokenList:PPOCAToken;
      ScanToken(t,nil);
     end;
    end;
-   function FindConstantRegister(t:PPOCAToken):longint;
-   var i:longint;
+   function FindConstantRegister(t:PPOCAToken):TPOCAInt32;
+   var i:TPOCAInt32;
        c:PPOCAToken;
    begin
     result:=-1;
@@ -23529,7 +23528,7 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Left,t,true);
           if assigned(t^.Left) and (t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) then begin
            t^.Token:=ptLITERALNUM;
-           t^.Num:=int64(not int64(trunc(ToNum(t^.Left))));
+           t^.Num:=TPOCAInt64(not TPOCAInt64(trunc(ToNum(t^.Left))));
            t^.Left^.Token:=ptEMPTY;
           end;
          end;
@@ -23581,7 +23580,7 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Left,t,true);
           if assigned(t^.Left) and (t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) then begin
            t^.Token:=ptLITERALNUM;
-           t^.Num:=int64(not int64(trunc(ToNum(t^.Left))));
+           t^.Num:=TPOCAInt64(not TPOCAInt64(trunc(ToNum(t^.Left))));
            t^.Left^.Token:=ptEMPTY;
           end;
          end;
@@ -23769,7 +23768,7 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Right,t,true);
           if (assigned(t^.Left) and assigned(t^.Right)) and ((t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) and (t^.Right^.Token in [ptLITERALNUM,ptLITERALSTR])) then begin
            t^.Token:=ptLITERALNUM;
-           t^.Num:=int64(System.trunc(ToNum(t^.Left))) and int64(System.trunc(ToNum(t^.Right)));
+           t^.Num:=TPOCAInt64(System.trunc(ToNum(t^.Left))) and TPOCAInt64(System.trunc(ToNum(t^.Right)));
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
@@ -23785,7 +23784,7 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Right,t,true);
           if (assigned(t^.Left) and assigned(t^.Right)) and ((t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) and (t^.Right^.Token in [ptLITERALNUM,ptLITERALSTR])) then begin
            t^.Token:=ptLITERALNUM;
-           t^.Num:=int64(System.trunc(ToNum(t^.Left))) xor int64(System.trunc(ToNum(t^.Right)));
+           t^.Num:=TPOCAInt64(System.trunc(ToNum(t^.Left))) xor TPOCAInt64(System.trunc(ToNum(t^.Right)));
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
@@ -23801,7 +23800,7 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Right,t,true);
           if (assigned(t^.Left) and assigned(t^.Right)) and ((t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) and (t^.Right^.Token in [ptLITERALNUM,ptLITERALSTR])) then begin
            t^.Token:=ptLITERALNUM;
-           t^.Num:=int64(System.trunc(ToNum(t^.Left))) or int64(System.trunc(ToNum(t^.Right)));
+           t^.Num:=TPOCAInt64(System.trunc(ToNum(t^.Left))) or TPOCAInt64(System.trunc(ToNum(t^.Right)));
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
@@ -23817,7 +23816,7 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Right,t,true);
           if (assigned(t^.Left) and assigned(t^.Right)) and ((t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) and (t^.Right^.Token in [ptLITERALNUM,ptLITERALSTR])) then begin
            t^.Token:=ptLITERALNUM;
-           t^.Num:=int64(System.trunc(ToNum(t^.Left))) shl longint(System.trunc(ToNum(t^.Right)));
+           t^.Num:=TPOCAInt64(System.trunc(ToNum(t^.Left))) shl TPOCAInt32(System.trunc(ToNum(t^.Right)));
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
@@ -23833,7 +23832,7 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Right,t,true);
           if (assigned(t^.Left) and assigned(t^.Right)) and ((t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) and (t^.Right^.Token in [ptLITERALNUM,ptLITERALSTR])) then begin
            t^.Token:=ptLITERALNUM;
-           t^.Num:=sar64(int64(System.trunc(ToNum(t^.Left))),longint(System.trunc(ToNum(t^.Right))));
+           t^.Num:=sar64(TPOCAInt64(System.trunc(ToNum(t^.Left))),TPOCAInt32(System.trunc(ToNum(t^.Right))));
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
@@ -23849,7 +23848,7 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Right,t,true);
           if (assigned(t^.Left) and assigned(t^.Right)) and ((t^.Left^.Token in [ptLITERALNUM,ptLITERALSTR]) and (t^.Right^.Token in [ptLITERALNUM,ptLITERALSTR])) then begin
            t^.Token:=ptLITERALNUM;
-           t^.Num:=int64(System.trunc(ToNum(t^.Left))) shr longint(System.trunc(ToNum(t^.Right)));
+           t^.Num:=TPOCAInt64(System.trunc(ToNum(t^.Left))) shr TPOCAInt32(System.trunc(ToNum(t^.Right)));
            t^.Left^.Token:=ptEMPTY;
            t^.Right^.Token:=ptEMPTY;
           end;
@@ -23899,14 +23898,14 @@ var TokenList:PPOCAToken;
     ResetTokenVisited;
     ScanToken(t,nil,false);
    end;
-   procedure FixTargetImmediate(Position:longint);
+   procedure FixTargetImmediate(Position:TPOCAInt32);
    begin
     CodeGenerator^.ByteCode[Position]:=CodeGenerator^.ByteCodeSize;
    end;
-   function GenerateExpression(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false):longint; forward;
-   function GenerateBlock(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false;NewScope:boolean=true):longint;
+   function GenerateExpression(t:PPOCAToken;OutReg:TPOCAInt32=-1;DoNeedResult:boolean=false):TPOCAInt32; forward;
+   function GenerateBlock(t:PPOCAToken;OutReg:TPOCAInt32=-1;DoNeedResult:boolean=false;NewScope:boolean=true):TPOCAInt32;
    var Expression:PPOCAToken;
-       Reg:longint;
+       Reg:TPOCAInt32;
    begin
     result:=-1;
     if NewScope then begin
@@ -23943,9 +23942,9 @@ var TokenList:PPOCAToken;
      end;
     end;
    end;
-   function GenerateCommaBlock(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false;NewScope:boolean=true):longint;
+   function GenerateCommaBlock(t:PPOCAToken;OutReg:TPOCAInt32=-1;DoNeedResult:boolean=false;NewScope:boolean=true):TPOCAInt32;
    var Expression:PPOCAToken;
-       Reg:longint;
+       Reg:TPOCAInt32;
    begin
     result:=-1;
     if NewScope then begin
@@ -23982,8 +23981,8 @@ var TokenList:PPOCAToken;
      end;
     end;
    end;
-   function GenerateExpression(t:PPOCAToken;OutReg:longint=-1;DoNeedResult:boolean=false):longint;
-    procedure NewLine(Line:longint);
+   function GenerateExpression(t:PPOCAToken;OutReg:TPOCAInt32=-1;DoNeedResult:boolean=false):TPOCAInt32;
+    procedure NewLine(Line:TPOCAInt32);
     begin
      if (CodeGenerator^.LineCount+1)>=length(CodeGenerator^.Lines) then begin
       SetLength(CodeGenerator^.Lines,(CodeGenerator^.LineCount+1)*2);
@@ -23992,7 +23991,7 @@ var TokenList:PPOCAToken;
      CodeGenerator^.Lines[CodeGenerator^.LineCount].Line:=Line;
      inc(CodeGenerator^.LineCount);
     end;
-    function GetNumberOp(Op:longword):longword;
+    function GetNumberOp(Op:TPOCAUInt32):TPOCAUInt32;
     begin
      case Op and $ff of
       popNOT:begin
@@ -24087,8 +24086,8 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function GenerateBinaryOperation(Op:longword;t:PPOCAToken;OutReg:longint):longint;
-    var r1,r2:longint;
+    function GenerateBinaryOperation(Op:TPOCAUInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var r1,r2:TPOCAInt32;
     begin
      if not (assigned(t^.Left) and assigned(t^.Right)) then begin
       SyntaxError('Empty subexpression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -24110,9 +24109,9 @@ var TokenList:PPOCAToken;
      FreeRegister(r1);
      FreeRegister(r2);
     end;
-    function GenerateInOperation(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateInOperation(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var rt:PPOCAToken;
-        Reg1,Reg2,Reg3:longint;
+        Reg1,Reg2,Reg3:TPOCAInt32;
     begin
      rt:=t^.Right;
      while assigned(rt) and ((rt^.Token=ptLPAR) and (assigned(rt^.Left) and ((rt^.Left=rt^.Right) or not assigned(rt^.Right)))) do begin
@@ -24136,7 +24135,7 @@ var TokenList:PPOCAToken;
       result:=GenerateBinaryOperation(popIN,t,OutReg);
      end;
     end;
-    function GetLeftValueLocalRegister(t:PPOCAToken):longint;
+    function GetLeftValueLocalRegister(t:PPOCAToken):TPOCAInt32;
     var Token:TPOCATokenType;
     begin
      result:=-1;
@@ -24177,7 +24176,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2:longint):longword;
+    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2:TPOCAInt32):TPOCAUInt32;
     var Token:TPOCATokenType;
     begin
      result:=0;
@@ -24266,8 +24265,8 @@ var TokenList:PPOCAToken;
      end;
      SyntaxError('Bad left value',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
     end;
-    procedure GenerateLeftValue(t:PPOCAToken;Reg:longint);
-    var AssignOp,ConstantIndex,Reg1,Reg2:longint;
+    procedure GenerateLeftValue(t:PPOCAToken;Reg:TPOCAInt32);
+    var AssignOp,ConstantIndex,Reg1,Reg2:TPOCAInt32;
     begin
      ConstantIndex:=0;
      Reg1:=0;
@@ -24301,9 +24300,9 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function GenerateAssignOp(Op:longint;t:PPOCAToken;OutReg:longint):longint;
-    var ConstantIndex,Reg1,Reg2,Reg3:longint;
-        SetOp:longword;
+    function GenerateAssignOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3:TPOCAInt32;
+        SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
@@ -24415,9 +24414,9 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function GenerateElvisAssignOp(t:PPOCAToken;OutReg:longint):longint;
-    var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue:longint;
-        SetOp:longword;
+    function GenerateElvisAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue:TPOCAInt32;
+        SetOp:TPOCAUInt32;
         Registers:TPOCACodeGeneratorRegisters;
     begin
      ConstantIndex:=0;
@@ -24612,9 +24611,9 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function GeneratePostfixDecIncOp(Op:longint;t:PPOCAToken;OutReg:longint):longint;
-    var ConstantIndex,Reg1,Reg2,Reg3:longint;
-        SetOp:longword;
+    function GeneratePostfixDecIncOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3:TPOCAInt32;
+        SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
@@ -24722,9 +24721,9 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function GeneratePrefixDecIncOp(Op:longint;t:PPOCAToken;OutReg:longint):longint;
-    var ConstantIndex,Reg1,Reg2,Reg3:longint;
-        SetOp:longword;
+    function GeneratePrefixDecIncOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3:TPOCAInt32;
+        SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
@@ -24830,7 +24829,7 @@ var TokenList:PPOCAToken;
      FreeRegister(Reg2);
      FreeRegister(Reg1);
     end;
-    function GenerateLambda(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateLambda(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     begin
      if OutReg<0 then begin
       result:=GetRegister(true,false);
@@ -24839,8 +24838,8 @@ var TokenList:PPOCAToken;
      end;
      EmitOpcode(popLOADCONST,result,NewConstant(NewLambda(t)));
     end;
-    procedure GenerateArrayItem(t:PPOCAToken;ArrayReg:longint);
-    var Reg1,Reg2:longint;
+    procedure GenerateArrayItem(t:PPOCAToken;ArrayReg:TPOCAInt32);
+    var Reg1,Reg2:TPOCAInt32;
     begin
      if assigned(t) then begin
       if Binary(t) and (t^.Token=ptDOTDOT) then begin
@@ -24856,7 +24855,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    procedure GenerateArray(t:PPOCAToken;ArrayReg:longint);
+    procedure GenerateArray(t:PPOCAToken;ArrayReg:TPOCAInt32);
     begin
      while assigned(t) do begin
       if t^.Token=ptCOMMA then begin
@@ -24870,8 +24869,8 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    procedure GenerateHashElement(t:PPOCAToken;HashReg:longint);
-    var Reg1,Reg2:longint;
+    procedure GenerateHashElement(t:PPOCAToken;HashReg:TPOCAInt32);
+    var Reg1,Reg2:TPOCAInt32;
     begin
      if (not assigned(t)) or (t^.Token=ptEMPTY) then begin
       exit;
@@ -24924,7 +24923,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    procedure GenerateHash(t:PPOCAToken;HashReg:longint);
+    procedure GenerateHash(t:PPOCAToken;HashReg:TPOCAInt32);
     begin
      while assigned(t) do begin
       if t^.Token=ptCOMMA then begin
@@ -24963,7 +24962,7 @@ var TokenList:PPOCAToken;
       result:=false;
      end;
     end;
-    function CountList(t:PPOCAToken;Token:TPOCATokenType):longint; overload;
+    function CountList(t:PPOCAToken;Token:TPOCATokenType):TPOCAInt32; overload;
     begin
      result:=1;
      while assigned(t) and (t^.Token=Token) do begin
@@ -24971,7 +24970,7 @@ var TokenList:PPOCAToken;
       t:=t^.Right;
      end;
     end;
-    function CountList(t:PPOCAToken;Tokens:TPOCATokenTypes):longint; overload;
+    function CountList(t:PPOCAToken;Tokens:TPOCATokenTypes):TPOCAInt32; overload;
     begin
      result:=1;
      while assigned(t) and (t^.Token in Tokens) do begin
@@ -24979,12 +24978,12 @@ var TokenList:PPOCAToken;
       t:=t^.Right;
      end;
     end;
-    function GenerateFunctionCall(t:PPOCAToken;OutReg:longint;const InjectedMember:TPOCARawByteString=''):longint;
+    function GenerateFunctionCall(t:PPOCAToken;OutReg:TPOCAInt32;const InjectedMember:TPOCARawByteString=''):TPOCAInt32;
     var IsMethod,IsSafeMethod:boolean;
-        Count,Reg1,Reg2,Reg3,i,JumpNull,JumpEnd,ConstantIndex:longint;
+        Count,Reg1,Reg2,Reg3,i,JumpNull,JumpEnd,ConstantIndex:TPOCAInt32;
         Registers:TPOCACodeGeneratorRegisters;
-        Regs:array of longint;
-     function CollectList(t:PPOCAToken):longint;
+        Regs:array of TPOCAInt32;
+     function CollectList(t:PPOCAToken):TPOCAInt32;
      begin
       result:=0;
       while assigned(t) do begin
@@ -24998,7 +24997,7 @@ var TokenList:PPOCAToken;
       end;
      end;
      procedure EmitList(t:PPOCAToken);
-     var Count,r:longint;  
+     var Count,r:TPOCAInt32;  
      begin
       Count:=0;
       while assigned(t) do begin
@@ -25131,7 +25130,7 @@ var TokenList:PPOCAToken;
       SetLength(Regs,0);
      end;
     end;
-    function StartBreakContinueScope(const Kind:TPOCACodeGeneratorBreakContinueScopeKind;const Index:longint):longint;
+    function StartBreakContinueScope(const Kind:TPOCACodeGeneratorBreakContinueScopeKind;const Index:TPOCAInt32):TPOCAInt32;
     var bcs:PPOCACodeGeneratorBreakContinueScope;
     begin
      if (CodeGenerator^.CountBreakContinueScopes+1)>length(CodeGenerator^.BreakContinueScopes) then begin
@@ -25147,7 +25146,7 @@ var TokenList:PPOCAToken;
     begin
      dec(CodeGenerator^.CountBreakContinueScopes);
     end;
-    function StartSwitch:longint;
+    function StartSwitch:TPOCAInt32;
     var s:PPOCACodeGeneratorSwitch;
     begin
      if CodeGenerator^.SwitchTop>=CodeGenerator^.SwitchAllocated then begin
@@ -25161,9 +25160,9 @@ var TokenList:PPOCAToken;
      inc(CodeGenerator^.SwitchTop);
      result:=CodeGenerator^.ByteCodeSize;
     end;
-    procedure EndSwitch(BreakPos:longint;var BreakRegisters:TPOCACodeGeneratorRegisters;var HasBreak:boolean);
+    procedure EndSwitch(BreakPos:TPOCAInt32;var BreakRegisters:TPOCACodeGeneratorRegisters;var HasBreak:boolean);
     var s:PPOCACodeGeneratorSwitch;
-        i:longint;
+        i:TPOCAInt32;
     begin
      EndBreakContinueScope;
      dec(CodeGenerator^.SwitchTop);
@@ -25180,7 +25179,7 @@ var TokenList:PPOCAToken;
      SetLength(s^.BreakRegisters,0);
      SetLength(s^.BreakJumps,0);
     end;
-    function StartLoop(LabelToken:PPOCAToken;IsSwitch:boolean):longint;
+    function StartLoop(LabelToken:PPOCAToken;IsSwitch:boolean):TPOCAInt32;
     var l:PPOCACodeGeneratorLoop;
     begin
      if CodeGenerator^.LoopTop>=CodeGenerator^.LoopAllocated then begin
@@ -25197,9 +25196,9 @@ var TokenList:PPOCAToken;
      inc(CodeGenerator^.LoopTop);
      result:=CodeGenerator^.ByteCodeSize;
     end;
-    procedure EndLoop(BreakPos,ContinuePos:longint;var BreakRegisters,ContinueRegisters:TPOCACodeGeneratorRegisters);
+    procedure EndLoop(BreakPos,ContinuePos:TPOCAInt32;var BreakRegisters,ContinueRegisters:TPOCACodeGeneratorRegisters);
     var l:PPOCACodeGeneratorLoop;
-        i:longint;
+        i:TPOCAInt32;
     begin
      EndBreakContinueScope;
      dec(CodeGenerator^.LoopTop);
@@ -25225,8 +25224,8 @@ var TokenList:PPOCAToken;
      SetLength(l^.BreakJumps,0);
      SetLength(l^.ContinueJumps,0);
     end;
-    function GenerateNullishShortCircuit(t:PPOCAToken;OutReg:longint):longint;
-    var e,r:longint;
+    function GenerateNullishShortCircuit(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var e,r:TPOCAInt32;
         Registers:TPOCACodeGeneratorRegisters;
     begin
      Registers:=nil;
@@ -25261,8 +25260,8 @@ var TokenList:PPOCAToken;
       SetLength(Registers,0);
      end;
     end;
-    function GenerateShortCircuit(t:PPOCAToken;OutReg:longint):longint;
-    var e,r:longint;
+    function GenerateShortCircuit(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var e,r:TPOCAInt32;
         Registers:TPOCACodeGeneratorRegisters;
     begin
      Registers:=nil;
@@ -25334,8 +25333,8 @@ var TokenList:PPOCAToken;
       SetLength(Registers,0);
      end;
     end;
-    function GenerateTest(Test:PPOCAToken;IsLoop,DoNegative:boolean;JumpNext:longint):longint;
-    var Back,RegLeft,RegRight,RegExpression:longint;
+    function GenerateTest(Test:PPOCAToken;IsLoop,DoNegative:boolean;JumpNext:TPOCAInt32):TPOCAInt32;
+    var Back,RegLeft,RegRight,RegExpression:TPOCAInt32;
         Optimized:boolean;
     begin
      result:=0;
@@ -25521,8 +25520,8 @@ var TokenList:PPOCAToken;
       FreeRegister(RegExpression);
      end;
     end;
-    function GenerateIF(tIF,tELSE:PPOCAToken;OutReg:longint):longint;
-    var JumpNext,JumpEnd:longint;
+    function GenerateIF(tIF,tELSE:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var JumpNext,JumpEnd:TPOCAInt32;
         Registers:array[0..1] of TPOCACodeGeneratorRegisters;
     begin
      Registers[0]:=nil;
@@ -25583,14 +25582,14 @@ var TokenList:PPOCAToken;
       SetLength(Registers[1],0);
      end;
     end;
-    function GenerateIFELSE(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateIFELSE(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     begin
      result:=GenerateIF(t,t^.Left^.Next.Next,OutReg);
     end;
-    function GenerateTry(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateTry(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var TryBlock,CatchBlock,FinallyBlock,CatchIdentifier,TemporaryCatchIdentifier,
         FullCatchIdentifier:PPOCAToken;
-        CatchIdentifierRegister,TryBlockPos,CatchBlockPos,FinallyBlockPos,EndPos,Reg:longint;
+        CatchIdentifierRegister,TryBlockPos,CatchBlockPos,FinallyBlockPos,EndPos,Reg:TPOCAInt32;
     begin
      if OutReg<0 then begin
       result:=GetRegister(true,false);
@@ -25771,8 +25770,8 @@ var TokenList:PPOCAToken;
      end;
      SetRegisterNumber(result,false);
     end;
-    function GenerateQuestion(t:PPOCAToken;OutReg:longint):longint;
-    var JumpNext,JumpEnd:longint;
+    function GenerateQuestion(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var JumpNext,JumpEnd:TPOCAInt32;
         Registers:array[0..1] of TPOCACodeGeneratorRegisters;
     begin
      Registers[0]:=nil;
@@ -25823,9 +25822,9 @@ var TokenList:PPOCAToken;
       SetLength(Registers[1],0);
      end;
     end;
-    function GenerateWhile(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateWhile(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Test,Body,LabelToken:PPOCAToken;
-        Len,JumpNext,JumpOver,BreakPos,ContinuePos,Start:longint;
+        Len,JumpNext,JumpOver,BreakPos,ContinuePos,Start:TPOCAInt32;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
      ScopeStart;
@@ -25905,9 +25904,9 @@ var TokenList:PPOCAToken;
      end;
      ScopeEnd;
     end;
-    function GenerateDoWhile(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateDoWhile(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Test,Body,LabelToken:PPOCAToken;
-        Len,JumpNext,BreakPos,ContinuePos,Start:longint;
+        Len,JumpNext,BreakPos,ContinuePos,Start:TPOCAInt32;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
      ScopeStart;
@@ -25977,9 +25976,9 @@ var TokenList:PPOCAToken;
      end;
      ScopeEnd;
     end;
-    function GenerateFor(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateFor(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Init,Test,Body,Update,LabelToken,h:PPOCAToken;
-        Len,JumpNext,JumpOver,BreakPos,ContinuePos,Reg,Start:longint;
+        Len,JumpNext,JumpOver,BreakPos,ContinuePos,Reg,Start:TPOCAInt32;
         Registers:array[0..5] of TPOCACodeGeneratorRegisters;
     begin
      ScopeStart;
@@ -26084,8 +26083,8 @@ var TokenList:PPOCAToken;
      end;
      ScopeEnd;
     end;
-    function GenerateForEachForIndexForKey(t:PPOCAToken;OutReg:longint):longint;
-    var JumpNext,JumpOver,BreakPos,ContinuePos,Reg1,Reg2,Reg3,Reg4,Len,Start:longint;
+    function GenerateForEachForIndexForKey(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var JumpNext,JumpOver,BreakPos,ContinuePos,Reg1,Reg2,Reg3,Reg4,Len,Start:TPOCAInt32;
         Element,Body,ArrayInstance,LabelToken,h:PPOCAToken;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
@@ -26229,7 +26228,7 @@ var TokenList:PPOCAToken;
      ScopeEnd;
     end;
     procedure GenerateBreakContinue(t:PPOCAToken);
-    var Levels,Loop,i:longint;
+    var Levels,Loop,i:TPOCAInt32;
         LabelToken:PPOCAToken;
         LoopItem:PPOCACodeGeneratorLoop;
         SwitchItem:PPOCACodeGeneratorSwitch;
@@ -26347,7 +26346,7 @@ var TokenList:PPOCAToken;
       EmitOpcode(popJMP,0);
      end;
     end;
-    function ParameterListLen(t:PPOCAToken):longint;
+    function ParameterListLen(t:PPOCAToken):TPOCAInt32;
     begin
      if (not assigned(t)) or ((t^.Token<>ptLPAR) or ((not assigned(t^.Left)) or (t^.Left^.Token<>ptCOMMA))) then begin
       result:=0;
@@ -26355,11 +26354,11 @@ var TokenList:PPOCAToken;
       result:=CountList(t^.Left,ptCOMMA);
      end;
     end;
-    function GenerateAssignment(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateAssignment(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var lv,rv:PPOCAToken;
-        Len,Variable:longint;
-     procedure EmitMultiLeftValue(t:PPOCAToken;Variable,Reg:longint);
-     var r:longint;
+        Len,Variable:TPOCAInt32;
+     procedure EmitMultiLeftValue(t:PPOCAToken;Variable,Reg:TPOCAInt32);
+     var r:TPOCAInt32;
      begin
       if Variable=0 then begin
        GenerateLeftValue(t,Reg);
@@ -26380,10 +26379,10 @@ var TokenList:PPOCAToken;
        end;
       end;
      end;
-     function DoList(at,pt:PPOCAToken;Variable,OutReg:longint):longint;
-     var Reg,Reg2,Count,Index:longint;
+     function DoList(at,pt:PPOCAToken;Variable,OutReg:TPOCAInt32):TPOCAInt32;
+     var Reg,Reg2,Count,Index:TPOCAInt32;
          tat,tpt,t:PPOCAToken;
-         Regs:array of longint;
+         Regs:array of TPOCAInt32;
          LastHasNoLeft,OnlyLiterals:boolean;
      begin
       result:=-1;
@@ -26518,10 +26517,10 @@ var TokenList:PPOCAToken;
        SetLength(Regs,0);
       end;
      end;
-     function DoUnpackList(LeftValue,RightValue:PPOCAToken;Count,Variable,OutReg:longint):longint;
+     function DoUnpackList(LeftValue,RightValue:PPOCAToken;Count,Variable,OutReg:TPOCAInt32):TPOCAInt32;
      var t:PPOCAToken;
-         Reg,i:longint;
-         Regs:array of longint;
+         Reg,i:TPOCAInt32;
+         Regs:array of TPOCAInt32;
      begin
       result:=-1;
       Reg:=-1;
@@ -26621,8 +26620,8 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    procedure GenerateSlice(t:PPOCAToken;DestArrayReg,SourceArrayReg:longint);
-    var Reg1,Reg2:longint;
+    procedure GenerateSlice(t:PPOCAToken;DestArrayReg,SourceArrayReg:TPOCAInt32);
+    var Reg1,Reg2:TPOCAInt32;
     begin
      if (not assigned(t)) or (t^.Token=ptEMPTY) then begin
       if assigned(t) then begin
@@ -26658,8 +26657,8 @@ var TokenList:PPOCAToken;
      end;
      SetRegisterNumber(result,false);
     end;
-    function GenerateExtract(t:PPOCAToken;OutReg:longint;Safe:boolean):longint;
-    var Reg1,Reg2,JumpNull,JumpEnd:longint;
+    function GenerateExtract(t:PPOCAToken;OutReg:TPOCAInt32;Safe:boolean):TPOCAInt32;
+    var Reg1,Reg2,JumpNull,JumpEnd:TPOCAInt32;
         Registers:TPOCACodeGeneratorRegisters;
     begin
      Reg1:=GenerateExpression(t^.Left,-1,true);
@@ -26714,9 +26713,9 @@ var TokenList:PPOCAToken;
       SetRegisterNumber(result,false);
      end;
     end;
-    procedure StartFallthrough(JumpRetryPos:longword);
+    procedure StartFallthrough(JumpRetryPos:TPOCAUInt32);
     var Item:PPOCACodeGeneratorWhenSwitchCaseBlock;
-        i,j:longint;
+        i,j:TPOCAInt32;
     begin
      j:=length(CodeGenerator^.WhenSwitchCaseBlocks);
      if CodeGenerator^.CountWhenSwitchCaseBlocks>=j then begin
@@ -26741,9 +26740,9 @@ var TokenList:PPOCAToken;
      Item^.FallthroughRegisters:=GetRegisters;
      inc(CodeGenerator^.CountWhenSwitchCaseBlocks);
     end;
-    procedure EndFallthrough(EndJumpPos:longword;var RetryRegisters,FallthroughRegisters:TPOCACodeGeneratorRegisters;var HasRetry,HasFallthrough:boolean);
+    procedure EndFallthrough(EndJumpPos:TPOCAUInt32;var RetryRegisters,FallthroughRegisters:TPOCACodeGeneratorRegisters;var HasRetry,HasFallthrough:boolean);
     var Item:PPOCACodeGeneratorWhenSwitchCaseBlock;
-        i:longint;
+        i:TPOCAInt32;
     begin
      if CodeGenerator^.CountWhenSwitchCaseBlocks=0 then begin
       SyntaxError('Invalid falthrough without matching owner when block',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -26768,7 +26767,7 @@ var TokenList:PPOCAToken;
     end;
     procedure GenerateFallthrough(t:PPOCAToken);
     var Item:PPOCACodeGeneratorWhenSwitchCaseBlock;
-        i,j:longint;
+        i,j:TPOCAInt32;
     begin
      if CodeGenerator^.CountWhenSwitchCaseBlocks=0 then begin
       SyntaxError('Invalid fallthrough without matching owner when block',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -26804,17 +26803,17 @@ var TokenList:PPOCAToken;
       EmitOpcode(popJMPLOOP,Item^.JumpRetryPos);
      end;
     end;
-    function GenerateWhenOrSwitch(t:PPOCAToken;OutReg:longint;const IsSwitch:boolean):longint;
+    function GenerateWhenOrSwitch(t:PPOCAToken;OutReg:TPOCAInt32;const IsSwitch:boolean):TPOCAInt32;
     type PWhenSwitchCaseExpression=^TWhenSwitchCaseExpression;
          TWhenSwitchCaseExpression=record
           Token:PPOCAToken;
-          JumpPosition:longword;
+          JumpPosition:TPOCAUInt32;
          end;
          PWhenSwitchCase=^TWhenSwitchCase;
          TWhenSwitchCase=record
           IsDefault:boolean;
           Body:PPOCAToken;
-          EndJumpPosition:longword;
+          EndJumpPosition:TPOCAUInt32;
           Expressions:array of TWhenSwitchCaseExpression;
          end;
          TWhenSwitchCases=array of TWhenSwitchCase;
@@ -26822,8 +26821,8 @@ var TokenList:PPOCAToken;
         WhenSwitchCases:TWhenSwitchCases;
         WhenSwitchCase,DefaultWhenSwitchCase:PWhenSwitchCase;
         WhenSwitchCaseExpression:PWhenSwitchCaseExpression;
-        CountWhenSwitchCases,CapacityWhenSwitchCases,Expressions,ExpressionIndex,i,j,RegExpression,RegComparsion,Reg,Reg1,Reg2,TryIndex,Start:longint;
-        EndJumpPosition,JumpRetryPos:longword;
+        CountWhenSwitchCases,CapacityWhenSwitchCases,Expressions,ExpressionIndex,i,j,RegExpression,RegComparsion,Reg,Reg1,Reg2,TryIndex,Start:TPOCAInt32;
+        EndJumpPosition,JumpRetryPos:TPOCAUInt32;
         Registers:array[0..7] of TPOCACodeGeneratorRegisters;
         HasDefault,HasRetry,HasBreak,HasFallthrough:boolean;
      procedure AddCaseExpression(t:PPOCAToken);
@@ -27127,8 +27126,8 @@ var TokenList:PPOCAToken;
      end;
      SetRegisterNumber(result,false);
     end;
-    function GenerateDot(t:PPOCAToken;OutReg:longint;Safe:boolean):longint;
-    var Reg,JumpNull,JumpEnd:longint;
+    function GenerateDot(t:PPOCAToken;OutReg:TPOCAInt32;Safe:boolean):TPOCAInt32;
+    var Reg,JumpNull,JumpEnd:TPOCAInt32;
         Registers:TPOCACodeGeneratorRegisters;
     begin
      result:=-1;
@@ -27199,8 +27198,8 @@ var TokenList:PPOCAToken;
       SetRegisterNumber(result,false);
      end;
     end;
-    function GenerateDefined(t:PPOCAToken;OutReg:longint):longint;
-    var Reg,Reg1,Reg2,ConstantIndex,EndPos,TryBlockPos,CatchBlockPos:longint;
+    function GenerateDefined(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var Reg,Reg1,Reg2,ConstantIndex,EndPos,TryBlockPos,CatchBlockPos:TPOCAInt32;
     begin
      if OutReg<0 then begin
       result:=GetRegister(true,false);
@@ -27277,8 +27276,8 @@ var TokenList:PPOCAToken;
      end;
      SetRegisterNumber(result,true);
     end;
-    function GenerateTypeOf(t:PPOCAToken;OutReg:longint):longint;
-    var Reg1:longint;
+    function GenerateTypeOf(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var Reg1:TPOCAInt32;
     begin
      if OutReg<0 then begin
       result:=GetRegister(true,false);
@@ -27294,8 +27293,8 @@ var TokenList:PPOCAToken;
      end;
      SetRegisterNumber(result,false);
     end;
-    function GenerateIDOf(t:PPOCAToken;OutReg:longint):longint;
-    var Reg1:longint;
+    function GenerateIDOf(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var Reg1:TPOCAInt32;
     begin
      if OutReg<0 then begin
       result:=GetRegister(true,false);
@@ -27311,8 +27310,8 @@ var TokenList:PPOCAToken;
      end;
      SetRegisterNumber(result,false);
     end;
-    function GenerateGhostTypeOf(t:PPOCAToken;OutReg:longint):longint;
-    var Reg1:longint;
+    function GenerateGhostTypeOf(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var Reg1:TPOCAInt32;
     begin
      if OutReg<0 then begin
       result:=GetRegister(true,false);
@@ -27328,7 +27327,7 @@ var TokenList:PPOCAToken;
      end;
      SetRegisterNumber(result,false);
     end;
-    function GenerateLPAR(t:PPOCAToken;OutReg:longint):longint;
+    function GenerateLPAR(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     begin
      if Binary(t) or not assigned(t^.Right) then begin
       case t^.Left^.Token of
@@ -27366,8 +27365,8 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function GenerateRegExp(t:PPOCAToken;OutReg:longint):longint;
-    var Reg:longint;
+    function GenerateRegExp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var Reg:TPOCAInt32;
     begin
      if assigned(t^.Right) then begin
       if OutReg<0 then begin
@@ -27384,8 +27383,8 @@ var TokenList:PPOCAToken;
       SyntaxError('Parser error',Parser.SourceFile,t^.SourceLine,t^.SourceColumn);
      end;
     end;
-    function GenerateReturn(t:PPOCAToken;OutReg:longint):longint;
-    var v:longword;
+    function GenerateReturn(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var v:TPOCAUInt32;
     begin
      if CodeToken in [ptCLASSFUNCTION,ptMODULEFUNCTION] then begin
       if OutReg<0 then begin
@@ -27431,8 +27430,8 @@ var TokenList:PPOCAToken;
      EmitOpcode(popRETURN,result);
      SetRegisterNumber(result,false);
     end;
-    function GenerateDelete(t:PPOCAToken;OutReg:longint):longint;
-    var Reg1,Reg2,ConstantIndex:longint;
+    function GenerateDelete(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var Reg1,Reg2,ConstantIndex:TPOCAInt32;
     begin
      result:=OutReg;
      if not assigned(t^.Right) then begin
@@ -27559,7 +27558,7 @@ var TokenList:PPOCAToken;
      end;
      SetRegisterNumber(result,true);
     end;
-   var i:longint;
+   var i:TPOCAInt32;
        ot:TPOCATokenType;
    begin
     result:=-1;
@@ -28012,7 +28011,7 @@ var TokenList:PPOCAToken;
        if Binary(t) then begin
         result:=GenerateBinaryOperation(popCAT,t,OutReg);
        end else if assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM) then begin
-        t^.Right^.Num:=not int64(trunc(t^.Right^.Num));
+        t^.Right^.Num:=not TPOCAInt64(trunc(t^.Right^.Num));
         result:=GenerateScalarConstant(t^.Right,OutReg);
         SetRegisterNumber(result,true);
        end else begin
@@ -28033,7 +28032,7 @@ var TokenList:PPOCAToken;
       end;
       ptBNOT:begin
        if assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM) then begin
-        t^.Right^.Num:=not int64(trunc(t^.Right^.Num));
+        t^.Right^.Num:=not TPOCAInt64(trunc(t^.Right^.Num));
         result:=GenerateScalarConstant(t^.Right,OutReg);
         SetRegisterNumber(result,true);
        end else begin
@@ -28298,9 +28297,9 @@ var TokenList:PPOCAToken;
          end else begin
           if Code^.CountOptionalArguments>=CodeGenerator^.OptionalArgumentAllocated then begin
            CodeGenerator^.OptionalArgumentAllocated:=Code^.CountOptionalArguments*2;
-           ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
-           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
-           ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
+           ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
           CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -28314,9 +28313,9 @@ var TokenList:PPOCAToken;
          end else begin
           if Code^.CountOptionalArguments>=CodeGenerator^.OptionalArgumentAllocated then begin
            CodeGenerator^.OptionalArgumentAllocated:=Code^.CountOptionalArguments*2;
-           ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
-           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
-           ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
+           ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
           CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -28329,9 +28328,9 @@ var TokenList:PPOCAToken;
          end else begin
           if Code^.CountOptionalArguments>=CodeGenerator^.OptionalArgumentAllocated then begin
            CodeGenerator^.OptionalArgumentAllocated:=Code^.CountOptionalArguments*2;
-           ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
-           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
-           ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
+           ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
           CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -28349,8 +28348,8 @@ var TokenList:PPOCAToken;
          end else begin
           if Code^.CountArguments>=CodeGenerator^.ArgAllocated then begin
            CodeGenerator^.ArgAllocated:=Code^.CountArguments*2;
-           ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(longint));
-           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(longint));
+           ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
           end;
           CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right);
           CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -28368,8 +28367,8 @@ var TokenList:PPOCAToken;
          end else begin
           if Code^.CountArguments>=CodeGenerator^.ArgAllocated then begin
            CodeGenerator^.ArgAllocated:=Code^.CountArguments*2;
-           ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(longint));
-           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(longint));
+           ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
           end;
           CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right);
           CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -28383,8 +28382,8 @@ var TokenList:PPOCAToken;
         end else begin
          if Code^.CountArguments>=CodeGenerator^.ArgAllocated then begin
           CodeGenerator^.ArgAllocated:=Code^.CountArguments*2;
-          ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(longint));
-          ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(longint));
+          ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+          ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
          end;
          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t);
          CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -28405,8 +28404,8 @@ var TokenList:PPOCAToken;
     end;
    end;
   var Code:PPOCACode;
-      i:longint;
-      IsEmpty:longbool;
+      i:TPOCAInt32;
+      IsEmpty:TPOCABool32;
   begin
    New(CodeGenerator);
    try
@@ -28414,8 +28413,8 @@ var TokenList:PPOCAToken;
      FillChar(CodeGenerator^,sizeof(TPOCACodeGenerator),#0);
      Initialize(CodeGenerator^);
      CodeGenerator^.ByteCodeAllocated:=1024;
-     GetMem(CodeGenerator^.ByteCode,CodeGenerator^.ByteCodeAllocated*sizeof(longword));
-     FillChar(CodeGenerator^.ByteCode^,CodeGenerator^.ByteCodeAllocated*sizeof(longword),#0);
+     GetMem(CodeGenerator^.ByteCode,CodeGenerator^.ByteCodeAllocated*sizeof(TPOCAUInt32));
+     FillChar(CodeGenerator^.ByteCode^,CodeGenerator^.ByteCodeAllocated*sizeof(TPOCAUInt32),#0);
      CodeGenerator^.HasLocals:=false;
      CodeGenerator^.RestArgSym:=Instance^.Globals.ArgumentsValueReference;
      CodeGenerator^.RestArgSymbolString:='arguments';
@@ -28500,11 +28499,11 @@ var TokenList:PPOCAToken;
        Code^.NeedArgumentArray:=false;
        CodeGenerator^.ArgAllocated:=1024;
        CodeGenerator^.OptionalArgumentAllocated:=1024;
-       GetMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(longint));
-       GetMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(longint));
-       GetMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
-       GetMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
-       GetMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(longint));
+       GetMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+       GetMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+       GetMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+       GetMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+       GetMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
        GenerateArgumentList(ArgumentList,Code);
       end;
       Code^.RestArgSym:=InternConstant(CodeGenerator^.RestArgSym);
@@ -28519,8 +28518,8 @@ var TokenList:PPOCAToken;
        end;
        begin
         Code^.ByteCodeSize:=CodeGenerator^.ByteCodeSize;
-        GetMem(Code^.ByteCode,Code^.ByteCodeSize*sizeof(longword));
-        Move(CodeGenerator^.ByteCode^,Code^.ByteCode^,Code^.ByteCodeSize*sizeof(longword));
+        GetMem(Code^.ByteCode,Code^.ByteCodeSize*sizeof(TPOCAUInt32));
+        Move(CodeGenerator^.ByteCode^,Code^.ByteCode^,Code^.ByteCodeSize*sizeof(TPOCAUInt32));
 {$ifdef POCAHasJIT}
         begin
          SetLength(Code^.InterpretByteCodeMap,Code^.ByteCodeSize);
@@ -28542,18 +28541,18 @@ var TokenList:PPOCAToken;
        end;
        begin
         if Code^.CountArguments>0 then begin
-         GetMem(Code^.ArgumentSymbols,Code^.CountArguments*sizeof(longint));
-         GetMem(Code^.ArgumentLocals,Code^.CountArguments*sizeof(longint));
-         Move(CodeGenerator^.ArgumentSymbols^,Code^.ArgumentSymbols^,Code^.CountArguments*sizeof(longint));
-         Move(CodeGenerator^.ArgumentLocals^,Code^.ArgumentLocals^,Code^.CountArguments*sizeof(longint));
+         GetMem(Code^.ArgumentSymbols,Code^.CountArguments*sizeof(TPOCAInt32));
+         GetMem(Code^.ArgumentLocals,Code^.CountArguments*sizeof(TPOCAInt32));
+         Move(CodeGenerator^.ArgumentSymbols^,Code^.ArgumentSymbols^,Code^.CountArguments*sizeof(TPOCAInt32));
+         Move(CodeGenerator^.ArgumentLocals^,Code^.ArgumentLocals^,Code^.CountArguments*sizeof(TPOCAInt32));
         end;
         if Code^.CountOptionalArguments>0 then begin
-         GetMem(Code^.OptionalArgumentSymbols,Code^.CountOptionalArguments*sizeof(longint));
-         GetMem(Code^.OptionalArgumentLocals,Code^.CountOptionalArguments*sizeof(longint));
-         GetMem(Code^.OptionalArgumentValues,Code^.CountOptionalArguments*sizeof(longint));
-         Move(CodeGenerator^.OptionalArgumentSymbols^,Code^.OptionalArgumentSymbols^,Code^.CountOptionalArguments*sizeof(longint));
-         Move(CodeGenerator^.OptionalArgumentLocals^,Code^.OptionalArgumentLocals^,Code^.CountOptionalArguments*sizeof(longint));
-         Move(CodeGenerator^.OptionalArgumentValues^,Code^.OptionalArgumentValues^,Code^.CountOptionalArguments*sizeof(longint));
+         GetMem(Code^.OptionalArgumentSymbols,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
+         GetMem(Code^.OptionalArgumentLocals,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
+         GetMem(Code^.OptionalArgumentValues,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
+         Move(CodeGenerator^.OptionalArgumentSymbols^,Code^.OptionalArgumentSymbols^,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
+         Move(CodeGenerator^.OptionalArgumentLocals^,Code^.OptionalArgumentLocals^,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
+         Move(CodeGenerator^.OptionalArgumentValues^,Code^.OptionalArgumentValues^,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
         end;
         Code^.Lines:=copy(CodeGenerator^.Lines,0,CodeGenerator^.LineCount);
        end;
@@ -28630,7 +28629,7 @@ var TokenList:PPOCAToken;
   FillChar(Parser,sizeof(TPOCAParser),#0);
  end;
 var Parser:TPOCAParser;
-    i:longint;
+    i:TPOCAInt32;
     OldFPUExceptionMask:TFPUExceptionMask;
     OldFPURoundingMode:TFPURoundingMode;
     OldFPUPrecisionMode:TFPUPrecisionMode;
@@ -28656,7 +28655,7 @@ begin
    Parser.SourceFile:=Instance^.SourceFiles.IndexOf(String(SourceFileName));
    if Parser.SourceFile<0 then begin
     Parser.SourceFile:=Instance^.SourceFiles.Add(String(SourceFileName));
-    if Parser.SourceFile=longint(POCAArraySize(Context^.Instance.Globals.SourceFiles)) then begin
+    if Parser.SourceFile=TPOCAInt32(POCAArraySize(Context^.Instance.Globals.SourceFiles)) then begin
      POCAArrayPush(Context^.Instance.Globals.SourceFiles,POCANewString(Context,SourceFileName));
     end else begin
      POCAArraySetSize(Context^.Instance.Globals.SourceFiles,Instance^.SourceFiles.Count);
@@ -28699,7 +28698,7 @@ begin
  POCAArrayPush(Context^.Instance^.Globals.Save,Obj);
 end;
 
-function POCAStackDepth(Context:PPOCAContext):longint;
+function POCAStackDepth(Context:PPOCAContext):TPOCAInt32;
 begin
  if assigned(Context) then begin
   result:=Context^.FrameTop+POCAStackDepth(Context^.CallChild);
@@ -28708,8 +28707,8 @@ begin
  end;
 end;
 
-function POCAFindFrame(Context:PPOCAContext;var OutContext:PPOCAContext;FrameNumber:longint):longint;
-var StackDepth:longint;
+function POCAFindFrame(Context:PPOCAContext;var OutContext:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAInt32;
+var StackDepth:TPOCAInt32;
 begin
  if assigned(Context) then begin
   StackDepth:=POCAStackDepth(Context);
@@ -28724,10 +28723,10 @@ begin
  end;
 end;
 
-function POCAGetSourceLine(Context:PPOCAContext;FrameNumber:longint):longint;
+function POCAGetSourceLine(Context:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAInt32;
 var Frame:PPOCAFrame;
     Code:PPOCACode;
-    i:longint;
+    i:TPOCAInt32;
 begin
  result:=-1;
  FrameNumber:=POCAFindFrame(Context,Context,FrameNumber);
@@ -28736,7 +28735,7 @@ begin
   if assigned(Frame) and (POCAIsValueFunction(Frame^.Func) and POCAIsValueCode(PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func))^.Code)) then begin
    Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func))^.Code));
    for i:=0 to length(Code^.Lines)-1 do begin
-    if Code^.Lines[i].InstructionPointer>longword(Frame^.InstructionPointer) then begin
+    if Code^.Lines[i].InstructionPointer>TPOCAUInt32(Frame^.InstructionPointer) then begin
      break;
     end;
     result:=Code^.Lines[i].Line;
@@ -28745,7 +28744,7 @@ begin
  end;
 end;
 
-function POCAGetSourceFile(Context:PPOCAContext;FrameNumber:longint):longint;
+function POCAGetSourceFile(Context:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAInt32;
 var Frame:PPOCAFrame;
     Code:PPOCACode;
 begin
@@ -28761,16 +28760,16 @@ begin
 end;
 
 procedure POCARuntimeError(Context:PPOCAContext;const Msg:TPOCAUTF8String);
-var StackDepth:longint;
+var StackDepth:TPOCAInt32;
 begin
  StackDepth:=POCAStackDepth(Context);
  raise EPOCARuntimeError.Create(POCAGetSourceFile(Context,StackDepth),POCAGetSourceLine(Context,StackDepth),-1,Msg);
 end;
 
-function POCAGetMember(Context:PPOCAContext;const Obj,Field:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:longword;const IsInherited,Throw:boolean):boolean;
+function POCAGetMember(Context:PPOCAContext;const Obj,Field:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited,Throw:boolean):boolean;
 var p:TPOCAValue;
     Ghost:PPOCAGhost;
-    PropertyIndex:longint;
+    PropertyIndex:TPOCAInt32;
 begin
 
  case POCAGetValueType(Obj) of
@@ -28883,10 +28882,10 @@ begin
  end;
 end;
 
-function POCASetMember(Context:PPOCAContext;const Obj,Field,Value:TPOCAValue;var CacheIndex:longword;Throw:boolean):boolean;
+function POCASetMember(Context:PPOCAContext;const Obj,Field,Value:TPOCAValue;var CacheIndex:TPOCAUInt32;Throw:boolean):boolean;
 var p:TPOCAValue;
     Ghost:PPOCAGhost;
-    PropertyIndex:longint;
+    PropertyIndex:TPOCAInt32;
 begin
  case POCAGetValueType(Obj) of
   pvtHASH:begin
@@ -28971,18 +28970,18 @@ begin
  end;
 end;
 
-procedure POCASetupArgumentsErrorTooFewArguments(Context:PPOCAContext;Code:PPOCACode;CountArguments:longint);
+procedure POCASetupArgumentsErrorTooFewArguments(Context:PPOCAContext;Code:PPOCACode;CountArguments:TPOCAInt32);
 begin
  POCARuntimeError(Context,'Too few function arguments (we have '+TPOCARawByteString(IntToStr(CountArguments))+' but we do need '+TPOCARawByteString(IntToStr(Code^.CountArguments))+')');
 end;
 
-procedure POCASetupArguments(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode;Args:PPOCAValues;CountArguments:longint;ArgIndices:PLongwords=nil);
-var i,j:longint;
+procedure POCASetupArguments(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode;Args:PPOCAValues;CountArguments:TPOCAInt32;ArgIndices:PPOCAUInt32Array=nil);
+var i,j:TPOCAInt32;
     Hash:PPOCAHash;
     Value,Arguments:TPOCAValue;
     ArrayRecord:PPOCAArrayRecord;
 begin
- if CountArguments<longint(Code^.CountArguments) then begin
+ if CountArguments<TPOCAInt32(Code^.CountArguments) then begin
   POCASetupArgumentsErrorTooFewArguments(Context,Code,CountArguments);
  end else begin
   Hash:=PPOCAHash(POCAGetValueReferencePointer(Frame^.Locals));
@@ -29075,7 +29074,7 @@ begin
 end;
 
 procedure POCACheckNamedArguments(Context:PPOCAContext;Code:PPOCACode;Hash:PPOCAHash;const HashValue:TPOCAValue);
-var i:longint;
+var i:TPOCAInt32;
     Sym,Value:TPOCAValue;
 begin
 //Value:=POCAValueNull;
@@ -29121,7 +29120,7 @@ begin
 end;
 
 procedure POCASetupNamedArgumentsWithLocals(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode;const Hash,Locals:TPOCAValue);
-var i:longint;
+var i:TPOCAInt32;
     Sym,Value:TPOCAValue;
 begin
 //Value:=POCAValueNull;
@@ -29172,11 +29171,11 @@ begin
 end;
 
 procedure POCASetupRegisters(Frame:PPOCAFrame;Code:PPOCACode);
-var i:longint;
+var i:TPOCAInt32;
 begin
  Frame^.CountRegisters:=Code^.CountRegisters;
  if Frame^.CountRegisters>0 then begin
-  if length(Frame^.Registers)<longint(Frame^.CountRegisters) then begin
+  if length(Frame^.Registers)<TPOCAInt32(Frame^.CountRegisters) then begin
    SetLength(Frame^.Registers,POCARoundUpToPowerOfTwo(Frame^.CountRegisters+1));
   end;
   for i:=0 to Frame^.CountRegisters-1 do begin
@@ -29186,9 +29185,9 @@ begin
  end;
 end;
 
-function POCASetupFunctionCall(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:longword;Operands:PLongwords;MethodCall,Named:boolean;TheFunc:PPOCAValue=nil):PPOCAFrame;
+function POCASetupFunctionCall(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:TPOCAUInt32;Operands:PPOCAUInt32Array;MethodCall,Named:boolean;TheFunc:PPOCAValue=nil):PPOCAFrame;
 var Func,Obj,Code:TPOCAValue;
-    i,CountArguments,ArgumentIndex:longint;
+    i,CountArguments,ArgumentIndex:TPOCAInt32;
     ObjPtr:PPOCAObject;
 begin
 //Obj:=POCAValueNull;
@@ -29217,8 +29216,8 @@ begin
 
  ObjPtr:=nil;
  repeat
-  if {$ifdef cpu64}((UInt64(pointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(pointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
-   ObjPtr:={$ifdef cpu64}pointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
+  if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
+   ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
    case ObjPtr^.Header.ValueType of
     pvtFUNCTION:begin
      if not MethodCall then begin
@@ -29232,8 +29231,8 @@ begin
        Obj:=Func;
       end;
       Func:=PPOCAHash(ObjPtr)^.Events^.HashRecord^.Events^[pmoCALL];
-      if {$ifdef cpu64}((UInt64(pointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(pointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
-       ObjPtr:={$ifdef cpu64}pointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
+      if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
+       ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
        if ObjPtr^.Header.ValueType=pvtFUNCTION then begin
         break;
        end;
@@ -29252,8 +29251,8 @@ begin
 
  Code:=PPOCAFunction(ObjPtr)^.Code;
 
- if {$ifdef cpu64}((UInt64(pointer(@Code.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(pointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask)){$else}(Code.ReferenceTag=POCAValueReferenceTag) and assigned(Code.Reference.Ptr){$endif} then begin
-  ObjPtr:={$ifdef cpu64}pointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask){$else}Code.Reference.Ptr{$endif};
+ if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Code.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask)){$else}(Code.ReferenceTag=POCAValueReferenceTag) and assigned(Code.Reference.Ptr){$endif} then begin
+  ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask){$else}Code.Reference.Ptr{$endif};
   case ObjPtr^.Header.ValueType of
    pvtNATIVECODE:begin
     if CountArguments>length(Frame^.Arguments) then begin
@@ -29352,7 +29351,7 @@ begin
 end;
 
 function POCARunEvalCat(Context:PPOCAContext;const l,r:TPOCAValue):TPOCAValue;
-var i,ls,rs:longint;
+var i,ls,rs:TPOCAInt32;
 begin
  if POCAIsValueArray(l) and POCAIsValueArray(r) then begin
   ls:=POCAArraySize(l);
@@ -29419,7 +29418,7 @@ begin
  POCARuntimeError(Context,'Undefined symbol: '+POCAGetStringValue(Context,Sym));
 end;
 
-procedure POCARunGetLocal(Context:PPOCAContext;Frame:PPOCAFrame;const Sym:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:longword);
+procedure POCARunGetLocal(Context:PPOCAContext;Frame:PPOCAFrame;const Sym:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32);
 var Func:PPOCAFunction;
 begin
  // Optimized search
@@ -29472,7 +29471,7 @@ begin
  POCARunGetLocalError(Context,Sym);
 end;
 
-procedure POCARunSetSymbol(Context:PPOCAContext;Frame:PPOCAFrame;const Sym,Value:TPOCAValue;var CacheIndex:longword);
+procedure POCARunSetSymbol(Context:PPOCAContext;Frame:PPOCAFrame;const Sym,Value:TPOCAValue;var CacheIndex:TPOCAUInt32);
 var Func:PPOCAFunction;
 begin
  begin
@@ -29506,18 +29505,18 @@ begin
  end;
 end;
 
-procedure POCARunGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:longword;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
+procedure POCARunGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
 begin
  POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,HashCacheIndex,IsInherited,true);
 end;
 
-procedure POCARunSafeGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:longword;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
+procedure POCARunSafeGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
 begin
  OutValue.CastedUInt64:=POCAValueNullCastedUInt64;
  POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,HashCacheIndex,IsInherited,false);
 end;
 
-procedure POCARunSetMember(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;var CacheIndex:longword); {$ifdef caninline}inline;{$endif}
+procedure POCARunSetMember(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;var CacheIndex:TPOCAUInt32); {$ifdef caninline}inline;{$endif}
 begin
  POCASetMember(Context,Obj,Fld,Value,CacheIndex,true);
 end;
@@ -29534,18 +29533,18 @@ begin
  end;
 end;
 
-function POCARunCheckArray(Context:PPOCAContext;const r,Index:TPOCAValue):longint; {$ifdef caninline}inline;{$endif}
+function POCARunCheckArray(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
 begin
  result:=trunc(POCAGetNumberValue(Context,Index));
  if result<0 then begin
   inc(result,POCAArraySize(r));
  end;
- if (result<0) or (result>=longint(POCAArraySize(r))) then begin
+ if (result<0) or (result>=TPOCAInt32(POCAArraySize(r))) then begin
   POCARuntimeError(Context,'Array index '+TPOCARawByteString(IntToStr(result))+' is out of bounds with size '+TPOCARawByteString(IntToStr(POCAArraySize(r))));
  end;
 end;
 
-function POCARunCheckString(Context:PPOCAContext;const r,Index:TPOCAValue):longint;
+function POCARunCheckString(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32;
 var s:TPOCARawByteString;
 begin
  s:=POCAGetStringValue(Context,r);
@@ -29562,8 +29561,8 @@ begin
  end;
 end;
 
-function POCARunCheckStringUTF8(Context:PPOCAContext;const r,Index:TPOCAValue):longint;
-var l:longint;
+function POCARunCheckStringUTF8(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32;
+var l:TPOCAInt32;
 begin
  l:=POCAGetStringUTF8Length(Context,r);
  try
@@ -29579,7 +29578,7 @@ begin
 end;
 
 function POCARunContainerGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
-var CodePoint,CodeUnit:longint;
+var CodePoint,CodeUnit:TPOCAInt32;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -29640,7 +29639,7 @@ begin
 end;
 
 function POCARunContainerSafeGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
-var CodePoint,CodeUnit:longint;
+var CodePoint,CodeUnit:TPOCAInt32;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -29701,8 +29700,8 @@ begin
 end;
 
 procedure POCARunContainerSet(Context:PPOCAContext;const Box,Key,Value:TPOCAValue);
-var CodePoint:longint;
-    CharValue:longword;
+var CodePoint:TPOCAInt32;
+    CharValue:TPOCAUInt32;
 begin
  if not POCAIsValueScalarType(Key) then begin
   POCARuntimeError(Context,'Container index not scalar');
@@ -29725,7 +29724,7 @@ begin
       PPOCAString(POCAGetValueReferencePointer(Box))^.Dirty:=true;
       POCAStringUpdate(Context,Box);
      end else begin
-      PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]:=ansichar(byte(CharValue));
+      PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]:=ansichar(TPOCAUInt8(CharValue));
      end;
     end;
    end;
@@ -29737,7 +29736,7 @@ begin
 end;
 
 function POCARunEvalForEach(Context:PPOCAContext;const Obj:TPOCAValue;var Index,Value,Keys:TPOCAValue):boolean;
-var CurrentIndex,Cell,Entity,CodePoint,CodeUnit:longint;
+var CurrentIndex,Cell,Entity,CodePoint,CodeUnit:TPOCAInt32;
     ArrayRecord:PPOCAArrayRecord;
     Str:PPOCAString;
     HashRecord:PPOCAHashRecord;
@@ -29772,7 +29771,7 @@ begin
      if ((CurrentIndex>=0) and (CurrentIndex<Str^.DataLength)) then begin
       Index.Num:=CurrentIndex+1;
       CodeUnit:=CurrentIndex+1;
-      Value.Num:=byte(AnsiChar(Str^.Data[CodeUnit]));
+      Value.Num:=TPOCAUInt8(AnsiChar(Str^.Data[CodeUnit]));
       result:=true;
      end;
     end;
@@ -29816,7 +29815,7 @@ begin
 end;
 
 function POCARunEvalForKey(Context:PPOCAContext;const Obj:TPOCAValue;var Index,Value,Keys:TPOCAValue):boolean;
-var CurrentIndex,Cell,Entity:longint;
+var CurrentIndex,Cell,Entity:TPOCAInt32;
     ArrayRecord:PPOCAArrayRecord;
     HashRecord:PPOCAHashRecord;
 begin
@@ -29859,7 +29858,7 @@ begin
 end;
 
 function POCARunEvalForIndex(Context:PPOCAContext;const Obj:TPOCAValue;var Index,Value:TPOCAValue):boolean;
-var CurrentIndex:longint;
+var CurrentIndex:TPOCAInt32;
     ArrayRecord:PPOCAArrayRecord;
     Str:PPOCAString;
 begin
@@ -29898,13 +29897,13 @@ begin
  end;
 end;
 
-procedure POCARunEvalUnpack(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:longword;Operands:PLongwords);
+procedure POCARunEvalUnpack(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:TPOCAUInt32;Operands:PPOCAUInt32Array);
 var ArrayObject:TPOCAValue;
-    i,Count:longint;
+    i,Count:TPOCAInt32;
 begin
  ArrayObject:=Frame^.Registers[Operands^[0]];
  Count:=(Opcode shr 8)-1;
- if (not POCAIsValueArray(ArrayObject)) or (longint(POCAArraySize(ArrayObject))<Count) then begin
+ if (not POCAIsValueArray(ArrayObject)) or (TPOCAInt32(POCAArraySize(ArrayObject))<Count) then begin
   POCARuntimeError(Context,'Short or invalid multi-assignment array');
  end else begin
   for i:=0 to Count-1 do begin
@@ -29914,7 +29913,7 @@ begin
 end;
 
 procedure POCARunEvalSlice(Context:PPOCAContext;var Dst:TPOCAValue;const Src,Idx:TPOCAValue);
-var DstType,CodePoint:longint;
+var DstType,CodePoint:TPOCAInt32;
 begin
  DstType:=POCAGetValueType(Dst);
  if DstType=pvtNULL then begin
@@ -29992,8 +29991,8 @@ begin
 end;
 
 procedure POCARunEvalSlice2(Context:PPOCAContext;var Dst:TPOCAValue;const Src,Start,EndR:TPOCAValue);
-var Size:longint;
- function Bound(const ir:TPOCAValue;IsEnd:boolean;IsString:boolean):longint;
+var Size:TPOCAInt32;
+ function Bound(const ir:TPOCAValue;IsEnd:boolean;IsString:boolean):TPOCAInt32;
  begin
   if POCAIsValueNull(ir) then begin
    if IsEnd then begin
@@ -30018,7 +30017,7 @@ var Size:longint;
    end;
   end;
  end;
-var DstType,i,s,e,l:longint;
+var DstType,i,s,e,l:TPOCAInt32;
 begin
  DstType:=POCAGetValueType(Dst);
  if DstType=pvtNULL then begin
@@ -30101,7 +30100,7 @@ begin
 end;
 
 procedure POCARunEvalSlice3(Context:PPOCAContext;var Dst:TPOCAValue;const Src,Start,Len:TPOCAValue);
-var DstType,Size,i,s,e,l:longint;
+var DstType,Size,i,s,e,l:TPOCAInt32;
 begin
  DstType:=POCAGetValueType(Dst);
  if DstType=pvtNULL then begin
@@ -30235,8 +30234,8 @@ end;
 
 function POCARunByteCode(Context:PPOCAContext):TPOCAValue; forward;
 
-function POCARunTry(Context:PPOCAContext;Frame:PPOCAFrame;ResultReg,CatchReg,TryBlockPos,CatchBlockPos,FinallyBlockPos,EndPos:longword):longword;
-var FrameTop:longint;
+function POCARunTry(Context:PPOCAContext;Frame:PPOCAFrame;ResultReg,CatchReg,TryBlockPos,CatchBlockPos,FinallyBlockPos,EndPos:TPOCAUInt32):TPOCAUInt32;
+var FrameTop:TPOCAInt32;
     rv,v:TPOCAValue;
 begin
  FrameTop:=Context^.FrameTop;
@@ -30308,7 +30307,7 @@ begin
 end;
 
 procedure POCARunThrow(Context:PPOCAContext;Parameter:TPOCAValue);
-var Value:longword;
+var Value:TPOCAUInt32;
 begin
  Value:=POCAStackDepth(Context);
  if POCAIsValueString(Parameter) then begin
@@ -30319,9 +30318,9 @@ begin
 end;
 
 procedure POCARunIn(Context:PPOCAContext;var r:TPOCAValue;const a,b:TPOCAValue);
-var CurrentIndex:longint;
+var CurrentIndex:TPOCAInt32;
     c:TPOCAValue;
-    d,e:longword;
+    d,e:TPOCAUInt32;
 begin
 //c:=POCAValueNull;
  c.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -30331,7 +30330,7 @@ begin
   end else begin
    r.Num:=0;
    CurrentIndex:=0;
-   while CurrentIndex<longint(POCAArraySize(b)) do begin
+   while CurrentIndex<TPOCAInt32(POCAArraySize(b)) do begin
     if POCACompare(Context,a,POCAArrayGet(b,CurrentIndex))=0 then begin
      r.Num:=1;
      break;
@@ -30364,7 +30363,7 @@ begin
  end;
 end;
 
-function POCARunHashEventBinaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PLongwords;const Operation:TPOCAMetaOp):boolean;
+function POCARunHashEventBinaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PPOCAUInt32Array;const Operation:TPOCAMetaOp):boolean;
 var HashEvents:PPOCAHashEvents;
 begin
  HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]],Frame^.Registers[Operands^[2]],Operation);
@@ -30376,7 +30375,7 @@ begin
  end;
 end;
 
-function POCARunHashEventRightBinaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PLongwords;const Operation:TPOCAMetaOp):boolean;
+function POCARunHashEventRightBinaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PPOCAUInt32Array;const Operation:TPOCAMetaOp):boolean;
 var HashEvents:PPOCAHashEvents;
 begin
  HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[2]],Operation);
@@ -30388,7 +30387,7 @@ begin
  end;
 end;
 
-function POCARunHashEventUnaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PLongwords;const Operation:TPOCAMetaOp):boolean;
+function POCARunHashEventUnaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PPOCAUInt32Array;const Operation:TPOCAMetaOp):boolean;
 var HashEvents:PPOCAHashEvents;
 begin
  HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]]);
@@ -30400,7 +30399,7 @@ begin
  end;
 end;
 
-function POCARunHashEventInRangeOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PLongwords;const Operation:TPOCAMetaOp):boolean;
+function POCARunHashEventInRangeOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PPOCAUInt32Array;const Operation:TPOCAMetaOp):boolean;
 var HashEvents:PPOCAHashEvents;
 begin
  HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]],Frame^.Registers[Operands^[2]],Frame^.Registers[Operands^[3]],Operation);
@@ -30419,21 +30418,21 @@ function POCAGenerateNativeCode(Context:PPOCAContext;Code:PPOCACode):boolean;
 type TFixupKind=(fkPTR,fkRET,fkOFS);
      TFixup=record
       Kind:TFixupKind;
-      Ofs:longint;
-      Dest:pointer;
-      ToOfs:longint;
+      Ofs:TPOCAInt32;
+      Dest:TPOCAPointer;
+      ToOfs:TPOCAInt32;
      end;
      TFixups=array of TFixup;
 var Fixups:TFixups;
-    CountFixups,i:longint;
-    Offsets:array of longword;
-    Opcode,Instruction:longword;
-    CodeBuffer:array of byte;
-    CodeBufferLen,OldCodeBufferLen:longint;
-    CurrentPC,LastPC,Temp,RetOfs,Literal:longword;
-    CodeBegin,CodeEnd:pointer;
-    CodeVars:array[0..8] of pointer;
-    Operands:PLongints;
+    CountFixups,i:TPOCAInt32;
+    Offsets:array of TPOCAUInt32;
+    Opcode,Instruction:TPOCAUInt32;
+    CodeBuffer:array of TPOCAUInt8;
+    CodeBufferLen,OldCodeBufferLen:TPOCAInt32;
+    CurrentPC,LastPC,Temp,RetOfs,Literal:TPOCAUInt32;
+    CodeBegin,CodeEnd:TPOCAPointer;
+    CodeVars:array[0..8] of TPOCAPointer;
+    Operands:PPOCAInt32Array;
     v:TPOCAValue;
  procedure Add(const s:TPUCURawByteString);
  begin
@@ -30445,10 +30444,10 @@ var Fixups:TFixups;
    inc(CodeBufferLen,length(s));
   end;
  end;
- procedure AddCode(CodeBegin,CodeEnd:pointer);
+ procedure AddCode(CodeBegin,CodeEnd:TPOCAPointer);
  var CodeLen:TPOCAPtrInt;
 {$ifdef windows}
-     OldProtect,OldProtectDummy:longword;
+     OldProtect,OldProtectDummy:TPOCAUInt32;
      OK:boolean;
 {$endif}
  begin
@@ -30472,13 +30471,13 @@ var Fixups:TFixups;
 {$endif}
   end;
  end;
- procedure AddDWord(const v:longword);
+ procedure AddDWord(const v:TPOCAUInt32);
  begin
-  if (CodeBufferLen+sizeof(longword))>=length(CodeBuffer) then begin
-   SetLength(CodeBuffer,(CodeBufferLen+sizeof(longword)+4096) and not 4095);
+  if (CodeBufferLen+sizeof(TPOCAUInt32))>=length(CodeBuffer) then begin
+   SetLength(CodeBuffer,(CodeBufferLen+sizeof(TPOCAUInt32)+4096) and not 4095);
   end;
-  move(v,CodeBuffer[CodeBufferLen],sizeof(longword));
-  inc(CodeBufferLen,sizeof(longword));
+  move(v,CodeBuffer[CodeBufferLen],sizeof(TPOCAUInt32));
+  inc(CodeBufferLen,sizeof(TPOCAUInt32));
  end;
  procedure DoItByVMOpcodeDispatcher;
  begin
@@ -30980,7 +30979,7 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
     popJMP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$e9); // jmp Arg
       if CountFixups>=length(Fixups) then begin
        SetLength(Fixups,CountFixups+4096);
@@ -31017,7 +31016,7 @@ begin
      Fixups[CountFixups].Dest:=@POCAGarbageCollectorDoBottleneck;
      inc(CountFixups);
 
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$e9); // jmp Arg
       if CountFixups>=length(Fixups) then begin
        SetLength(Fixups,CountFixups+4096);
@@ -31030,7 +31029,7 @@ begin
      end;
     end;
     popJIFTRUE:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$81#$bb); // cmp dword ptr [ebx+RegisterOfs+4],POCAValueReferenceTag
       AddDWord((Operands^[1]*sizeof(double))+4);
       AddDWord(POCAValueReferenceTag);
@@ -31069,7 +31068,7 @@ begin
      end;
     end;
     popJIFFALSE:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$81#$bb); // cmp dword ptr [ebx+RegisterOfs+4],POCAValueReferenceTag
       AddDWord((Operands^[1]*sizeof(double))+4);
       AddDWord(POCAValueReferenceTag);
@@ -31108,7 +31107,7 @@ begin
      end;
     end;
     popJIFTRUELOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$81#$bb); // cmp dword ptr [ebx+RegisterOfs+4],POCAValueReferenceTag
       AddDWord((Operands^[1]*sizeof(double))+4);
       AddDWord(POCAValueReferenceTag);
@@ -31168,7 +31167,7 @@ begin
      end;
     end;
     popJIFFALSELOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$81#$bb); // cmp dword ptr [ebx+RegisterOfs+4],POCAValueReferenceTag
       AddDWord((Operands^[1]*sizeof(double))+4);
       AddDWord(POCAValueReferenceTag);
@@ -31243,50 +31242,50 @@ begin
      end else begin
       Add(#$c7#$83); // mov dword ptr [ebx+Reg+0],[v+0]
       AddDWord(Operands^[0]*sizeof(double));
-      AddDWord(longword(pointer(@v)^));
+      AddDWord(TPOCAUInt32(TPOCAPointer(@v)^));
 
       Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[v+4]
       AddDWord((Operands^[0]*sizeof(double))+4);
-      AddDWord(longword(pointer(@pansichar(@v)[4])^));
+      AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@v)[4])^));
      end;
     end;
     popLOADONE:begin
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+0],[POCADoubleOne+0]
      AddDWord(Operands^[0]*sizeof(double));
-     AddDWord(longword(pointer(@POCADoubleOne)^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@POCADoubleOne)^));
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[POCADoubleOne+4]
      AddDWord((Operands^[0]*sizeof(double))+4);
-     AddDWord(longword(pointer(@pansichar(@POCADoubleOne)[4])^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@POCADoubleOne)[4])^));
     end;
     popLOADZERO:begin
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+0],[POCADoubleZero+0]
      AddDWord(Operands^[0]*sizeof(double));
-     AddDWord(longword(pointer(@POCADoubleZero)^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@POCADoubleZero)^));
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[POCADoubleZero+4]
      AddDWord((Operands^[0]*sizeof(double))+4);
-     AddDWord(longword(pointer(@pansichar(@POCADoubleZero)[4])^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@POCADoubleZero)[4])^));
     end;
     popLOADINT32:begin
      v.Num:=Operands^[1];
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+0],[v+0]
      AddDWord(Operands^[0]*sizeof(double));
-     AddDWord(longword(pointer(@v)^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@v)^));
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[v+4]
      AddDWord((Operands^[0]*sizeof(double))+4);
-     AddDWord(longword(pointer(@pansichar(@v)[4])^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@v)[4])^));
     end;
     popLOADNULL:begin
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+0],[POCAValueNull+0]
      AddDWord(Operands^[0]*sizeof(double));
-     AddDWord(longword(pointer(@POCAValueNull)^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@POCAValueNull)^));
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[POCAValueNull+4]
      AddDWord((Operands^[0]*sizeof(double))+4);
-     AddDWord(longword(pointer(@pansichar(@POCAValueNull)[4])^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@POCAValueNull)[4])^));
     end;
     popLOADTHAT:begin
      DoItByVMOpcodeDispatcher;
@@ -32813,7 +32812,7 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
     popN_JIFTRUE:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
       asm
@@ -32839,7 +32838,7 @@ begin
      end;
     end;
     popN_JIFFALSE:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
       asm
@@ -32865,7 +32864,7 @@ begin
      end;
     end;
     popN_JIFTRUELOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
@@ -32913,7 +32912,7 @@ begin
      end;
     end;
     popN_JIFFALSELOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
@@ -32961,7 +32960,7 @@ begin
      end;
     end;
     popN_JIFLT:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
 
@@ -32990,7 +32989,7 @@ begin
      end;
     end;
     popN_JIFLTEQ:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
 
@@ -33019,7 +33018,7 @@ begin
      end;
     end;
     popN_JIFGT:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
 
@@ -33048,7 +33047,7 @@ begin
      end;
     end;
     popN_JIFGTEQ:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
 
@@ -33077,7 +33076,7 @@ begin
      end;
     end;
     popN_JIFEQ:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
 
@@ -33106,7 +33105,7 @@ begin
      end;
     end;
     popN_JIFNEQ:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
 
@@ -33135,7 +33134,7 @@ begin
      end;
     end;
     popN_JIFLTLOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
@@ -33186,7 +33185,7 @@ begin
      end;
     end;
     popN_JIFLTEQLOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
@@ -33237,7 +33236,7 @@ begin
      end;
     end;
     popN_JIFGTLOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
@@ -33288,7 +33287,7 @@ begin
      end;
     end;
     popN_JIFGTEQLOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
@@ -33339,7 +33338,7 @@ begin
      end;
     end;
     popN_JIFEQLOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
@@ -33390,7 +33389,7 @@ begin
      end;
     end;
     popN_JIFNEQLOOP:begin
-     if longword(Operands^[0])<>CurrentPC then begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
       Add(#$dd#$83); // fld qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
@@ -33573,13 +33572,13 @@ begin
   for i:=0 to CountFixups-1 do begin
    case FixUps[i].Kind of
     fkPTR:begin
-     TPOCAPtrUInt(pointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(pointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
+     TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
     end;
     fkRET:begin
-     TPOCAPtrUInt(pointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(pointer(@pansichar(Code.NativeCode)[RetOfs]))-(TPOCAPtrUInt(pointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
+     TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
     end;
     fkOFS:begin
-     TPOCAPtrUInt(pointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(pointer(@pansichar(Code.NativeCode)[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(pointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
+     TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
     end;
    end;
   end;
@@ -33592,7 +33591,7 @@ begin
 end;
 {$warnings on}
 
-function POCARunNativeCode(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode):longbool; register; assembler;
+function POCARunNativeCode(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode):TPOCABool32; register; assembler;
 asm
  push ebx
  push esi
@@ -33619,8 +33618,8 @@ end;
 function POCARunByteCode(Context:PPOCAContext):TPOCAValue;
 var Code:PPOCACode;
     Frame:PPOCAFrame;
-    Opcode:longword;
-    Operands:PLongwords;
+    Opcode:TPOCAUInt32;
+    Operands:PPOCAUInt32Array;
     Registers:PPOCAValues;
     a,b:TPOCAValue;
 begin
@@ -34019,7 +34018,7 @@ begin
     Registers^[Operands^[0]].Num:=0;
    end;
    popLOADINT32:begin
-    Registers^[Operands^[0]].Num:=longint(longword(Operands^[1]));
+    Registers^[Operands^[0]].Num:=TPOCAInt32(TPOCAUInt32(Operands^[1]));
    end;
    popLOADNULL:begin
 //  Registers^[Operands^[0]]:=POCAValueNull;
@@ -34155,7 +34154,7 @@ begin
     a:=Registers^[Operands^[1]];
     b:=Registers^[Operands^[2]];
     if POCAIsValueNumber(a) and POCAIsValueNumber(b) then begin
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) and int64(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) and TPOCAInt64(System.trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBAND) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:=@Frame^.Registers[0];
@@ -34166,14 +34165,14 @@ begin
      if not POCAIsValueNumber(b) then begin
       b.Num:=POCAGetNumberValue(Context,b);
      end;
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) and int64(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) and TPOCAInt64(System.trunc(b.Num));
     end;
    end;
    popBXOR:begin
     a:=Registers^[Operands^[1]];
     b:=Registers^[Operands^[2]];
     if POCAIsValueNumber(a) and POCAIsValueNumber(b) then begin
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) xor int64(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) xor TPOCAInt64(System.trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBXOR) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:=@Frame^.Registers[0];
@@ -34184,14 +34183,14 @@ begin
      if not POCAIsValueNumber(b) then begin
       b.Num:=POCAGetNumberValue(Context,b);
      end;
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) xor int64(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) xor TPOCAInt64(System.trunc(b.Num));
     end;
    end;
    popBOR:begin
     a:=Registers^[Operands^[1]];
     b:=Registers^[Operands^[2]];
     if POCAIsValueNumber(a) and POCAIsValueNumber(b) then begin
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) or int64(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) or TPOCAInt64(System.trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBOR) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:=@Frame^.Registers[0];
@@ -34202,7 +34201,7 @@ begin
      if not POCAIsValueNumber(b) then begin
       b.Num:=POCAGetNumberValue(Context,b);
      end;
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) or int64(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) or TPOCAInt64(System.trunc(b.Num));
     end;
    end;
    popBNOT:begin
@@ -34210,14 +34209,14 @@ begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:=@Frame^.Registers[0];
     end else begin
-     Registers^[Operands^[0]].Num:=int64(not int64(System.trunc(POCAGetNumberValue(Context,Registers^[Operands^[1]]))));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(not TPOCAInt64(System.trunc(POCAGetNumberValue(Context,Registers^[Operands^[1]]))));
     end;
    end;
    popBSHL:begin
     a:=Registers^[Operands^[1]];
     b:=Registers^[Operands^[2]];
     if POCAIsValueNumber(a) and POCAIsValueNumber(b) then begin
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) shl longint(trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) shl TPOCAInt32(trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBSHL) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:=@Frame^.Registers[0];
@@ -34228,14 +34227,14 @@ begin
      if not POCAIsValueNumber(b) then begin
       b.Num:=POCAGetNumberValue(Context,b);
      end;
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) shl longint(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) shl TPOCAInt32(System.trunc(b.Num));
     end;
    end;
    popBSHR:begin
     a:=Registers^[Operands^[1]];
     b:=Registers^[Operands^[2]];
     if POCAIsValueNumber(a) and POCAIsValueNumber(b) then begin
-     Registers^[Operands^[0]].Num:=sar64(int64(System.trunc(a.Num)),longint(System.trunc(b.Num)));
+     Registers^[Operands^[0]].Num:=sar64(TPOCAInt64(System.trunc(a.Num)),TPOCAInt32(System.trunc(b.Num)));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBSHR) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:=@Frame^.Registers[0];
@@ -34246,14 +34245,14 @@ begin
      if not POCAIsValueNumber(b) then begin
       b.Num:=POCAGetNumberValue(Context,b);
      end;
-     Registers^[Operands^[0]].Num:=sar64(int64(System.trunc(a.Num)),longint(System.trunc(b.Num)));
+     Registers^[Operands^[0]].Num:=sar64(TPOCAInt64(System.trunc(a.Num)),TPOCAInt32(System.trunc(b.Num)));
     end;
    end;
    popBUSHR:begin
     a:=Registers^[Operands^[1]];
     b:=Registers^[Operands^[2]];
     if POCAIsValueNumber(a) and POCAIsValueNumber(b) then begin
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) shr longint(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) shr TPOCAInt32(System.trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBUSHR) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:=@Frame^.Registers[0];
@@ -34264,7 +34263,7 @@ begin
      if not POCAIsValueNumber(b) then begin
       b.Num:=POCAGetNumberValue(Context,b);
      end;
-     Registers^[Operands^[0]].Num:=int64(System.trunc(a.Num)) shr longint(System.trunc(b.Num));
+     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) shr TPOCAInt32(System.trunc(b.Num));
     end;
    end;
    popMOD:begin
@@ -34434,25 +34433,25 @@ begin
     Registers^[Operands^[0]].Num:=Registers^[Operands^[1]].Num+1.0;
    end;
    popN_BAND:begin
-    Registers^[Operands^[0]].Num:=int64(System.trunc(Registers^[Operands^[1]].Num)) and int64(System.trunc(Registers^[Operands^[2]].Num));
+    Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(Registers^[Operands^[1]].Num)) and TPOCAInt64(System.trunc(Registers^[Operands^[2]].Num));
    end;
    popN_BXOR:begin
-    Registers^[Operands^[0]].Num:=int64(System.trunc(Registers^[Operands^[1]].Num)) xor int64(System.trunc(Registers^[Operands^[2]].Num));
+    Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(Registers^[Operands^[1]].Num)) xor TPOCAInt64(System.trunc(Registers^[Operands^[2]].Num));
    end;
    popN_BOR:begin
-    Registers^[Operands^[0]].Num:=int64(System.trunc(Registers^[Operands^[1]].Num)) or int64(System.trunc(Registers^[Operands^[2]].Num));
+    Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(Registers^[Operands^[1]].Num)) or TPOCAInt64(System.trunc(Registers^[Operands^[2]].Num));
    end;
    popN_BNOT:begin
-    Registers^[Operands^[0]].Num:=int64(not int64(System.trunc(Registers^[Operands^[1]].Num)));
+    Registers^[Operands^[0]].Num:=TPOCAInt64(not TPOCAInt64(System.trunc(Registers^[Operands^[1]].Num)));
    end;
    popN_BSHL:begin
-    Registers^[Operands^[0]].Num:=int64(System.trunc(Registers^[Operands^[1]].Num)) shl int64(System.trunc(Registers^[Operands^[2]].Num));
+    Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(Registers^[Operands^[1]].Num)) shl TPOCAInt64(System.trunc(Registers^[Operands^[2]].Num));
    end;
    popN_BSHR:begin
-    Registers^[Operands^[0]].Num:=sar64(int64(System.trunc(Registers^[Operands^[1]].Num)),longint(trunc(Registers^[Operands^[2]].Num)));
+    Registers^[Operands^[0]].Num:=sar64(TPOCAInt64(System.trunc(Registers^[Operands^[1]].Num)),TPOCAInt32(trunc(Registers^[Operands^[2]].Num)));
    end;
    popN_BUSHR:begin
-    Registers^[Operands^[0]].Num:=int64(System.trunc(Registers^[Operands^[1]].Num)) shr int64(System.trunc(Registers^[Operands^[2]].Num));
+    Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(Registers^[Operands^[1]].Num)) shr TPOCAInt64(System.trunc(Registers^[Operands^[2]].Num));
    end;
    popN_MOD:begin
     Registers^[Operands^[0]].Num:=Modulo(Registers^[Operands^[1]].Num,Registers^[Operands^[2]].Num);
@@ -34760,8 +34759,8 @@ begin
  end;
 end;
 
-function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:longint;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue;
-var i:longint;
+function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue;
+var i:TPOCAInt32;
     Frame:PPOCAFrame;
     CodePointer:PPOCACode;
     HashEvents:PPOCAHashEvents;
@@ -34836,7 +34835,7 @@ end;
 
 {$hints off}
 function POCAGetFileContent(FileName:TPOCAUTF8String):TPOCARawByteString;
-var OldFileMode:byte;
+var OldFileMode:TPOCAUInt8;
     f:file;
 begin
  result:='';
@@ -34868,7 +34867,7 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
       FPURoundingMode:TFPURoundingMode=rmNearest;
       FPUPrecisionMode:TFPUPrecisionMode={$ifdef HAS_TYPE_EXTENDED}pmEXTENDED{$else}pmDOUBLE{$endif};
  procedure InitializeTokens;
- var i:longint;
+ var i:TPOCAInt32;
      t:TPOCATokenType;
      p:PPOCATokenPrecedence;
      pbp:PPOCATokenBinaryPrefix;
@@ -34907,7 +34906,7 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
  procedure InitializeKeywords;
   procedure AddKeywordToken(Token:TPOCATokenType;const Str:TPOCARawByteString);
   var Node:PPOCALexerKeywordTokenCharTreeNode;
-      Index:longint;
+      Index:TPOCAInt32;
       CurrentChar:ansichar;
   begin
    Node:=LexerKeywordTokenCharTreeRootNode;
