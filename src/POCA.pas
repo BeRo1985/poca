@@ -1224,9 +1224,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Destroy:procedure(const Ghost:PPOCAGhost);
       CanDestroy:function(const Ghost:PPOCAGhost):TPOCABool32;
       Mark:function(const Ghost:PPOCAGhost):TPOCABool32;
-      ExistKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue):TPOCABool32;
-      GetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;out aValue:TPOCAValue):TPOCABool32;
-      SetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;const aValue:TPOCAValue):TPOCABool32;
+      ExistKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;const aCacheIndex:PPOCAUInt32):TPOCABool32;
+      GetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;out aValue:TPOCAValue;const aCacheIndex:PPOCAUInt32):TPOCABool32;
+      SetKey:function(const Context:PPOCAContext;const Ghost:PPOCAGhost;const aKey:TPOCAValue;const aValue:TPOCAValue;const aCacheIndex:PPOCAUInt32):TPOCABool32;
       Name:TPOCARawByteString;
      end;
 
@@ -28831,7 +28831,7 @@ begin
     end;
    end;
 
-   if assigned(Ghost) and assigned(Ghost^.GhostType) and assigned(Ghost^.GhostType^.GetKey) and Ghost^.GhostType^.GetKey(Context,Ghost,Field,OutValue) then begin
+   if assigned(Ghost) and assigned(Ghost^.GhostType) and assigned(Ghost^.GhostType^.GetKey) and Ghost^.GhostType^.GetKey(Context,Ghost,Field,OutValue,@CacheIndex) then begin
 
     result:=true;
 
@@ -28903,7 +28903,7 @@ begin
      POCARuntimeError(Context,'Expandable-write-access to a non-expandable native object isn''t allowed');
     end;
    end;
-   if assigned(Ghost) and assigned(Ghost^.GhostType) and assigned(Ghost^.GhostType^.SetKey) and Ghost^.GhostType^.SetKey(Context,Ghost,Field,Value) then begin
+   if assigned(Ghost) and assigned(Ghost^.GhostType) and assigned(Ghost^.GhostType^.SetKey) and Ghost^.GhostType^.SetKey(Context,Ghost,Field,Value,@CacheIndex) then begin
     result:=true;
    end else begin
     p:=POCAGhostGetHashValue(Obj);
