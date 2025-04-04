@@ -1258,7 +1258,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
 {$ifdef POCAPools}
      TPOCAPoolBlock=record
-      GrayList:TPOCAGarbageCollectorLinkedList;
 {$ifdef POCAGarbageCollectorPoolBlockReferenceCounting}
       ReferenceCounter:TPOCAInt32;
 {$endif}
@@ -1267,7 +1266,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 {$endif}
       Data:TPOCAPointer;
       Size:TPOCAInt32;
-      Spin:TPOCAInt32;
       Previous:PPOCAPoolBlock;
       Next:PPOCAPoolBlock;
      end;
@@ -1305,6 +1303,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      PPOCAGarbageCollector=^TPOCAGarbageCollector;
      TPOCAGarbageCollector=record
+
+      Instance:PPOCAInstance;
      
       // Ephemeral generation
       WhiteLists:array[boolean] of TPOCAGarbageCollectorLinkedList;
@@ -1340,7 +1340,49 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ContextCacheSize:TPOCAInt32;
       MinimumBlockSize:TPOCAInt32;
       ScanContextGrays:TPOCAInt32;
-      ScanPoolGrays:TPOCAInt32;
+
+      class function IsWhite(const Obj:PPOCAObject):Boolean; static;
+      class function IsGray(const Obj:PPOCAObject):Boolean; static;
+      class function IsBlack(const Obj:PPOCAObject):Boolean; static;
+      class function IsGrayOrBlack(const Obj:PPOCAObject):Boolean; static;
+
+      procedure WriteBarrierMark(const Obj:PPOCAObject);
+      procedure WriteBarrierMarkParent(const ParentObj:PPOCAObject);
+      procedure WriteBarrierPersistent(const ParentObj:PPOCAObject);
+      procedure WriteBarrierObject(const ParentObj,Obj:PPOCAObject);
+      class procedure WriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue); static;
+
+      function MarkObjectAsGray(Obj:PPOCAObject):boolean;
+      function MarkValue(const Value:TPOCAValue):boolean;
+      function MarkArrayAsGray(Obj:PPOCAArray):boolean;
+      function MarkHashAsGray(Obj:PPOCAHash):boolean;
+      function MarkCodeAsGray(Obj:PPOCACode):boolean;
+      function MarkFunctionAsGray(Obj:PPOCAFunction):boolean;
+      function MarkGhostAsGray(Obj:PPOCAGhost):boolean;
+
+      procedure TryMarkGhostAsGray(Obj:PPOCAObject);
+
+      function MarkObjectContent(Obj:PPOCAObject):boolean;
+
+      procedure MarkObject(Obj:PPOCAObject);
+
+      procedure MarkTemporarySavedObjects(Context:PPOCAContext);
+
+      procedure MarkRoots;
+
+      function MarkContexts:boolean;
+
+      function MarkContextGrays:boolean;
+
+      procedure MarkPersistents;
+
+      procedure MarkProtected;
+
+      procedure Reset;
+
+      function CollectCycle:boolean;
+
+      procedure CollectAll;
       
      end;
 
@@ -2967,135 +3009,9 @@ begin
  end;
 end;
 
-procedure POCAGarbageCollectorWriteBarrierMark(const GarbageCollector:PPOCAGarbageCollector;const Obj:PPOCAObject);
-{$ifdef POCAPools}
-var PoolBlock:PPOCAPoolBlock;
-{$endif}
-begin
- // Obj: white -> gray
-{$ifdef POCAPools}
- PoolBlock:=Obj^.Header.PoolBlock;
- while TPasMPInterlocked.CompareExchange(PoolBlock^.Spin,-1,0)<>0 do begin
- end;
-{$else}
- POCALockEnter(GarbageCollector^.Lock);
-{$endif}
- try
-  // Re-check after locking
-  if (Obj^.Header.GarbageCollector.State and pgcbNOWHITE)=0 then begin
-   // Move to gray list
-   TPasMPInterlocked.Exchange(GarbageCollector^.ScanPoolGrays,-1);
-   POCAGarbageCollectorLinkedListRemove(Obj);
-{$ifdef POCAPools}
-   POCAGarbageCollectorLinkedListPush(@PoolBlock^.GrayList,Obj);
-{$else}
-   POCAGarbageCollectorLinkedListPush(@GarbageCollector^.GrayList,Obj);
-{$endif}
-   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
-  end;
- finally
-{$ifdef POCAPools}
-  TPasMPInterlocked.Exchange(PoolBlock^.Spin,0);
-{$else}
-  POCALockLeave(GarbageCollector^.Lock);
-{$endif}
- end;
-end;
-
-procedure POCAGarbageCollectorWriteBarrierMarkParent(const GarbageCollector:PPOCAGarbageCollector;const ParentObj:PPOCAObject);
-{$ifdef POCAPools}
-var PoolBlock:PPOCAPoolBlock;
-{$endif}
-begin
- // ParentObj: white -> gray
-{$ifdef POCAPools}
- PoolBlock:=ParentObj^.Header.PoolBlock;
- while TPasMPInterlocked.CompareExchange(PoolBlock^.Spin,-1,0)<>0 do begin
- end;
-{$else}
- POCALockEnter(GarbageCollector^.Lock);
-{$endif}
- try
-  TPasMPInterlocked.Exchange(GarbageCollector^.ScanPoolGrays,-1);
-  POCAGarbageCollectorLinkedListRemove(ParentObj);
-{$ifdef POCAPools}
-  POCAGarbageCollectorLinkedListPush(@PoolBlock^.GrayList,ParentObj);
-{$else}
-  POCAGarbageCollectorLinkedListPush(@GarbageCollector^.GrayList,ParentObj);
-{$endif}
-  ParentObj^.Header.GarbageCollector.State:=(ParentObj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
- finally
-{$ifdef POCAPools}
-  TPasMPInterlocked.Exchange(PoolBlock^.Spin,0);
-{$else}
-  POCALockLeave(GarbageCollector^.Lock);
-{$endif}
- end;
-end;
-
-procedure POCAGarbageCollectorWriteBarrierPersistent(const GarbageCollector:PPOCAGarbageCollector;const ParentObj:PPOCAObject);
-{$ifdef POCAPools}
-var PoolBlock:PPOCAPoolBlock;
-{$endif}
-begin
-{$ifdef POCAPools}
- PoolBlock:=ParentObj^.Header.PoolBlock;
- while TPasMPInterlocked.CompareExchange(PoolBlock^.Spin,-1,0)<>0 do begin
- end;
-{$endif}
- try
-  POCALockEnter(GarbageCollector^.Lock);
-  try
-   // Re-check after locking
-   if (ParentObj^.Header.GarbageCollector.State and pgcbPERSISTENT)<>0 then begin
-    // Move from persistent non-root list to persistent root list (a ka remembered set)
-    POCAGarbageCollectorLinkedListRemove(ParentObj);
-    POCAGarbageCollectorLinkedListPush(@GarbageCollector^.PersistentRootLists[ParentObj^.Header.ValueType=pvtGHOST],ParentObj);
-    ParentObj^.Header.GarbageCollector.State:=(ParentObj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENTROOT;
-   end;
-  finally
-   POCALockLeave(GarbageCollector^.Lock);
-  end;
- finally
-{$ifdef POCAPools}
-  TPasMPInterlocked.Exchange(PoolBlock^.Spin,0);
-{$endif}
- end;
-end;
-
 procedure POCAGarbageCollectorWriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue);
-var GarbageCollector:PPOCAGarbageCollector;
-    Obj:PPOCAObject;
 begin
- if POCAIsValueObjectAndGetReferencePointer(Value,Obj) then begin
-  GarbageCollector:=@ParentObj^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.GarbageCollector;
-
-  // Write-barrier (forward barrier: white -> gray)
-  // Pre-check before locking
-  if (Obj^.Header.GarbageCollector.State and pgcbNOWHITE)=0 then begin
-   if assigned(ParentObj) then begin
-    if (ParentObj^.Header.GarbageCollector.State and pgcbBLACK)<>0 then begin
-     // The parent holder object is in the black object list, so mark our to-store-object gray
-     POCAGarbageCollectorWriteBarrierMark(GarbageCollector,Obj);
-    end else if (ParentObj^.Header.GarbageCollector.State and pgcbNOWHITE)=0 then begin
-     // The parent holder object is in the white object list, so mark the parent holder object gray
-     POCAGarbageCollectorWriteBarrierMarkParent(GarbageCollector,ParentObj);
-    end;
-   end else begin
-    // Mark our object gray, if ParentObj is null
-    POCAGarbageCollectorWriteBarrierMark(GarbageCollector,Obj);
-   end;
-  end;
-
-  // Persistent -> ephemeral inter-generation-reference write-barrier
-  // Pre-check before locking
-  if assigned(ParentObj) and
-     (((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0) and
-      ((ParentObj^.Header.GarbageCollector.State and pgcbPERSISTENT)<>0)) then begin
-   POCAGarbageCollectorWriteBarrierPersistent(GarbageCollector,ParentObj);
-  end;
-
- end;
+ TPOCAGarbageCollector.WriteBarrier(ParentObj,Value);
 end;
 
 {$if defined(cpuamd64) and not defined(fpc)}
@@ -5056,7 +4972,6 @@ begin
    BlockSize:=PoolBlockSize+(Size*Pool^.ElementSize);
    GetMemAligned(Block,BlockSize,16);
    FillChar(Block^,BlockSize,#0);
-   POCAGarbageCollectorLinkedListInitialize(@Block^.GrayList,'Block GrayList');
 {$ifdef POCAGarbageCollectorPoolBlockReferenceCounting}
    Block^.ReferenceCounter:=0;
 {$endif}
@@ -5065,7 +4980,6 @@ begin
 {$endif}
    Block^.Data:=TPOCAPointer(@PAnsiChar(Block)[PoolBlockSize]);
    Block^.Size:=Size;
-   Block^.Spin:=0;
    Block^.Next:=nil;
    if assigned(Pool^.LastBlock) then begin
     Block^.Previous:=Pool^.LastBlock;
@@ -5112,8 +5026,6 @@ procedure POCAPoolFreeBlock(Pool:PPOCAPool;Block:PPOCAPoolBlock); {$ifdef UseReg
 var Element,OtherElement:TPOCAInt32;
     Obj,OtherObj:PPOCAObject;
 begin
- POCAGarbageCollectorLinkedListMove(@Block^.GrayList,@Pool^.Instance.Globals.GarbageCollector.GrayList);
- Block^.GrayList.Name:='';
  for Element:=0 to Block^.Size-1 do begin
   Obj:=PPOCAObject(TPOCAPointer(@pansichar(Block^.Data)[Element*Pool^.ElementSize]));
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
@@ -5329,24 +5241,9 @@ begin
 end;
 
 function POCAMarkValue(Instance:PPOCAInstance;const Value:TPOCAValue):TPOCABool32;
- function MarkObjectAsGray(Obj:PPOCAObject):TPOCABool32;
- var GarbageCollector:PPOCAGarbageCollector;
- begin
-  GarbageCollector:=@Instance^.Globals.GarbageCollector;
-  if assigned(Obj) then begin
-   result:=(Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0;
-   if result and ((Obj^.Header.GarbageCollector.State and (pgcbGRAY or pgcbBLACK))=0) then begin
-    POCAGarbageCollectorLinkedListRemove(Obj);
-    POCAGarbageCollectorLinkedListPush(@GarbageCollector^.GrayList,Obj);
-    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
-   end;
-  end else begin
-   result:=false;
-  end;
- end;
 begin
  if POCAIsValueObject(Value) then begin
-  result:=MarkObjectAsGray(PPOCAObject(POCAGetValueReferencePointer(Value)));
+  result:=Instance^.Globals.GarbageCollector.MarkObjectAsGray(PPOCAObject(POCAGetValueReferencePointer(Value)));
  end else begin
   result:=false;
  end;
@@ -5355,453 +5252,558 @@ end;
 function POCACoroutineGhostMarkEx(const Data:TPOCAPointer):TPOCABool32; forward;
 function POCAThreadGhostMarkEx(const Data:TPOCAPointer):TPOCABool32; forward;
 
-function POCAGarbageCollectorCollectCycle(Instance:PPOCAInstance):boolean; {$ifdef UseRegister}register;{$endif}
-var GarbageCollector:PPOCAGarbageCollector;
- function MarkObjectAsGray(Obj:PPOCAObject):boolean;
- begin
-  if assigned(Obj) then begin
-   result:=(Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0;
-   if result and ((Obj^.Header.GarbageCollector.State and (pgcbGRAY or pgcbBLACK))=0) then begin
-    POCAGarbageCollectorLinkedListRemove(Obj);
-    POCAGarbageCollectorLinkedListPush(@GarbageCollector^.GrayList,Obj);
-    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+class function TPOCAGarbageCollector.IsWhite(const Obj:PPOCAObject):Boolean;
+begin
+ result:=(Obj^.Header.GarbageCollector.State and pgcbNOWHITE)=0;
+end;
+
+class function TPOCAGarbageCollector.IsGray(const Obj:PPOCAObject):Boolean;
+begin
+ result:=(Obj^.Header.GarbageCollector.State and pgcbGRAY)<>0;
+end;
+
+class function TPOCAGarbageCollector.IsBlack(const Obj:PPOCAObject):Boolean;
+begin
+ result:=(Obj^.Header.GarbageCollector.State and pgcbBLACK)<>0;
+end;
+
+class function TPOCAGarbageCollector.IsGrayOrBlack(const Obj:PPOCAObject):Boolean;
+begin
+ result:=(Obj^.Header.GarbageCollector.State and (pgcbGRAY or pgcbBLACK))<>0;
+end;
+
+procedure TPOCAGarbageCollector.WriteBarrierMark(const Obj:PPOCAObject);
+begin
+ // Obj: white -> gray
+ POCALockEnter(Lock);
+ try
+  // Re-check after locking
+  if TPOCAGarbageCollector.IsWhite(Obj) then begin
+   // Move to gray list
+   POCAGarbageCollectorLinkedListRemove(Obj);
+   POCAGarbageCollectorLinkedListPush(@GrayList,Obj);
+   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+  end;
+ finally
+  POCALockLeave(Lock);
+ end;
+end;
+
+procedure TPOCAGarbageCollector.WriteBarrierMarkParent(const ParentObj:PPOCAObject);
+begin
+ // ParentObj: white -> gray
+ POCALockEnter(Lock);
+ try
+  POCAGarbageCollectorLinkedListRemove(ParentObj);
+  POCAGarbageCollectorLinkedListPush(@GrayList,ParentObj);
+  ParentObj^.Header.GarbageCollector.State:=(ParentObj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+ finally
+  POCALockLeave(Lock);
+ end;
+end;
+
+procedure TPOCAGarbageCollector.WriteBarrierPersistent(const ParentObj:PPOCAObject);
+begin
+ POCALockEnter(Lock);
+ try
+  // Re-check after locking
+  if (ParentObj^.Header.GarbageCollector.State and pgcbPERSISTENT)<>0 then begin
+   // Move from persistent non-root list to persistent root list (a ka remembered set)
+   POCAGarbageCollectorLinkedListRemove(ParentObj);
+   POCAGarbageCollectorLinkedListPush(@PersistentRootLists[ParentObj^.Header.ValueType=pvtGHOST],ParentObj);
+   ParentObj^.Header.GarbageCollector.State:=(ParentObj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENTROOT;
+  end;
+ finally
+  POCALockLeave(Lock);
+ end;
+end;
+
+procedure TPOCAGarbageCollector.WriteBarrierObject(const ParentObj,Obj:PPOCAObject);
+begin
+
+ // Write-barrier (forward barrier: white -> gray)
+ // Pre-check before locking
+ if TPOCAGarbageCollector.IsWhite(Obj) then begin
+  if assigned(ParentObj) then begin
+   if TPOCAGarbageCollector.IsBlack(ParentObj) then begin
+    // The parent holder object is in the black object list, so mark our to-store-object gray
+    WriteBarrierMark(Obj);
+   end else if TPOCAGarbageCollector.IsWhite(ParentObj) then begin
+    // The parent holder object is in the white object list, so mark the parent holder object gray
+    WriteBarrierMarkParent(ParentObj);
    end;
   end else begin
-   result:=false;
+   // Mark our object gray, if ParentObj is null
+   WriteBarrierMark(Obj);
   end;
  end;
- function MarkValue(const Value:TPOCAValue):boolean;
- begin
-  if POCAIsValueObject(Value) then begin
-   result:=MarkObjectAsGray(PPOCAObject(POCAGetValueReferencePointer(Value)));
+
+ // Persistent -> ephemeral inter-generation-reference write-barrier
+ // Pre-check before locking
+ if assigned(ParentObj) and
+    (((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0) and
+     ((ParentObj^.Header.GarbageCollector.State and pgcbPERSISTENT)<>0)) then begin
+  WriteBarrierPersistent(ParentObj);
+ end;
+
+end;
+
+class procedure TPOCAGarbageCollector.WriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue);
+var Obj:PPOCAObject;
+    GarbageCollector:PPOCAGarbageCollector;
+begin
+ if POCAIsValueObjectAndGetReferencePointer(Value,Obj) then begin
+  if assigned(ParentObj) then begin
+   GarbageCollector:=@ParentObj^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.GarbageCollector;
+   if not assigned(GarbageCollector) then begin
+    GarbageCollector:=@Obj^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.GarbageCollector;
+   end;
   end else begin
-   result:=false;
+   GarbageCollector:=@Obj^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.GarbageCollector;
+  end;
+  if assigned(GarbageCollector) then begin
+   GarbageCollector^.WriteBarrierObject(ParentObj,Obj);
   end;
  end;
- function MarkArrayAsGray(Obj:PPOCAArray):boolean;
- var ArrayRecord:PPOCAArrayRecord;
-     i:TPOCAInt32;
- begin
+end;
+
+function TPOCAGarbageCollector.MarkObjectAsGray(Obj:PPOCAObject):boolean;
+begin
+ if assigned(Obj) then begin
+  result:=(Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0;
+  if result and not TPOCAGarbageCollector.IsGrayOrBlack(Obj) then begin
+   POCAGarbageCollectorLinkedListRemove(Obj);
+   POCAGarbageCollectorLinkedListPush(@GrayList,Obj);
+   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+  end;
+ end else begin
   result:=false;
-  ArrayRecord:=Obj^.ArrayRecord;
-  if assigned(ArrayRecord) then begin
-   for i:=0 to ArrayRecord^.Size-1 do begin
-    if MarkValue(ArrayRecord^.Data[i]) then begin
+ end;
+end;
+
+function TPOCAGarbageCollector.MarkValue(const Value:TPOCAValue):boolean;
+begin
+ if POCAIsValueObject(Value) then begin
+  result:=MarkObjectAsGray(PPOCAObject(POCAGetValueReferencePointer(Value)));
+ end else begin
+  result:=false;
+ end;
+end;
+
+function TPOCAGarbageCollector.MarkArrayAsGray(Obj:PPOCAArray):boolean;
+var ArrayRecord:PPOCAArrayRecord;
+    i:TPOCAInt32;
+begin
+ result:=false;
+ ArrayRecord:=Obj^.ArrayRecord;
+ if assigned(ArrayRecord) then begin
+  for i:=0 to ArrayRecord^.Size-1 do begin
+   if MarkValue(ArrayRecord^.Data[i]) then begin
+    result:=true;
+   end;
+  end;
+ end;
+end;
+
+function TPOCAGarbageCollector.MarkHashAsGray(Obj:PPOCAHash):boolean;
+var HashRec:PPOCAHashRecord;
+    HashEntity:PPOCAHashEntity;
+    i:TPOCAInt32;
+    j:TPOCAInt32;
+    mo:TPOCAMetaOp;
+begin
+ result:=false;
+ HashRec:=Obj^.HashRecord;
+ if assigned(HashRec) then begin
+  for i:=0 to (2 shl HashRec^.LogSize)-1 do begin
+   j:=HashRec^.CellToEntityIndex^[i];
+   if j>=0 then begin
+    HashEntity:=@HashRec^.Entities^[j];
+    if MarkValue(HashEntity^.Key) then begin
+     result:=true;
+    end;
+    if MarkValue(HashEntity^.Value) then begin
+     result:=true;
+    end;
+   end;
+  end;
+  if assigned(HashRec^.Events) then begin
+   for mo:=low(TPOCAHashEvents) to high(TPOCAHashEvents) do begin
+    if MarkValue(HashRec^.Events[mo]) then begin
      result:=true;
     end;
    end;
   end;
  end;
- function MarkHashAsGray(Obj:PPOCAHash):boolean;
- var HashRec:PPOCAHashRecord;
-     HashEntity:PPOCAHashEntity;
-     i:TPOCAInt32;
-     j:TPOCAInt32;
-     mo:TPOCAMetaOp;
- begin
-  result:=false;
-  HashRec:=Obj^.HashRecord;
-  if assigned(HashRec) then begin
-   for i:=0 to (2 shl HashRec^.LogSize)-1 do begin
-    j:=HashRec^.CellToEntityIndex^[i];
-    if j>=0 then begin
-     HashEntity:=@HashRec^.Entities^[j];
-     if MarkValue(HashEntity^.Key) then begin
-      result:=true;
-     end;
-     if MarkValue(HashEntity^.Value) then begin
-      result:=true;
-     end;
-    end;
-   end;
-   if assigned(HashRec^.Events) then begin
-    for mo:=low(TPOCAHashEvents) to high(TPOCAHashEvents) do begin
-     if MarkValue(HashRec^.Events[mo]) then begin
-      result:=true;
-     end;
-    end;
-   end;
-  end;
-  if assigned(Obj^.Prototype) then begin
-   if MarkObjectAsGray(TPOCAPointer(Obj^.Prototype)) then begin
-    result:=true;
-   end;
-  end;
-  if assigned(Obj^.Events) then begin
-   if MarkObjectAsGray(TPOCAPointer(Obj^.Events)) then begin
-    result:=true;
-   end;
-  end;
-  if assigned(Obj^.Ghost) then begin
-   if MarkObjectAsGray(TPOCAPointer(Obj^.Ghost)) then begin
-    result:=true;
-   end;
-  end;
- end;
- function MarkCodeAsGray(Obj:PPOCACode):boolean;
- var i:TPOCAInt32;
- begin
-  result:=false;
-  for i:=0 to Obj^.ConstantCount-1 do begin
-   if MarkValue(Obj^.Constants^[i]) then begin
-    result:=true;
-   end;
-  end;
-  for i:=0 to Obj^.CountRegExps-1 do begin
-   if MarkValue(Obj^.RegExps^[i]) then begin
-    result:=true;
-   end;
-  end;
- end;
- function MarkFunctionAsGray(Obj:PPOCAFunction):boolean;
- begin
-  result:=false;
-  if MarkValue(Obj^.Code) then begin
-   result:=true;
-  end;
-  if MarkValue(Obj^.Namespace) then begin
-   result:=true;
-  end;
-  if MarkValue(Obj^.Obj) then begin
-   result:=true;
-  end;
-  if MarkValue(Obj^.Next) then begin
+ if assigned(Obj^.Prototype) then begin
+  if MarkObjectAsGray(TPOCAPointer(Obj^.Prototype)) then begin
    result:=true;
   end;
  end;
- function MarkGhostAsGray(Obj:PPOCAGhost):boolean;
- begin
-  result:=false;
-  if assigned(Obj^.GhostType) and assigned(addr(Obj^.GhostType^.Mark)) then begin
-   if Obj^.GhostType^.Mark(Obj) then begin
-    result:=true;
-   end;
-  end;
-  if assigned(Obj^.Hash) then begin
-   if MarkObjectAsGray(TPOCAPointer(Obj^.Hash)) then begin
-    result:=true;
-   end;
+ if assigned(Obj^.Events) then begin
+  if MarkObjectAsGray(TPOCAPointer(Obj^.Events)) then begin
+   result:=true;
   end;
  end;
- procedure TryMarkGhostAsGray(Obj:PPOCAObject);
- begin
-  if Obj^.Header.ValueType=pvtGHOST then begin
-   MarkGhostAsGray(TPOCAPointer(Obj));
+ if assigned(Obj^.Ghost) then begin
+  if MarkObjectAsGray(TPOCAPointer(Obj^.Ghost)) then begin
+   result:=true;
   end;
  end;
- function MarkObjectContent(Obj:PPOCAObject):boolean;
- begin
-  case Obj^.Header.ValueType of
-   pvtREFERENCE:begin
-    result:=MarkObjectAsGray(TPOCAPointer(Obj));
-   end;
-   pvtSTRING:begin
-    result:=MarkObjectAsGray(TPOCAPointer(Obj));
-   end;
-   pvtARRAY:begin
-    result:=MarkArrayAsGray(TPOCAPointer(Obj));
-   end;
-   pvtHASH:begin
-    result:=MarkHashAsGray(TPOCAPointer(Obj));
-   end;
-   pvtCODE:begin
-    result:=MarkCodeAsGray(TPOCAPointer(Obj));
-   end;
-   pvtFUNCTION:begin
-    result:=MarkFunctionAsGray(TPOCAPointer(Obj));
-   end;
-   pvtNATIVECODE:begin
-    result:=MarkObjectAsGray(TPOCAPointer(Obj));
-   end;
-   pvtGHOST:begin
-    result:=MarkGhostAsGray(TPOCAPointer(Obj));
-   end;
-   else begin
-    result:=false;
-   end;
+end;
+
+function TPOCAGarbageCollector.MarkCodeAsGray(Obj:PPOCACode):boolean;
+var i:TPOCAInt32;
+begin
+ result:=false;
+ for i:=0 to Obj^.ConstantCount-1 do begin
+  if MarkValue(Obj^.Constants^[i]) then begin
+   result:=true;
   end;
  end;
- procedure MarkObject(Obj:PPOCAObject);
- var Temp:TPOCAUInt32;
- begin
-  case Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT or pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT) of
-   pgcbWASPERSISTENT:begin
+ for i:=0 to Obj^.CountRegExps-1 do begin
+  if MarkValue(Obj^.RegExps^[i]) then begin
+   result:=true;
+  end;
+ end;
+end;
+
+function TPOCAGarbageCollector.MarkFunctionAsGray(Obj:PPOCAFunction):boolean;
+begin
+ result:=false;
+ if MarkValue(Obj^.Code) then begin
+  result:=true;
+ end;
+ if MarkValue(Obj^.Namespace) then begin
+  result:=true;
+ end;
+ if MarkValue(Obj^.Obj) then begin
+  result:=true;
+ end;
+ if MarkValue(Obj^.Next) then begin
+  result:=true;
+ end;
+end;
+
+function TPOCAGarbageCollector.MarkGhostAsGray(Obj:PPOCAGhost):boolean;
+begin
+ result:=false;
+ if assigned(Obj^.GhostType) and assigned(addr(Obj^.GhostType^.Mark)) then begin
+  if Obj^.GhostType^.Mark(Obj) then begin
+   result:=true;
+  end;
+ end;
+ if assigned(Obj^.Hash) then begin
+  if MarkObjectAsGray(TPOCAPointer(Obj^.Hash)) then begin
+   result:=true;
+  end;
+ end;
+end;
+
+procedure TPOCAGarbageCollector.TryMarkGhostAsGray(Obj:PPOCAObject);
+begin
+ if Obj^.Header.ValueType=pvtGHOST then begin
+  MarkGhostAsGray(TPOCAPointer(Obj));
+ end;
+end;
+
+function TPOCAGarbageCollector.MarkObjectContent(Obj:PPOCAObject):boolean;
+begin
+ case Obj^.Header.ValueType of
+  pvtREFERENCE:begin
+   result:=MarkObjectAsGray(TPOCAPointer(Obj));
+  end;
+  pvtSTRING:begin
+   result:=MarkObjectAsGray(TPOCAPointer(Obj));
+  end;
+  pvtARRAY:begin
+   result:=MarkArrayAsGray(TPOCAPointer(Obj));
+  end;
+  pvtHASH:begin
+   result:=MarkHashAsGray(TPOCAPointer(Obj));
+  end;
+  pvtCODE:begin
+   result:=MarkCodeAsGray(TPOCAPointer(Obj));
+  end;
+  pvtFUNCTION:begin
+   result:=MarkFunctionAsGray(TPOCAPointer(Obj));
+  end;
+  pvtNATIVECODE:begin
+   result:=MarkObjectAsGray(TPOCAPointer(Obj));
+  end;
+  pvtGHOST:begin
+   result:=MarkGhostAsGray(TPOCAPointer(Obj));
+  end;
+  else begin
+   result:=false;
+  end;
+ end;
+end;
+
+procedure TPOCAGarbageCollector.MarkObject(Obj:PPOCAObject);
+var Temp:TPOCAUInt32;
+begin
+ case Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT or pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT) of
+  pgcbWASPERSISTENT:begin
+   POCAGarbageCollectorLinkedListRemove(Obj);
+   POCAGarbageCollectorLinkedListPush(@PersistentLists[Obj^.Header.ValueType=pvtGHOST],Obj);
+   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENT;
+   MarkObjectContent(Obj);
+  end;
+  pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT,pgcbWASPERSISTENTROOT:begin
+   POCAGarbageCollectorLinkedListRemove(Obj);
+   POCAGarbageCollectorLinkedListPush(@PersistentRootLists[Obj^.Header.ValueType=pvtGHOST],Obj);
+   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENTROOT;
+   MarkObjectContent(Obj);
+  end;
+  0:begin
+   if (PersistentThreshold>0) and
+      (TPOCAPtrUInt(Obj^.Header.GarbageCollector.State shr 8)>=TPOCAPtrUInt(PersistentThreshold)) then begin
     POCAGarbageCollectorLinkedListRemove(Obj);
-    POCAGarbageCollectorLinkedListPush(@GarbageCollector^.PersistentLists[Obj^.Header.ValueType=pvtGHOST],Obj);
-    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENT;
-    MarkObjectContent(Obj);
-   end;
-   pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT,pgcbWASPERSISTENTROOT:begin
-    POCAGarbageCollectorLinkedListRemove(Obj);
-    POCAGarbageCollectorLinkedListPush(@GarbageCollector^.PersistentRootLists[Obj^.Header.ValueType=pvtGHOST],Obj);
-    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENTROOT;
-    MarkObjectContent(Obj);
-   end;
-   0:begin
-    if (GarbageCollector^.PersistentThreshold>0) and
-       (TPOCAPtrUInt(Obj^.Header.GarbageCollector.State shr 8)>=TPOCAPtrUInt(GarbageCollector^.PersistentThreshold)) then begin
-     POCAGarbageCollectorLinkedListRemove(Obj);
-     POCAGarbageCollectorLinkedListPush(@GarbageCollector^.PersistentLists[Obj^.Header.ValueType=pvtGHOST],Obj);
-     Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbPERSISTENT;
-    end else begin
-     Temp:=Obj^.Header.GarbageCollector.State+pgcscONE;
-     if Temp<=pgcscMAXSHIFTED then begin
-      Obj^.Header.GarbageCollector.State:=Temp;
-     end;
-     POCAGarbageCollectorLinkedListRemove(Obj);
-     POCAGarbageCollectorLinkedListPush(@GarbageCollector^.BlackLists[Obj^.Header.ValueType=pvtGHOST],Obj);
-     Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbBLACK;
+    POCAGarbageCollectorLinkedListPush(@PersistentLists[Obj^.Header.ValueType=pvtGHOST],Obj);
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbPERSISTENT;
+   end else begin
+    Temp:=Obj^.Header.GarbageCollector.State+pgcscONE;
+    if Temp<=pgcscMAXSHIFTED then begin
+     Obj^.Header.GarbageCollector.State:=Temp;
     end;
-    MarkObjectContent(Obj);
+    POCAGarbageCollectorLinkedListRemove(Obj);
+    POCAGarbageCollectorLinkedListPush(@BlackLists[Obj^.Header.ValueType=pvtGHOST],Obj);
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbBLACK;
+   end;
+   MarkObjectContent(Obj);
+  end;
+ end;
+end;
+
+procedure TPOCAGarbageCollector.MarkTemporarySavedObjects(Context:PPOCAContext);
+var i:TPOCAInt32;
+begin
+ for i:=0 to Context^.TemporarySavedObjectCount-1 do begin
+  MarkObjectAsGray(Context^.TemporarySavedObjects^[i]);
+ end;
+end;
+
+procedure TPOCAGarbageCollector.MarkRoots;
+begin
+ MarkValue(Instance^.Globals.RootArray);
+ MarkValue(Instance^.Globals.RootHash);
+ MarkValue(Instance^.Globals.Namespace);
+ MarkValue(Instance^.Globals.HiddenNamespace);
+ MarkValue(Instance^.Globals.ModuleScopes);
+ MarkValue(Instance^.Globals.ModuleValues);
+ MarkValue(Instance^.Globals.ModuleTimes);
+ MarkValue(Instance^.Globals.BaseClass);
+ MarkValue(Instance^.Globals.ArrayHash);
+ MarkValue(Instance^.Globals.HashHash);
+ MarkValue(Instance^.Globals.NumberHash);
+ MarkValue(Instance^.Globals.StringHash);
+ MarkValue(Instance^.Globals.IOHash);
+ MarkValue(Instance^.Globals.RegExpHash);
+ MarkValue(Instance^.Globals.CoroutineHash);
+ MarkValue(Instance^.Globals.ThreadHash);
+ MarkValue(Instance^.Globals.LockHash);
+ MarkValue(Instance^.Globals.SemaphoreHash);
+ MarkValue(Instance^.Globals.Save);
+ MarkValue(Instance^.Globals.Symbols);
+ MarkValue(Instance^.Globals.ArgumentsValueReference);
+ MarkValue(Instance^.Globals.ConstructorValueReference);
+ MarkValue(Instance^.Globals.NullValueReference);
+ MarkValue(Instance^.Globals.ReferenceValueReference);
+ MarkValue(Instance^.Globals.NumberValueReference);
+ MarkValue(Instance^.Globals.StringValueReference);
+ MarkValue(Instance^.Globals.ArrayValueReference);
+ MarkValue(Instance^.Globals.GhostClassValueReference);
+ MarkValue(Instance^.Globals.ClassValueReference);
+ MarkValue(Instance^.Globals.GhostModuleValueReference);
+ MarkValue(Instance^.Globals.ModuleValueReference);
+ MarkValue(Instance^.Globals.GhostHashValueReference);
+ MarkValue(Instance^.Globals.HashValueReference);
+ MarkValue(Instance^.Globals.FunctionValueReference);
+ MarkValue(Instance^.Globals.ClassGhostValueReference);
+ MarkValue(Instance^.Globals.ModuleGhostValueReference);
+ MarkValue(Instance^.Globals.HashGhostValueReference);
+ MarkValue(Instance^.Globals.GhostValueReference);
+ MarkValue(Instance^.Globals.CodeValueReference);
+ MarkValue(Instance^.Globals.NativeCodeValueReference);
+ MarkValue(Instance^.Globals.UnknownValueReference);
+ MarkValue(Instance^.Globals.SourceFiles);
+ MarkValue(Instance^.Globals.UniqueStringArray);
+end;
+
+function TPOCAGarbageCollector.MarkContexts:boolean;
+var Context:PPOCAContext;
+    Frame:PPOCAFrame;
+    i,j:TPOCAInt32;
+begin
+ Context:=Instance^.Globals.FirstContext;
+ while assigned(Context) do begin
+  for i:=0 to Context^.FrameTop-1 do begin
+   Frame:=@Context^.FrameStack[i];
+   MarkValue(Frame^.Func);
+   MarkValue(Frame^.Locals);
+   MarkValue(Frame^.Obj);
+   for j:=0 to Frame^.CountRegisters-1 do begin
+    MarkValue(Frame^.Registers[j]);
+   end;
+   for j:=0 to Frame^.CountArguments-1 do begin
+    MarkValue(Frame^.Arguments[j]);
    end;
   end;
- end;
- procedure MarkTemporarySavedObjects(Context:PPOCAContext);
- var i:TPOCAInt32;
- begin
-  for i:=0 to Context^.TemporarySavedObjectCount-1 do begin
-   MarkObjectAsGray(Context^.TemporarySavedObjects^[i]);
+  if assigned(PPOCACoroutineData(Context^.CoroutineData)) and (assigned(PPOCACoroutineData(Context^.CoroutineData)^.Coroutine) and (PPOCACoroutineData(Context^.CoroutineData)^.Coroutine^.State<>pcsTERMINATED)) then begin
+   POCACoroutineGhostMarkEx(Context^.ThreadData);
   end;
+  if assigned(PPOCAThreadData(Context^.ThreadData)) and not PPOCAThreadData(Context^.ThreadData)^.Terminated then begin
+   POCAThreadGhostMarkEx(Context^.ThreadData);
+  end;
+  MarkTemporarySavedObjects(Context);
+  POCAGarbageCollectorLinkedListMove(@Context^.GrayList,@GrayList);
+  Context:=Context^.Next;
  end;
- procedure MarkRoots;
- begin
-  MarkValue(Instance^.Globals.RootArray);
-  MarkValue(Instance^.Globals.RootHash);
-  MarkValue(Instance^.Globals.Namespace);
-  MarkValue(Instance^.Globals.HiddenNamespace);
-  MarkValue(Instance^.Globals.ModuleScopes);
-  MarkValue(Instance^.Globals.ModuleValues);
-  MarkValue(Instance^.Globals.ModuleTimes);
-  MarkValue(Instance^.Globals.BaseClass);
-  MarkValue(Instance^.Globals.ArrayHash);
-  MarkValue(Instance^.Globals.HashHash);
-  MarkValue(Instance^.Globals.NumberHash);
-  MarkValue(Instance^.Globals.StringHash);
-  MarkValue(Instance^.Globals.IOHash);
-  MarkValue(Instance^.Globals.RegExpHash);
-  MarkValue(Instance^.Globals.CoroutineHash);
-  MarkValue(Instance^.Globals.ThreadHash);
-  MarkValue(Instance^.Globals.LockHash);
-  MarkValue(Instance^.Globals.SemaphoreHash);
-  MarkValue(Instance^.Globals.Save);
-  MarkValue(Instance^.Globals.Symbols);
-  MarkValue(Instance^.Globals.ArgumentsValueReference);
-  MarkValue(Instance^.Globals.ConstructorValueReference);
-  MarkValue(Instance^.Globals.NullValueReference);
-  MarkValue(Instance^.Globals.ReferenceValueReference);
-  MarkValue(Instance^.Globals.NumberValueReference);
-  MarkValue(Instance^.Globals.StringValueReference);
-  MarkValue(Instance^.Globals.ArrayValueReference);
-  MarkValue(Instance^.Globals.GhostClassValueReference);
-  MarkValue(Instance^.Globals.ClassValueReference);
-  MarkValue(Instance^.Globals.GhostModuleValueReference);
-  MarkValue(Instance^.Globals.ModuleValueReference);
-  MarkValue(Instance^.Globals.GhostHashValueReference);
-  MarkValue(Instance^.Globals.HashValueReference);
-  MarkValue(Instance^.Globals.FunctionValueReference);
-  MarkValue(Instance^.Globals.ClassGhostValueReference);
-  MarkValue(Instance^.Globals.ModuleGhostValueReference);
-  MarkValue(Instance^.Globals.HashGhostValueReference);
-  MarkValue(Instance^.Globals.GhostValueReference);
-  MarkValue(Instance^.Globals.CodeValueReference);
-  MarkValue(Instance^.Globals.NativeCodeValueReference);
-  MarkValue(Instance^.Globals.UnknownValueReference);
-  MarkValue(Instance^.Globals.SourceFiles);
-  MarkValue(Instance^.Globals.UniqueStringArray);
- end;
- function MarkContexts:boolean;
- var Context:PPOCAContext;
-     Frame:PPOCAFrame;
-     i,j:TPOCAInt32;
- begin
+ result:=assigned(GrayList.First);
+end;
+
+function TPOCAGarbageCollector.MarkContextGrays:boolean;
+var Context:PPOCAContext;
+begin
+ if ScanContextGrays<>0 then begin
+  ScanContextGrays:=0;
   Context:=Instance^.Globals.FirstContext;
   while assigned(Context) do begin
-   for i:=0 to Context^.FrameTop-1 do begin
-    Frame:=@Context^.FrameStack[i];
-    MarkValue(Frame^.Func);
-    MarkValue(Frame^.Locals);
-    MarkValue(Frame^.Obj);
-    for j:=0 to Frame^.CountRegisters-1 do begin
-     MarkValue(Frame^.Registers[j]);
-    end;
-    for j:=0 to Frame^.CountArguments-1 do begin
-     MarkValue(Frame^.Arguments[j]);
-    end;   
-   end;               
-   if assigned(PPOCACoroutineData(Context^.CoroutineData)) and (assigned(PPOCACoroutineData(Context^.CoroutineData)^.Coroutine) and (PPOCACoroutineData(Context^.CoroutineData)^.Coroutine^.State<>pcsTERMINATED)) then begin
-    POCACoroutineGhostMarkEx(Context^.ThreadData);
-   end;
-   if assigned(PPOCAThreadData(Context^.ThreadData)) and not PPOCAThreadData(Context^.ThreadData)^.Terminated then begin
-    POCAThreadGhostMarkEx(Context^.ThreadData);
-   end;
-   MarkTemporarySavedObjects(Context);
-   POCAGarbageCollectorLinkedListMove(@Context^.GrayList,@GarbageCollector^.GrayList);
+   POCAGarbageCollectorLinkedListMove(@Context^.GrayList,@GrayList);
    Context:=Context^.Next;
   end;
-  result:=assigned(GarbageCollector^.GrayList.First);
+  result:=assigned(GrayList.First);
+ end else begin
+  result:=false;
  end;
-{$ifdef POCAPools}
- function MarkPoolGrays:boolean;
- var ValueType:TPOCAInt32;
-     Pool:PPOCAPool;
-     PoolBlock:PPOCAPoolBlock;
- begin
-  if GarbageCollector^.ScanPoolGrays<>0 then begin
-   GarbageCollector^.ScanPoolGrays:=0;
-   for ValueType:=pvtFIRSTREF to pvtCOUNT-1 do begin
-    Pool:=@Instance^.Globals.Pools[ValueType];
-    PoolBlock:=Pool^.FirstBlock;
-    while assigned(PoolBlock) do begin
-     POCAGarbageCollectorLinkedListMove(@PoolBlock^.GrayList,@GarbageCollector^.GrayList);
-     PoolBlock:=PoolBlock^.Next;
-    end;
-   end;
-   result:=assigned(GarbageCollector^.GrayList.First);
-  end else begin
-   result:=false;
-  end;
- end;
-{$endif}
- function MarkContextGrays:boolean;
- var Context:PPOCAContext;
- begin
-  if GarbageCollector^.ScanContextGrays<>0 then begin
-   GarbageCollector^.ScanContextGrays:=0;
-   Context:=Instance^.Globals.FirstContext;
-   while assigned(Context) do begin
-    POCAGarbageCollectorLinkedListMove(@Context^.GrayList,@GarbageCollector^.GrayList);
-    Context:=Context^.Next;
-   end;
-   result:=assigned(GarbageCollector^.GrayList.First);
-  end else begin
-   result:=false;
-  end;
- end;
- procedure MarkPersistents;
- var Ghost:boolean;
-     Obj,NextObj:PPOCAObject;
-     List:PPOCAGarbageCollectorLinkedList;
- begin
-  for Ghost:=false to true do begin
-   List:=@GarbageCollector^.PersistentRootLists[Ghost];
-   Obj:=TPOCAPointer(List^.First);
-   while assigned(Obj) do begin
-    NextObj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
-    if not MarkObjectContent(Obj) then begin
-     // No more references to ephemeral generation objects, so move from the
-     // persistent root list to the persistent list
-     POCAGarbageCollectorLinkedListRemove(Obj);
-     POCAGarbageCollectorLinkedListPush(@GarbageCollector^.PersistentLists[Ghost],Obj);
-     Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENT;
-    end;
-    Obj:=NextObj;
-   end;
-  end;
- end;
- procedure MarkProtected;
- var Obj:PPOCAObject;
-     i:TPOCAInt32;
- begin
-  for i:=0 to Instance^.Globals.GarbageCollector.ProtectList.Count-1 do begin
-   Obj:=Instance^.Globals.GarbageCollector.ProtectList[i];
-   if assigned(Obj) then begin
-    MarkObjectAsGray(Obj);
-   end;
-  end;
- end;
- procedure Reset;
- var Ghost:boolean;
-     Obj:PPOCAObject;
- begin
-  GarbageCollector^.PersistentCycleCounter:=0;
-  for Ghost:=false to true do begin
-   POCAGarbageCollectorLinkedListMove(@GarbageCollector^.BlackLists[Ghost],@GarbageCollector^.WhiteLists[Ghost]);
-   POCAGarbageCollectorLinkedListMove(@GarbageCollector^.PersistentLists[Ghost],@GarbageCollector^.WhiteLists[Ghost]);
-   POCAGarbageCollectorLinkedListMove(@GarbageCollector^.PersistentRootLists[Ghost],@GarbageCollector^.WhiteLists[Ghost]);
-   Obj:=TPOCAPointer(GarbageCollector^.WhiteLists[Ghost].First);
-   while assigned(Obj) do begin
-    Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST);
-    Obj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
-   end;
-  end;
-  Obj:=TPOCAPointer(GarbageCollector^.GrayList.First);
+end;
+
+procedure TPOCAGarbageCollector.MarkPersistents;
+var Ghost:boolean;
+    Obj,NextObj:PPOCAObject;
+    List:PPOCAGarbageCollectorLinkedList;
+begin
+ for Ghost:=false to true do begin
+  List:=@PersistentRootLists[Ghost];
+  Obj:=TPOCAPointer(List^.First);
   while assigned(Obj) do begin
-   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbGRAY;
+   NextObj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
+   if not MarkObjectContent(Obj) then begin
+    // No more references to ephemeral generation objects, so move from the
+    // persistent root list to the persistent list
+    POCAGarbageCollectorLinkedListRemove(Obj);
+    POCAGarbageCollectorLinkedListPush(@PersistentLists[Ghost],Obj);
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENT;
+   end;
+   Obj:=NextObj;
+  end;
+ end;
+end;
+
+procedure TPOCAGarbageCollector.MarkProtected;
+var Obj:PPOCAObject;
+    i:TPOCAInt32;
+begin
+ for i:=0 to Instance^.Globals.GarbageCollector.ProtectList.Count-1 do begin
+  Obj:=Instance^.Globals.GarbageCollector.ProtectList[i];
+  if assigned(Obj) then begin
+   MarkObjectAsGray(Obj);
+  end;
+ end;
+end;
+
+procedure TPOCAGarbageCollector.Reset;
+var Ghost:boolean;
+    Obj:PPOCAObject;
+begin
+ PersistentCycleCounter:=0;
+ for Ghost:=false to true do begin
+  POCAGarbageCollectorLinkedListMove(@BlackLists[Ghost],@WhiteLists[Ghost]);
+  POCAGarbageCollectorLinkedListMove(@PersistentLists[Ghost],@WhiteLists[Ghost]);
+  POCAGarbageCollectorLinkedListMove(@PersistentRootLists[Ghost],@WhiteLists[Ghost]);
+  Obj:=TPOCAPointer(WhiteLists[Ghost].First);
+  while assigned(Obj) do begin
+   Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST);
    Obj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
   end;
  end;
+ Obj:=TPOCAPointer(GrayList.First);
+ while assigned(Obj) do begin
+  Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbGRAY;
+  Obj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
+ end;
+end;
+
+function TPOCAGarbageCollector.CollectCycle:boolean;
 var i:TPOCAInt32;
 //  WhiteGhostList:PPOCAGarbageCollectorLinkedList;
     Obj:PPOCAObject;
     Ghost:boolean;
 begin
- GarbageCollector:=@Instance^.Globals.GarbageCollector;
  result:=true;
- POCALockEnter(GarbageCollector^.Lock);
+ POCALockEnter(Lock);
  try
-  if GarbageCollector^.PersistentForceScan and (GarbageCollector^.State<>pgcsINIT) then begin
-   GarbageCollector^.State:=pgcsINIT;
+  if PersistentForceScan and (State<>pgcsINIT) then begin
+   State:=pgcsINIT;
   end;
 {$ifdef POCASafeGC}
-  GarbageCollector^.State:=pgcsRESET;
+  State:=pgcsRESET;
 {$endif}
   repeat
-   case GarbageCollector^.State of
+   case State of
     pgcsRESET:begin
      Reset;
-     GarbageCollector^.State:=pgcsINIT;
+     State:=pgcsINIT;
     end;
     pgcsINIT:begin
-     if GarbageCollector^.PersistentInterval>0 then begin
-      inc(GarbageCollector^.PersistentCycleCounter);
+     if PersistentInterval>0 then begin
+      inc(PersistentCycleCounter);
      end else begin
-      GarbageCollector^.PersistentCycleCounter:=0;
+      PersistentCycleCounter:=0;
      end;
-     if GarbageCollector^.PersistentForceScan or ((GarbageCollector^.PersistentInterval>0) and (GarbageCollector^.PersistentCycleCounter>=GarbageCollector^.PersistentInterval)) or (Instance^.Globals.RequestGarbageCollection=prgcFULL) then begin
-      GarbageCollector^.PersistentForceScan:=false;
-      GarbageCollector^.PersistentCycleCounter:=0;
+     if PersistentForceScan or ((PersistentInterval>0) and (PersistentCycleCounter>=PersistentInterval)) or (Instance^.Globals.RequestGarbageCollection=prgcFULL) then begin
+      PersistentForceScan:=false;
+      PersistentCycleCounter:=0;
       for Ghost:=false to true do begin
-       POCAGarbageCollectorLinkedListMoveMark(@GarbageCollector^.PersistentLists[Ghost],@GarbageCollector^.WhiteLists[Ghost],pgcbWASPERSISTENT);
-       POCAGarbageCollectorLinkedListMoveMark(@GarbageCollector^.PersistentRootLists[Ghost],@GarbageCollector^.WhiteLists[Ghost],pgcbWASPERSISTENTROOT);
+       POCAGarbageCollectorLinkedListMoveMark(@PersistentLists[Ghost],@WhiteLists[Ghost],pgcbWASPERSISTENT);
+       POCAGarbageCollectorLinkedListMoveMark(@PersistentRootLists[Ghost],@WhiteLists[Ghost],pgcbWASPERSISTENTROOT);
       end;
      end;
-     GarbageCollector^.State:=pgcsMARKROOTS;
+     State:=pgcsMARKROOTS;
     end;
     pgcsMARKROOTS:begin
      MarkRoots;
-     GarbageCollector^.State:=pgcsMARKCONTEXTS;
+     State:=pgcsMARKCONTEXTS;
     end;
     pgcsMARKCONTEXTS:begin
      MarkContexts;
-     GarbageCollector^.State:=pgcsMARKPERSISTENTS;
+     State:=pgcsMARKPERSISTENTS;
     end;
     pgcsMARKPERSISTENTS:begin
      MarkPersistents;
-     GarbageCollector^.State:=pgcsMARKPROTECTED;
+     State:=pgcsMARKPROTECTED;
     end;
     pgcsMARKPROTECTED:begin
      MarkProtected;
-     GarbageCollector^.State:=pgcsMARKGREYS;
+     State:=pgcsMARKGREYS;
     end;
     pgcsMARKGREYS,pgcsMARKWHITEGHOSTGREYS:begin
-     if GarbageCollector^.State=pgcsMARKGREYS then begin
-{$ifdef POCAPools}
-      MarkPoolGrays;
-{$endif}
+     if State=pgcsMARKGREYS then begin
       MarkContextGrays;
      end;
-     if not assigned(GarbageCollector^.GrayList.First) then begin
-      if GarbageCollector^.State=pgcsMARKWHITEGHOSTGREYS then begin
-       GarbageCollector^.State:=pgcsSWEEP;
+     if not assigned(GrayList.First) then begin
+      if State=pgcsMARKWHITEGHOSTGREYS then begin
+       State:=pgcsSWEEP;
       end else begin
-       GarbageCollector^.State:=pgcsSWEEPINIT;
+       State:=pgcsSWEEPINIT;
       end;
      end else begin
       case Instance^.Globals.RequestGarbageCollection of
        prgcCYCLE:begin
         i:=POCAGarbageCollectorUsed(Instance);
         if i<>0 then begin
-         i:=(i*GarbageCollector^.StepFactor) shr 8;
+         i:=(i*StepFactor) shr 8;
          if i<1024 then begin
           i:=1024;
          end;
@@ -5811,17 +5813,17 @@ begin
         i:=-1;
        end;
       end;
-      while (i<>0) and POCAGarbageCollectorLinkedListPop(@GarbageCollector^.GrayList,Obj) do begin
+      while (i<>0) and POCAGarbageCollectorLinkedListPop(@GrayList,Obj) do begin
        dec(i);
        MarkObject(TPOCAPointer(Obj));
       end;
-      if not assigned(GarbageCollector^.GrayList.First) then begin
-       if GarbageCollector^.State=pgcsMARKWHITEGHOSTGREYS then begin
-        GarbageCollector^.State:=pgcsSWEEP;
+      if not assigned(GrayList.First) then begin
+       if State=pgcsMARKWHITEGHOSTGREYS then begin
+        State:=pgcsSWEEP;
        end else begin
-        GarbageCollector^.State:=pgcsSWEEPINIT;
+        State:=pgcsSWEEPINIT;
        end;
-       if GarbageCollector^.StepFactor>=256 then begin
+       if StepFactor>=256 then begin
         continue;
        end;
       end;
@@ -5834,18 +5836,18 @@ begin
     pgcsSWEEPINIT:begin
      // Scan contexts again before we are beginning sweeping (due to VM registers)
      if MarkContexts then begin
-      GarbageCollector^.State:=pgcsMARKGREYS;
+      State:=pgcsMARKGREYS;
      end else begin
-      GarbageCollector^.State:=pgcsFLIP;
+      State:=pgcsFLIP;
       for Ghost:=false to true do begin
-       if assigned(GarbageCollector^.WhiteLists[Ghost].First) then begin
+       if assigned(WhiteLists[Ghost].First) then begin
         if Ghost then begin
-         POCAGarbageCollectorLinkedListMove(@GarbageCollector^.WhiteLists[Ghost],@GarbageCollector^.WhiteGhostList);
-         GarbageCollector^.State:=pgcsMARKWHITEGHOSTS;
+         POCAGarbageCollectorLinkedListMove(@WhiteLists[Ghost],@WhiteGhostList);
+         State:=pgcsMARKWHITEGHOSTS;
         end else begin
-         POCAGarbageCollectorLinkedListMove(@GarbageCollector^.WhiteLists[Ghost],@GarbageCollector^.SweepLists[Ghost]);
-         if GarbageCollector^.State=pgcsFLIP then begin
-          GarbageCollector^.State:=pgcsSWEEP;
+         POCAGarbageCollectorLinkedListMove(@WhiteLists[Ghost],@SweepLists[Ghost]);
+         if State=pgcsFLIP then begin
+          State:=pgcsSWEEP;
          end;
         end;
        end;
@@ -5857,7 +5859,7 @@ begin
       prgcCYCLE:begin
        i:=POCAGarbageCollectorUsed(Instance);
        if i<>0 then begin
-        i:=(i*GarbageCollector^.GhostFactor) shr 8;
+        i:=(i*GhostFactor) shr 8;
         if i<1024 then begin
          i:=1024;
         end;
@@ -5867,24 +5869,24 @@ begin
        i:=-1;
       end;
      end;
-     while (i<>0) and POCAGarbageCollectorLinkedListPop(@GarbageCollector^.WhiteGhostList,Obj) do begin
+     while (i<>0) and POCAGarbageCollectorLinkedListPop(@WhiteGhostList,Obj) do begin
       dec(i);
       if (((Obj^.Header.ValueType=pvtGHOST) and assigned(PPOCAGhost(Obj)^.GhostType)) and assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy))) and not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj)) then begin
        POCAGarbageCollectorLinkedListRemove(Obj);
-       POCAGarbageCollectorLinkedListPush(@GarbageCollector^.GrayList,Obj);
+       POCAGarbageCollectorLinkedListPush(@GrayList,Obj);
       end else begin
        POCAGarbageCollectorLinkedListRemove(Obj);
-       POCAGarbageCollectorLinkedListPush(@GarbageCollector^.SweepLists[Obj^.Header.ValueType=pvtGHOST],Obj);
+       POCAGarbageCollectorLinkedListPush(@SweepLists[Obj^.Header.ValueType=pvtGHOST],Obj);
        TryMarkGhostAsGray(Obj);
       end;
      end;
-     if not assigned(GarbageCollector^.WhiteGhostList.First) then begin
-      if assigned(GarbageCollector^.GrayList.First) then begin
-       GarbageCollector^.State:=pgcsMARKWHITEGHOSTGREYS;
+     if not assigned(WhiteGhostList.First) then begin
+      if assigned(GrayList.First) then begin
+       State:=pgcsMARKWHITEGHOSTGREYS;
       end else begin
-       GarbageCollector^.State:=pgcsSWEEP;
+       State:=pgcsSWEEP;
       end;
-      if GarbageCollector^.GhostFactor>=256 then begin
+      if GhostFactor>=256 then begin
        continue;
       end;
      end;
@@ -5898,7 +5900,7 @@ begin
       prgcCYCLE:begin
        i:=POCAGarbageCollectorUsed(Instance);
        if i<>0 then begin
-        i:=(i*GarbageCollector^.SweepFactor) shr 8;
+        i:=(i*SweepFactor) shr 8;
         if i<1024 then begin
          i:=1024;
         end;
@@ -5908,19 +5910,19 @@ begin
        i:=-1;
       end;
      end;
-     GarbageCollector^.State:=pgcsFLIP;
+     State:=pgcsFLIP;
      for Ghost:=true downto false do begin
-      while (i<>0) and POCAGarbageCollectorLinkedListPop(@GarbageCollector^.SweepLists[Ghost],Obj) do begin
+      while (i<>0) and POCAGarbageCollectorLinkedListPop(@SweepLists[Ghost],Obj) do begin
        dec(i);
 {$ifdef POCAPools}
        POCAPoolFreeElement(@Instance^.Globals.Pools[Obj^.Header.ValueType],Obj);
 {$else}
        POCAFreeElement(Obj);
-       TPasMPInterlocked.Decrement(GarbageCollector^.Allocated);
+       TPasMPInterlocked.Decrement(Allocated);
 {$endif}
       end;
-      if assigned(GarbageCollector^.SweepLists[Ghost].First) then begin
-       GarbageCollector^.State:=pgcsSWEEP;
+      if assigned(SweepLists[Ghost].First) then begin
+       State:=pgcsSWEEP;
       end;
       if i=0 then begin
        break;
@@ -5929,7 +5931,7 @@ begin
 {$ifdef POCASafeGC}
      continue;///
 {$endif}
-     if (GarbageCollector^.State=pgcsFLIP) and (GarbageCollector^.SweepFactor>=256) then begin
+     if (State=pgcsFLIP) and (SweepFactor>=256) then begin
       continue;
      end else begin
       break;
@@ -5937,36 +5939,36 @@ begin
     end;
     pgcsFLIP:begin
      for Ghost:=false to true do begin
-      POCAGarbageCollectorLinkedListMoveMark(@GarbageCollector^.BlackLists[Ghost],@GarbageCollector^.WhiteLists[Ghost],0);
+      POCAGarbageCollectorLinkedListMoveMark(@BlackLists[Ghost],@WhiteLists[Ghost],0);
      end;
-     GarbageCollector^.State:=pgcsDONE;
+     State:=pgcsDONE;
 (*   case Instance^.Globals.RequestGarbageCollection of
       prgcCYCLE:begin
        i:=0;
        for Ghost:=false to true do begin
-        if assigned(GarbageCollector^.BlackLists[Ghost].First) then begin
+        if assigned(BlackLists[Ghost].First) then begin
          inc(i);
          break;
         end;
        end;
-       GarbageCollector^.State:=pgcsDONE;
+       State:=pgcsDONE;
        if i>0 then begin
         i:=POCAGarbageCollectorUsed(Instance);
         if i<>0 then begin
-         i:=(i*GarbageCollector^.FlipFactor) shr 8;
+         i:=(i*FlipFactor) shr 8;
          if i<1024 then begin
           i:=1024;
          end;
         end;
         for Ghost:=false to true do begin
-         while (i<>0) and POCAGarbageCollectorLinkedListPop(@GarbageCollector^.BlackLists[Ghost],Obj) do begin
+         while (i<>0) and POCAGarbageCollectorLinkedListPop(@BlackLists[Ghost],Obj) do begin
           dec(i);
           POCAGarbageCollectorLinkedListRemove(Obj);
-          POCAGarbageCollectorLinkedListPush(@GarbageCollector^.WhiteLists[Ghost],Obj);
+          POCAGarbageCollectorLinkedListPush(@WhiteLists[Ghost],Obj);
           Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not pgcbLIST;
          end;
-         if assigned(GarbageCollector^.BlackLists[Ghost].First) then begin
-          GarbageCollector^.State:=pgcsFLIP;
+         if assigned(BlackLists[Ghost].First) then begin
+          State:=pgcsFLIP;
           break;
          end;
         end;
@@ -5974,14 +5976,14 @@ begin
       end;
       else {prgcFULLEPHEMERAL,prgcFULL:}begin
        for Ghost:=false to true do begin
-        POCAGarbageCollectorLinkedListMoveMark(@GarbageCollector^.BlackLists[Ghost],@GarbageCollector^.WhiteLists[Ghost],0);
+        POCAGarbageCollectorLinkedListMoveMark(@BlackLists[Ghost],@WhiteLists[Ghost],0);
        end;
-       GarbageCollector^.State:=pgcsDONE;
+       State:=pgcsDONE;
       end;
      end;//*)
     end;
     pgcsDONE:begin
-     GarbageCollector^.State:=pgcsINIT;
+     State:=pgcsINIT;
      result:=false;
      break;
     end;
@@ -5992,22 +5994,20 @@ begin
    end;
   until false;
  finally
-  POCALockLeave(GarbageCollector^.Lock);
+  POCALockLeave(Lock);
  end;
 end;
 
-procedure POCAGarbageCollectorCollectAll(Instance:PPOCAInstance); {$ifdef UseRegister}register;{$endif}
-var GarbageCollector:PPOCAGarbageCollector;
-    i:TPOCAInt32;
+procedure TPOCAGarbageCollector.CollectAll;
+var i:TPOCAInt32;
 begin
- GarbageCollector:=@Instance^.Globals.GarbageCollector;
- if GarbageCollector^.State<>pgcsINIT then begin
-  while POCAGarbageCollectorCollectCycle(Instance) do begin
+ if State<>pgcsINIT then begin
+  while CollectCycle do begin
   end;
-  GarbageCollector^.State:=pgcsINIT;
-//GarbageCollector^.State:=pgcsRESET;
+  State:=pgcsINIT;
+//State:=pgcsRESET;
  end;
- while POCAGarbageCollectorCollectCycle(Instance) do begin
+ while CollectCycle do begin
  end;
  begin
   Instance^.Globals.DeadAllocationCount:=0;
@@ -6045,10 +6045,12 @@ begin
   POCAFreeDead(Instance);
   case Instance^.Globals.RequestGarbageCollection of
    prgcCYCLE:begin
-    POCAGarbageCollectorCollectCycle(Instance);
+    Instance^.Globals.GarbageCollector.CollectCycle;
    end;
    prgcFULLEPHEMERAL,prgcFULL:begin
-    POCAGarbageCollectorCollectAll(Instance);
+    Instance^.Globals.GarbageCollector.CollectAll;
+   end;
+   else begin
    end;
   end;
   if Instance^.Globals.WaitCount<>0 then begin
@@ -6794,14 +6796,6 @@ begin
 
  Obj:=ContextObjectPool^.Objects^[ContextObjectPool^.Count];
 {$else}
-
-{if Context^.Instance^.Globals.GarbageCollector.FullCollect thenbegin
-  Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULLEPHEMERAL;
-  POCAGarbageCollectorBottleneck(Context^.Instance);
-  Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULL;
-  POCAGarbageCollectorBottleneck(Context^.Instance);
- end;}
-
  GetMem(Obj,POCARoundUpToMask(POCATypeSizes[ValueType],16));
  FillChar(Obj^,POCATypeSizes[ValueType],#0);
  Obj^.Header.GarbageCollector.LinkedList.List:=nil;
@@ -7650,7 +7644,7 @@ begin
    end;
    if (i>=0) and (i<ArrayRecord^.Size) then begin
     ArrayRecord^.Data[i]:=Value;
-    POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
    end;
   end;
  end;
@@ -7681,7 +7675,7 @@ begin
   end;
   if assigned(ArrayRecord) then begin
    ArrayRecord^.Data[ArrayRecord^.Size]:=Value;
-   POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
    result:=ArrayRecord^.Size;
    TPasMPInterlocked.Increment(ArrayRecord^.Size);
    exit;
@@ -7875,7 +7869,7 @@ begin
   if assigned(ArrayRecord) then begin
    if ArrayRecord^.Size>0 then begin
     result:=ArrayRecord^.Data[ArrayRecord^.Size-1];
-    POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),result);
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),result);
     TPasMPInterlocked.Decrement(ArrayRecord^.Size);
     if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
      POCAArrayResize(ArrayInstance);
@@ -9079,7 +9073,7 @@ begin
  Entity:=HashRec^.CellToEntityIndex^[Cell];
  if Entity>=0 then begin
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -9093,7 +9087,7 @@ begin
   TPasMPInterlocked.Increment(HashRec^.RealSize);
   HashRec^.Entities^[Entity].Key:=Key;
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -9108,7 +9102,7 @@ begin
  Entity:=CacheIndex;
  if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -9119,7 +9113,7 @@ begin
  if Entity>=0 then begin
   TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -9134,7 +9128,7 @@ begin
   TPasMPInterlocked.Increment(HashRec^.RealSize);
   HashRec^.Entities^[Entity].Key:=Key;
   HashRec^.Entities^[Entity].Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -9567,7 +9561,7 @@ begin
   he:=@HashRec^.Entities^[Entity];
   he^.Key:=Key;
   he^.Value:=Value;
-  POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
@@ -9602,7 +9596,7 @@ begin
     Entity:=HashRec^.CellToEntityIndex^[Cell];
     if Entity>=0 then begin
      HashRec^.Entities^[Entity].Value:=Value;
-     POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
      if assigned(HashRec^.Events) then begin
       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
      end;
@@ -9638,7 +9632,7 @@ begin
     Entity:=CacheIndex;
     if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and POCAEqual(HashRec^.Entities^[Entity].Key,Key) then begin
      HashRec^.Entities^[Entity].Value:=Value;
-     POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
      if assigned(HashRec^.Events) then begin
       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
      end;
@@ -9650,7 +9644,7 @@ begin
     if Entity>=0 then begin
      TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
      HashRec^.Entities^[Entity].Value:=Value;
-     POCAGarbageCollectorWriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
      if assigned(HashRec^.Events) then begin
       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
      end;
@@ -15854,6 +15848,7 @@ begin
   result^.Globals.StrictMode:=true;
  end;
  begin
+  result^.Globals.GarbageCollector.Instance:=result;
   result^.Globals.GarbageCollector.Lock:=POCALockCreate;
   result^.Globals.GarbageCollector.ProtectList:=TPOCAPointerList.Create;
   for Ghost:=false to true do begin
@@ -15881,7 +15876,6 @@ begin
   result^.Globals.GarbageCollector.ContextCacheSize:=128;
   result^.Globals.GarbageCollector.MinimumBlockSize:=1024;
   result^.Globals.GarbageCollector.ScanContextGrays:=0;
-  result^.Globals.GarbageCollector.ScanPoolGrays:=0;
  end;
  begin
   result^.Globals.DeadAllocationCount:=256;
