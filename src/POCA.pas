@@ -1340,7 +1340,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       LocalContextPoolSize:TPOCAInt32;
       ContextCacheSize:TPOCAInt32;
       MinimumBlockSize:TPOCAInt32;
-      ScanContextGrays:TPOCAInt32;
+      ScanContextGrays:TPasMPBool32;
 
       class function IsWhite(const Obj:PPOCAObject):Boolean; static;
       class function IsGray(const Obj:PPOCAObject):Boolean; static;
@@ -5686,8 +5686,7 @@ end;
 function TPOCAGarbageCollector.MarkContextGrays:boolean;
 var Context:PPOCAContext;
 begin
- if ScanContextGrays<>0 then begin
-  ScanContextGrays:=0;
+ if TPasMPInterlocked.CompareExchange(ScanContextGrays,TPasMPBool32(false),TPasMPBool32(true)) then begin
   Context:=Instance^.Globals.FirstContext;
   while assigned(Context) do begin
    POCAGarbageCollectorLinkedListMove(@Context^.GrayList,@GrayList);
@@ -6852,7 +6851,7 @@ begin
  Obj^.Header.ValueType:=ValueType;
 {$endif}
 
- TPasMPInterlocked.Exchange(GarbageCollector^.ScanContextGrays,-1);
+ TPasMPInterlocked.Write(GarbageCollector^.ScanContextGrays,TPasMPBool32(true));
 
  POCAGarbageCollectorLinkedListPush(@Context^.GrayList,Obj);
  Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
@@ -15921,7 +15920,7 @@ begin
   result^.Globals.GarbageCollector.LocalContextPoolSize:=256;
   result^.Globals.GarbageCollector.ContextCacheSize:=128;
   result^.Globals.GarbageCollector.MinimumBlockSize:=1024;
-  result^.Globals.GarbageCollector.ScanContextGrays:=0;
+  result^.Globals.GarbageCollector.ScanContextGrays:=false;
  end;
  begin
   result^.Globals.DeadAllocationCount:=256;
