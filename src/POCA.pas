@@ -529,8 +529,6 @@ const POCAVersion='2025-04-02-21-25-0000';
 
       pgcbLIST=pgcbWHITE or pgcbGRAY or pgcbBLACK or pgcbPERSISTENT or pgcbPERSISTENTROOT;
 
-      pgcbNOWHITE=pgcbGRAY or pgcbBLACK or pgcbPERSISTENT or pgcbPERSISTENTROOT;
-
       pgcscSHIFT=8;
       pgcscMAX=longword($ffffff);
       pgcscONE=longword(1 shl pgcscSHIFT);
@@ -1022,6 +1020,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       function TakeOver(const Obj:PPOCAObject):boolean;
       function TakeOverAppend(const aSourceList:PPOCAGarbageCollectorLinkedList):boolean;
       function TakeOverAppendMark(const aSourceList:PPOCAGarbageCollectorLinkedList;const aBitsToAdd:TPOCAUInt32):boolean;
+      class function Swap(var aList,aWithList:PPOCAGarbageCollectorLinkedList):boolean; static;
      end;
 
      PPOCAGarbageCollectorHeader=^TPOCAGarbageCollectorHeader;
@@ -1320,10 +1319,13 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       Instance:PPOCAInstance;
      
+      WhiteMask:TPOCAUInt32;
+      BlackMask:TPOCAUInt32;
+
       // Ephemeral generation
-      WhiteLists:array[boolean] of TPOCAGarbageCollectorLinkedList;
+      WhiteLists:array[boolean] of PPOCAGarbageCollectorLinkedList;
       GrayList:TPOCAGarbageCollectorLinkedList;
-      BlackLists:array[boolean] of TPOCAGarbageCollectorLinkedList;
+      BlackLists:array[boolean] of PPOCAGarbageCollectorLinkedList;
 
       // Persistent generation
       PersistentLists:array[boolean] of TPOCAGarbageCollectorLinkedList;
@@ -1355,10 +1357,10 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       MinimumBlockSize:TPOCAInt32;
       ScanContextGrays:TPasMPBool32;
 
-      class function IsWhite(const Obj:PPOCAObject):Boolean; static;
+      function IsWhite(const Obj:PPOCAObject):Boolean;
       class function IsGray(const Obj:PPOCAObject):Boolean; static;
-      class function IsBlack(const Obj:PPOCAObject):Boolean; static;
-      class function IsGrayOrBlack(const Obj:PPOCAObject):Boolean; static;
+      function IsBlack(const Obj:PPOCAObject):Boolean;
+      function IsGrayOrBlack(const Obj:PPOCAObject):Boolean;
 
       procedure WriteBarrierMark(const Obj:PPOCAObject);
       procedure WriteBarrierMarkParent(const ParentObj:PPOCAObject);
@@ -1397,6 +1399,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       procedure Reset;
 
       procedure Init;
+
+      procedure Flip;
 
       function CollectCycle:boolean;
 
@@ -5347,14 +5351,29 @@ begin
  end;
 end;
 
+class function TPOCAGarbageCollectorLinkedList.Swap(var aList,aWithList:PPOCAGarbageCollectorLinkedList):boolean;
+var List:PPOCAGarbageCollectorLinkedList;
+    Name:TPOCAUTF8String;
+begin
+ result:=(aList<>aWithList) and assigned(aList) and assigned(aWithList);
+ if result then begin
+  List:=aList;
+  aList:=aWithList;
+  aWithList:=List;
+  Name:=aList^.Name;
+  aList^.Name:=aWithList^.Name;
+  aWithList^.Name:=Name;
+ end;
+end; 
+
 procedure POCAGarbageCollectorWriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue);
 begin
  TPOCAGarbageCollector.WriteBarrier(ParentObj,Value);
 end;
 
-class function TPOCAGarbageCollector.IsWhite(const Obj:PPOCAObject):Boolean;
+function TPOCAGarbageCollector.IsWhite(const Obj:PPOCAObject):Boolean;
 begin
- result:=(Obj^.Header.GarbageCollector.State and pgcbWHITE)<>0;
+ result:=(Obj^.Header.GarbageCollector.State and WhiteMask)<>0;
 end;
 
 class function TPOCAGarbageCollector.IsGray(const Obj:PPOCAObject):Boolean;
@@ -5362,14 +5381,14 @@ begin
  result:=(Obj^.Header.GarbageCollector.State and pgcbGRAY)<>0;
 end;
 
-class function TPOCAGarbageCollector.IsBlack(const Obj:PPOCAObject):Boolean;
+function TPOCAGarbageCollector.IsBlack(const Obj:PPOCAObject):Boolean;
 begin
- result:=(Obj^.Header.GarbageCollector.State and pgcbBLACK)<>0;
+ result:=(Obj^.Header.GarbageCollector.State and BlackMask)<>0;
 end;
 
-class function TPOCAGarbageCollector.IsGrayOrBlack(const Obj:PPOCAObject):Boolean;
+function TPOCAGarbageCollector.IsGrayOrBlack(const Obj:PPOCAObject):Boolean;
 begin
- result:=(Obj^.Header.GarbageCollector.State and (pgcbGRAY or pgcbBLACK))<>0;
+ result:=(Obj^.Header.GarbageCollector.State and (pgcbGRAY or BlackMask))<>0;
 end;
 
 procedure TPOCAGarbageCollector.WriteBarrierMark(const Obj:PPOCAObject);
@@ -5378,7 +5397,7 @@ begin
  POCALockEnter(Lock);
  try
   // Re-check after locking
-  if TPOCAGarbageCollector.IsWhite(Obj) then begin
+  if IsWhite(Obj) then begin
    // Move to gray list
    GrayList.TakeOver(Obj);
    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
@@ -5420,12 +5439,12 @@ begin
 
  // Write-barrier (forward barrier: white -> gray)
  // Pre-check before locking
- if TPOCAGarbageCollector.IsWhite(Obj) then begin
+ if IsWhite(Obj) then begin
   if assigned(ParentObj) then begin
-   if TPOCAGarbageCollector.IsBlack(ParentObj) then begin
+   if IsBlack(ParentObj) then begin
     // The parent holder object is in the black object list, so mark our to-store-object gray
     WriteBarrierMark(Obj);
-   end else if TPOCAGarbageCollector.IsWhite(ParentObj) then begin
+   end else if IsWhite(ParentObj) then begin
     // The parent holder object is in the white object list, so mark the parent holder object gray
     WriteBarrierMarkParent(ParentObj);
    end;
@@ -5468,7 +5487,7 @@ function TPOCAGarbageCollector.MarkObjectAsGray(Obj:PPOCAObject):boolean;
 begin
  if assigned(Obj) then begin
   result:=(Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0;
-  if result and not TPOCAGarbageCollector.IsGrayOrBlack(Obj) then begin
+  if result and not IsGrayOrBlack(Obj) then begin
    GrayList.TakeOver(Obj);
    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
   end;
@@ -5660,8 +5679,8 @@ begin
     if Temp<=pgcscMAXSHIFTED then begin
      Obj^.Header.GarbageCollector.State:=Temp;
     end;
-    BlackLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
-    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbBLACK;
+    BlackLists[Obj^.Header.ValueType=pvtGHOST]^.TakeOver(Obj);
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or BlackMask;
    end;
    MarkObjectContent(Obj);
   end;
@@ -5818,12 +5837,12 @@ begin
  PersistentCycleCounter:=0;
 
  for Ghost:=false to true do begin
-  WhiteLists[Ghost].TakeOverAppend(@BlackLists[Ghost]);
-  WhiteLists[Ghost].TakeOverAppend(@PersistentLists[Ghost]);
-  WhiteLists[Ghost].TakeOverAppend(@PersistentRootLists[Ghost]);
-  Obj:=TPOCAPointer(WhiteLists[Ghost].First);
+  WhiteLists[Ghost]^.TakeOverAppend(BlackLists[Ghost]);
+  WhiteLists[Ghost]^.TakeOverAppend(@PersistentLists[Ghost]);
+  WhiteLists[Ghost]^.TakeOverAppend(@PersistentRootLists[Ghost]);
+  Obj:=TPOCAPointer(WhiteLists[Ghost]^.First);
   while assigned(Obj) do begin
-   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbWHITE;
+   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or WhiteMask;
    Obj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
   end;
  end;
@@ -5848,15 +5867,30 @@ begin
   PersistentForceScan:=false;
   PersistentCycleCounter:=0;
   for Ghost:=false to true do begin
-   WhiteLists[Ghost].TakeOverAppendMark(@PersistentLists[Ghost],pgcbWHITE or pgcbWASPERSISTENT);
-   WhiteLists[Ghost].TakeOverAppendMark(@PersistentRootLists[Ghost],pgcbWHITE or pgcbWASPERSISTENTROOT);
+   WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentLists[Ghost],WhiteMask or pgcbWASPERSISTENT);
+   WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentRootLists[Ghost],WhiteMask or pgcbWASPERSISTENTROOT);
   end;
+ end;
+end;
+
+procedure TPOCAGarbageCollector.Flip;
+var Ghost:boolean;
+begin
+ // Swap the roles of the white and black lists, but also swap the roles of the white and black bit masks.
+ if WhiteMask=pgcbWHITE then begin
+  WhiteMask:=pgcbBLACK;
+  BlackMask:=pgcbWHITE;
+ end else begin
+  WhiteMask:=pgcbWHITE;
+  BlackMask:=pgcbBLACK;
+ end;
+ for Ghost:=false to true do begin
+  TPOCAGarbageCollectorLinkedList.Swap(WhiteLists[Ghost],BlackLists[Ghost]);
  end;
 end;
 
 function TPOCAGarbageCollector.CollectCycle:boolean;
 var i:TPOCAInt32;
-//  WhiteGhostList:PPOCAGarbageCollectorLinkedList;
     Obj:PPOCAObject;
     Ghost:boolean;
 begin
@@ -5951,12 +5985,12 @@ begin
      end else begin
       State:=pgcsFLIP;
       for Ghost:=false to true do begin
-       if WhiteLists[Ghost].Filled then begin
+       if WhiteLists[Ghost]^.Filled then begin
         if Ghost then begin
-         WhiteGhostList.TakeOverAppend(@WhiteLists[Ghost]);
+         WhiteGhostList.TakeOverAppend(WhiteLists[Ghost]);
          State:=pgcsMARKWHITEGHOSTS;
         end else begin
-         SweepLists[Ghost].TakeOverAppend(@WhiteLists[Ghost]);
+         SweepLists[Ghost].TakeOverAppend(WhiteLists[Ghost]);
          if State=pgcsFLIP then begin
           State:=pgcsSWEEP;
          end;
@@ -5985,6 +6019,7 @@ begin
       dec(i);
       if (((Obj^.Header.ValueType=pvtGHOST) and assigned(PPOCAGhost(Obj)^.GhostType)) and assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy))) and not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj)) then begin
        GrayList.TakeOver(Obj);
+       Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
       end else begin
        SweepLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
        TryMarkGhostAsGray(Obj);
@@ -6050,48 +6085,8 @@ begin
     end;
 
     pgcsFLIP:begin
-     for Ghost:=false to true do begin
-      WhiteLists[Ghost].TakeOverAppendMark(@BlackLists[Ghost],pgcbWHITE);
-     end;
+     Flip;
      State:=pgcsDONE;
-(*   case Instance^.Globals.RequestGarbageCollection of
-      prgcCYCLE:begin
-       i:=0;
-       for Ghost:=false to true do begin
-        if assigned(BlackLists[Ghost].First) then begin
-         inc(i);
-         break;
-        end;
-       end;
-       State:=pgcsDONE;
-       if i>0 then begin
-        i:=POCAGarbageCollectorUsed(Instance);
-        if i<>0 then begin
-         i:=(i*FlipFactor) shr 8;
-         if i<1024 then begin
-          i:=1024;
-         end;
-        end;
-        for Ghost:=false to true do begin
-         while (i<>0) and BlackLists[Ghost]^.Pop(Obj) do begin
-          dec(i);
-          WhiteLists[Ghost]^.TakeOver(Obj);
-          Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbWHITE;
-         end;
-         if assigned(BlackLists[Ghost].First) then begin
-          State:=pgcsFLIP;
-          break;
-         end;
-        end;
-       end;
-      end;
-      else {prgcFULLEPHEMERAL,prgcFULL:}begin
-       for Ghost:=false to true do begin
-        WhiteLists[Ghost].TakeOverAppendMark(@BlackLists[Ghost],pgcbWHITE);
-       end;
-       State:=pgcsDONE;
-      end;
-     end;//*)
     end;
 
     pgcsDONE:begin
@@ -15968,9 +15963,15 @@ begin
   result^.Globals.GarbageCollector.Instance:=result;
   result^.Globals.GarbageCollector.Lock:=POCALockCreate;
   result^.Globals.GarbageCollector.ProtectList:=TPOCAPointerList.Create;
+  result^.Globals.GarbageCollector.WhiteMask:=pgcbWHITE;
+  result^.Globals.GarbageCollector.BlackMask:=pgcbBLACK;
   for Ghost:=false to true do begin
-   result^.Globals.GarbageCollector.WhiteLists[Ghost].Initialize('WhiteLists['+IntToStr(Ord(Ghost) and 1)+']');
-   result^.Globals.GarbageCollector.BlackLists[Ghost].Initialize('BlackLists['+IntToStr(Ord(Ghost) and 1)+']');
+   GetMem(result^.Globals.GarbageCollector.WhiteLists[Ghost],SizeOf(TPOCAGarbageCollectorLinkedList));
+   Initialize(result^.Globals.GarbageCollector.WhiteLists[Ghost]^);
+   GetMem(result^.Globals.GarbageCollector.BlackLists[Ghost],SizeOf(TPOCAGarbageCollectorLinkedList));
+   Initialize(result^.Globals.GarbageCollector.BlackLists[Ghost]^);
+   result^.Globals.GarbageCollector.WhiteLists[Ghost]^.Initialize('WhiteLists['+IntToStr(Ord(Ghost) and 1)+']');
+   result^.Globals.GarbageCollector.BlackLists[Ghost]^.Initialize('BlackLists['+IntToStr(Ord(Ghost) and 1)+']');
    result^.Globals.GarbageCollector.PersistentLists[Ghost].Initialize('PersistentLists['+IntToStr(Ord(Ghost) and 1)+']');
    result^.Globals.GarbageCollector.PersistentRootLists[Ghost].Initialize('PersistentRootLists['+IntToStr(Ord(Ghost) and 1)+']');
    result^.Globals.GarbageCollector.SweepLists[Ghost].Initialize('SweepLists['+IntToStr(Ord(Ghost) and 1)+']');
@@ -16152,11 +16153,15 @@ begin
    end;
 
    for Ghost:=false to true do begin
-    Instance^.Globals.GarbageCollector.WhiteLists[Ghost].Finalize;
-    Instance^.Globals.GarbageCollector.BlackLists[Ghost].Finalize;
+    Instance^.Globals.GarbageCollector.WhiteLists[Ghost]^.Finalize;
+    Instance^.Globals.GarbageCollector.BlackLists[Ghost]^.Finalize;
     Instance^.Globals.GarbageCollector.PersistentLists[Ghost].Finalize;
     Instance^.Globals.GarbageCollector.PersistentRootLists[Ghost].Finalize;
     Instance^.Globals.GarbageCollector.SweepLists[Ghost].Finalize;
+    Finalize(Instance^.Globals.GarbageCollector.WhiteLists[Ghost]^);
+    FreeMem(Instance^.Globals.GarbageCollector.WhiteLists[Ghost]);
+    Finalize(Instance^.Globals.GarbageCollector.BlackLists[Ghost]^);
+    FreeMem(Instance^.Globals.GarbageCollector.BlackLists[Ghost]);
    end;
    Instance^.Globals.GarbageCollector.GrayList.Finalize;
    Instance^.Globals.GarbageCollector.WhiteGhostList.Finalize;
