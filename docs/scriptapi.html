@@ -559,7 +559,6 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_garbagecollector_getintervalfactor">GarbageCollector.getIntervalFactor</a></li>
 <li><a href="#_garbagecollector_getghostfactor">GarbageCollector.getGhostFactor</a></li>
 <li><a href="#_garbagecollector_getsweepfactor">GarbageCollector.getSweepFactor</a></li>
-<li><a href="#_garbagecollector_getflipfactor">GarbageCollector.getFlipFactor</a></li>
 <li><a href="#_garbagecollector_getpersistentinterval">GarbageCollector.getPersistentInterval</a></li>
 <li><a href="#_garbagecollector_getpersistentthreshold">GarbageCollector.getPersistentThreshold</a></li>
 <li><a href="#_garbagecollector_getfullcollect">GarbageCollector.getFullCollect</a></li>
@@ -574,7 +573,6 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_garbagecollector_setintervalfactor">GarbageCollector.setIntervalFactor</a></li>
 <li><a href="#_garbagecollector_setghostfactor">GarbageCollector.setGhostFactor</a></li>
 <li><a href="#_garbagecollector_setsweepfactor">GarbageCollector.setSweepFactor</a></li>
-<li><a href="#_garbagecollector_setflipfactor">GarbageCollector.setFlipFactor</a></li>
 <li><a href="#_garbagecollector_setpersistentinterval">GarbageCollector.setPersistentInterval</a></li>
 <li><a href="#_garbagecollector_setpersistentthreshold">GarbageCollector.setPersistentThreshold</a></li>
 <li><a href="#_garbagecollector_setfullcollect">GarbageCollector.setFullCollect</a></li>
@@ -2950,30 +2948,6 @@ objects are swept (freed) in each partial sweep step.</p>
 <hr>
 </div>
 <div class="sect3">
-<h4 id="_garbagecollector_getflipfactor">GarbageCollector.getFlipFactor</h4>
-<div class="paragraph">
-<p><strong>Usage:</strong></p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let factor = GarbageCollector.getFlipFactor();</code></pre>
-</div>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Description:</strong> Returns the &#8220;flip factor&#8221;, which controls how many
-objects are flipped from black (in use) to white (candidate for freeing)
-at once during a cycle.</p>
-</li>
-<li>
-<p><strong>Return Value:</strong> A numeric value (integer).</p>
-</li>
-</ul>
-</div>
-<hr>
-</div>
-<div class="sect3">
 <h4 id="_garbagecollector_getpersistentinterval">GarbageCollector.getPersistentInterval</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -3246,39 +3220,6 @@ cycle.</p>
 </li>
 <li>
 <p><strong>Return Value:</strong> The old sweep factor.</p>
-</li>
-</ul>
-</div>
-<hr>
-</div>
-<div class="sect3">
-<h4 id="_garbagecollector_setflipfactor">GarbageCollector.setFlipFactor</h4>
-<div class="paragraph">
-<p><strong>Usage:</strong></p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setFlipFactor(1024);</code></pre>
-</div>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Description:</strong> Sets the factor controlling how many objects switch
-from black (in use) to white (candidate for freeing) at one time.</p>
-</li>
-<li>
-<p><strong>Parameters:</strong></p>
-<div class="ulist">
-<ul>
-<li>
-<p><em>newFlipFactor</em> (number)</p>
-</li>
-</ul>
-</div>
-</li>
-<li>
-<p><strong>Return Value:</strong> The old flip factor.</p>
 </li>
 </ul>
 </div>
@@ -11266,7 +11207,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-04 14:53:07 +0200
+Last updated 2025-04-05 01:50:09 +0200
 </div>
 </div>
 </body>
