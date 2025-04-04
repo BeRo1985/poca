@@ -1277,22 +1277,6 @@ objects are swept (freed) in each partial sweep step.
 
 '''''
 
-==== GarbageCollector.getFlipFactor
-
-*Usage:*
-
-[source,js]
-----
-let factor = GarbageCollector.getFlipFactor();
-----
-
-* *Description:* Returns the "`flip factor`", which controls how many
-objects are flipped from black (in use) to white (candidate for freeing)
-at once during a cycle.
-* *Return Value:* A numeric value (integer).
-
-'''''
-
 ==== GarbageCollector.getPersistentInterval
 
 *Usage:*
@@ -1454,23 +1438,6 @@ cycle.
 * *Parameters:*
 ** _newSweepFactor_ (number)
 * *Return Value:* The old sweep factor.
-
-'''''
-
-==== GarbageCollector.setFlipFactor
-
-*Usage:*
-
-[source,js]
-----
-let old = GarbageCollector.setFlipFactor(1024);
-----
-
-* *Description:* Sets the factor controlling how many objects switch
-from black (in use) to white (candidate for freeing) at one time.
-* *Parameters:*
-** _newFlipFactor_ (number)
-* *Return Value:* The old flip factor.
 
 '''''
 

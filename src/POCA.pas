@@ -1348,7 +1348,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       IntervalFactor:TPOCAInt32;
       GhostFactor:TPOCAInt32;
       SweepFactor:TPOCAInt32;
-      FlipFactor:TPOCAInt32;
       PersistentThreshold:TPOCAInt32;
       PersistentInterval:TPOCAInt32;
       FullCollect:TPOCABool32;
@@ -10705,11 +10704,6 @@ begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.SweepFactor;
 end;
 
-function POCAGarbageCollectorFunctionGETFLIPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
-begin
- result.Num:=Context^.Instance^.Globals.GarbageCollector.FlipFactor;
-end;
-
 function POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.PersistentInterval;
@@ -10774,15 +10768,6 @@ begin
  end;
  result.Num:=Context^.Instance^.Globals.GarbageCollector.SweepFactor;
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.SweepFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
-end;
-
-function POCAGarbageCollectorFunctionSETFLIPFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
-begin
- if CountArguments=0 then begin
-  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setFlipFactor"');
- end;
- result.Num:=Context^.Instance^.Globals.GarbageCollector.FlipFactor;
- TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.FlipFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
 function POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -10875,7 +10860,6 @@ begin
  POCAAddNativeFunction(Context,result,'getIntervalFactor',POCAGarbageCollectorFunctionGETINTERVALFACTOR);
  POCAAddNativeFunction(Context,result,'getGhostFactor',POCAGarbageCollectorFunctionGETGHOSTFACTOR);
  POCAAddNativeFunction(Context,result,'getSweepFactor',POCAGarbageCollectorFunctionGETSWEEPFACTOR);
- POCAAddNativeFunction(Context,result,'getFlipFactor',POCAGarbageCollectorFunctionGETFLIPFACTOR);
  POCAAddNativeFunction(Context,result,'getPersistentInterval',POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'getPersistentThreshold',POCAGarbageCollectorFunctionGETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'getFullCollect',POCAGarbageCollectorFunctionGETFULLCOLLECT);
@@ -10886,7 +10870,6 @@ begin
  POCAAddNativeFunction(Context,result,'setIntervalFactor',POCAGarbageCollectorFunctionSETINTERVALFACTOR);
  POCAAddNativeFunction(Context,result,'setGhostFactor',POCAGarbageCollectorFunctionSETGHOSTFACTOR);
  POCAAddNativeFunction(Context,result,'setSweepFactor',POCAGarbageCollectorFunctionSETSWEEPFACTOR);
- POCAAddNativeFunction(Context,result,'setFlipFactor',POCAGarbageCollectorFunctionSETFLIPFACTOR);
  POCAAddNativeFunction(Context,result,'setPersistentInterval',POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'setPersistentThreshold',POCAGarbageCollectorFunctionSETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'setFullCollect',POCAGarbageCollectorFunctionSETFULLCOLLECT);
@@ -15986,7 +15969,6 @@ begin
   result^.Globals.GarbageCollector.IntervalFactor:=16;
   result^.Globals.GarbageCollector.GhostFactor:=64;
   result^.Globals.GarbageCollector.SweepFactor:=64;
-  result^.Globals.GarbageCollector.FlipFactor:=64;
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
   result^.Globals.GarbageCollector.FullCollect:=true;
