@@ -2631,11 +2631,46 @@ let file = IO.open("example.txt", "r");
 
 '''''
 
+==== IO.getDirectoryEntries
+
+*Usage:*
+[source,js]
+----
+let entries = IO.getDirectoryEntries(directoryPath);
+----
+* *Description:* Returns an array of hashes/objects of file and directory
+entries in the specified directory. Each entry contains information
+about the file or directory, such as its name, size, and type.
+* *Parameters:*
+** `+directoryPath+` (string): The path to the directory to list.
+* *Return Value:* An array of hashes/objects, each representing a file
+or directory entry.
+* *Example:*
++
+[source,js]
+----
+// Get entries in the current directory
+let entries = IO.getDirectoryEntries(".");
+for (let entry of entries) {
+    puts("Name: " + entry.name);
+    puts("Size: " + entry.size);
+    puts("Type: " + entry.type);
+}
+----
+* *Note:* The entries returned may include files, directories, and
+other types of objects, depending on the file system and the
+directory contents. The `+type+` field in the entry hash/object
+indicates whether the entry is a file, directory, or other type. The
+`+size+` field may not be applicable for directories. The `+name+`
+field contains the name of the entry.
+
+''''''
+
 === File Ghost Object Methods
 
 Once you have a file ghost object, the following methods are available:
 
-==== 1. IO.read
+==== IO.read
 
 *Usage:*
 
@@ -2660,7 +2695,7 @@ let chunk = file.read(10);
 
 '''''
 
-==== 2. IO.readln
+==== IO.readln
 
 *Usage:*
 
@@ -2681,7 +2716,7 @@ let line = file.readln();
 
 '''''
 
-==== 3. IO.write
+==== IO.write
 
 *Usage:*
 
@@ -2704,7 +2739,7 @@ let bytesWritten = file.write("Hello, POCA!");
 
 '''''
 
-==== 4. IO.writeln
+==== IO.writeln
 
 *Usage:*
 
@@ -2727,7 +2762,7 @@ let count = file.writeln("This is a new line.");
 
 '''''
 
-==== 5. IO.eof
+==== IO.eof
 
 *Usage:*
 
@@ -2751,7 +2786,7 @@ if (file.eof()) {
 
 '''''
 
-==== 6. IO.close
+==== IO.close
 
 *Usage:*
 

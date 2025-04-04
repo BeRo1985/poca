@@ -11860,6 +11860,51 @@ begin
  end;
 end;
 
+// IO.getDirectoryEntries(path:string):array of list of objects with name, datetime, size and type  
+function POCAIOFunctionGETDIRECTORYENTRIES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+    ListItem:TPOCAValue;
+    FindData:TSearchRec;
+begin
+ if CountArguments>0 then begin
+  
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  
+  result:=POCANewArray(Context);
+  
+  if FindFirst(Path,faAnyFile,FindData)=0 then begin
+
+   repeat
+
+    ListItem:=POCANewHash(Context);    
+    POCAHashSetString(Context,ListItem,'name',POCANewString(Context,FindData.Name));
+    POCAHashSetString(Context,ListItem,'datetime',POCANewNumber(Context,{$ifdef fpc}FindData.TimeStampUTC{$else}LocalTimeToUniversal(FindData.TimeStamp){$endif}));
+    POCAHashSetString(Context,ListItem,'size',POCANewNumber(Context,FindData.Size));
+    if (FindData.Attr and faDirectory)<>0 then begin
+     POCAHashSetString(Context,ListItem,'type',POCANewString(Context,'directory'));
+    end else begin
+     POCAHashSetString(Context,ListItem,'type',POCANewString(Context,'file'));
+    end;
+    {$if declared(faReadOnly)}POCAHashSetString(Context,ListItem,'readOnly',POCANewNumber(Context,ord((FindData.Attr and faReadOnly)<>0) and 1));{$ifend}
+    {$if declared(faHidden)}POCAHashSetString(Context,ListItem,'hidden',POCANewNumber(Context,ord((FindData.Attr and faHidden)<>0) and 1));{$ifend}
+    {$if declared(faSysFile)}POCAHashSetString(Context,ListItem,'system',POCANewNumber(Context,ord((FindData.Attr and faSysFile)<>0) and 1));{$ifend}
+    {$if declared(faVolumeID)}POCAHashSetString(Context,ListItem,'volumeID',POCANewNumber(Context,ord((FindData.Attr and faVolumeID)<>0) and 1));{$ifend}
+    {$if declared(faDirectory)}POCAHashSetString(Context,ListItem,'directory',POCANewNumber(Context,ord((FindData.Attr and faDirectory)<>0) and 1));{$ifend}
+    {$if declared(faArchive)}POCAHashSetString(Context,ListItem,'archive',POCANewNumber(Context,ord((FindData.Attr and faArchive)<>0) and 1));{$ifend}
+    POCAArrayPush(result,ListItem);
+
+   until FindNext(FindData)<>0;
+
+  end;
+
+  FindClose(FindData);
+
+ end else begin
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end; 
+
 function POCAInitIONamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
@@ -11867,6 +11912,7 @@ begin
  POCAHashSetString(Context,result,'stdOut',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.Output,true)));
  POCAHashSetString(Context,result,'stdErr',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.ErrOutput,true)));}
  POCAAddNativeFunction(Context,result,'open',POCAIOFunctionOPEN);
+ POCAAddNativeFunction(Context,result,'getDirectoryEntries',POCAIOFunctionGETDIRECTORYENTRIES);
 end;
 
 function POCAInitIOHash(Context:PPOCAContext):TPOCAValue;

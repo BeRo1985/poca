@@ -663,16 +663,17 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_global_object_io">Global Object: <strong>IO</strong></a>
 <ul class="sectlevel3">
 <li><a href="#_io_open">IO.open</a></li>
+<li><a href="#_io_getdirectoryentries">IO.getDirectoryEntries</a></li>
 </ul>
 </li>
 <li><a href="#_file_ghost_object_methods">File Ghost Object Methods</a>
 <ul class="sectlevel3">
-<li><a href="#_1_io_read">1. IO.read</a></li>
-<li><a href="#_2_io_readln">2. IO.readln</a></li>
-<li><a href="#_3_io_write">3. IO.write</a></li>
-<li><a href="#_4_io_writeln">4. IO.writeln</a></li>
-<li><a href="#_5_io_eof">5. IO.eof</a></li>
-<li><a href="#_6_io_close">6. IO.close</a></li>
+<li><a href="#_io_read">IO.read</a></li>
+<li><a href="#_io_readln">IO.readln</a></li>
+<li><a href="#_io_write">IO.write</a></li>
+<li><a href="#_io_writeln">IO.writeln</a></li>
+<li><a href="#_io_eof">IO.eof</a></li>
+<li><a href="#_io_close">IO.close</a></li>
 </ul>
 </li>
 <li><a href="#_example_usage_2">Example Usage</a></li>
@@ -5400,6 +5401,63 @@ let file = IO.open("example.txt", "r");</code></pre>
 </div>
 <hr>
 </div>
+<div class="sect3">
+<h4 id="_io_getdirectoryentries">IO.getDirectoryEntries</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let entries = IO.getDirectoryEntries(directoryPath);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns an array of hashes/objects of file and directory
+entries in the specified directory. Each entry contains information
+about the file or directory, such as its name, size, and type.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>directoryPath</code> (string): The path to the directory to list.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> An array of hashes/objects, each representing a file
+or directory entry.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Get entries in the current directory
+let entries = IO.getDirectoryEntries(".");
+for (let entry of entries) {
+    puts("Name: " + entry.name);
+    puts("Size: " + entry.size);
+    puts("Type: " + entry.type);
+}</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p><strong>Note:</strong> The entries returned may include files, directories, and
+other types of objects, depending on the file system and the
+directory contents. The <code>type</code> field in the entry hash/object
+indicates whether the entry is a file, directory, or other type. The
+<code>size</code> field may not be applicable for directories. The <code>name</code>
+field contains the name of the entry.</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_file_ghost_object_methods">File Ghost Object Methods</h3>
@@ -5407,7 +5465,7 @@ let file = IO.open("example.txt", "r");</code></pre>
 <p>Once you have a file ghost object, the following methods are available:</p>
 </div>
 <div class="sect3">
-<h4 id="_1_io_read">1. IO.read</h4>
+<h4 id="_io_read">IO.read</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -5450,7 +5508,7 @@ let chunk = file.read(10);</code></pre>
 <hr>
 </div>
 <div class="sect3">
-<h4 id="_2_io_readln">2. IO.readln</h4>
+<h4 id="_io_readln">IO.readln</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -5481,7 +5539,7 @@ text mode). In binary mode, it returns a null value or no action occurs.</p>
 <hr>
 </div>
 <div class="sect3">
-<h4 id="_3_io_write">3. IO.write</h4>
+<h4 id="_io_write">IO.write</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -5522,7 +5580,7 @@ using block write operations.</p>
 <hr>
 </div>
 <div class="sect3">
-<h4 id="_4_io_writeln">4. IO.writeln</h4>
+<h4 id="_io_writeln">IO.writeln</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -5555,7 +5613,7 @@ including the newline.</p>
 <hr>
 </div>
 <div class="sect3">
-<h4 id="_5_io_eof">5. IO.eof</h4>
+<h4 id="_io_eof">IO.eof</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -5589,7 +5647,7 @@ reached, otherwise a falsy value (e.g., <code>false</code> or <code>0</code>).</
 <hr>
 </div>
 <div class="sect3">
-<h4 id="_6_io_close">6. IO.close</h4>
+<h4 id="_io_close">IO.close</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
@@ -11208,7 +11266,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-02 21:25:39 +0200
+Last updated 2025-04-04 14:53:07 +0200
 </div>
 </div>
 </body>
