@@ -5560,11 +5560,11 @@ or directory entry.</p>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-js" data-lang="js">// Get entries in the current directory
-let entries = IO.getDirectoryEntries(".");
-for (let entry of entries) {
-    puts("Name: " + entry.name);
-    puts("Size: " + entry.size);
-    puts("Type: " + entry.type);
+let entries = IO.getDirectoryEntries("./*");
+foreach(let entry in entries) {
+    puts("Name: ", entry.name);
+    puts("Size: ", entry.size);
+    puts("Type: ", entry.type);
 }</code></pre>
 </div>
 </div>
@@ -11389,7 +11389,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-05 03:08:04 +0200
+Last updated 2025-04-05 12:35:03 +0200
 </div>
 </div>
 </body>
