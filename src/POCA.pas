@@ -12131,6 +12131,546 @@ begin
  POCAAddNativeFunction(Context,result,'readln',POCAIOFunctionREADLN);
 end;
 
+//////////
+
+function POCAPathFunctionDIR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result:=POCANewString(Context,ExcludeTrailingPathDelimiter(ExtractFilePath(Path)));
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;  
+end;
+
+function POCAPathFunctionFILENAME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin 
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result:=POCANewString(Context,ExtractFileName(Path));
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAPathFunctionFILEEXTENSION(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result:=POCANewString(Context,ExtractFileExt(Path));
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAPathFunctionCURRENTSCRIPTFILE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments>0 then begin
+  result:=POCANewString(Context,POCAGetSourceFileName(Context,0,POCAGetBooleanValue(Context,Arguments^[0])));
+ end else begin
+  result:=POCANewString(Context,POCAGetSourceFileName(Context,0,false));
+ end;
+end;
+
+function POCAPathFunctionRELATIVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+    BasePath:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  if CountArguments>1 then begin
+   BasePath:=POCAGetStringValue(Context,Arguments^[1]);
+  end else begin
+   BasePath:='';
+  end;
+  result:=POCANewString(Context,POCAConvertPathToRelative(Path,BasePath));
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAPathFunctionABSOLUTE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+    BasePath:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  if CountArguments>1 then begin
+   BasePath:=POCAGetStringValue(Context,Arguments^[1]);
+  end else begin
+   BasePath:='';
+  end;
+  result:=POCANewString(Context,POCAExpandRelativePath(Path,BasePath));
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAPathFunctionSPLIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Index,Len:TPOCAInt32;
+    Path,Part:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  Len:=Length(Path);
+  result:=POCANewArray(Context);
+  Index:=1;
+  while Index<=Len do begin
+   Part:='';
+   while (Index<=Len) and ((Path[Index]='\') or (Path[Index]='/')) do begin
+    Inc(Index);
+   end;
+   while (Index<=Len) and not ((Path[Index]='\') or (Path[Index]='/')) do begin
+    Part:=Part+Path[Index];
+    Inc(Index);
+   end;
+   if length(Part)>0 then begin
+    POCAArrayPush(result,POCANewString(Context,Part));
+   end;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAPathFunctionJOIN(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+const DelimiterChar={$ifdef Windows}'\'{$else}'/'{$endif};
+var Index:TPOCAInt32;
+    Path,Part:TPOCARawByteString;
+    PathList:TPOCAValue;
+    PathListCount:TPOCAInt32;
+begin
+ if CountArguments>0 then begin
+  PathList:=Arguments^[0];
+  if POCAIsValueArray(PathList) then begin
+   PathListCount:=POCAArraySize(PathList);
+   Path:='';
+   for Index:=0 to PathListCount-1 do begin
+    Part:=POCAGetStringValue(Context,POCAArrayGet(PathList,Index));
+    if length(Part)>0 then begin
+     if length(Path)>0 then begin
+      Path:=Path+DelimiterChar;
+     end;
+     Path:=Path+Part;
+    end;
+   end; 
+   result:=POCANewString(Context,Path);
+  end else begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAPathFunctionISABSOLUTE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+    IsAbsolute:boolean;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+{$ifdef Windows}
+  IsAbsolute:=(length(Path)>1) and (Path[2]=':') and ((Path[1]>='A') and (Path[1]<='Z')) or ((Path[1]>='a') and (Path[1]<='z'));
+{$else}
+  IsAbsolute:=(length(Path)>0) and ((Path[1]='\') or (Path[1]='/'));
+{$endif}
+  result.Num:=ord(IsAbsolute) and 1;
+ end else begin 
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionDELIMITER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ result:=POCANewString(Context,{$ifdef Windows}'\'{$else}'/'{$endif});
+end; 
+
+function POCAPathFunctionCURRENT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ result:=POCANewString(Context,ExcludeTrailingPathDelimiter(GetCurrentDir));
+end;
+
+function POCAPathFunctionGETENTRIES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+{$if defined(fpc) and defined(Unix)}
+// With FpOpendir etc. from BaseUnix
+var Path:TPOCARawByteString;
+    DirHandle:PDIR;
+    FileInfo:PDirent;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  Path:=ExcludeTrailingPathDelimiter(Path);
+  result:=POCANewArray(Context);
+  DirHandle:=fpOpendir(Path);
+  if assigned(DirHandle) then begin
+   try
+    repeat
+     FileInfo:=fpReaddir(DirHandle^);
+     if FileInfo<>nil then begin
+      POCAArrayPush(result,POCANewString(Context,FileInfo^.d_name));
+     end;
+    until FileInfo=nil;
+   finally
+    fpClosedir(DirHandle^);
+   end;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+{$else}
+// With FindFirst
+var Path:TPOCARawByteString;
+    FindData:TSearchRec;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  Path:=IncludeTrailingPathDelimiter(Path)+{$ifdef Windows}'*.*'{$else}'*'{$endif};
+  result:=POCANewArray(Context); 
+  if FindFirst(Path,faAnyFile,FindData)=0 then begin
+   repeat
+    POCAArrayPush(result,POCANewString(Context,FindData.Name));
+   until FindNext(FindData)<>0;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end; 
+{$endif}
+
+function POCAPathFunctionSTAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+{$if defined(fpc) and defined(Unix)}
+// With FpStat etc. from BaseUnix
+var Path:TPOCARawByteString;
+    StatData:TStat;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result:=POCANewHash(Context);
+  if fpStat(Path,StatData)=0 then begin
+   POCAHashSetString(Context,result,'size',POCANewNumber(Context,StatData.st_size));
+   POCAHashSetString(Context,result,'mtime',POCANewNumber(Context,{$ifdef fpc}StatData.st_mtime{$else}LocalTimeToUniversal(StatData.st_mtime){$endif}));
+   POCAHashSetString(Context,result,'ctime',POCANewNumber(Context,{$ifdef fpc}StatData.st_ctime{$else}LocalTimeToUniversal(StatData.st_ctime){$endif}));
+   POCAHashSetString(Context,result,'atime',POCANewNumber(Context,{$ifdef fpc}StatData.st_atime{$else}LocalTimeToUniversal(StatData.st_atime){$endif}));
+   if (StatData.st_mode and S_IFDIR)<>0 then begin
+    POCAHashSetString(Context,result,'type',POCANewString(Context,'directory'));
+   end else begin
+    POCAHashSetString(Context,result,'type',POCANewString(Context,'file'));
+   end;
+  end else begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;  
+{$else}
+// With FindFirst and emulating stat
+var Path:TPOCARawByteString;
+    StatData:TSearchRec;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result:=POCANewHash(Context);
+  if FindFirst(Path,faAnyFile,StatData)=0 then begin
+   POCAHashSetString(Context,result,'size',POCANewNumber(Context,StatData.Size));
+   POCAHashSetString(Context,result,'mtime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}LocalTimeToUniversal(StatData.TimeStamp){$endif}));
+   POCAHashSetString(Context,result,'ctime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}LocalTimeToUniversal(StatData.TimeStamp){$endif}));
+   POCAHashSetString(Context,result,'atime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}LocalTimeToUniversal(StatData.TimeStamp){$endif}));
+   if (StatData.Attr and faDirectory)<>0 then begin
+    POCAHashSetString(Context,result,'type',POCANewString(Context,'directory'));
+   end else begin
+    POCAHashSetString(Context,result,'type',POCANewString(Context,'file'));
+   end;
+  end else begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+{$endif}
+
+function POCAPathFunctionISDIR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result.Num:=ord(DirectoryExists(Path)) and 1;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionISFILE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result.Num:=ord(FileExists(Path)) and 1;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionISSYMLINK(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+{$if defined(fpc) and defined(Unix)}
+var Path:TPOCARawByteString;
+    StatData:TStat;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result.Num:=0;
+  if fpLStat(Path,StatData)=0 then begin
+   if (StatData.st_mode and S_IFLNK)<>0 then begin
+    result.Num:=1;
+   end;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+{$else}
+var Path:TPOCARawByteString;
+    StatData:TSearchRec;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result.Num:=0;
+  if FindFirst(Path,faAnyFile,StatData)=0 then begin
+   if (StatData.Attr and faSymLink)<>0 then begin
+    result.Num:=1;
+   end;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+{$endif}
+
+function POCAPathFunctionRESOLVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+{$if defined(fpc) and defined(Unix)}
+var Path:TPOCARawByteString;
+    StatData:TStat;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  if fpLStat(Path,StatData)=0 then begin
+   if (StatData.st_mode and S_IFLNK)<>0 then begin
+    Path:=fpReadlink(Path);
+   end;
+  end;
+  result:=POCANewString(Context,Path);
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+{$else}
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  if FileExists(Path) then begin
+   result:=POCANewString(Context,Path);
+  end else begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+{$endif}
+ 
+function POCAPathFunctionMKDIR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  if not DirectoryExists(Path) then begin
+   if CreateDir(Path) then begin
+    result.Num:=1;
+   end else begin
+    result.Num:=0;
+   end;
+  end else begin
+   result.Num:=0;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionCHDIR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  if DirectoryExists(Path) then begin
+   if SetCurrentDir(Path) then begin
+    result.Num:=1;
+   end else begin
+    result.Num:=0;
+   end;
+  end else begin
+   result.Num:=0;
+  end;
+ end else begin 
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionRMDIR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  if DirectoryExists(Path) then begin
+   if RemoveDir(Path) then begin
+    result.Num:=1;
+   end else begin
+    result.Num:=0;
+   end;
+  end else begin
+   result.Num:=0;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionEXIST(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  result.Num:=ord(FileExists(Path) or DirectoryExists(Path)) and 1;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionREMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Path:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  Path:=POCAGetStringValue(Context,Arguments^[0]);
+  if FileExists(Path) then begin
+   if DeleteFile(Path) then begin
+    result.Num:=1;
+   end else begin
+    result.Num:=0;
+   end;
+  end else begin
+   result.Num:=0;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionCOPY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var SourcePath,DestPath:TPOCARawByteString;
+    StreamSource,StreamDest:TStream;
+begin
+ if CountArguments>1 then begin
+  SourcePath:=POCAGetStringValue(Context,Arguments^[0]);
+  DestPath:=POCAGetStringValue(Context,Arguments^[1]);
+  if FileExists(SourcePath) then begin
+   StreamSource:=TFileStream.Create(SourcePath,fmOpenRead);
+   try
+    StreamDest:=TFileStream.Create(DestPath,fmCreate);
+    try
+     StreamDest.CopyFrom(StreamSource,StreamSource.Size);
+     result.Num:=1;
+    finally
+     StreamDest.Free;
+    end;
+   finally
+    StreamSource.Free;
+   end;
+  end else begin
+   result.Num:=0;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue; 
+var SourcePath,DestPath:TPOCARawByteString;
+begin
+ if CountArguments>1 then begin
+  SourcePath:=POCAGetStringValue(Context,Arguments^[0]);
+  DestPath:=POCAGetStringValue(Context,Arguments^[1]);
+  if FileExists(SourcePath) then begin
+   if RenameFile(SourcePath,DestPath) then begin
+    result.Num:=1;
+   end else begin
+    result.Num:=0;
+   end;
+  end else begin
+   result.Num:=0;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAPathFunctionRENAME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var SourcePath,DestPath:TPOCARawByteString;
+begin
+ if CountArguments>1 then begin
+  SourcePath:=POCAGetStringValue(Context,Arguments^[0]);
+  DestPath:=POCAGetStringValue(Context,Arguments^[1]);
+  if FileExists(SourcePath) then begin
+   if RenameFile(SourcePath,DestPath) then begin
+    result.Num:=1;
+   end else begin
+    result.Num:=0;
+   end;
+  end else begin
+   result.Num:=0;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end;
+end;
+
+function POCAInitPathNamespace(Context:PPOCAContext):TPOCAValue;
+begin
+ result:=POCANewHash(Context);
+ POCAAddNativeFunction(Context,result,'dir',POCAPathFunctionDIR);
+ POCAAddNativeFunction(Context,result,'fileName',POCAPathFunctionFILENAME);
+ POCAAddNativeFunction(Context,result,'fileExtension',POCAPathFunctionFILEEXTENSION);
+ POCAAddNativeFunction(Context,result,'currentScriptFile',POCAPathFunctionCURRENTSCRIPTFILE);
+ POCAAddNativeFunction(Context,result,'relative',POCAPathFunctionRELATIVE);
+ POCAAddNativeFunction(Context,result,'absolute',POCAPathFunctionABSOLUTE);
+ POCAAddNativeFunction(Context,result,'split',POCAPathFunctionSPLIT);
+ POCAAddNativeFunction(Context,result,'join',POCAPathFunctionJOIN);
+ POCAAddNativeFunction(Context,result,'isAbsolute',POCAPathFunctionISABSOLUTE);
+ POCAAddNativeFunction(Context,result,'delimiter',POCAPathFunctionDELIMITER);
+ POCAAddNativeFunction(Context,result,'current',POCAPathFunctionCURRENT);
+ POCAAddNativeFunction(Context,result,'getEntries',POCAPathFunctionGETENTRIES);
+ POCAAddNativeFunction(Context,result,'stat',POCAPathFunctionSTAT);
+ POCAAddNativeFunction(Context,result,'isDir',POCAPathFunctionISDIR);
+ POCAAddNativeFunction(Context,result,'isFile',POCAPathFunctionISFILE);
+ POCAAddNativeFunction(Context,result,'isSymLink',POCAPathFunctionISSYMLINK);
+ POCAAddNativeFunction(Context,result,'resolve',POCAPathFunctionRESOLVE);
+ POCAAddNativeFunction(Context,result,'mkdir',POCAPathFunctionMKDIR);
+ POCAAddNativeFunction(Context,result,'chdir',POCAPathFunctionCHDIR);
+ POCAAddNativeFunction(Context,result,'rmdir',POCAPathFunctionRMDIR);
+ POCAAddNativeFunction(Context,result,'exist',POCAPathFunctionEXIST);
+ POCAAddNativeFunction(Context,result,'remove',POCAPathFunctionREMOVE);
+ POCAAddNativeFunction(Context,result,'copy',POCAPathFunctionCOPY);
+ POCAAddNativeFunction(Context,result,'move',POCAPathFunctionMOVE);
+ POCAAddNativeFunction(Context,result,'rename',POCAPathFunctionRENAME); 
+end;
+
+//////////
+
 procedure POCARegExpGhostDestroy(const Ghost:PPOCAGhost);
 begin
  if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
@@ -14261,6 +14801,7 @@ begin
  POCAHashSetString(Context,result,'ModuleManager',POCAInitModuleManagerNamespace(Context));
  POCAHashSetString(Context,result,'Math',POCAInitMathNamespace(Context));
  POCAHashSetString(Context,result,'IO',POCAInitIONamespace(Context));
+ POCAHashSetString(Context,result,'Path',POCAInitPathNamespace(Context));
  POCAHashSetString(Context,result,'RegExp',POCAInitRegExpNamespace(Context));
  POCAHashSetString(Context,result,'Coroutine',POCAInitCoroutineNamespace(Context));
  POCAHashSetString(Context,result,'Thread',POCAInitThreadNamespace(Context));
