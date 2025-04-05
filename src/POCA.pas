@@ -1976,6 +1976,12 @@ function POCARun(Context:PPOCAContext):TPOCAValue;
 
 function POCAGetFileContent(FileName:TPOCAUTF8String):TPOCARawByteString;
 
+function POCAIsPathSeparator(const aChar:AnsiChar):Boolean;
+function POCACorrectPathSeparators(const aPath:TPOCARawByteString):TPOCARawByteString;
+function POCAExpandRelativePath(const aRelativePath:TPOCARawByteString;const aBasePath:TPOCARawByteString=''):TPOCARawByteString;
+function POCAConvertPathToRelative(aAbsolutePath,aBasePath:TPOCARawByteString):TPOCARawByteString;
+function POCAExtractFilePath(aPath:TPOCARawByteString):TPOCARawByteString;
+
 procedure InitializePOCA;
 procedure FinalizePOCA;
 
@@ -35308,6 +35314,207 @@ begin
   end;
  finally
   FileMode:=OldFileMode;
+ end;
+end;
+
+function POCAIsPathSeparator(const aChar:AnsiChar):Boolean;
+begin
+ case aChar of
+  '/','\':begin
+   result:=true;
+  end;
+  else begin
+   result:=false;
+  end;
+ end;
+end;
+
+function POCACorrectPathSeparators(const aPath:TPOCARawByteString):TPOCARawByteString;
+const DestinationPathSeparator={$ifdef Windows}'\'{$else}'/'{$endif};
+var Index:TPOCAInt32;
+begin
+ result:=aPath;
+ for Index:=1 to length(result) do begin
+  if POCAIsPathSeparator(result[Index]) then begin
+   result[Index]:=DestinationPathSeparator;
+  end;
+ end;
+end;
+
+function POCAExpandRelativePath(const aRelativePath:TPOCARawByteString;const aBasePath:TPOCARawByteString):TPOCARawByteString;
+var InputIndex,OutputIndex:TPOCAInt32;
+    InputPath:TPOCARawByteString;
+    PathSeparator:AnsiChar;
+begin
+ if (length(aRelativePath)>0) and
+    (POCAIsPathSeparator(aRelativePath[1]) or
+     ((length(aRelativePath)>1) and
+      (aRelativePath[1] in ['a'..'z','A'..'Z']) and
+      (aRelativePath[2]=':'))) then begin
+  InputPath:=aRelativePath;
+ end else begin
+  if (length(aBasePath)>1) and not POCAIsPathSeparator(aBasePath[length(aBasePath)]) then begin
+   PathSeparator:=#0;
+   for InputIndex:=1 to length(aBasePath) do begin
+    if POCAIsPathSeparator(aBasePath[InputIndex]) then begin
+     PathSeparator:=aBasePath[InputIndex];
+     break;
+    end;
+   end;
+   if PathSeparator=#0 then begin
+    for InputIndex:=1 to length(aRelativePath) do begin
+     if POCAIsPathSeparator(aRelativePath[InputIndex]) then begin
+      PathSeparator:=aRelativePath[InputIndex];
+      break;
+     end;
+    end;
+    if PathSeparator=#0 then begin
+     PathSeparator:='/';
+    end;
+   end;
+   InputPath:=aBasePath+PathSeparator;
+  end else begin
+   InputPath:=aBasePath;
+  end;
+  InputPath:=InputPath+aRelativePath;
+ end;
+ result:=InputPath;
+ InputIndex:=1;
+ OutputIndex:=1;
+ while InputIndex<=length(InputPath) do begin
+  if (((InputIndex+1)<=length(InputPath)) and (InputPath[InputIndex]='.') and POCAIsPathSeparator(InputPath[InputIndex+1])) or
+     ((InputIndex=length(InputPath)) and (InputPath[InputIndex]='.')) then begin
+   inc(InputIndex,2);
+   if OutputIndex=1 then begin
+    inc(OutputIndex,2);
+   end;
+  end else if (((InputIndex+1)<=length(InputPath)) and (InputPath[InputIndex]='.') and (InputPath[InputIndex+1]='.')) and
+              ((((InputIndex+2)<=length(InputPath)) and POCAIsPathSeparator(InputPath[InputIndex+2])) or
+               ((InputIndex+1)=length(InputPath))) then begin
+   inc(InputIndex,3);
+   if OutputIndex=1 then begin
+    inc(OutputIndex,3);
+   end else if OutputIndex>1 then begin
+    dec(OutputIndex,2);
+    while (OutputIndex>0) and not POCAIsPathSeparator(result[OutputIndex]) do begin
+     dec(OutputIndex);
+    end;
+    inc(OutputIndex);
+   end;
+  end else if POCAIsPathSeparator(InputPath[InputIndex]) then begin
+   if (InputIndex=1) and
+      ((InputIndex+1)<=length(InputPath)) and
+      POCAIsPathSeparator(InputPath[InputIndex+1]) and
+      ((length(InputPath)=2) or
+       (((InputIndex+2)<=Length(InputPath)) and not POCAIsPathSeparator(InputPath[InputIndex+2]))) then begin
+    result[OutputIndex]:=InputPath[InputIndex];
+    result[OutputIndex+1]:=InputPath[InputIndex+1];
+    inc(InputIndex,2);
+    inc(OutputIndex,2);
+   end else begin
+    if (OutputIndex=1) or ((OutputIndex>1) and not POCAIsPathSeparator(result[OutputIndex-1])) then begin
+     result[OutputIndex]:=InputPath[InputIndex];
+     inc(OutputIndex);
+    end;
+    inc(InputIndex);
+   end;
+  end else begin
+   while (InputIndex<=length(InputPath)) and not POCAIsPathSeparator(InputPath[InputIndex]) do begin
+    result[OutputIndex]:=InputPath[InputIndex];
+    inc(InputIndex);
+    inc(OutputIndex);
+   end;
+   if InputIndex<=length(InputPath) then begin
+    result[OutputIndex]:=InputPath[InputIndex];
+    inc(InputIndex);
+    inc(OutputIndex);
+   end;
+  end;
+ end;
+ SetLength(result,OutputIndex-1);
+end;
+
+function POCAConvertPathToRelative(aAbsolutePath,aBasePath:TPOCARawByteString):TPOCARawByteString;
+var AbsolutePathIndex,BasePathIndex:TPOCAInt32;
+    PathSeparator:AnsiChar;
+begin
+ if length(aBasePath)=0 then begin
+  result:=aAbsolutePath;
+ end else begin
+  aAbsolutePath:=POCAExpandRelativePath(aAbsolutePath);
+  aBasePath:=POCAExpandRelativePath(aBasePath);
+  PathSeparator:=#0;
+  for BasePathIndex:=1 to length(aBasePath) do begin
+   if POCAIsPathSeparator(aBasePath[BasePathIndex]) then begin
+    PathSeparator:=aBasePath[BasePathIndex];
+    break;
+   end;
+  end;
+  if PathSeparator=#0 then begin
+   for AbsolutePathIndex:=1 to length(aAbsolutePath) do begin
+    if POCAIsPathSeparator(aAbsolutePath[AbsolutePathIndex]) then begin
+     PathSeparator:=aAbsolutePath[AbsolutePathIndex];
+     break;
+    end;
+   end;
+   if PathSeparator=#0 then begin
+    PathSeparator:='/';
+   end;
+  end;
+  if length(aBasePath)>1 then begin
+   if POCAIsPathSeparator(aBasePath[length(aBasePath)]) then begin
+    if (length(aAbsolutePath)>1) and POCAIsPathSeparator(aAbsolutePath[length(aAbsolutePath)]) then begin
+     if (aAbsolutePath=aBasePath) and (aAbsolutePath[1]<>'.') and (aBasePath[1]<>'.') then begin
+      result:='.'+PathSeparator;
+      exit;
+     end;
+    end;
+   end else begin
+    aBasePath:=aBasePath+PathSeparator;
+   end;
+  end;
+  AbsolutePathIndex:=1;
+  BasePathIndex:=1;
+  while (BasePathIndex<=Length(aBasePath)) and
+        (AbsolutePathIndex<=Length(aAbsolutePath)) and
+        ((aBasePath[BasePathIndex]=aAbsolutePath[AbsolutePathIndex]) or
+         (POCAIsPathSeparator(aBasePath[BasePathIndex]) and POCAIsPathSeparator(aAbsolutePath[AbsolutePathIndex]))) do begin
+   inc(AbsolutePathIndex);
+   inc(BasePathIndex);
+  end;
+  if ((BasePathIndex<=length(aBasePath)) and not POCAIsPathSeparator(aBasePath[BasePathIndex])) or
+     ((AbsolutePathIndex<=length(aAbsolutePath)) and not POCAIsPathSeparator(aAbsolutePath[AbsolutePathIndex])) then begin
+   while (BasePathIndex>1) and not POCAIsPathSeparator(aBasePath[BasePathIndex-1]) do begin
+    dec(AbsolutePathIndex);
+    dec(BasePathIndex);
+   end;
+  end;
+  if BasePathIndex<=Length(aBasePath) then begin
+   result:='';
+   while BasePathIndex<=Length(aBasePath) do begin
+    if POCAIsPathSeparator(aBasePath[BasePathIndex]) then begin
+     result:=result+'..'+PathSeparator;
+    end;
+    inc(BasePathIndex);
+   end;
+  end else begin
+   result:='.'+PathSeparator;
+  end;
+  if AbsolutePathIndex<=length(aAbsolutePath) then begin
+   result:=result+copy(aAbsolutePath,AbsolutePathIndex,(length(aAbsolutePath)-AbsolutePathIndex)+1);
+  end;
+ end;
+end;
+
+function POCAExtractFilePath(aPath:TPOCARawByteString):TPOCARawByteString;
+var Index:TPOCAInt32;
+begin
+ result:=aPath;
+ for Index:=length(result) downto 1 do begin
+  if POCAIsPathSeparator(result[Index]) then begin
+   SetLength(result,Index);
+   exit;
+  end;
  end;
 end;
 
