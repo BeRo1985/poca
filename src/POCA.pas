@@ -22991,7 +22991,7 @@ var TokenList:PPOCAToken;
           AddNewChild(t,ParseToken(t,List));
          end;
         end else begin
-         SyntaxError('Missed try catch or finally block',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+         //SyntaxError('Missed try catch or finally block',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
        end;
       end;
@@ -26597,7 +26597,7 @@ var TokenList:PPOCAToken;
        end;
       end;
      end;
-     if assigned(TryBlock) and (assigned(CatchBlock) or assigned(FinallyBlock)) then begin
+     if assigned(TryBlock) {and (assigned(CatchBlock) or assigned(FinallyBlock))} then begin
       CatchIdentifierRegister:=GetRegister(true,false);
       EmitImmediate(popTRY,6);
       Emit(result);
@@ -26745,6 +26745,25 @@ var TokenList:PPOCAToken;
        end else begin
         SyntaxError('Bad finally block',FinallyBlock^.SourceFile,FinallyBlock^.SourceLine,FinallyBlock^.SourceColumn);
        end;
+      end else begin
+       begin
+        FixTargetImmediate(TryBlockPos);
+        Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
+        if result<>Reg then begin
+         EmitOpcode(popCOPY,result,Reg);
+         SetRegisterNumber(result,GetRegisterNumber(Reg));
+         FreeRegister(Reg);
+        end;
+        EmitOpcode(popTRYBLOCKEND,result);
+       end;
+       begin
+        ClearRegisters;
+        FixTargetImmediate(FinallyBlockPos);
+        EmitOpcode(popLOADNULL,result);
+        EmitOpcode(popTRYBLOCKEND,result);
+       end;
+       FixTargetImmediate(EndPos);
+       ClearRegisters;
       end;
       FreeRegister(CatchIdentifierRegister);
      end else begin
