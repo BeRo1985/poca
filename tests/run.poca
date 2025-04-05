@@ -1,0 +1,49 @@
+#!/usr/bin/env poca
+
+// A rudimentary Unit Testing tool/suite for POCA.
+
+/*
+  TODO:
+   - load tests from relative path (need Path.methods)
+   - capture exceptions
+   - support multiple asserts per test function
+   - option to abort if test/case FAILs
+   - option to only run specific tests
+*/
+
+import Test from 'tests/unit/base.poca';
+
+let align = function(s, col = 44) {
+  const padding = Math.max(0, col - s.length());
+  return ' '.repeat(padding);
+};
+
+const RESET  = "\x1b[0m";
+const RED    = "\x1b[31m";
+const YELLOW = "\x1b[33m";
+const GREEN  = "\x1b[32m";
+const BLUE   = "\x1b[34m";
+const WHITE  = "\x1b[37m";
+
+let test_files = [];
+
+foreach (let entry in IO.getDirectoryEntries('tests/unit/test_*.poca'))
+  if (entry.type == 'file' && entry.size > 0)
+    test_files.push(entry.name);
+
+test_files.sort();
+
+foreach (let f in test_files) {
+  let t = require('tests/unit/' ~ f);
+
+  puts();
+  puts(RESET ~ "=> Running test file '" ~ YELLOW ~ f ~ RESET ~ "'...");
+
+  foreach (let n in t.keys())
+    if (typeof(t[n]) === 'Array') {
+      puts();
+      for (let i = 0; i < t[n].size(); ++i)
+        puts(WHITE ~ `${n}#${BLUE}${i+1}${WHITE}` ~ align(`${n}#${i+1}`) ~ '[' ~ (t[n][i]() ? GREEN ~ 'OK' : RED ~'FAIL') ~ WHITE ~ ']');
+    } else
+      puts(WHITE ~ n ~ align(n) ~ '[' ~ (t[n]() ? GREEN ~ 'OK' : RED ~ 'FAIL') ~ WHITE ~ ']');
+}

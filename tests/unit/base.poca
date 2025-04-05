@@ -1,0 +1,59 @@
+let Test = {
+  assert: (value) => {
+    return !!(value);
+  },
+
+  // assertTrue: assert,
+
+  assertFalse: (value) => {
+    return !(value);
+  },
+
+  assertNull: (value) => {
+    return value === null;
+  },
+
+  assertLikeNull: (value) => {
+    return value == null;
+  },
+
+  assertNotNull: (value) => {
+    return value !== null;
+  },
+
+  assertNotLikeNull: (value) => {
+    return value != null;
+  },
+
+  assertEqual: (expected, actual, msg = 'assertEqual failed') => {
+    return expected === actual;
+  },
+
+  assertUnequal: (expected, actual, msg = 'assertUnequal failed') => {
+    return expected !== actual;
+  },
+
+  assertLike: (expected, actual, msg = 'assertLike failed') => {
+    return expected == actual;
+  },
+
+  assertUnlike: (expected, actual, msg = 'assertUnlike failed') => {
+    return expected != actual;
+  },
+
+  assertZero: (actual, msg = 'assertZero failed') => {
+    return 0 === actual;
+  },
+
+  assertSize: (what, size, msg = 'assertSize failed') => {
+    return what.size();
+  },
+
+  assertLength: (what, len, msg = 'assertLength failed') => {
+    return what.length();
+  },
+};
+
+Test.assertTrue = Test.assert;
+
+export Test;
