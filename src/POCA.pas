@@ -5322,7 +5322,31 @@ begin
 end;
 
 function TPOCAGarbageCollectorLinkedList.TakeOverAppendMark(const aSourceList:PPOCAGarbageCollectorLinkedList;const aBitsToAdd:TPOCAUInt32):boolean;
-var Obj:PPOCAObject;
+var Node:PPOCAGarbageCollectorLinkedListItem;
+begin
+ result:=(aSourceList<>@self) and assigned(aSourceList) and assigned(@self) and aSourceList^.Filled;
+ if result then begin
+  if assigned(aSourceList^.First) then begin
+   Node:=aSourceList^.First;
+   while assigned(Node) do begin
+    Assert(Node^.List=aSourceList,'Inconsistent garbage collector linked list object ownership');
+    Node^.List:=@self;
+    PPOCAObject(Node)^.Header.GarbageCollector.State:=(PPOCAObject(Node)^.Header.GarbageCollector.State and not pgcbLIST) or aBitsToAdd;
+    Node:=Node^.Next;
+   end;
+   if assigned(Last) then begin
+    Last^.Next:=aSourceList^.First;
+    aSourceList^.First^.Previous:=Last;
+   end else begin
+    First:=aSourceList^.First;
+   end;
+   Last:=aSourceList^.Last;
+   aSourceList^.First:=nil;
+   aSourceList^.Last:=nil;
+  end;
+ end;
+end;
+{var Obj:PPOCAObject;
 begin
  result:=(aSourceList<>@self) and assigned(aSourceList) and assigned(@self) and aSourceList^.Filled;
  if result then begin
@@ -5332,7 +5356,7 @@ begin
    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or aBitsToAdd;
   end;
  end;
-end;
+end;//}
 
 class function TPOCAGarbageCollectorLinkedList.Swap(var aList,aWithList:PPOCAGarbageCollectorLinkedList):boolean;
 var List:PPOCAGarbageCollectorLinkedList;
@@ -6022,7 +6046,7 @@ begin
          WhiteGhostList.TakeOverAppend(WhiteLists[Ghost]);
          State:=pgcsMARKWHITEGHOSTS;
         end else begin
-         SweepLists[Ghost].TakeOverAppend(WhiteLists[Ghost]);
+         SweepLists[Ghost].TakeOverAppendMark(WhiteLists[Ghost],0);
          if State=pgcsFLIP then begin
           State:=pgcsSWEEP;
          end;
@@ -6060,6 +6084,7 @@ begin
        Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
       end else begin
        SweepLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
+       Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not pgcbLIST;
        TryMarkGhostAsGray(Obj);
       end;
      end;
