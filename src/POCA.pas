@@ -319,7 +319,11 @@
 {$undef POCAGarbageCollectorPoolBlockReferenceCounting}
 {-$define pocastrictutf8}
 
-{$define POCAPools}
+{$ifdef POCANoMemoryPools}
+ {$undef POCAMemoryPools}
+{$else}
+ {$define POCAMemoryPools}
+{$endif}
 
 interface
 
@@ -587,6 +591,9 @@ type PPOCAInt8=^TPOCAInt8;
      PPOCANativeInt=^TPOCANativeInt;
      TPOCANativeUInt=TPOCAPtrUInt;
      TPOCANativeInt=TPOCAPtrInt;
+
+     PPOCAUInt8Array=^TPOCAUInt8Array;
+     TPOCAUInt8Array=array[0..($7fffffff div sizeof(TPOCAUInt8))-1] of TPOCAUInt8;
 
      PPOCAUInt16Array=^TPOCAUInt16Array;
      TPOCAUInt16Array=array[0..($7fffffff div sizeof(TPOCAUInt16))-1] of TPOCAUInt16;
@@ -990,7 +997,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       State:TPOCAInt32; // Sign bit is writer flag! 1.31 bit layout (1 bit writer count . 31 bit reader count)
      end;
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
      PPOCAPoolBlock=^TPOCAPoolBlock;
 {$endif}
 
@@ -1035,7 +1042,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
       Instance:PPOCAInstance;
 {$endif}
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
       PoolBlock:PPOCAPoolBlock;
 {$endif}
      end;
@@ -1268,7 +1275,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Hash:PPOCAHash;
      end;
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
      TPOCAPoolBlock=record
 {$ifdef POCAGarbageCollectorPoolBlockReferenceCounting}
       ReferenceCounter:TPOCAInt32;
@@ -1422,7 +1429,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       StrictMode:TPOCABool32;
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
       Pools:TPOCAPools;
 {$endif}
 
@@ -1531,7 +1538,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       GarbageCollectorLockCount:TPOCAInt32;
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
       ContextObjectPools:TPOCAContextObjectPools;
 {$endif}
 
@@ -2768,7 +2775,7 @@ begin
   end;
   FillChar(result^.Base^,result^.Size,#0);
   result^.First:=result^.Base;
-  result^.Last:=TPOCAPointer(@pansichar(result^.Base)[result^.Size-sizeof(TPOCANativeCodeMemoryManagerBlock)]);
+  result^.Last:=TPOCAPointer(@PPOCAUInt8Array(result^.Base)^[result^.Size-sizeof(TPOCANativeCodeMemoryManagerBlock)]);
   Block:=result^.First;
   Block^.Signature:=bncmmMemoryBlockSignature;
   Block^.Previous:=nil;
@@ -2822,7 +2829,7 @@ begin
     if (BlockContainer^.Used+DestSize)<=BlockContainer^.Size then begin
      CurrentBlock:=BlockContainer^.First;
      while assigned(CurrentBlock) and (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and assigned(CurrentBlock^.Next) do begin
-      NewBlock:=TPOCAPointer(TPOCAPtrUInt(POCARoundUpToMask(TPOCAPtrUInt(TPOCAPointer(@pansichar(CurrentBlock)[(sizeof(TPOCANativeCodeMemoryManagerBlock)*2)+CurrentBlock^.Size])),NativeCodeMemoryManager^.Alignment)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
+      NewBlock:=TPOCAPointer(TPOCAPtrUInt(POCARoundUpToMask(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(CurrentBlock)^[(sizeof(TPOCANativeCodeMemoryManagerBlock)*2)+CurrentBlock^.Size])),NativeCodeMemoryManager^.Alignment)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
       if (TPOCAPtrUInt(CurrentBlock^.Next)-TPOCAPtrUInt(NewBlock))>=DestSize then begin
        NewBlock^.Signature:=bncmmMemoryBlockSignature;
        NewBlock^.Previous:=CurrentBlock;
@@ -2830,7 +2837,7 @@ begin
        NewBlock^.Size:=Size;
        CurrentBlock^.Next^.Previous:=NewBlock;
        CurrentBlock^.Next:=NewBlock;
-       result:=TPOCAPointer(@pansichar(NewBlock)[sizeof(TPOCANativeCodeMemoryManagerBlock)]);
+       result:=TPOCAPointer(@PPOCAUInt8Array(NewBlock)^[sizeof(TPOCANativeCodeMemoryManagerBlock)]);
        inc(BlockContainer^.Used,DestSize);
        exit;
       end else begin
@@ -4860,7 +4867,40 @@ begin
  end;
 end;
 
-{$ifdef POCAPools}
+procedure POCACleanElement(Obj:PPOCAObject); {$ifdef UseRegister}register;{$endif}
+begin
+ if assigned(Obj) then begin
+//case Pool^.ValueType of
+  case Obj^.Header.ValueType of
+   pvtSTRING:begin
+    POCAFinalizeString(TPOCAPointer(Obj));
+   end;
+   pvtARRAY:begin
+    POCAFinalizeArray(TPOCAPointer(Obj));
+   end;
+   pvtHASH:begin
+    POCAFinalizeHash(TPOCAPointer(Obj));
+   end;
+   pvtCODE:begin
+    POCACodeGCClean(TPOCAPointer(Obj));
+   end;
+   pvtFUNCTION:begin
+    POCAFuncGCClean(TPOCAPointer(Obj));
+   end;
+   pvtNATIVECODE:begin
+    POCANativeCodeGCClean(TPOCAPointer(Obj));
+   end;
+   pvtGHOST:begin
+    POCAGhostGCClean(TPOCAPointer(Obj));
+   end;
+  end;
+  if assigned(Obj^.Header.GarbageCollector.LinkedList.Previous) then begin
+   TPOCAGarbageCollectorLinkedList.Remove(Obj);
+  end;
+ end;
+end;
+
+{$ifdef POCAMemoryPools}
 procedure POCAPoolNewBlock(Pool:PPOCAPool;Size:TPOCAInt32); {$ifdef UseRegister}register;{$endif}
 var PoolBlockSize,BlockSize,i:TPOCAInt32;
     Block:PPOCAPoolBlock;
@@ -4884,7 +4924,7 @@ begin
 {$ifdef POCAGarbageCollectorPoolBlockInstance}
    Block^.Instance:=Pool^.Instance;
 {$endif}
-   Block^.Data:=TPOCAPointer(@PAnsiChar(Block)[PoolBlockSize]);
+   Block^.Data:=TPOCAPointer(@PPOCAUInt8Array(Block)^[PoolBlockSize]);
    Block^.Size:=Size;
    Block^.Next:=nil;
    if assigned(Pool^.LastBlock) then begin
@@ -4907,7 +4947,7 @@ begin
   end;
   begin
    for i:=0 to Size-1 do begin
-    Obj:=PPOCAObject(TPOCAPointer(@pansichar(Block^.Data)[i*Pool^.ElementSize]));
+    Obj:=PPOCAObject(TPOCAPointer(@PPOCAUInt8Array(Block^.Data)^[i*Pool^.ElementSize]));
     Obj^.Header.ValueType:=Pool^.ValueType;
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
     Obj^.Header.Instance:=Pool^.Instance;
@@ -4933,7 +4973,7 @@ var Element,OtherElement:TPOCAInt32;
     Obj,OtherObj:PPOCAObject;
 begin
  for Element:=0 to Block^.Size-1 do begin
-  Obj:=PPOCAObject(TPOCAPointer(@pansichar(Block^.Data)[Element*Pool^.ElementSize]));
+  Obj:=PPOCAObject(TPOCAPointer(@PPOCAUInt8Array(Block^.Data)^[Element*Pool^.ElementSize]));
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
   Obj^.Header.Instance:=Pool^.Instance;
 {$endif}
@@ -4973,34 +5013,9 @@ end;
 procedure POCAPoolCleanElement(Pool:PPOCAPool;Obj:PPOCAObject); {$ifdef UseRegister}register;{$endif}
 begin
  if assigned(Obj) then begin
-  case Pool^.ValueType of
-   pvtSTRING:begin
-    POCAFinalizeString(TPOCAPointer(Obj));
-   end;
-   pvtARRAY:begin
-    POCAFinalizeArray(TPOCAPointer(Obj));
-   end;
-   pvtHASH:begin
-    POCAFinalizeHash(TPOCAPointer(Obj));
-   end;
-   pvtCODE:begin
-    POCACodeGCClean(TPOCAPointer(Obj));
-   end;
-   pvtFUNCTION:begin
-    POCAFuncGCClean(TPOCAPointer(Obj));
-   end;
-   pvtNATIVECODE:begin
-    POCANativeCodeGCClean(TPOCAPointer(Obj));
-   end;
-   pvtGHOST:begin
-    POCAGhostGCClean(TPOCAPointer(Obj));
-   end;
-  end;
-  if assigned(Obj^.Header.GarbageCollector.LinkedList.Previous) then begin
-   TPOCAGarbageCollectorLinkedList.Remove(Obj);
-  end;
+  POCACleanElement(Obj);
   if sizeof(TPOCAObjectHeader)<Pool^.ElementRealSize then begin
-   FillChar(pansichar(Obj)[sizeof(TPOCAObjectHeader)],Pool^.ElementRealSize-sizeof(TPOCAObjectHeader),#0);
+   FillChar(PPOCAUInt8Array(Obj)^[sizeof(TPOCAObjectHeader)],Pool^.ElementRealSize-sizeof(TPOCAObjectHeader),#0);
   end;
   Obj^.Header.GarbageCollector.State:=0;
  end;
@@ -5054,7 +5069,7 @@ begin
    NextBlock:=CurrentBlock^.Next;
    if assigned(CurrentBlock^.Data) then begin
     for Element:=0 to CurrentBlock^.Size-1 do begin
-     Obj:=PPOCAObject(TPOCAPointer(@pansichar(CurrentBlock^.Data)[Element*Pool^.ElementSize]));
+     Obj:=PPOCAObject(TPOCAPointer(@PPOCAUInt8Array(CurrentBlock^.Data)^[Element*Pool^.ElementSize]));
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
      Obj^.Header.Instance:=Instance;
 {$endif}
@@ -5075,47 +5090,14 @@ begin
  FillChar(Pool^,sizeof(TPOCAPool),#0);
 end;
 {$else}
-procedure POCACleanElement(Obj:PPOCAObject); {$ifdef UseRegister}register;{$endif}
-begin
- if assigned(Obj) then begin
-  case Obj^.Header.ValueType of
-   pvtSTRING:begin
-    POCAFinalizeString(TPOCAPointer(Obj));
-   end;
-   pvtARRAY:begin
-    POCAFinalizeArray(TPOCAPointer(Obj));
-   end;
-   pvtHASH:begin
-    POCAFinalizeHash(TPOCAPointer(Obj));
-   end;
-   pvtCODE:begin
-    POCACodeGCClean(TPOCAPointer(Obj));
-   end;
-   pvtFUNCTION:begin
-    POCAFuncGCClean(TPOCAPointer(Obj));
-   end;
-   pvtNATIVECODE:begin
-    POCANativeCodeGCClean(TPOCAPointer(Obj));
-   end;
-   pvtGHOST:begin
-    POCAGhostGCClean(TPOCAPointer(Obj));
-   end;
-  end;
-  if assigned(Obj^.Header.GarbageCollector.LinkedList.Previous) then begin
-   TPOCAGarbageCollectorLinkedList.Remove(Obj);
-  end;
- end;
-end;
-
 procedure POCAFreeElement(Obj:PPOCAObject); {$ifdef UseRegister}register;{$endif}
 begin
  if assigned(Obj) then begin
-//  writeln(IntToHex(TPOCAPtrUInt(Obj),16));
+//writeln(IntToHex(TPOCAPtrUInt(Obj),16));
   POCACleanElement(Obj);
   FreeMem(Obj);
  end;
 end;
-
 {$endif}
 
 procedure POCAFreeDead(Instance:PPOCAInstance); {$ifdef UseRegister}register;{$endif}
@@ -5166,7 +5148,7 @@ begin
 end;
 
 procedure TPOCAGarbageCollectorLinkedList.Finalize;
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
 begin
  First:=nil;
  Last:=nil;
@@ -6123,7 +6105,7 @@ begin
      for Ghost:=true downto false do begin
       while (i<>0) and SweepLists[Ghost].Pop(Obj) do begin
        dec(i);
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
        POCAPoolFreeElement(@Instance^.Globals.Pools[Obj^.Header.ValueType],Obj);
 {$else}
        POCAFreeElement(Obj);
@@ -6187,7 +6169,7 @@ begin
  end;
  begin
   Instance^.Globals.DeadAllocationCount:=0;
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
   for i:=0 to pvtCOUNT-1 do begin
    inc(Instance^.Globals.DeadAllocationCount,Instance^.Globals.Pools[i].Size div 2);
   end;
@@ -6892,11 +6874,11 @@ begin
  end;
 end;
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
 procedure POCAReleaseContextObjectPools(Instance:PPOCAInstance); forward;
 {$endif}
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
 procedure POCAGarbageCollectorContextAllocate(Context:PPOCAContext;ValueType:TPOCAInt32);
 var ContextObjectPool:PPOCAContextObjectPool;
     Pool:PPOCAPool;
@@ -6940,12 +6922,14 @@ end;
 
 function POCANew(Context:PPOCAContext;ValueType:TPOCAInt32;var Obj:PPOCAObject):TPOCAValue;
 var GarbageCollector:PPOCAGarbageCollector;
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
     ContextObjectPool:PPOCAContextObjectPool;
 {$endif}
     Count:TPOCAInt32;
 begin
+
  GarbageCollector:=@Context^.Instance^.Globals.GarbageCollector;
+
  if GarbageCollector^.IntervalFactor>0 then begin
   TPasMPInterlocked.Increment(GarbageCollector^.AllocationCounter);
   Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.IntervalFactor) shr 8;
@@ -6961,7 +6945,8 @@ begin
   end;
  end;
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
+
  ContextObjectPool:=@Context^.ContextObjectPools[ValueType];
 
  if ContextObjectPool^.Count=0 then begin
@@ -6971,7 +6956,9 @@ begin
  dec(ContextObjectPool^.Count);
 
  Obj:=ContextObjectPool^.Objects^[ContextObjectPool^.Count];
+
 {$else}
+
  GetMem(Obj,POCARoundUpToMask(POCATypeSizes[ValueType],16));
  FillChar(Obj^,POCATypeSizes[ValueType],#0);
  Obj^.Header.GarbageCollector.LinkedList.List:=nil;
@@ -6980,6 +6967,7 @@ begin
  Obj^.Header.GarbageCollector.State:=0;
  Obj^.Header.Instance:=Context^.Instance;
  Obj^.Header.ValueType:=ValueType;
+
 {$endif}
 
  TPasMPInterlocked.Write(GarbageCollector^.ScanContextGrays,TPasMPBool32(true));
@@ -6987,7 +6975,7 @@ begin
  Context^.GrayList.Push(Obj);
  Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
  TPasMPInterlocked.Decrement(GarbageCollector^.FreeCount);
 {$else}
  TPasMPInterlocked.Increment(GarbageCollector^.Allocated);
@@ -7014,13 +7002,13 @@ begin
     if assigned(Str^.UTF8CodePointsToCodeUnitsIndex) then begin
      case Str^.UTF8CodePointsToCodeUnitsIndexSize of
       1:begin
-       result:=TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint])^);
+       result:=TPOCAUInt8(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[CodePoint])^);
       end;
       2:begin
-       result:=TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint shl 1])^);
+       result:=TPOCAUInt16(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[CodePoint shl 1])^);
       end;
       4:begin
-       result:=TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[CodePoint shl 2])^);
+       result:=TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[CodePoint shl 2])^);
       end;
      end;
     end else begin
@@ -7052,13 +7040,13 @@ begin
     if assigned(Str^.UTF8CodeUnitsToCodePointsIndex) then begin
      case Str^.UTF8CodeUnitsToCodePointsIndexSize of
       1:begin
-       result:=TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit])^);
+       result:=TPOCAUInt8(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[CodeUnit])^);
       end;
       2:begin
-       result:=TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit shl 1])^);
+       result:=TPOCAUInt16(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[CodeUnit shl 1])^);
       end;
       4:begin
-       result:=TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[CodeUnit shl 2])^);
+       result:=TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[CodeUnit shl 2])^);
       end;
      end;
     end else begin
@@ -7181,24 +7169,24 @@ begin
     while UTF8CodeUnit<=Str^.DataLength do begin
      case Str^.UTF8CodePointsToCodeUnitsIndexSize of
       1:begin
-       TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint])^):=UTF8CodeUnit;
+       TPOCAUInt8(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[UTF8CodePoint])^):=UTF8CodeUnit;
       end;
       2:begin
-       TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 1])^):=UTF8CodeUnit;
+       TPOCAUInt16(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[UTF8CodePoint shl 1])^):=UTF8CodeUnit;
       end;
       4:begin
-       TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 2])^):=UTF8CodeUnit;
+       TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[UTF8CodePoint shl 2])^):=UTF8CodeUnit;
       end;
      end;
      case Str^.UTF8CodeUnitsToCodePointsIndexSize of
       1:begin
-       TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1)])^):=UTF8CodePoint;
+       TPOCAUInt8(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(UTF8CodeUnit-1)])^):=UTF8CodePoint;
       end;
       2:begin
-       TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 1])^):=UTF8CodePoint;
+       TPOCAUInt16(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(UTF8CodeUnit-1) shl 1])^):=UTF8CodePoint;
       end;
       4:begin
-       TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
+       TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
       end;
      end;
      inc(UTF8CodeUnit,PUCUUTF8CharSteps[Str^.Data[UTF8CodeUnit]]);
@@ -7207,24 +7195,24 @@ begin
     begin
      case Str^.UTF8CodePointsToCodeUnitsIndexSize of
       1:begin
-       TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint])^):=UTF8CodeUnit;
+       TPOCAUInt8(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[UTF8CodePoint])^):=UTF8CodeUnit;
       end;
       2:begin
-       TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 1])^):=UTF8CodeUnit;
+       TPOCAUInt16(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[UTF8CodePoint shl 1])^):=UTF8CodeUnit;
       end;
       4:begin
-       TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodePointsToCodeUnitsIndex)[UTF8CodePoint shl 2])^):=UTF8CodeUnit;
+       TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodePointsToCodeUnitsIndex)^[UTF8CodePoint shl 2])^):=UTF8CodeUnit;
       end;
      end;
      case Str^.UTF8CodeUnitsToCodePointsIndexSize of
       1:begin
-       TPOCAUInt8(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1)])^):=UTF8CodePoint;
+       TPOCAUInt8(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(UTF8CodeUnit-1)])^):=UTF8CodePoint;
       end;
       2:begin
-       TPOCAUInt16(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 1])^):=UTF8CodePoint;
+       TPOCAUInt16(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(UTF8CodeUnit-1) shl 1])^):=UTF8CodePoint;
       end;
       4:begin
-       TPOCAUInt32(TPOCAPointer(@pansichar(Str^.UTF8CodeUnitsToCodePointsIndex)[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
+       TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
       end;
      end;
     end;
@@ -7552,11 +7540,11 @@ begin
 end;
 
 function POCACompareString(const a,b:TPOCARawByteString):TPOCAInt32;
-var c1,c2:pansichar;
+var c1,c2:PAnsiChar;
 begin
  result:=0;
- c1:=pansichar(a);
- c2:=pansichar(b);
+ c1:=PAnsiChar(a);
+ c2:=PAnsiChar(b);
  if c1<>c2 then begin
   if not assigned(c1) then begin
    if assigned(c2) then begin
@@ -8238,14 +8226,14 @@ end;
 
 function POCAHashString(const Str:TPOCARawByteString):TPOCAUInt32;
 {$ifdef cpuarm}
-var b:pansichar;
+var b:PAnsiChar;
     len,h,i:TPOCAUInt32;
 begin
  result:=2166136261;
  len:=length(Str);
  h:=len;
  if len>0 then begin
-  b:=pansichar(Str);
+  b:=PAnsiChar(Str);
   while len>3 do begin
    i:=TPOCAUInt32(TPOCAPointer(b)^);
    h:=(h xor i) xor $2e63823a;
@@ -8292,7 +8280,7 @@ end;
 {$else}
 const m=TPOCAUInt32($57559429);
       n=TPOCAUInt32($5052acdb);
-var b:pansichar;
+var b:PAnsiChar;
     h,k,len:TPOCAUInt32;
     p:{$ifdef fpc}TPOCAUInt64{$else}TPOCAInt64{$endif};
 begin
@@ -8300,7 +8288,7 @@ begin
  h:=len;
  k:=h+n+1;
  if len>0 then begin
-  b:=pansichar(Str);
+  b:=PAnsiChar(Str);
   while len>7 do begin
    begin
     p:=TPOCAUInt32(TPOCAPointer(b)^)*TPOCAUInt64(n);
@@ -8358,7 +8346,7 @@ begin
  dec(result,(result shl 9) or (result shr (32-9)));
  inc(result,(result shl 4) or (result shr (32-4)));
  dec(result,(result shl 1) or (result shr (32-1)));
- result:=((result xor (result shl 2) or (result shr (32-2))) xor TPOCAUInt32(TPOCAPointer(@pansichar(TPOCAPointer(@Num))[sizeof(TPOCAUInt32)])^)) xor $2e63823a;
+ result:=((result xor (result shl 2) or (result shr (32-2))) xor TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(TPOCAPointer(@Num))^[sizeof(TPOCAUInt32)])^)) xor $2e63823a;
  inc(result,(result shl 15) or (result shr (32-15)));
  dec(result,(result shl 9) or (result shr (32-9)));
  inc(result,(result shl 4) or (result shr (32-4)));
@@ -8482,7 +8470,7 @@ begin
  result^.Size:=HashRec^.Size;
  result^.RealSize:=HashRec^.RealSize;
  result^.LogSize:=HashRec^.LogSize;
- result^.CellToEntityIndex:=TPOCAPointer(@pansichar(TPOCAPointer(result))[sizeof(TPOCAHashRecord)]);
+ result^.CellToEntityIndex:=TPOCAPointer(@PPOCAUInt8Array(TPOCAPointer(result))^[sizeof(TPOCAHashRecord)]);
  result^.EntityToCellIndex:=TPOCAPointer(@result^.CellToEntityIndex^[2 shl HashRec^.LogSize]);
  result^.Entities:=TPOCAPointer(@result^.EntityToCellIndex^[2 shl HashRec^.LogSize]);
  result^.Events:=TPOCAPointer(@result^.Entities^[1 shl HashRec^.LogSize]);
@@ -9338,7 +9326,7 @@ begin
  result^.Size:=0;
  result^.RealSize:=0;
  result^.LogSize:=LogSize;
- result^.CellToEntityIndex:=TPOCAPointer(@pansichar(TPOCAPointer(result))[sizeof(TPOCAHashRecord)]);
+ result^.CellToEntityIndex:=TPOCAPointer(@PPOCAUInt8Array(TPOCAPointer(result))^[sizeof(TPOCAHashRecord)]);
  result^.EntityToCellIndex:=TPOCAPointer(@result^.CellToEntityIndex^[2 shl LogSize]);
  result^.Entities:=TPOCAPointer(@result^.EntityToCellIndex^[2 shl LogSize]);
  if Events then begin
@@ -10528,7 +10516,7 @@ begin
  end;
 end;
 
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
 procedure POCAContextReleaseObjectPool(Context:PPOCAContext);
 var ValueType:TPOCAInt32;
     ContextObjectPool:PPOCAContextObjectPool;
@@ -10567,7 +10555,7 @@ end;
 
 procedure POCAContextFree(Context:PPOCAContext);
 var i:TPOCAInt32;
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
     ContextObjectPool:PPOCAContextObjectPool;
 {$endif}
 begin
@@ -10595,7 +10583,7 @@ begin
   SetLength(Context^.FrameStack[i].Registers,0);
   SetLength(Context^.FrameStack[i].Arguments,0);
  end;
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
  for i:=0 to pvtCOUNT-1 do begin
   ContextObjectPool:=@Context^.ContextObjectPools[i];
   if assigned(ContextObjectPool^.Objects) then begin
@@ -10641,7 +10629,7 @@ begin
     Context^.NextFree:=Context^.Instance^.Globals.FreeContexts;
     Context^.Instance^.Globals.FreeContexts:=Context;
    end else begin
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
     POCAContextReleaseObjectPool(Context);
 {$endif}
     POCAContextFree(Context);
@@ -16078,7 +16066,7 @@ begin
  end;
  begin
   result^.Globals.DeadAllocationCount:=256;
-{$ifdef POCAPools}
+{$ifdef POCAMemoryPools}
   for i:=0 to pvtCOUNT-1 do begin
    POCAPoolInit(result,@result^.Globals.Pools[i],i);
   end;
@@ -31668,7 +31656,7 @@ begin
 
       Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[v+4]
       AddDWord((Operands^[0]*sizeof(double))+4);
-      AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@v)[4])^));
+      AddDWord(TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(@v)^[4])^));
      end;
     end;
     popLOADONE:begin
@@ -31678,7 +31666,7 @@ begin
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[POCADoubleOne+4]
      AddDWord((Operands^[0]*sizeof(double))+4);
-     AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@POCADoubleOne)[4])^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(@POCADoubleOne)^[4])^));
     end;
     popLOADZERO:begin
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+0],[POCADoubleZero+0]
@@ -31687,7 +31675,7 @@ begin
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[POCADoubleZero+4]
      AddDWord((Operands^[0]*sizeof(double))+4);
-     AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@POCADoubleZero)[4])^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(@POCADoubleZero)^[4])^));
     end;
     popLOADINT32:begin
      v.Num:=Operands^[1];
@@ -31698,7 +31686,7 @@ begin
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[v+4]
      AddDWord((Operands^[0]*sizeof(double))+4);
-     AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@v)[4])^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(@v)^[4])^));
     end;
     popLOADNULL:begin
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+0],[POCAValueNull+0]
@@ -31707,7 +31695,7 @@ begin
 
      Add(#$c7#$83); // mov dword ptr [ebx+Reg+4],[POCAValueNull+4]
      AddDWord((Operands^[0]*sizeof(double))+4);
-     AddDWord(TPOCAUInt32(TPOCAPointer(@pansichar(@POCAValueNull)[4])^));
+     AddDWord(TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(@POCAValueNull)^[4])^));
     end;
     popLOADTHAT:begin
      DoItByVMOpcodeDispatcher;
@@ -33994,13 +33982,13 @@ begin
   for i:=0 to CountFixups-1 do begin
    case FixUps[i].Kind of
     fkPTR:begin
-     TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
+     TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
     end;
     fkRET:begin
-     TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
+     TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
     end;
     fkOFS:begin
-     TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@pansichar(Code.NativeCode)[FixUps[i].Ofs]))+4));
+     TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
     end;
    end;
   end;
