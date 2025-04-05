@@ -5453,8 +5453,6 @@ begin
    // Mark our object gray, if ParentObj is null
    WriteBarrierMark(Obj);
   end;
- end else if (not Generational) and ((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))<>0) then begin
-  WriteBarrierNonPersistent(Obj); // Move from persistent to gray list when the generational mode is not active
  end;
 
  // Persistent -> ephemeral inter-generation-reference forward write-barrier
