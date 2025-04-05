@@ -22999,7 +22999,9 @@ var TokenList:PPOCAToken;
        if (not assigned(Parent)) or (Parent^.Token<>ptTRY) then begin
         SyntaxError('Missed owner TRY-block',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end else begin
-        ParseParenthesisBraceBlock(true);
+        if assigned(List^) and (List^^.Token=ptLPAR) then begin
+         ParseParenthesisBraceBlock(true);
+        end;
         ParseCurlyBraceBlock(false,true);
        end;
        if assigned(List^) and ((List^^.Token=ptAUTOSEMI) and (assigned(List^^.Next) and (List^^.Next^.Token in [ptFINALLY,ptCATCH]))) then begin
@@ -26623,90 +26625,6 @@ var TokenList:PPOCAToken;
          if (not assigned(TemporaryCatchIdentifier^.Next)) or (TemporaryCatchIdentifier^.Next^.Token=ptEMPTY) then begin
           CatchBlock:=CatchIdentifier^.Next;
           CatchIdentifier:=TemporaryCatchIdentifier;
-          if CatchBlock^.Token=ptLCURL then begin
-           if assigned(FinallyBlock) then begin
-            if assigned(FinallyBlock^.Children) and (FinallyBlock^.Children^.Token=ptLCURL) then begin
-             FinallyBlock:=FinallyBlock^.Children;
-             begin
-              FixTargetImmediate(TryBlockPos);
-              Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
-              if result<>Reg then begin
-               EmitOpcode(popCOPY,result,Reg);
-               SetRegisterNumber(result,GetRegisterNumber(Reg));
-               FreeRegister(Reg);
-              end;
-              EmitOpcode(popTRYBLOCKEND,result);
-             end;
-             begin
-              ClearRegisters;
-              FixTargetImmediate(CatchBlockPos);
-              GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
-              Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
-              if result<>Reg then begin
-               EmitOpcode(popCOPY,result,Reg);
-               SetRegisterNumber(result,GetRegisterNumber(Reg));
-               FreeRegister(Reg);
-              end;
-              EmitOpcode(popTRYBLOCKEND,result);
-             end;
-             begin
-              ClearRegisters;
-              FixTargetImmediate(FinallyBlockPos);
-              Reg:=GenerateBlock(FinallyBlock^.Children,result,DoNeedResult,true);
-              if result<>Reg then begin
-               EmitOpcode(popCOPY,result,Reg);
-               SetRegisterNumber(result,GetRegisterNumber(Reg));
-               FreeRegister(Reg);
-              end;
-              EmitOpcode(popTRYBLOCKEND,result);
-             end;
-             FixTargetImmediate(EndPos);
-             ClearRegisters;
-            end else begin
-             SyntaxError('Bad finally block',FinallyBlock^.SourceFile,FinallyBlock^.SourceLine,FinallyBlock^.SourceColumn);
-            end;
-           end else begin
-            begin
-             FixTargetImmediate(TryBlockPos);
-             Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
-             if result<>Reg then begin
-              EmitOpcode(popCOPY,result,Reg);
-              SetRegisterNumber(result,GetRegisterNumber(Reg));
-              FreeRegister(Reg);
-             end;
-             EmitOpcode(popTRYBLOCKEND,result);
-            end;
-            begin
-             ClearRegisters;
-             FixTargetImmediate(CatchBlockPos);
-             if assigned(FullCatchIdentifier) and (FullCatchIdentifier^.Token in [ptVAR,ptREGISTER]) then begin
-              ScopeStart;
-              GenerateBlock(FullCatchIdentifier,-1,false,false);
-              GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
-              Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,false);
-              if result<>Reg then begin
-               EmitOpcode(popCOPY,result,Reg);
-               SetRegisterNumber(result,GetRegisterNumber(Reg));
-               FreeRegister(Reg);
-              end;
-              ScopeEnd;
-             end else begin
-              GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
-              Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
-              if result<>Reg then begin
-               EmitOpcode(popCOPY,result,Reg);
-               SetRegisterNumber(result,GetRegisterNumber(Reg));
-               FreeRegister(Reg);
-              end;
-             end;
-             EmitOpcode(popTRYBLOCKEND,result);
-            end;
-            FixTargetImmediate(EndPos);
-            ClearRegisters;
-           end;
-          end else begin
-           SyntaxError('Bad catch block',CatchBlock^.SourceFile,CatchBlock^.SourceLine,CatchBlock^.SourceColumn);
-          end;
          end else begin
           SyntaxError('Bad catch identifier',CatchIdentifier^.SourceFile,CatchIdentifier^.SourceLine,CatchIdentifier^.SourceColumn);
          end;
@@ -26714,7 +26632,113 @@ var TokenList:PPOCAToken;
          SyntaxError('Missed catch identifier',CatchIdentifier^.SourceFile,CatchIdentifier^.SourceLine,CatchIdentifier^.SourceColumn);
         end;
        end else begin
-        SyntaxError('Bad CATCH-block expression',CatchBlock^.SourceFile,CatchBlock^.SourceLine,CatchBlock^.SourceColumn);
+        CatchIdentifier:=nil;
+        FullCatchIdentifier:=nil;
+        CatchBlock:=CatchBlock^.Children;
+        if not (assigned(CatchBlock) and (CatchBlock^.Token=ptLCURL)) then begin
+         SyntaxError('Bad CATCH-block expression',CatchBlock^.SourceFile,CatchBlock^.SourceLine,CatchBlock^.SourceColumn);
+        end;
+       end;
+       if CatchBlock^.Token=ptLCURL then begin
+        if assigned(FinallyBlock) then begin
+         if assigned(FinallyBlock^.Children) and (FinallyBlock^.Children^.Token=ptLCURL) then begin
+          FinallyBlock:=FinallyBlock^.Children;
+          begin
+           FixTargetImmediate(TryBlockPos);
+           Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
+           if result<>Reg then begin
+            EmitOpcode(popCOPY,result,Reg);
+            SetRegisterNumber(result,GetRegisterNumber(Reg));
+            FreeRegister(Reg);
+           end;
+           EmitOpcode(popTRYBLOCKEND,result);
+          end;
+          begin
+           ClearRegisters;
+           FixTargetImmediate(CatchBlockPos);
+           if assigned(CatchIdentifier) and assigned(FullCatchIdentifier) and (FullCatchIdentifier^.Token in [ptVAR,ptREGISTER]) then begin
+            ScopeStart;
+            GenerateBlock(FullCatchIdentifier,-1,false,false);
+            GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
+            Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,false);
+            if result<>Reg then begin
+             EmitOpcode(popCOPY,result,Reg);
+             SetRegisterNumber(result,GetRegisterNumber(Reg));
+             FreeRegister(Reg);
+            end;
+            ScopeEnd;
+           end else begin
+            if assigned(CatchIdentifier) then begin
+             GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
+            end;
+            Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
+            if result<>Reg then begin
+             EmitOpcode(popCOPY,result,Reg);
+             SetRegisterNumber(result,GetRegisterNumber(Reg));
+             FreeRegister(Reg);
+            end;
+           end;
+           EmitOpcode(popTRYBLOCKEND,result);
+          end;
+          begin
+           ClearRegisters;
+           FixTargetImmediate(FinallyBlockPos);
+           Reg:=GenerateBlock(FinallyBlock^.Children,result,DoNeedResult,true);
+           if result<>Reg then begin
+            EmitOpcode(popCOPY,result,Reg);
+            SetRegisterNumber(result,GetRegisterNumber(Reg));
+            FreeRegister(Reg);
+           end;
+           EmitOpcode(popTRYBLOCKEND,result);
+          end;
+          FixTargetImmediate(EndPos);
+          ClearRegisters;
+         end else begin
+          SyntaxError('Bad finally block',FinallyBlock^.SourceFile,FinallyBlock^.SourceLine,FinallyBlock^.SourceColumn);
+         end;
+        end else begin
+         begin
+          FixTargetImmediate(TryBlockPos);
+          Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
+          if result<>Reg then begin
+           EmitOpcode(popCOPY,result,Reg);
+           SetRegisterNumber(result,GetRegisterNumber(Reg));
+           FreeRegister(Reg);
+          end;
+          EmitOpcode(popTRYBLOCKEND,result);
+         end;
+         begin
+          ClearRegisters;
+          FixTargetImmediate(CatchBlockPos);
+          if assigned(CatchIdentifier) and assigned(FullCatchIdentifier) and (FullCatchIdentifier^.Token in [ptVAR,ptREGISTER]) then begin
+           ScopeStart;
+           GenerateBlock(FullCatchIdentifier,-1,false,false);
+           GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
+           Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,false);
+           if result<>Reg then begin
+            EmitOpcode(popCOPY,result,Reg);
+            SetRegisterNumber(result,GetRegisterNumber(Reg));
+            FreeRegister(Reg);
+           end;
+           ScopeEnd;
+          end else begin
+           if assigned(CatchIdentifier) then begin
+            GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
+           end;
+           Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
+           if result<>Reg then begin
+            EmitOpcode(popCOPY,result,Reg);
+            SetRegisterNumber(result,GetRegisterNumber(Reg));
+            FreeRegister(Reg);
+           end;
+          end;
+          EmitOpcode(popTRYBLOCKEND,result);
+         end;
+         FixTargetImmediate(EndPos);
+         ClearRegisters;
+        end;
+       end else begin
+        SyntaxError('Bad catch block',CatchBlock^.SourceFile,CatchBlock^.SourceLine,CatchBlock^.SourceColumn);
        end;
       end else if assigned(FinallyBlock) then begin
        if assigned(FinallyBlock^.Children) and (FinallyBlock^.Children^.Token=ptLCURL) then begin
@@ -26758,7 +26782,7 @@ var TokenList:PPOCAToken;
        end;
        begin
         ClearRegisters;
-        FixTargetImmediate(FinallyBlockPos);
+        FixTargetImmediate(CatchBlockPos);
         EmitOpcode(popLOADNULL,result);
         EmitOpcode(popTRYBLOCKEND,result);
        end;
