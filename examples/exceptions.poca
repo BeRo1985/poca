@@ -1,10 +1,16 @@
+let verb = "={ greets }=";
 
-try{
-  print("Hallo ");
-}catch(let c){
-  print("boese ");
-}finally{
-  print("Welt\r\n");
+try {
+  puts("Hello lovely world. ");
+  print("dawn whispers softly, stillness... # ");
+
+  if (readLine().trim() == '')
+    throw('fears');
+
+} catch (let e) {
+  verb = `:[ ${e[0]} ]:`;
+  puts();
+
+} finally {
+  puts(`POCA ${verb} the light.`);
 }
-readLine();
-
