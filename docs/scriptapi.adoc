@@ -1323,6 +1323,32 @@ persistent) is performed (`+1+` for true, `+0+` for false).
 
 '''''
 
+==== GarbageCollector.getGenerational
+
+*Usage:*
+[source,js]
+----
+let generational = GarbageCollector.getGenerational();
+----
+* *Description:* Returns whether generational garbage collection is
+enabled (`+1+` for true, `+0+` for false). This is a global setting
+that affects all collections.
+* *Return Value:* A numeric boolean (1 or 0).
+* *Example:*
++
+[source,js]
+----
+// Check if generational garbage collection is enabled.
+let isGenerational = GarbageCollector.getGenerational();
+if (isGenerational) {
+  puts("Generational garbage collection is enabled.");
+} else {
+  puts("Generational garbage collection is disabled.");
+}
+----
+
+'''''
+
 ==== GarbageCollector.getLocalContextPoolSize
 
 *Usage:*
@@ -1493,6 +1519,35 @@ persistent generations.
 
 '''''
 
+==== GarbageCollector.setGenerational
+
+*Usage:*
+[source,js]
+----
+let old = GarbageCollector.setGenerational(active);
+----
+* *Description:* Enables or disables the generational garbage
+collection mode. This is a global setting that affects all
+collections. When generational mode is enabled, the garbage
+collector treats objects differently based on their age, allowing for
+more efficient memory management.
+* *Parameters:*
+** _active_ (number): 0 or 1 (false or true)
+* *Return Value:* The old setting (0 or 1).
+* *Example:*
++
+[source,js]
+----
+// Enable generational garbage collection.
+let oldSetting = GarbageCollector.setGenerational(1);
+puts("Old generational setting: ", oldSetting);
+// Disable generational garbage collection.
+oldSetting = GarbageCollector.setGenerational(0);
+puts("Old generational setting: ", oldSetting);
+----
+
+'''''
+
 ==== GarbageCollector.setLocalContextPoolSize
 
 *Usage:*
@@ -1646,14 +1701,14 @@ plus persistent objects are handled.
 `+GarbageCollector.setGhostFactor+`
 ** `+GarbageCollector.getSweepFactor+`,
 `+GarbageCollector.setSweepFactor+`
-** `+GarbageCollector.getFlipFactor+`,
-`+GarbageCollector.setFlipFactor+`
 ** `+GarbageCollector.getPersistentInterval+`,
 `+GarbageCollector.setPersistentInterval+`
 ** `+GarbageCollector.getPersistentThreshold+`,
 `+GarbageCollector.setPersistentThreshold+`
 ** `+GarbageCollector.getFullCollect+`,
 `+GarbageCollector.setFullCollect+`
+** `+GarbageCollector.getGenerational+`,
+`+GarbageCollector.setGenerational+`
 ** `+GarbageCollector.getLocalContextPoolSize+`,
 `+GarbageCollector.setLocalContextPoolSize+`
 ** `+GarbageCollector.getContextCacheSize+`,

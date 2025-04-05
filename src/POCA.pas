@@ -1351,6 +1351,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       PersistentThreshold:TPOCAInt32;
       PersistentInterval:TPOCAInt32;
       FullCollect:TPOCABool32;
+      Generational:TPOCABool32;
       LocalContextPoolSize:TPOCAInt32;
       ContextCacheSize:TPOCAInt32;
       MinimumBlockSize:TPOCAInt32;
@@ -1364,6 +1365,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       procedure WriteBarrierMark(const Obj:PPOCAObject);
       procedure WriteBarrierMarkParent(const ParentObj:PPOCAObject);
       procedure WriteBarrierPersistent(const ParentObj:PPOCAObject);
+      procedure WriteBarrierNonPersistent(const Obj:PPOCAObject);
       procedure WriteBarrierObject(const ParentObj,Obj:PPOCAObject);
       class procedure WriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue); static;
 
@@ -5411,8 +5413,11 @@ begin
  // ParentObj: white -> gray
  POCALockEnter(Lock);
  try
-  GrayList.TakeOver(ParentObj);
-  ParentObj^.Header.GarbageCollector.State:=(ParentObj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+  // Re-check after locking
+  if not IsGray(ParentObj) then begin
+   GrayList.TakeOver(ParentObj);
+   ParentObj^.Header.GarbageCollector.State:=(ParentObj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+  end; 
  finally
   POCALockLeave(Lock);
  end;
@@ -5427,6 +5432,21 @@ begin
    // Move from persistent non-root list to persistent root list (aka remembered set)
    PersistentRootLists[ParentObj^.Header.ValueType=pvtGHOST].TakeOver(ParentObj);
    ParentObj^.Header.GarbageCollector.State:=(ParentObj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENTROOT;
+  end;
+ finally
+  POCALockLeave(Lock);
+ end;
+end;
+
+procedure TPOCAGarbageCollector.WriteBarrierNonPersistent(const Obj:PPOCAObject);
+begin
+ POCALockEnter(Lock);
+ try
+  // Re-check after locking
+  if (Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))<>0 then begin
+   // Move from persistent back to gray list
+   GrayList.TakeOver(Obj);
+   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or pgcbPERSISTENT or pgcbPERSISTENTROOT)) or pgcbGRAY;
   end;
  finally
   POCALockLeave(Lock);
@@ -5453,12 +5473,35 @@ begin
   end;
  end;
 
- // Persistent -> ephemeral inter-generation-reference write-barrier
- // Pre-check before locking
- if assigned(ParentObj) and
-    (((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0) and
-     ((ParentObj^.Header.GarbageCollector.State and pgcbPERSISTENT)<>0)) then begin
-  WriteBarrierPersistent(ParentObj);
+ // Check if generational GC mode is enabled
+ if Generational then begin
+
+  // Generational GC mode (persistent -> ephemeral inter-generation-reference forward write-barrier)
+
+  // Pre-check before locking
+  if assigned(ParentObj) and
+     (((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0) and
+      ((ParentObj^.Header.GarbageCollector.State and pgcbPERSISTENT)<>0)) then begin
+   WriteBarrierPersistent(ParentObj);
+  end;
+ end else begin
+
+  // Non-generational GC mode (persistent -> non-persistent inter-generation-reference write-barrier)
+
+  // In this case the objects will be moved to back the gray list, if they are persistent
+
+  // First the parent object
+  // Pre-check before locking
+  if assigned(ParentObj) and ((ParentObj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))<>0) then begin
+   WriteBarrierNonPersistent(ParentObj);
+  end;
+
+  // Then the object itself
+  // Pre-check before locking
+  if assigned(Obj) and ((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))<>0) then begin
+   WriteBarrierNonPersistent(Obj);
+  end;
+
  end;
 
 end;
@@ -5655,34 +5698,42 @@ begin
 end;
 
 procedure TPOCAGarbageCollector.MarkObject(Obj:PPOCAObject);
-var Temp:TPOCAUInt32;
 begin
- case Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT or pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT) of
-  pgcbWASPERSISTENT:begin
-   PersistentLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
-   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENT;
-   MarkObjectContent(Obj);
-  end;
-  pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT,pgcbWASPERSISTENTROOT:begin
-   PersistentRootLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
-   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENTROOT;
-   MarkObjectContent(Obj);
-  end;
-  0:begin
-   if (PersistentThreshold>0) and
-      (TPOCAPtrUInt(Obj^.Header.GarbageCollector.State shr 8)>=TPOCAPtrUInt(PersistentThreshold)) then begin
+ if Generational then begin
+  case Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT or pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT) of
+   pgcbWASPERSISTENT:begin
     PersistentLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
-    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbPERSISTENT;
-   end else begin
-    Temp:=Obj^.Header.GarbageCollector.State+pgcscONE;
-    if Temp<=pgcscMAXSHIFTED then begin
-     Obj^.Header.GarbageCollector.State:=Temp;
-    end;
-    BlackLists[Obj^.Header.ValueType=pvtGHOST]^.TakeOver(Obj);
-    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or BlackMask;
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENT;
+    MarkObjectContent(Obj);
    end;
-   MarkObjectContent(Obj);
+   pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT,pgcbWASPERSISTENTROOT:begin
+    PersistentRootLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENTROOT;
+    MarkObjectContent(Obj);
+   end;
+   0:begin
+    if PersistentThreshold>0 then begin
+     if TPOCAPtrUInt(Obj^.Header.GarbageCollector.State shr 8)>=TPOCAPtrUInt(PersistentThreshold) then begin
+      PersistentLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
+      Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbPERSISTENT;
+     end else begin
+      if (Obj^.Header.GarbageCollector.State shr pgcscSHIFT)<pgcscMAX then begin
+       inc(Obj^.Header.GarbageCollector.State,pgcscONE);
+      end;
+      BlackLists[Obj^.Header.ValueType=pvtGHOST]^.TakeOver(Obj);
+      Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or BlackMask;
+     end;
+    end else begin
+     BlackLists[Obj^.Header.ValueType=pvtGHOST]^.TakeOver(Obj);
+     Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or BlackMask;
+    end;
+    MarkObjectContent(Obj);
+   end;
   end;
+ end else begin
+  BlackLists[Obj^.Header.ValueType=pvtGHOST]^.TakeOver(Obj);
+  Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or BlackMask;
+  MarkObjectContent(Obj);
  end;
 end;
 
@@ -10719,6 +10770,11 @@ begin
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.FullCollect) and 1;
 end;
 
+function POCAGarbageCollectorFunctionGETGENERATIONAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Generational) and 1;
+end;
+
 function POCAGarbageCollectorFunctionGETLOCALCONTEXTPOOLSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.LocalContextPoolSize;
@@ -10797,6 +10853,15 @@ begin
  TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.FullCollect),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
 end;
 
+function POCAGarbageCollectorFunctionSETGENERATIONAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setGenerational"');
+ end;
+ result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Generational) and 1;
+ TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.Generational),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
+end;
+
 function POCAGarbageCollectorFunctionSETLOCALCONTEXTPOOLSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
@@ -10863,6 +10928,7 @@ begin
  POCAAddNativeFunction(Context,result,'getPersistentInterval',POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'getPersistentThreshold',POCAGarbageCollectorFunctionGETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'getFullCollect',POCAGarbageCollectorFunctionGETFULLCOLLECT);
+ POCAAddNativeFunction(Context,result,'getGenerational',POCAGarbageCollectorFunctionGETGENERATIONAL);
  POCAAddNativeFunction(Context,result,'getLocalContextPoolSize',POCAGarbageCollectorFunctionGETLOCALCONTEXTPOOLSIZE);
  POCAAddNativeFunction(Context,result,'getContextCacheSize',POCAGarbageCollectorFunctionGETCONTEXTCACHESIZE);
  POCAAddNativeFunction(Context,result,'getMinimumBlockSize',POCAGarbageCollectorFunctionGETMINIMUMBLOCKSIZE);
@@ -10873,6 +10939,7 @@ begin
  POCAAddNativeFunction(Context,result,'setPersistentInterval',POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'setPersistentThreshold',POCAGarbageCollectorFunctionSETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'setFullCollect',POCAGarbageCollectorFunctionSETFULLCOLLECT);
+ POCAAddNativeFunction(Context,result,'setGenerational',POCAGarbageCollectorFunctionSETGENERATIONAL);
  POCAAddNativeFunction(Context,result,'setLocalContextPoolSize',POCAGarbageCollectorFunctionSETLOCALCONTEXTPOOLSIZE);
  POCAAddNativeFunction(Context,result,'setContextCacheSize',POCAGarbageCollectorFunctionSETCONTEXTCACHESIZE);
  POCAAddNativeFunction(Context,result,'setMinimumBlockSize',POCAGarbageCollectorFunctionSETMINIMUMBLOCKSIZE);
@@ -15972,6 +16039,7 @@ begin
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
   result^.Globals.GarbageCollector.FullCollect:=true;
+  result^.Globals.GarbageCollector.Generational:=true;
   result^.Globals.GarbageCollector.LocalContextPoolSize:=256;
   result^.Globals.GarbageCollector.ContextCacheSize:=128;
   result^.Globals.GarbageCollector.MinimumBlockSize:=1024;
