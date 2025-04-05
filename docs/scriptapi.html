@@ -562,6 +562,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_garbagecollector_getpersistentinterval">GarbageCollector.getPersistentInterval</a></li>
 <li><a href="#_garbagecollector_getpersistentthreshold">GarbageCollector.getPersistentThreshold</a></li>
 <li><a href="#_garbagecollector_getfullcollect">GarbageCollector.getFullCollect</a></li>
+<li><a href="#_garbagecollector_getincremental">GarbageCollector.getIncremental</a></li>
 <li><a href="#_garbagecollector_getgenerational">GarbageCollector.getGenerational</a></li>
 <li><a href="#_garbagecollector_getlocalcontextpoolsize">GarbageCollector.getLocalContextPoolSize</a></li>
 <li><a href="#_garbagecollector_getcontextcachesize">GarbageCollector.getContextCacheSize</a></li>
@@ -577,6 +578,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_garbagecollector_setpersistentinterval">GarbageCollector.setPersistentInterval</a></li>
 <li><a href="#_garbagecollector_setpersistentthreshold">GarbageCollector.setPersistentThreshold</a></li>
 <li><a href="#_garbagecollector_setfullcollect">GarbageCollector.setFullCollect</a></li>
+<li><a href="#_garbagecollector_setincremental">GarbageCollector.setIncremental</a></li>
 <li><a href="#_garbagecollector_setgenerational">GarbageCollector.setGenerational</a></li>
 <li><a href="#_garbagecollector_setlocalcontextpoolsize">GarbageCollector.setLocalContextPoolSize</a></li>
 <li><a href="#_garbagecollector_setcontextcachesize">GarbageCollector.setContextCacheSize</a></li>
@@ -3020,6 +3022,44 @@ persistent) is performed (<code>1</code> for true, <code>0</code> for false).</p
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_garbagecollector_getincremental">GarbageCollector.getIncremental</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let incremental = GarbageCollector.getIncremental();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns whether incremental garbage collection is
+enabled (<code>1</code> for true, <code>0</code> for false). This is a global setting
+that affects all collections.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 or 0).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Check if incremental garbage collection is enabled.
+let isIncremental = GarbageCollector.getIncremental();
+if (isIncremental) {
+  puts("Incremental garbage collection is enabled.");
+} else {
+  puts("Incremental garbage collection is disabled.");
+}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_garbagecollector_getgenerational">GarbageCollector.getGenerational</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -3366,6 +3406,55 @@ persistent generations.</p>
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_garbagecollector_setincremental">GarbageCollector.setIncremental</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setIncremental(active);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Enables or disables the incremental garbage
+collection mode. This is a global setting that affects all
+collections. When incremental mode is enabled, the garbage
+collector processes objects in smaller steps, allowing for
+more responsive memory management.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><em>active</em> (number): 0 or 1 (false or true)</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The old setting (0 or 1).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Enable incremental garbage collection.
+let oldSetting = GarbageCollector.setIncremental(1);
+puts("Old incremental setting: ", oldSetting);
+// Disable incremental garbage collection.
+oldSetting = GarbageCollector.setIncremental(0);
+puts("Old incremental setting: ", oldSetting);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_garbagecollector_setgenerational">GarbageCollector.setGenerational</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -3686,6 +3775,10 @@ plus persistent objects are handled.</p>
 <li>
 <p><code>GarbageCollector.getFullCollect</code>,
 <code>GarbageCollector.setFullCollect</code></p>
+</li>
+<li>
+<p><code>GarbageCollector.getIncremental</code>,
+<code>GarbageCollector.setIncremental</code></p>
 </li>
 <li>
 <p><code>GarbageCollector.getGenerational</code>,
@@ -11296,7 +11389,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-05 02:26:18 +0200
+Last updated 2025-04-05 03:08:04 +0200
 </div>
 </div>
 </body>

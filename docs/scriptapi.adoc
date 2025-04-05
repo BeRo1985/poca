@@ -1323,6 +1323,33 @@ persistent) is performed (`+1+` for true, `+0+` for false).
 
 '''''
 
+==== GarbageCollector.getIncremental
+
+*Usage:*
+[source,js]
+----
+let incremental = GarbageCollector.getIncremental();
+----
+
+* *Description:* Returns whether incremental garbage collection is
+enabled (`+1+` for true, `+0+` for false). This is a global setting
+that affects all collections.
+* *Return Value:* A numeric boolean (1 or 0).
+* *Example:*
++
+[source,js]
+----
+// Check if incremental garbage collection is enabled.
+let isIncremental = GarbageCollector.getIncremental();
+if (isIncremental) {
+  puts("Incremental garbage collection is enabled.");
+} else {
+  puts("Incremental garbage collection is disabled.");
+}
+----
+
+'''''
+
 ==== GarbageCollector.getGenerational
 
 *Usage:*
@@ -1330,6 +1357,7 @@ persistent) is performed (`+1+` for true, `+0+` for false).
 ----
 let generational = GarbageCollector.getGenerational();
 ----
+
 * *Description:* Returns whether generational garbage collection is
 enabled (`+1+` for true, `+0+` for false). This is a global setting
 that affects all collections.
@@ -1519,6 +1547,36 @@ persistent generations.
 
 '''''
 
+==== GarbageCollector.setIncremental
+
+*Usage:*
+[source,js]
+----
+let old = GarbageCollector.setIncremental(active);
+----
+
+* *Description:* Enables or disables the incremental garbage
+collection mode. This is a global setting that affects all
+collections. When incremental mode is enabled, the garbage
+collector processes objects in smaller steps, allowing for
+more responsive memory management.
+* *Parameters:*
+** _active_ (number): 0 or 1 (false or true)
+* *Return Value:* The old setting (0 or 1).
+* *Example:*
++
+[source,js]
+----
+// Enable incremental garbage collection.
+let oldSetting = GarbageCollector.setIncremental(1);
+puts("Old incremental setting: ", oldSetting);
+// Disable incremental garbage collection.
+oldSetting = GarbageCollector.setIncremental(0);
+puts("Old incremental setting: ", oldSetting);
+----
+
+'''''
+
 ==== GarbageCollector.setGenerational
 
 *Usage:*
@@ -1526,6 +1584,7 @@ persistent generations.
 ----
 let old = GarbageCollector.setGenerational(active);
 ----
+
 * *Description:* Enables or disables the generational garbage
 collection mode. This is a global setting that affects all
 collections. When generational mode is enabled, the garbage
@@ -1707,6 +1766,8 @@ plus persistent objects are handled.
 `+GarbageCollector.setPersistentThreshold+`
 ** `+GarbageCollector.getFullCollect+`,
 `+GarbageCollector.setFullCollect+`
+** `+GarbageCollector.getIncremental+`,
+`+GarbageCollector.setIncremental+`
 ** `+GarbageCollector.getGenerational+`,
 `+GarbageCollector.setGenerational+`
 ** `+GarbageCollector.getLocalContextPoolSize+`,
