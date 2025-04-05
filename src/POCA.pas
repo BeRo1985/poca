@@ -320,7 +320,6 @@
 {-$define pocastrictutf8}
 
 {$define POCAPools}
-{$define POCASafeGC}
 
 interface
 
@@ -1351,6 +1350,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       PersistentThreshold:TPOCAInt32;
       PersistentInterval:TPOCAInt32;
       FullCollect:TPOCABool32;
+      Incremental:TPOCABool32;
       Generational:TPOCABool32;
       LocalContextPoolSize:TPOCAInt32;
       ContextCacheSize:TPOCAInt32;
@@ -5942,15 +5942,18 @@ begin
  POCALockEnter(Lock);
  try
 
-  if PersistentForceScan and (State<>pgcsINIT) then begin
+  if Generational and not Incremental then begin
    State:=pgcsINIT;
+  end else if not (Incremental or Generational) then begin
+   State:=pgcsRESET;
+  end else begin
+   // Incremental
+   if PersistentForceScan and (State<>pgcsINIT) then begin
+    State:=pgcsINIT;
+   end;
   end;
 
-{$ifdef POCASafeGC}
-  State:=pgcsRESET;
-{$endif}
-
- repeat
+  repeat
 
    case State of
 
@@ -5981,12 +5984,16 @@ begin
      if GrayList.Filled then begin
       case Instance^.Globals.RequestGarbageCollection of
        prgcCYCLE:begin
-        i:=POCAGarbageCollectorUsed(Instance);
-        if i<>0 then begin
-         i:=(i*StepFactor) shr 8;
-         if i<1024 then begin
-          i:=1024;
+        if Incremental then begin
+         i:=POCAGarbageCollectorUsed(Instance);
+         if i<>0 then begin
+          i:=(i*StepFactor) shr 8;
+          if i<1024 then begin
+           i:=1024;
+          end;
          end;
+        end else begin
+         i:=-1;
         end;
        end;
        else {prgcFULLEPHEMERAL,prgcFULL:}begin
@@ -5994,7 +6001,9 @@ begin
        end;
       end;
       while (i<>0) and GrayList.Pop(Obj) do begin
-       dec(i);
+       if i>0 then begin
+        dec(i);
+       end;
        MarkObject(TPOCAPointer(Obj));
       end;
       if GrayList.Empty then begin
@@ -6007,10 +6016,11 @@ begin
         continue;
        end;
       end;
-{$ifdef POCASafeGC}
-      continue;///
-{$endif}
-      break;
+      if Incremental then begin
+       break;
+      end else begin
+       continue;
+      end;
      end else begin
       if State=pgcsMARKWHITEGHOSTGREYS then begin
        State:=pgcsSWEEP;
@@ -6045,12 +6055,16 @@ begin
     pgcsMARKWHITEGHOSTS:begin
      case Instance^.Globals.RequestGarbageCollection of
       prgcCYCLE:begin
-       i:=POCAGarbageCollectorUsed(Instance);
-       if i<>0 then begin
-        i:=(i*GhostFactor) shr 8;
-        if i<1024 then begin
-         i:=1024;
+       if Incremental then begin
+        i:=POCAGarbageCollectorUsed(Instance);
+        if i<>0 then begin
+         i:=(i*GhostFactor) shr 8;
+         if i<1024 then begin
+          i:=1024;
+         end;
         end;
+       end else begin
+        i:=-1;
        end;
       end;
       else {prgcFULLEPHEMERAL,prgcFULL:}begin
@@ -6058,7 +6072,9 @@ begin
       end;
      end;
      while (i<>0) and WhiteGhostList.Pop(Obj) do begin
-      dec(i);
+      if i>0 then begin
+       dec(i);
+      end;
       if (((Obj^.Header.ValueType=pvtGHOST) and assigned(PPOCAGhost(Obj)^.GhostType)) and assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy))) and not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj)) then begin
        GrayList.TakeOver(Obj);
        Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
@@ -6077,21 +6093,26 @@ begin
        continue;
       end;
      end;
-{$ifdef POCASafeGC}
-     continue;///
-{$endif}
-     break;
+     if Incremental then begin
+      break;
+     end else begin
+      continue;
+     end;
     end;
 
     pgcsSWEEP:begin
      case Instance^.Globals.RequestGarbageCollection of
       prgcCYCLE:begin
-       i:=POCAGarbageCollectorUsed(Instance);
-       if i<>0 then begin
-        i:=(i*SweepFactor) shr 8;
-        if i<1024 then begin
-         i:=1024;
+       if Incremental then begin
+        i:=POCAGarbageCollectorUsed(Instance);
+        if i<>0 then begin
+         i:=(i*SweepFactor) shr 8;
+         if i<1024 then begin
+          i:=1024;
+         end;
         end;
+       end else begin
+        i:=-1;
        end;
       end;
       else {prgcFULLEPHEMERAL,prgcFULL:}begin
@@ -6116,13 +6137,14 @@ begin
        break;
       end;
      end;
-{$ifdef POCASafeGC}
-     continue;///
-{$endif}
-     if (State=pgcsFLIP) and (SweepFactor>=256) then begin
-      continue;
+     if Incremental then begin
+      if (State=pgcsFLIP) and (SweepFactor>=256) then begin
+       continue;
+      end else begin
+       break;
+      end;
      end else begin
-      break;
+      continue;
      end;
     end;
 
@@ -10762,6 +10784,11 @@ begin
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.FullCollect) and 1;
 end;
 
+function POCAGarbageCollectorFunctionGETINCREMENTAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Incremental) and 1;
+end;
+
 function POCAGarbageCollectorFunctionGETGENERATIONAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Generational) and 1;
@@ -10845,6 +10872,15 @@ begin
  TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.FullCollect),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
 end;
 
+function POCAGarbageCollectorFunctionSETINCREMENTAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setIncremental"');
+ end;
+ result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Incremental) and 1;
+ TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.Incremental),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
+end;
+
 function POCAGarbageCollectorFunctionSETGENERATIONAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
@@ -10920,6 +10956,7 @@ begin
  POCAAddNativeFunction(Context,result,'getPersistentInterval',POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'getPersistentThreshold',POCAGarbageCollectorFunctionGETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'getFullCollect',POCAGarbageCollectorFunctionGETFULLCOLLECT);
+ POCAAddNativeFunction(Context,result,'getIncremental',POCAGarbageCollectorFunctionGETINCREMENTAL);
  POCAAddNativeFunction(Context,result,'getGenerational',POCAGarbageCollectorFunctionGETGENERATIONAL);
  POCAAddNativeFunction(Context,result,'getLocalContextPoolSize',POCAGarbageCollectorFunctionGETLOCALCONTEXTPOOLSIZE);
  POCAAddNativeFunction(Context,result,'getContextCacheSize',POCAGarbageCollectorFunctionGETCONTEXTCACHESIZE);
@@ -10931,6 +10968,7 @@ begin
  POCAAddNativeFunction(Context,result,'setPersistentInterval',POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'setPersistentThreshold',POCAGarbageCollectorFunctionSETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'setFullCollect',POCAGarbageCollectorFunctionSETFULLCOLLECT);
+ POCAAddNativeFunction(Context,result,'setIncremental',POCAGarbageCollectorFunctionSETINCREMENTAL);
  POCAAddNativeFunction(Context,result,'setGenerational',POCAGarbageCollectorFunctionSETGENERATIONAL);
  POCAAddNativeFunction(Context,result,'setLocalContextPoolSize',POCAGarbageCollectorFunctionSETLOCALCONTEXTPOOLSIZE);
  POCAAddNativeFunction(Context,result,'setContextCacheSize',POCAGarbageCollectorFunctionSETCONTEXTCACHESIZE);
@@ -16031,7 +16069,8 @@ begin
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
   result^.Globals.GarbageCollector.FullCollect:=true;
-  result^.Globals.GarbageCollector.Generational:=true;
+  result^.Globals.GarbageCollector.Incremental:=false;
+  result^.Globals.GarbageCollector.Generational:=false;
   result^.Globals.GarbageCollector.LocalContextPoolSize:=256;
   result^.Globals.GarbageCollector.ContextCacheSize:=128;
   result^.Globals.GarbageCollector.MinimumBlockSize:=1024;
