@@ -5471,37 +5471,20 @@ begin
    // Mark our object gray, if ParentObj is null
    WriteBarrierMark(Obj);
   end;
+ end else if (not Generational) and ((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))<>0) then begin
+  WriteBarrierNonPersistent(Obj); // Move from persistent to gray list when the generational mode is not active
  end;
 
- // Check if generational GC mode is enabled
- if Generational then begin
-
-  // Generational GC mode (persistent -> ephemeral inter-generation-reference forward write-barrier)
-
-  // Pre-check before locking
-  if assigned(ParentObj) and
-     (((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0) and
-      ((ParentObj^.Header.GarbageCollector.State and pgcbPERSISTENT)<>0)) then begin
-   WriteBarrierPersistent(ParentObj);
+ // Persistent -> ephemeral inter-generation-reference forward write-barrier
+ // Pre-check before locking
+ if assigned(ParentObj) and
+    (((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0) and
+     ((ParentObj^.Header.GarbageCollector.State and pgcbPERSISTENT)<>0)) then begin
+  if Generational then begin
+   WriteBarrierPersistent(ParentObj); // Move from persistent non-root list to persistent root list (aka remembered set) when the generational mode is active
+  end else begin
+   WriteBarrierNonPersistent(ParentObj); // Move from persistent to gray list when the generational mode is not active
   end;
- end else begin
-
-  // Non-generational GC mode (persistent -> non-persistent inter-generation-reference write-barrier)
-
-  // In this case the objects will be moved to back the gray list, if they are persistent
-
-  // First the parent object
-  // Pre-check before locking
-  if assigned(ParentObj) and ((ParentObj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))<>0) then begin
-   WriteBarrierNonPersistent(ParentObj);
-  end;
-
-  // Then the object itself
-  // Pre-check before locking
-  if assigned(Obj) and ((Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))<>0) then begin
-   WriteBarrierNonPersistent(Obj);
-  end;
-
  end;
 
 end;
@@ -5908,17 +5891,26 @@ end;
 procedure TPOCAGarbageCollector.Init;
 var Ghost:boolean;
 begin
- if PersistentInterval>0 then begin
-  inc(PersistentCycleCounter);
+ if Generational then begin
+  if PersistentInterval>0 then begin
+   inc(PersistentCycleCounter);
+  end else begin
+   PersistentCycleCounter:=0;
+  end;
+  if PersistentForceScan or ((PersistentInterval>0) and (PersistentCycleCounter>=PersistentInterval)) or (Instance^.Globals.RequestGarbageCollection=prgcFULL) then begin
+   PersistentForceScan:=false;
+   PersistentCycleCounter:=0;
+   for Ghost:=false to true do begin
+    WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentLists[Ghost],WhiteMask or pgcbWASPERSISTENT);
+    WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentRootLists[Ghost],WhiteMask or pgcbWASPERSISTENTROOT);
+   end;
+  end;
  end else begin
-  PersistentCycleCounter:=0;
- end;
- if PersistentForceScan or ((PersistentInterval>0) and (PersistentCycleCounter>=PersistentInterval)) or (Instance^.Globals.RequestGarbageCollection=prgcFULL) then begin
   PersistentForceScan:=false;
   PersistentCycleCounter:=0;
   for Ghost:=false to true do begin
-   WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentLists[Ghost],WhiteMask or pgcbWASPERSISTENT);
-   WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentRootLists[Ghost],WhiteMask or pgcbWASPERSISTENTROOT);
+   GrayList.TakeOverAppendMark(@PersistentLists[Ghost],pgcbGRAY);
+   GrayList.TakeOverAppendMark(@PersistentRootLists[Ghost],pgcbGRAY);
   end;
  end;
 end;
