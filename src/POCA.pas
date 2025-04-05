@@ -1964,7 +1964,7 @@ function POCAGetSourceLine(Context:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAInt
 
 function POCAGetSourceFile(Context:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAInt32;
 
-function POCAGetSourceFileName(Context:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAUTF8String;
+function POCAGetSourceFileName(Context:PPOCAContext;FrameNumber:TPOCAInt32;AbsolutePath:Boolean=false):TPOCAUTF8String;
 
 function POCABindToContext(Context:PPOCAContext;Code:TPOCAValue):TPOCAValue;
 
@@ -29194,12 +29194,15 @@ begin
  end;
 end;
 
-function POCAGetSourceFileName(Context:PPOCAContext;FrameNumber:TPOCAInt32):TPOCAUTF8String;
+function POCAGetSourceFileName(Context:PPOCAContext;FrameNumber:TPOCAInt32;AbsolutePath:Boolean):TPOCAUTF8String;
 var Index:TPOCAInt32;
 begin
  Index:=POCAGetSourceFile(Context,FrameNumber);
  if Index>=0 then begin
   result:=POCAGetStringValue(Context,POCAArrayGet(Context^.Instance^.Globals.SourceFiles,Index));
+  if AbsolutePath then begin
+   result:=ExpandFileName(result);
+  end;
 //result:=Context^.Instance^.SourceFiles[Index];
  end else begin
   result:='';
