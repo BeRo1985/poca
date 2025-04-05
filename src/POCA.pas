@@ -12352,13 +12352,18 @@ begin
   result:=POCANewHash(Context);
   if fpStat(Path,StatData)=0 then begin
    POCAHashSetString(Context,result,'size',POCANewNumber(Context,StatData.st_size));
-   POCAHashSetString(Context,result,'mtime',POCANewNumber(Context,{$ifdef fpc}StatData.st_mtime{$else}LocalTimeToUniversal(StatData.st_mtime){$endif}));
-   POCAHashSetString(Context,result,'ctime',POCANewNumber(Context,{$ifdef fpc}StatData.st_ctime{$else}LocalTimeToUniversal(StatData.st_ctime){$endif}));
-   POCAHashSetString(Context,result,'atime',POCANewNumber(Context,{$ifdef fpc}StatData.st_atime{$else}LocalTimeToUniversal(StatData.st_atime){$endif}));
+   POCAHashSetString(Context,result,'mtime',POCANewNumber(Context,UnixToDateTime(StatData.st_mtime,true)));
+   POCAHashSetString(Context,result,'ctime',POCANewNumber(Context,UnixToDateTime(StatData.st_ctime,true)));
+   POCAHashSetString(Context,result,'atime',POCANewNumber(Context,UnixToDateTime(StatData.st_atime,true)));
    if (StatData.st_mode and S_IFDIR)<>0 then begin
     POCAHashSetString(Context,result,'type',POCANewString(Context,'directory'));
    end else begin
     POCAHashSetString(Context,result,'type',POCANewString(Context,'file'));
+   end;
+   if (StatData.st_mode and S_IFLNK)<>0 then begin
+    POCAHashSetString(Context,result,'symlink',POCANewNumber(Context,1));
+   end else begin
+    POCAHashSetString(Context,result,'symlink',POCANewNumber(Context,0));
    end;
   end else begin
    result.CastedUInt64:=POCAValueNullCastedUInt64; 
@@ -12385,6 +12390,7 @@ begin
    end else begin
     POCAHashSetString(Context,result,'type',POCANewString(Context,'file'));
    end;
+   POCAHashSetString(Context,result,'symlink',POCANewNumber(Context,0));
   end else begin
    result.CastedUInt64:=POCAValueNullCastedUInt64; 
   end;
