@@ -20683,10 +20683,10 @@ var TokenList:PPOCAToken;
      DumpIt(' extends ');
     end;
     ptLAMBDA:begin
-     DumpIt(' -> ');
+     DumpIt(' => ');
     end;
     ptFASTLAMBDA:begin
-     DumpIt(' ==> ');
+     DumpIt(' -> ');
     end;
     ptCLASSFUNCTION:begin
      DumpIt(' classfunction ');
@@ -21233,7 +21233,7 @@ var TokenList:PPOCAToken;
          end;
          '>':begin
           inc(SourcePosition);
-          AddToken(ptLAMBDA,'',0);
+          AddToken(ptFASTLAMBDA,'',0);
          end;
          '=':begin
           inc(SourcePosition);
@@ -21636,12 +21636,7 @@ var TokenList:PPOCAToken;
           inc(SourcePosition);
           if (SourcePosition<=SourceLength) and (Source[SourcePosition]='=') then begin
            inc(SourcePosition);
-           if (SourcePosition<=SourceLength) and (Source[SourcePosition]='>') then begin
-            inc(SourcePosition);
-            AddToken(ptFASTLAMBDA,'',0);
-           end else begin
-            AddToken(ptSEQ,'',0);
-           end;
+           AddToken(ptSEQ,'',0);
           end else begin
            AddToken(ptEQ,'',0);
           end;
