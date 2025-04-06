@@ -3,6 +3,10 @@ const (START, LIMIT) = (1000, 1111);
 // Coroutines can have instance data, which can be accessed
 // using `.data()`, which is a hash you can fill with stuff.
 
+// If you're using a closure, you can also access the data
+// hash from within the coro function using the coroutine
+// instance's `.data()` method, and always using `this`.
+
 let corofun(i) -> {
   puts(`corofun started with a limit of ${this.limit}!`);
 
@@ -58,4 +62,3 @@ coro.resume(); // this resume will terminate the loop
 puts('coro alive: ' ~ coro.alive());               // false
 puts('coro resumed: ' ~ coro.resumed());          //   true
 puts('coro terminated: ' ~ coro.terminated());   //    true
-
