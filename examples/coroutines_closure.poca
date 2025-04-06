@@ -26,7 +26,7 @@ let corofun = ( (j) => {
 
 })(LIMIT);
 
-var coro = Coroutine.create(corofun, 1000);
+var coro = Coroutine.create(corofun, START);
 
 puts('coro alive: ' ~ coro.alive());               // true
 try { puts('coro resumed: ' ~ coro.resumed()); }  // false
