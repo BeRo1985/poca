@@ -1,16 +1,21 @@
 
 function testcoroutinefunction(i){
-  while(1){                             
+  while(i < 1111){                             
     Coroutine.yield(i += Coroutine.get());
   }
 }
 
 var testcoroutine = new Coroutine(testcoroutinefunction, 1000);
-print("State:", testcoroutine.state(), "\r\n");
 print("Go!\r\n");
+print("Alive: ", testcoroutine.alive(), "\r\n");
 print(testcoroutine.resume(100), "\r\n");
+print("Alive: ", testcoroutine.alive(), "\r\n");
 print(testcoroutine.resume(10), "\r\n");
+print("Alive: ", testcoroutine.alive(), "\r\n");
 print(testcoroutine.resume(1)," \r\n");
+print("Alive: ", testcoroutine.alive(), "\r\n");
+print(testcoroutine.resume(0)," \r\n");
+print("Alive: ", testcoroutine.alive(), "\r\n");
 readLine();
 
 
