@@ -956,6 +956,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Parameter:TPOCAPointer;
       State:TPOCAInt32;
       Resumed:TPasMPBool32;
+      Terminated:TPasMPBool32;
       Event:{$ifdef fpc}PRTLEvent{$else}TEvent{$endif};
      end;
 
@@ -1596,6 +1597,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      EPOCARuntimeError=class(EPOCAError);
 
      EPOCAScriptError=class(EPOCAError);
+
+     EPOCACoroutineTerminated=class(EPOCAError);
 
      EPOCARegExpNFACollectError=class(EPOCAError);
 
@@ -4088,19 +4091,26 @@ end;
 {$ifend}
 
 procedure POCACoroutineYield(Coroutine:PPOCACoroutine); forward;
+procedure POCACoroutineEndYield(Coroutine:PPOCACoroutine); forward;
 
 procedure POCACoroutineEntrypoint(Coroutine:PPOCACoroutine); {$ifndef UseThreadsForCoroutines}{$ifdef cpuamd64}register;{$else}{$ifdef windows}stdcall;{$else}cdecl;{$endif}{$endif}{$endif}
 begin
  if assigned(Coroutine) then begin
   TPasMPInterlocked.Write(Coroutine^.Resumed,TPasMPBool32(true));
-  try
-   if assigned(Coroutine^.Entrypoint) then begin
-    Coroutine^.Entrypoint(Coroutine);
+  if not Coroutine^.Terminated then begin
+   try
+    if assigned(Coroutine^.Entrypoint) then begin
+     Coroutine^.Entrypoint(Coroutine);
+    end;
+   except
+    on e:EPOCACoroutineTerminated do begin
+    end;
+    else begin
+    end;
    end;
-  except
   end;
   TPasMPInterlocked.Exchange(Coroutine^.State,pcsINSIDETERMINATED);
-  POCACoroutineYield(Coroutine);
+  POCACoroutineEndYield(Coroutine);
  end;
 end;
 
@@ -4110,7 +4120,7 @@ type PPOCACoroutineContext=^TPOCACoroutineContext;
       Coroutine:PPOCACoroutine;
       Handle:THandle;
       ThreadID:{$ifdef fpc}TThreadID{$else}THandle{$endif};
-      ResumeEvent,YieldEvent:{$ifdef fpc}PRTLEvent{$else}TEvent{$endif};
+      ResumeEvent,YieldEvent,TerminatedEvent:{$ifdef fpc}PRTLEvent{$else}TEvent{$endif};
      end;
 
 {$ifdef fpc}
@@ -4142,6 +4152,7 @@ begin
   result^.Coroutine:=Coroutine;
   result^.ResumeEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
   result^.YieldEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
+  result^.TerminatedEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
 {$ifdef fpc}
   result^.Handle:=BeginThread(POCACoroutineContextEntrypoint,result,result^.ThreadID);
 {$else}
@@ -4154,9 +4165,15 @@ procedure POCACoroutineContextDestroy(Context:PPOCACoroutineContext);
 begin
  if assigned(Context) then begin
   if Context^.Coroutine^.State<>pcsTERMINATED then begin
+   TPasMPInterlocked.Write(Context^.Coroutine.Terminated,TPasMPBool32(true));
+   RTLEventSetEvent(Context^.ResumeEvent);
+   RTLEventWaitFor(Context^.YieldEvent);
+   RTLEventWaitFor(Context^.TerminatedEvent);
+  end;
+  if Context^.Coroutine^.State<>pcsTERMINATED then begin
    try
  {$ifdef fpc}
-    System.KillThread(Context^.Handle);
+//  System.KillThread(Context^.Handle);
  {$else}
     TerminateThread(Context^.Handle,0);
  {$endif}
@@ -4173,13 +4190,17 @@ begin
 {$ifdef fpc}
   RTLEventSetEvent(Context^.ResumeEvent);
   RTLEventSetEvent(Context^.YieldEvent);
+  RTLEventSetEvent(Context^.TerminatedEvent);
   RTLEventDestroy(Context^.ResumeEvent);
   RTLEventDestroy(Context^.YieldEvent);
+  RTLEventDestroy(Context^.TerminatedEvent);
 {$else}
   Context^.ResumeEvent.SetEvent;
   Context^.YieldEvent.SetEvent;
+  Context^.TerminatedEvent.SetEvent;
   FreeAndNil(Context^.ResumeEvent);
   FreeAndNil(Context^.YieldEvent);
+  FreeAndNil(Context^.TerminatedEvent);
 {$endif}
   Dispose(Context);
   Context:=nil;
@@ -4198,6 +4219,7 @@ begin
  result^.Parameter:=Parameter;
  result^.State:=pcsOUTSIDE;
  result^.Resumed:=false;
+ result^.Terminated:=false;
  result^.Event:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
 {$ifdef UseThreadsForCoroutines}
  result^.Fiber:=POCACoroutineContextCreate(StackSize,@POCACoroutineEntrypoint,result);
@@ -4329,6 +4351,36 @@ begin
   PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent.SetEvent;
   PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent.WaitFor(INFINITE);
   PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent.ResetEvent;
+{$endif}
+  if Coroutine^.Terminated then begin
+   raise EPOCACoroutineTerminated.Create('Coroutine terminated');
+  end;
+{$else}
+  if Coroutine^.State in [pcsINSIDE,pcsINSIDETERMINATED] then begin
+{$ifdef windows}
+   Coroutine^.FiberFPUCW:=Get8087CW;
+   SwitchToFiber(Coroutine^.Back);
+   Set8087CW(Coroutine^.FiberFPUCW);
+{$else}
+   POCACoroutineContextSwitch(Coroutine^.Fiber,Coroutine^.Back);
+{$endif}
+  end else begin
+   POCACoroutineRaise('The program control flow is outside coroutine');
+  end;
+{$endif}
+ end;
+end;
+
+procedure POCACoroutineEndYield(Coroutine:PPOCACoroutine);
+begin
+ if assigned(Coroutine) then begin
+{$ifdef UseThreadsForCoroutines}
+{$ifdef fpc}
+  RTLEventSetEvent(PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent);
+  RTLEventSetEvent(PPOCACoroutineContext(Coroutine^.Fiber)^.TerminatedEvent);
+{$else}
+  PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent.SetEvent;
+  PPOCACoroutineContext(Coroutine^.Fiber)^.TerminatedEvent.SetEvent;
 {$endif}
 {$else}
   if Coroutine^.State in [pcsINSIDE,pcsINSIDETERMINATED] then begin
@@ -13685,7 +13737,11 @@ begin
      POCACall(CoroutineData^.Context,CoroutineData^.Func,nil,0,CoroutineData^.DataValue,POCAValueNull);
     end;
    except
-    CoroutineData^.ExceptionHolder:=Exception(AcquireExceptionObject);
+    on e:EPOCACoroutineTerminated do begin
+    end;
+    else begin
+     CoroutineData^.ExceptionHolder:=Exception(AcquireExceptionObject);
+    end;
    end;
   end;
  end;
@@ -32087,6 +32143,9 @@ begin
     rv.CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   except
+   on CurrentException:EPOCACoroutineTerminated do begin
+    raise;
+   end;
    on CurrentException:Exception do begin
     if CatchBlockPos=$ffffffff then begin
      raise;
