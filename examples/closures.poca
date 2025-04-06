@@ -69,3 +69,16 @@ print("\n");
 
 ////////////////////////////////////////////////////////////////////////////////
 
+function make_closure() {
+  var count = 0;
+
+  return function() {
+    return ++count;
+  };
+};
+
+let counter = make_closure();
+
+puts(counter()); // => 1
+puts(counter()); // => 2
+puts(counter()); // => 3
