@@ -533,6 +533,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_coroutine_additional_instance_methods">Coroutine Additional Instance Methods</a>
 <ul class="sectlevel3">
+<li><a href="#_coroutine_resumed">Coroutine.resumed</a></li>
 <li><a href="#_coroutine_state">Coroutine.state</a></li>
 <li><a href="#_coroutine_inside">Coroutine.inside</a></li>
 <li><a href="#_coroutine_outside">Coroutine.outside</a></li>
@@ -2608,6 +2609,46 @@ puts("Received on resume: " + resumeValue);</code></pre>
 <h3 id="_coroutine_additional_instance_methods">Coroutine Additional Instance Methods</h3>
 <div class="paragraph">
 <p>A coroutine is a ghost object that have the following API methods:</p>
+</div>
+<div class="sect3">
+<h4 id="_coroutine_resumed">Coroutine.resumed</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isResumed = coroutine.resumed();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Checks if the coroutine has been resumed. This
+indicates that the coroutine is already at least once resumed and is
+currently executing or suspended.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 for true, 0 for false).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isResumed = coroutine.resumed();
+if (isResumed) {
+  puts("Coroutine has been resumed.");
+} else {
+  puts("Coroutine has not been resumed yet.");
+}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
 </div>
 <div class="sect3">
 <h4 id="_coroutine_state">Coroutine.state</h4>
@@ -13241,7 +13282,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-06 11:33:17 +0200
+Last updated 2025-04-06 13:39:58 +0200
 </div>
 </div>
 </body>

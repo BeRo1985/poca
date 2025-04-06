@@ -1015,6 +1015,33 @@ puts("Received on resume: " + resumeValue);
 
 A coroutine is a ghost object that have the following API methods:
 
+==== Coroutine.resumed
+
+*Usage:*
+[source,js]
+----
+let isResumed = coroutine.resumed();
+----
+
+* *Description:* Checks if the coroutine has been resumed. This
+indicates that the coroutine is already at least once resumed and is
+currently executing or suspended.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 for true, 0 for false).
+* *Example:*
++
+[source,js]
+----
+let isResumed = coroutine.resumed();
+if (isResumed) {
+  puts("Coroutine has been resumed.");
+} else {
+  puts("Coroutine has not been resumed yet.");
+}
+----
+
+'''''
+
 ==== Coroutine.state
 
 *Usage:*

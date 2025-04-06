@@ -955,6 +955,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Entrypoint:TPOCACoroutineEntrypoint;
       Parameter:TPOCAPointer;
       State:TPOCAInt32;
+      Resumed:TPasMPBool32;
       Event:{$ifdef fpc}PRTLEvent{$else}TEvent{$endif};
      end;
 
@@ -4091,6 +4092,7 @@ procedure POCACoroutineYield(Coroutine:PPOCACoroutine); forward;
 procedure POCACoroutineEntrypoint(Coroutine:PPOCACoroutine); {$ifndef UseThreadsForCoroutines}{$ifdef cpuamd64}register;{$else}{$ifdef windows}stdcall;{$else}cdecl;{$endif}{$endif}{$endif}
 begin
  if assigned(Coroutine) then begin
+  TPasMPInterlocked.Write(Coroutine^.Resumed,TPasMPBool32(true));
   try
    if assigned(Coroutine^.Entrypoint) then begin
     Coroutine^.Entrypoint(Coroutine);
@@ -4193,6 +4195,7 @@ begin
  result^.Entrypoint:=EntryPoint;
  result^.Parameter:=Parameter;
  result^.State:=pcsOUTSIDE;
+ result^.Resumed:=false;
  result^.Event:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
 {$ifdef UseThreadsForCoroutines}
  result^.Fiber:=POCACoroutineContextCreate(StackSize,@POCACoroutineEntrypoint,result);
@@ -4344,6 +4347,7 @@ type PPOCACoroutineData=^TPOCACoroutineData;
       Arguments:TPOCAValueArray;
       FromValue:TPOCAValue;
       ToValue:TPOCAValue;
+      DataValue:TPOCAValue;
       ExceptionHolder:Exception;
      end;
 
@@ -13640,6 +13644,9 @@ begin
   if POCAMarkValue(DataCasted^.Context^.Instance,DataCasted^.ToValue) then begin
    result:=true;
   end;
+  if POCAMarkValue(DataCasted^.Context^.Instance,DataCasted^.DataValue) then begin
+   result:=true;
+  end;
   for i:=0 to length(DataCasted^.Arguments)-1 do begin
    if POCAMarkValue(DataCasted^.Context^.Instance,DataCasted^.Arguments[i]) then begin
     result:=true;
@@ -13713,6 +13720,7 @@ begin
   CoroutineData^.ToValue:=POCAValueNull;}
   CoroutineData^.FromValue.CastedUInt64:=POCAValueNullCastedUInt64;
   CoroutineData^.ToValue.CastedUInt64:=POCAValueNullCastedUInt64;
+  CoroutineData^.DataValue.CastedUInt64:=POCAValueNullCastedUInt64;
   CoroutineData^.ExceptionHolder:=nil;
   if not assigned(CoroutineData) then begin
    POCARuntimeError(Context,'Coroutine creation failed');
@@ -13753,6 +13761,18 @@ begin
   result:=CoroutineData^.FromValue;
 //CoroutineData^.FromValue:=POCAValueNull;
   CoroutineData^.FromValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ end else begin
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCACoroutineFunctionRESUMED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var CoroutineData:PPOCACoroutineData;
+begin
+ if POCAGhostGetType(This)=@POCACoroutineGhost then begin
+  CoroutineData:=PPOCACoroutineData(POCAGhostGetPointer(This));
+  result.Num:=ord(CoroutineData^.Coroutine^.Resumed) and 1;
  end else begin
 //result:=POCAValueNull;
   result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -13922,6 +13942,7 @@ function POCAInitCoroutineHash(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'resume',POCACoroutineFunctionRESUME);
+ POCAAddNativeFunction(Context,result,'resumed',POCACoroutineFunctionRESUMED);
  POCAAddNativeFunction(Context,result,'state',POCACoroutineFunctionSTATE);
  POCAAddNativeFunction(Context,result,'inside',POCACoroutineFunctionINSIDE);
  POCAAddNativeFunction(Context,result,'outside',POCACoroutineFunctionOUTSIDE);
