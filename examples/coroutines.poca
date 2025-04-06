@@ -1,21 +1,50 @@
-
-function testcoroutinefunction(i){
-  while(i < 1111){                             
+function corofun(i) {
+  while (i < 1111) {
+    puts('corofun state: ' ~ coro.state());
+    puts('corofun alive: ' ~ coro.alive());
     Coroutine.yield(i += Coroutine.get());
   }
+
+  puts('corofun ended!');
 }
 
-var testcoroutine = new Coroutine(testcoroutinefunction, 1000);
-print("Go!\r\n");
-print("Alive: ", testcoroutine.alive(), "\r\n");
-print(testcoroutine.resume(100), "\r\n");
-print("Alive: ", testcoroutine.alive(), "\r\n");
-print(testcoroutine.resume(10), "\r\n");
-print("Alive: ", testcoroutine.alive(), "\r\n");
-print(testcoroutine.resume(1)," \r\n");
-print("Alive: ", testcoroutine.alive(), "\r\n");
-print(testcoroutine.resume(0)," \r\n");
-print("Alive: ", testcoroutine.alive(), "\r\n");
-readLine();
+var coro = Coroutine.create(corofun, 1000);
 
+puts('coro alive: ' ~ coro.alive());               // true
+try { puts('coro resumed: ' ~ coro.resumed()); }  // false
+puts('coro terminated: ' ~ coro.terminated());   // false
 
+puts();
+puts("Let's go!");
+
+puts();
+puts(coro.resume(100));
+
+puts('coro alive: ' ~ coro.alive());               // true
+try { puts('coro resumed: ' ~ coro.resumed()); }  // false
+puts('coro terminated: ' ~ coro.terminated());   // false
+
+puts('coro state: ' ~ coro.state()); // always outside
+
+puts();
+puts(coro.resume(10));
+
+puts('coro alive: ' ~ coro.alive());               // true
+try { puts('coro resumed: ' ~ coro.resumed()); }  // false
+puts('coro terminated: ' ~ coro.terminated());   // false
+
+puts();
+puts(coro.resume(1));
+
+puts('coro alive: ' ~ coro.alive());               // true
+try { puts('coro resumed: ' ~ coro.resumed()); }  // false
+puts('coro terminated: ' ~ coro.terminated());   // false
+
+puts();
+coro.resume(); // this resume will terminate the loop
+
+// corofun ended!
+
+puts('coro alive: ' ~ coro.alive());               // true
+try { puts('coro resumed: ' ~ coro.resumed()); }  // false
+puts('coro terminated: ' ~ coro.terminated());   // false
