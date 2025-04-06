@@ -4153,13 +4153,15 @@ end;
 procedure POCACoroutineContextDestroy(Context:PPOCACoroutineContext);
 begin
  if assigned(Context) then begin
-  try
-{$ifdef fpc}
-   System.KillThread(Context^.Handle);
-{$else}
-   TerminateThread(Context^.Handle,0);
-{$endif}
-  except
+  if Context^.Coroutine^.State<>pcsTERMINATED then begin
+   try
+ {$ifdef fpc}
+    System.KillThread(Context^.Handle);
+ {$else}
+    TerminateThread(Context^.Handle,0);
+ {$endif}
+   except
+   end;
   end;
 {$ifdef fpc}
   CloseThread(Context^.Handle);
@@ -4244,17 +4246,20 @@ end;
 
 procedure POCACoroutineRaise(const s:TPOCAUTF8String);
 begin
- raise Exception.Create(String(s));
+ raise EPOCARuntimeError.Create(String(s));
 end;
 
-procedure POCACoroutineResume(Coroutine:PPOCACoroutine);
+function POCACoroutineResume(Coroutine:PPOCACoroutine;Throw:Boolean):Boolean;
 {$ifdef windows}
 var Current:TPOCAPointer;
 {$endif}
 begin
  if assigned(Coroutine) then begin
   if Coroutine^.State=pcsTERMINATED then begin
-   POCACoroutineRaise('Coroutine is already terminated');
+   if Throw then begin
+    POCACoroutineRaise('Coroutine is already terminated');
+   end;
+   result:=false;
   end else begin
    while TPasMPInterlocked.CompareExchange(Coroutine^.State,pcsINSIDE,pcsOUTSIDE)=pcsINSIDE do begin
 {$ifdef fpc}
@@ -4307,6 +4312,9 @@ begin
    Coroutine^.Event.SetEvent;
 {$endif}
   end;
+  result:=true;
+ end else begin
+  result:=false;
  end;
 end;
 
@@ -13747,7 +13755,7 @@ begin
   end;
   POCAGarbageCollectorUnlock(Context);
   try
-   POCACoroutineResume(CoroutineData^.Coroutine);
+   POCACoroutineResume(CoroutineData^.Coroutine,false);
   finally
    POCAGarbageCollectorLock(Context);
   end;
