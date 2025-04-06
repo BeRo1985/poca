@@ -2314,7 +2314,7 @@ begin
 end;
 {$ifend}
 
-function ReadLine(const aContext:PPOCAContext;const aPrompt:TPOCAUTF8String):TPOCAUTF8String;
+function ReadLine(const aContext:PPOCAContext;const aPrompt:TPOCAUTF8String;out aNull:Boolean):TPOCAUTF8String;
 {$if defined(fpc) and defined(Linux)}
 var s:TPOCAUTF16String;
     t:String;
@@ -2328,15 +2328,18 @@ begin
    p:=ReadLine_readline(nil);
   end;
   if assigned(p) then begin
+   aNull:=false;
    result:=PUCUUTF8Correct(p);
    if length(trim(result))>0 then begin
     ReadLine_add_history(p);
    end;
    ReadLine_free(p);
   end else begin
+   aNull:=true;
    result:='';
   end;
  end else begin
+  aNull:=false;
   s:='';
   if length(aPrompt)>0 then begin
    if assigned(aContext) and assigned(aContext^.UserIOWrite) then begin
@@ -2358,6 +2361,7 @@ end;
 var s:TPOCAUTF16String;
     t:String;
 begin
+ aNull:=false;
  s:='';
  if length(aPrompt)>0 then begin
   if assigned(aContext) and assigned(aContext^.UserIOWrite) then begin
@@ -14001,11 +14005,19 @@ begin
 end;
 
 function POCAConsoleFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Prompt,Line:TPOCAUTF8String;
+    Null:Boolean;
 begin
  if CountArguments>0 then begin
-  result:=POCANewString(Context,ReadLine(Context,POCAGetStringValue(Context,Arguments^[0])));
+  Prompt:=POCAGetStringValue(Context,Arguments^[0]);
  end else begin
-  result:=POCANewString(Context,ReadLine(Context,''));
+  Prompt:='';
+ end;
+ Line:=ReadLine(Context,Prompt,Null);
+ if Null then begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end else begin
+  result:=POCANewString(Context,Line);
  end;
 end;
 
@@ -14551,11 +14563,19 @@ begin
 end;
 
 function POCAGlobalFunctionREADLINE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Prompt,Line:TPOCAUTF8String;
+    Null:Boolean;
 begin
  if CountArguments>0 then begin
-  result:=POCANewString(Context,ReadLine(Context,POCAGetStringValue(Context,Arguments^[0])));
+  Prompt:=POCAGetStringValue(Context,Arguments^[0]);
  end else begin
-  result:=POCANewString(Context,ReadLine(Context,''));
+  Prompt:='';
+ end;
+ Line:=ReadLine(Context,Prompt,Null);
+ if Null then begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end else begin
+  result:=POCANewString(Context,Line);
  end;
 end;
 

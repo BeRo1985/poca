@@ -23,8 +23,11 @@ const REPLCode='print("Welcome to POCA version '+POCAVersion+'.\n");'#13#10+
                'print("Type \".help\" for more information.\n");'#13#10+
                'let expr = "", lineRegExp = /^(.*)\\s*$/, cmdRegEx = /^\s*\.(\w+)\s*(.*)/, currentScope = {};'#13#10+
                'while(1){'#13#10+
-               '  let match, line;'#13#10+
-               '  if(match = lineRegExp.match(line = readLine((expr == "") ? "> " : ". "))){'#13#10+
+               '  let match, line = readLine((expr == "") ? "> " : ". ");'#13#10+
+               '  if(line === null){'#13#10+
+               '    break;'#13#10+
+               '  }'#13#10+
+               '  if(match = lineRegExp.match(line)){'#13#10+
                '    expr ~= match[0][1] ~ "\n";'#13#10+
                '    continue;'#13#10+
                '  }'#13#10+
