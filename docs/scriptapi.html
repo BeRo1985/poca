@@ -534,6 +534,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_coroutine_additional_instance_methods">Coroutine Additional Instance Methods</a>
 <ul class="sectlevel3">
 <li><a href="#_coroutine_resumed">Coroutine.resumed</a></li>
+<li><a href="#_coroutine_data">Coroutine.data</a></li>
 <li><a href="#_coroutine_state">Coroutine.state</a></li>
 <li><a href="#_coroutine_inside">Coroutine.inside</a></li>
 <li><a href="#_coroutine_outside">Coroutine.outside</a></li>
@@ -2643,6 +2644,44 @@ if (isResumed) {
 } else {
   puts("Coroutine has not been resumed yet.");
 }</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_coroutine_data">Coroutine.data</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let data = coroutine.data();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns the data hash associated with the coroutine.
+This is the value passed to the coroutine when it was created. If no data
+is associated with the coroutine, it returns a empty hash. In the
+coroutine function, you can access this data using <code>this</code>.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A hash containing the data associated with the
+coroutine.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let data = coroutine.data();
+puts("Coroutine data: ", String.dump(data));</code></pre>
 </div>
 </div>
 </li>
@@ -13282,7 +13321,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-06 13:39:58 +0200
+Last updated 2025-04-06 15:10:39 +0200
 </div>
 </div>
 </body>

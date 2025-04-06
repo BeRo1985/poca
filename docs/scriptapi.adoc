@@ -1042,6 +1042,31 @@ if (isResumed) {
 
 '''''
 
+==== Coroutine.data
+
+*Usage:*
+[source,js]
+----
+let data = coroutine.data();
+----
+
+* *Description:* Returns the data hash associated with the coroutine. 
+This is the value passed to the coroutine when it was created. If no data
+is associated with the coroutine, it returns a empty hash. In the
+coroutine function, you can access this data using `this`.
+* *Parameters:* None.
+* *Return Value:* A hash containing the data associated with the
+coroutine.
+* *Example:*
++
+[source,js]
+----
+let data = coroutine.data();
+puts("Coroutine data: ", String.dump(data));
+----
+
+'''''
+
 ==== Coroutine.state
 
 *Usage:*

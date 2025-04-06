@@ -13837,6 +13837,23 @@ begin
  end;
 end;
 
+function POCACoroutineFunctionDATA(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var CoroutineData:PPOCACoroutineData;
+begin
+ if POCAGhostGetType(This)=@POCACoroutineGhost then begin
+  CoroutineData:=PPOCACoroutineData(POCAGhostGetPointer(This));
+  if assigned(CoroutineData) then begin
+   result:=CoroutineData^.DataValue;
+  end else begin
+// result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end else begin
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
 function POCACoroutineFunctionSTATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
 begin
@@ -13949,6 +13966,7 @@ end;
 function POCAInitCoroutineHash(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
+ POCAAddNativeFunction(Context,result,'data',POCACoroutineFunctionDATA);
  POCAAddNativeFunction(Context,result,'resume',POCACoroutineFunctionRESUME);
  POCAAddNativeFunction(Context,result,'resumed',POCACoroutineFunctionRESUMED);
  POCAAddNativeFunction(Context,result,'state',POCACoroutineFunctionSTATE);
