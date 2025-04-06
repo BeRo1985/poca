@@ -1,35 +1,22 @@
 const (START, LIMIT) = (1000, 1111);
 
-// As Coroutine functions have no state for themselves,
-// we have to use an alternative to introduce a limit,
-// that we can pass to the coro, if we don't want to
-// pass it on together with the counter in every resume.
+// Coroutines can have instance data, which can be accessed
+// using `.data(), which is a hash you can fill with stuff.
 
-// But if we want to use the outer scoped const in corofun,
-// we'd get a runtime error: Undefined symbol: LIMIT
+let corofun(i) -> {
+  puts(`corofun started with a limit of ${this.limit}!`);
 
-// So we use a closure instead.
+  while (i < this.limit) {
+    puts('corofun state: ' ~ coro.state());
+    puts('corofun alive: ' ~ coro.alive());
+    Coroutine.yield(i += Coroutine.get());
+  }
 
-// UPDATE: Now there's also coro data, but we'll leave this
-//         perfectly working example intact. :)
-
-let corofun = ( (j) => {
- 
-  return (i) => {
-    puts('corofun started!');
-
-    while (i < j) {
-      puts('corofun state: ' ~ coro.state());
-      puts('corofun alive: ' ~ coro.alive());
-      Coroutine.yield(i += Coroutine.get());
-    }
-
-    puts('corofun ended!');
-  };
-
-})(LIMIT);
+  puts('corofun ended!');
+};
 
 var coro = Coroutine.create(corofun, START);
+coro.data().limit = LIMIT;
 
 puts('coro alive: ' ~ coro.alive());               //  true
 puts('coro resumed: ' ~ coro.resumed());          //  false
@@ -71,3 +58,4 @@ coro.resume(); // this resume will terminate the loop
 puts('coro alive: ' ~ coro.alive());               // false
 puts('coro resumed: ' ~ coro.resumed());          //   true
 puts('coro terminated: ' ~ coro.terminated());   //    true
+
