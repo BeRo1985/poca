@@ -2427,7 +2427,9 @@ var p:TPOCAInt32;
  end;
  function ToLower(const w:AnsiChar):AnsiChar;
  begin
-  result:=AnsiChar(UInt8(AnsiChar(LowerCase(w))));
+  if (UInt8(w)>=ord('A')) and (UInt8(w)<=ord('Z')) then begin
+   result:=AnsiChar(UInt8(UInt8(AnsiChar(w))+(ord('a')-ord('A'))));
+  end;
  end;
  procedure SkipWhite;
  begin
@@ -2593,7 +2595,9 @@ var p:TPOCAInt32;
  end;
  function ToLower(const w:AnsiChar):AnsiChar;
  begin
-  result:=AnsiChar(UInt8(AnsiChar(LowerCase(w))));
+  if (UInt8(w)>=ord('A')) and (UInt8(w)<=ord('Z')) then begin
+   result:=AnsiChar(UInt8(UInt8(AnsiChar(w))+(ord('a')-ord('A'))));
+  end;
  end;
  procedure SkipWhite;
  begin
@@ -12678,9 +12682,9 @@ begin
 
    repeat
 
-    ListItem:=POCANewHash(Context);    
+    ListItem:=POCANewHash(Context);
     POCAHashSetString(Context,ListItem,'name',POCANewString(Context,FindData.Name));
-    POCAHashSetString(Context,ListItem,'datetime',POCANewNumber(Context,{$ifdef fpc}FindData.TimeStampUTC{$else}LocalTimeToUniversal(FindData.TimeStamp){$endif}));
+    POCAHashSetString(Context,ListItem,'datetime',POCANewNumber(Context,{$ifdef fpc}FindData.TimeStampUTC{$else}DateTimeFromLocalTimeToUniversalTime(FindData.TimeStamp){$endif}));
     POCAHashSetString(Context,ListItem,'size',POCANewNumber(Context,FindData.Size));
     if (FindData.Attr and faDirectory)<>0 then begin
      POCAHashSetString(Context,ListItem,'type',POCANewString(Context,'directory'));
@@ -12936,7 +12940,7 @@ begin
   result.CastedUInt64:=POCAValueNullCastedUInt64; 
  end;
 end; 
-{$endif}
+{$ifend}
 
 function POCAPathFunctionSTAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 {$if defined(fpc) and defined(Unix)}
@@ -12979,9 +12983,9 @@ begin
   result:=POCANewHash(Context);
   if FindFirst(Path,faAnyFile,StatData)=0 then begin
    POCAHashSetString(Context,result,'size',POCANewNumber(Context,StatData.Size));
-   POCAHashSetString(Context,result,'mtime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}LocalTimeToUniversal(StatData.TimeStamp){$endif}));
-   POCAHashSetString(Context,result,'ctime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}LocalTimeToUniversal(StatData.TimeStamp){$endif}));
-   POCAHashSetString(Context,result,'atime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}LocalTimeToUniversal(StatData.TimeStamp){$endif}));
+   POCAHashSetString(Context,result,'mtime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}DateTimeFromLocalTimeToUniversalTime(StatData.TimeStamp){$endif}));
+   POCAHashSetString(Context,result,'ctime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}DateTimeFromLocalTimeToUniversalTime(StatData.TimeStamp){$endif}));
+   POCAHashSetString(Context,result,'atime',POCANewNumber(Context,{$ifdef fpc}StatData.TimeStampUTC{$else}DateTimeFromLocalTimeToUniversalTime(StatData.TimeStamp){$endif}));
    if (StatData.Attr and faDirectory)<>0 then begin
     POCAHashSetString(Context,result,'type',POCANewString(Context,'directory'));
    end else begin
@@ -12995,7 +12999,7 @@ begin
   result.CastedUInt64:=POCAValueNullCastedUInt64; 
  end;
 end;
-{$endif}
+{$ifend}
 
 function POCAPathFunctionISDIR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Path:TPOCARawByteString;
@@ -13052,7 +13056,7 @@ begin
   result.CastedUInt64:=POCAValueNullCastedUInt64; 
  end;
 end;
-{$endif}
+{$ifend}
 
 function POCAPathFunctionRESOLVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 {$if defined(fpc) and defined(Unix)}
@@ -13085,7 +13089,7 @@ begin
   result.CastedUInt64:=POCAValueNullCastedUInt64; 
  end;
 end;
-{$endif}
+{$ifend}
  
 function POCAPathFunctionMKDIR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Path:TPOCARawByteString;
@@ -14495,7 +14499,7 @@ begin
  end else begin
   Format:='yyyy-mm-dd hh:nn:ss.zzz';
  end;
- result:=POCANewString(Context,FormatDateTime(Format,DateTime,[]));
+ result:=POCANewString(Context,FormatDateTime(Format,DateTime));
 end;
 
 function POCADateTimeFunctionPARSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
