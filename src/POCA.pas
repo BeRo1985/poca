@@ -3306,14 +3306,14 @@ begin
  end;
 end;
 
-{$ifdef unix}
-{$define UseThreadsForCoroutines}
-{$else}
+{$ifdef Wimdows}
 {$undef UseThreadsForCoroutines}
+{$else}
+{$define UseThreadsForCoroutines}
 {$endif}
 
-{$ifndef UseThreadsForCoroutines}
-{$ifdef windows}
+{$if not defined(UseThreadsForCoroutines)}
+{$if defined(Windows)}
 function CreateFiber(dwStackSize:TPOCAUInt32;lpStartAddress,lpParameter:TPOCAPointer):TPOCAPointer; stdcall; external 'kernel32.dll' name 'CreateFiber';
 procedure DeleteFiber(lpFiber:TPOCAPointer); stdcall; external 'kernel32.dll' name 'DeleteFiber';
 procedure SwitchToFiber(lpFiber:TPOCAPointer); stdcall; external 'kernel32.dll' name 'SwitchToFiber';
@@ -3342,8 +3342,7 @@ asm
 {$endif}
 {$endif}
 end;
-{$else}
-{$ifdef cpu386}
+{$elseif defined(cpu386)}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
      TPOCACoroutineContextJmpBuf=record
       RegEBX,RegESI,RegEDI,RegESP,RegEBP,RegEIP:TPOCAUInt32;
@@ -3422,8 +3421,7 @@ procedure POCACoroutineContextGet(Context:PPOCACoroutineContext);
 begin
  POCACoroutineContextSetJmp(@Context^.JmpBuf);
 end;
-{$else}
-{$ifdef cpuamd64}
+{$elseif defined(cpuamd64)}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
      TPOCACoroutineContextJmpBuf=record
       RegRBX{$ifdef win64},RegRCX{$endif},RegRBP,RegR12,RegR13,RegR14,RegR15,RegRSP,RegRIP{$ifdef win64},RegRSI,RegRDI{$else},RegRDI{$endif}:TPOCAUInt64;
@@ -3554,10 +3552,8 @@ begin
 end;
 {$else}
 {$define UseThreadsForCoroutines}
-{$endif}
-{$endif}
-{$endif}
-{$endif}
+{$ifend}
+{$ifend}
 
 procedure POCACoroutineYield(Coroutine:PPOCACoroutine); forward;
 
