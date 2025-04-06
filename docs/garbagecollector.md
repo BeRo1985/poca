@@ -12,7 +12,7 @@ The GC system is structured as a state machine with well‑defined phases (e.g.,
 
 **2. Marking and List Management**
 
-A significant part of the GC functionality relies on the efficient management of various object lists (gray, black, persistent, etc.) using a custom linked list implementation. In the current design, the low‑level list operations have been fully encapsulated as methods within the `TPOCAGarbageCollectorLinkedList` record. Methods such as `Initialize`, `Push`, `Pop`, and `PopFromFront` now perform these fundamental operations, while additional methods like `TakeOver`, `TakeOverAppend`, `TakeOverAppendMark`, and the class method `Swap` are used to move list segments between lists during the marking phases. This encapsulation not only improves code organization but also integrates list management seamlessly into the overall marking flow.
+A significant part of the GC functionality relies on the efficient management of various object lists (white, gray, black, persistent, etc.) using a custom linked list implementation. In the current design, the low‑level list operations have been fully encapsulated as methods within the `TPOCAGarbageCollectorLinkedList` record. Methods such as `Initialize`, `Push`, `Pop`, and `PopFromFront` now perform these fundamental operations, while additional methods like `TakeOver`, `TakeOverAppend`, `TakeOverAppendMark`, and the class method `Swap` are used to move list segments between lists during the marking phases. This encapsulation not only improves code organization but also integrates list management seamlessly into the overall marking flow.
 
 ──────────────────────────────
 
