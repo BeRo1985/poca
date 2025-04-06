@@ -2156,7 +2156,7 @@ end;
 {$endif}
 {$warnings on}
 
-function GetDateTimeUTCOffset:TDateTime;
+function GetDateTimeUTCOffset(const aWhen:TDateTime):TDateTime;
 {$if defined(fpc) and declared(GetLocalTimeOffset)}
 begin
  result:=GetLocalTimeOffset/1440.0;
@@ -2164,7 +2164,7 @@ end;
 {$elseif defined(DelphiXE2AndUp) and declared(TTimeZone)}
 begin
  result:=0.0;
- result:=result+TTimeZone.Local.GetUtcOffset(Now);
+ result:=result+TTimeZone.Local.GetUtcOffset(aWhen);
 end;
 {$else}
 var SystemTimes:array[0..1] of TSystemTime;
@@ -2193,7 +2193,7 @@ begin
 end;
 {$else}
 begin
- result:=aDateTime+GetDateTimeUTCOffset;
+ result:=aDateTime+GetDateTimeUTCOffset(aDataTime);
 end;
 {$ifend}
 
@@ -2208,7 +2208,7 @@ begin
 end;
 {$else}
 begin
- result:=aDateTime-GetDateTimeUTCOffset;
+ result:=aDateTime-GetDateTimeUTCOffset(aDateTime);
 end;
 {$ifend}
 
@@ -2241,6 +2241,533 @@ begin
 {$ifend}
 end;
 {$ifend}
+
+function DateTimeFromUnixTime(const aUnixTime:TPOCAInt64):TDateTime;
+{$if declared(UnixToDateTime)}
+begin
+ result:=UnixToDateTime(aUnixTime);
+end;
+{$else}
+begin
+ result:=(TDateTime(aUnixTime)/86400.0)+25569.0;
+end;
+{$ifend}
+
+function DateTimeToUnixTime(const aDateTime:TDateTime):TPOCAInt64;
+{$if declared(DateTimeToUnix)}
+begin
+ result:=DateTimeToUnix(aDateTime);
+end;
+{$else}
+begin
+ result:=Trunc((aDateTime-25569.0)*86400.0);
+end;
+{$ifend}
+
+const POCAmsPerMinute=60000.0/86400.0;
+      POCAmsPerDay=86400000.0/86400.0;
+      POCAmsPerHour=3600000.0/86400.0;
+      POCAmsPerSecond=1000.0/86400.0;
+      POCAmsPerMillisecond=1.0/86400.0;
+
+      ParserMonthNames:array[0..11] of widestring=('jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec');
+      ParserDayNames:array[0..6] of widestring=('sun','mon','tue','wed','thu','fri','sat');
+
+function MakeDate(Year,Month,Date:TPOCAInt32):TDateTime;
+begin
+ result:=EncodeDate(Year,Month,Date);
+end;
+
+function MakeTime(Hour,Minute,Second,Millisecond:TPOCAInt32):TDateTime;
+begin
+ result:=EncodeTime(Hour,Minute,Second,Millisecond);
+end;
+
+function TimeClip(const DateTime:TDateTime):TDateTime;
+begin
+ result:=DateTime;
+end;
+
+function ParseISOTime(s:TPOCARawByteString):TDateTime;
+ function IsDigit(const w:AnsiChar):boolean;
+ begin
+  result:=(UInt8(w)>=ord('0')) and (UInt8(w)<=ord('9'));
+ end;
+ function ParseDay(const ss:TPOCARawByteString):TDateTime;
+ var Offset:TPOCAInt32;
+ begin
+  if (length(ss)=10) and (IsDigit(ss[1]) and IsDigit(ss[2]) and IsDigit(ss[3]) and IsDigit(ss[4]) and (ss[5]='-') and IsDigit(ss[6]) and IsDigit(ss[7]) and (ss[8]='-') and IsDigit(ss[9]) and IsDigit(ss[10])) then begin
+   Offset:=1;
+  end else if (length(ss)=8) and (IsDigit(ss[1]) and IsDigit(ss[2]) and IsDigit(ss[3]) and IsDigit(ss[4]) and IsDigit(ss[5]) and IsDigit(ss[6]) and IsDigit(ss[7]) and IsDigit(ss[8])) then begin
+   Offset:=0;
+  end else begin
+   result:=double(pointer(@POCADoubleNaN)^);
+   exit;
+  end;
+  result:=MakeDate(StrToIntDef(copy(ss,1,4),0),StrToIntDef(copy(ss,5+(1*Offset),2),0),StrToIntDef(copy(ss,7+(2*Offset),2),0));
+ end;
+ function ParseTime(const ss:TPOCARawByteString):TDateTime;
+ var s,ms:TPOCARawByteString;
+     i,Offset,Hours,Minutes,Seconds,Milliseconds:TPOCAInt32;
+     WithSeconds:boolean;
+ begin
+  i:=Pos(',',ss);
+  if i=0 then begin
+   i:=Pos('.',ss);
+  end;
+  if i=0 then begin
+   s:=ss;
+   ms:='';
+  end else begin
+   s:=copy(ss,1,i-1);
+   ms:=copy(ms,i+1,(length(ss)-i)+1);
+  end;
+  if (length(s)=8) and (IsDigit(s[1]) and IsDigit(s[2]) and (s[3]=':') and IsDigit(s[4]) and IsDigit(s[5]) and (s[6]=':') and IsDigit(s[7]) and IsDigit(s[8])) then begin
+   Offset:=1;
+   WithSeconds:=true;
+  end else if (length(s)=6) and (IsDigit(s[1]) and IsDigit(s[2]) and IsDigit(s[3]) and IsDigit(s[4]) and IsDigit(s[5]) and IsDigit(s[6])) then begin
+   Offset:=0;
+   WithSeconds:=true;
+  end else if (length(s)=5) and (IsDigit(s[1]) and IsDigit(s[2]) and (s[3]=':') and IsDigit(s[4]) and IsDigit(s[5])) then begin
+   Offset:=1;
+   WithSeconds:=false;
+  end else if (length(s)=4) and (IsDigit(s[1]) and IsDigit(s[2]) and IsDigit(s[3]) and IsDigit(s[4])) then begin
+   Offset:=0;
+   WithSeconds:=false;
+  end else begin
+   result:=double(pointer(@POCADoubleNaN)^);
+   exit;
+  end;
+  Hours:=StrToIntDef(copy(s,1,2),100);
+  Minutes:=StrToIntDef(copy(s,3+(1*Offset),2),100);
+  if WithSeconds then begin
+   Seconds:=StrToIntDef(copy(s,5+(2*Offset),2),100);
+  end else begin
+   Seconds:=0;
+   if length(ms)>0 then begin
+    result:=double(pointer(@POCADoubleNaN)^);
+    exit;
+   end;
+  end;
+  case length(ms) of
+   0:begin
+    Milliseconds:=0;
+   end;
+   3:begin
+    Milliseconds:=StrToIntDef(ms,10000);
+   end;
+   else begin
+    result:=double(pointer(@POCADoubleNaN)^);
+    exit;
+   end;
+  end;
+  result:=MakeTime(Hours,Minutes,Seconds,Milliseconds);
+ end;
+var i,j,k:TPOCAInt32;
+    sz:TPOCARawByteString;
+    Delta:TDateTime;
+begin
+ i:=Pos('T',s);
+ if i=0 then begin
+  i:=Pos(' ',s);
+ end;
+ if i>0 then begin
+  j:=Pos('Z',s);
+  if j=0 then begin
+   j:=length(s)+1;
+   for k:=length(s) downto i+1 do begin
+    if (s[k]='-') or (s[k]='+') then begin
+     j:=k;
+     break;
+    end;
+   end;
+  end;
+  sz:=copy(s,j,(length(s)-j)+1);
+  s:=copy(s,1,j-1);
+  Delta:=0;
+  if (length(sz)=6) and ((sz[1]='-') or (sz[1]='+')) and IsDigit(sz[2]) and IsDigit(sz[3]) and (sz[4]=':') and IsDigit(sz[5]) and IsDigit(sz[6]) then begin
+   i:=StrToIntDef(copy(sz,2,2),-1);
+   j:=StrToIntDef(copy(sz,5,2),-1);
+   if ((i>=0) and (i<=24)) and ((j>=0) and (j<=60)) then begin
+    Delta:=(i*60)+j;
+    if sz[1]='-' then begin
+     Delta:=-Delta;
+    end;
+   end else begin
+    result:=double(pointer(@POCADoubleNaN)^);
+    exit;
+   end;
+  end else if (length(sz)>0) and (sz<>'Z') then begin
+   result:=double(pointer(@POCADoubleNaN)^);
+   exit;
+  end;
+  result:=TimeClip((ParseDay(copy(s,1,i-1))+ParseTime(copy(s,i+1,(length(s)-i)+1)))-(Delta*POCAmsPerMinute));
+ end else begin
+  result:=double(pointer(@POCADoubleNaN)^);
+ end;
+end;
+
+function ParseTime(s:TPOCARawByteString):TDateTime;
+var p:TPOCAInt32;
+ function IsWhite(const w:AnsiChar):boolean;
+ begin
+  result:=UInt8(w)<=32;
+ end;
+ function IsLetter(const w:AnsiChar):boolean;
+ begin
+  result:=((UInt8(w)>=ord('a')) and (UInt8(w)<=ord('z'))) or ((UInt8(w)>=ord('Z')) and (UInt8(w)<=ord('Z')));
+ end;
+ function IsDigit(const w:AnsiChar):boolean;
+ begin
+  result:=(UInt8(w)>=ord('0')) and (UInt8(w)<=ord('9'));
+ end;
+ function ToLower(const w:AnsiChar):AnsiChar;
+ begin
+  result:=AnsiChar(UInt8(AnsiChar(LowerCase(w))));
+ end;
+ procedure SkipWhite;
+ begin
+  while p<length(s) do begin
+   if IsWhite(s[p]) then begin
+    inc(p);
+   end else begin
+    break;
+   end;
+  end;
+ end;
+var i,d,m,y,hr,min,sec,ms,wd:TPOCAInt32;
+    t:TPOCARawByteString;
+    yneg:boolean;
+begin
+ result:=double(pointer(@POCADoubleNaN)^);
+
+ p:=1;
+
+ SkipWhite;
+
+ if ((p+2)<=length(s)) and (IsLetter(s[p]) and IsLetter(s[p+1]) and IsLetter(s[p+2])) then begin
+  t:=Lowercase(copy(s,p,3));
+  for wd:=low(ParserDayNames) to high(ParserDayNames) do begin
+   if t=ParserDayNames[wd] then begin
+    inc(p,3);
+    if (p<=length(s)) and (s[p]=',') then begin
+     inc(p);
+    end;
+    SkipWhite;
+    break;
+   end;
+  end;
+ end;
+
+ if (p<=length(s)) and IsDigit(s[p]) then begin
+  d:=0;
+  while (p<=length(s)) and IsDigit(s[p]) do begin
+   d:=(d*10)+(UInt8(AnsiChar(s[p]))-ord('0'));
+   inc(p);
+  end;
+  if not ((p<=length(s)) and IsWhite(s[p])) then begin
+   exit;
+  end;
+  SkipWhite;
+  if not (((p+2)<=length(s)) and (IsLetter(s[p]) and IsLetter(s[p+1]) and IsLetter(s[p+2]))) then begin
+   exit;
+  end;
+  t:=Lowercase(copy(s,p,3));
+  inc(p,3);
+  m:=0;
+  for i:=low(ParserMonthNames) to high(ParserMonthNames) do begin
+   if t=ParserMonthNames[i] then begin
+    m:=i;
+    break;
+   end;
+  end;
+ end else begin
+  if not (((p+2)<=length(s)) and (IsLetter(s[p]) and IsLetter(s[p+1]) and IsLetter(s[p+2]))) then begin
+   exit;
+  end;
+  t:=Lowercase(copy(s,p,3));
+  inc(p,3);
+  m:=0;
+  for i:=low(ParserMonthNames) to high(ParserMonthNames) do begin
+   if t=ParserMonthNames[i] then begin
+    m:=i;
+    break;
+   end;
+  end;
+  if not ((p<=length(s)) and IsWhite(s[p])) then begin
+   exit;
+  end;
+  SkipWhite;
+  d:=0;
+  while (p<=length(s)) and IsDigit(s[p]) do begin
+   d:=(d*10)+(UInt8(AnsiChar(s[p]))-ord('0'));
+   inc(p);
+  end;
+ end;
+ if (m<0) or ((d<1) or (d>31)) then begin
+  exit;
+ end;
+
+ if not ((p<=length(s)) and IsWhite(s[p])) then begin
+  exit;
+ end;
+ SkipWhite;
+
+ yneg:=(p<=length(s)) and (s[p]='-');
+ if yneg then begin
+  inc(p);
+ end;
+ if not ((p<=length(s)) and IsDigit(s[p])) then begin
+  exit;
+ end;
+ y:=0;
+ while (p<=length(s)) and IsDigit(s[p]) do begin
+  y:=(y*10)+(UInt8(AnsiChar(s[p]))-ord('0'));
+  inc(p);
+ end;
+ if yneg then begin
+  y:=-y;
+ end;
+
+ hr:=0;
+ min:=0;
+ sec:=0;
+ ms:=0;
+ if (p<=length(s)) and IsWhite(s[p]) then begin
+  SkipWhite;
+  if ((p+4)<=length(s)) and (IsDigit(s[p]) and IsDigit(s[p+1]) and (s[p+2]=':') and IsDigit(s[p+3]) and IsDigit(s[p+4])) then begin
+   hr:=((UInt8(AnsiChar(s[p]))-ord('0'))*10)+(UInt8(AnsiChar(s[p+1]))-ord('0'));
+   min:=((UInt8(AnsiChar(s[p+3]))-ord('0'))*10)+(UInt8(AnsiChar(s[p+4]))-ord('0'));
+   inc(p,5);
+   if ((p+2)<=length(s)) and ((s[p]=':') and IsDigit(s[p+1]) and IsDigit(s[p+2])) then begin
+    sec:=((UInt8(AnsiChar(s[p+1]))-ord('0'))*10)+(UInt8(AnsiChar(s[p+2]))-ord('0'));
+    inc(p,3);
+   end;
+   if ((p+3)<=length(s)) and (((s[p]=':') or (s[p]='.')) and IsDigit(s[p+1]) and IsDigit(s[p+2]) and IsDigit(s[p+3])) then begin
+    ms:=((UInt8(AnsiChar(s[p+1]))-ord('0'))*100)+((UInt8(AnsiChar(s[p+2]))-ord('0'))*10)+(UInt8(AnsiChar(s[p+3]))-ord('0'));
+    inc(p,4);
+   end;
+  end;
+ end;
+ if ((hr<0) or (hr>=24)) or ((min<0) or (min>=60)) or ((sec<0) or (sec>=60)) or ((ms<0) or (ms>=1000)) then begin
+  exit;
+ end;
+
+ result:=(MakeDate(y,m,d)+MakeTime(hr,min,sec,ms));
+
+ SkipWhite;
+ if ((p+2)<=length(s)) and (((s[p]='G') and (s[p+1]='M') and (s[p+2]='T')) or ((s[p]='U') and (s[p+1]='T') and (s[p+2]='C'))) then begin
+  inc(p,3);
+  if ((p+4)<=length(s)) and (((s[p]='-') or (s[p]='+')) and IsDigit(s[p+1]) and IsDigit(s[p+2]) and IsDigit(s[p+3]) and IsDigit(s[p+4])) then begin
+   i:=((((UInt8(AnsiChar(s[p+1]))-ord('0'))*10)+((UInt8(AnsiChar(s[p+2]))-ord('0'))))*60)+(((UInt8(AnsiChar(s[p+3]))-ord('0'))*10)+(UInt8(AnsiChar(s[p+4]))-ord('0')));
+   if s[p]='-' then begin
+    i:=-i;
+   end;
+   result:=result-(POCAmsPerMinute*i);
+  end;
+ end else begin
+  result:=DateTimeFromLocalTimeToUniversalTime(MakeDate(y,m,d)+MakeTime(hr,min,sec,ms));
+ end;
+
+ result:=TimeClip(result);
+
+end;
+
+function ParseNetscapeTime(s:TPOCARawByteString):TDateTime;
+var p:TPOCAInt32;
+ function IsWhite(const w:AnsiChar):boolean;
+ begin
+  result:=UInt8(w)<=32;
+ end;
+ function IsLetter(const w:AnsiChar):boolean;
+ begin
+  result:=((UInt8(w)>=ord('a')) and (UInt8(w)<=ord('z'))) or ((UInt8(w)>=ord('Z')) and (UInt8(w)<=ord('Z')));
+ end;
+ function IsDigit(const w:AnsiChar):boolean;
+ begin
+  result:=(UInt8(w)>=ord('0')) and (UInt8(w)<=ord('9'));
+ end;
+ function ToLower(const w:AnsiChar):AnsiChar;
+ begin
+  result:=AnsiChar(UInt8(AnsiChar(LowerCase(w))));
+ end;
+ procedure SkipWhite;
+ begin
+  while p<length(s) do begin
+   if IsWhite(s[p]) then begin
+    inc(p);
+   end else begin
+    break;
+   end;
+  end;
+ end;
+var i,j,d,m,y,hr,min,sec,ms:TPOCAInt32;
+    neg:boolean;
+    n:array[0..2] of TPOCAInt32;
+begin
+ result:=double(pointer(@POCADoubleNaN)^);
+
+ p:=1;
+
+ SkipWhite;
+
+ for j:=0 to 2 do begin
+  if j<>0 then begin
+   SkipWhite;
+   if (p<=length(s)) and (s[p]='/') then begin
+    inc(p);
+   end else begin
+    exit;
+   end;
+   SkipWhite;
+  end;
+  n[j]:=0;
+  neg:=(p<=length(s)) and (s[p]='-');
+  if neg then begin
+   inc(p);
+  end;
+  if (p<=length(s)) and IsDigit(s[p]) then begin
+   i:=0;
+   while (p<=length(s)) and IsDigit(s[p]) do begin
+    i:=(i*10)+(UInt8(AnsiChar(s[p]))-ord('0'));
+    inc(p);
+   end;
+   if neg then begin
+    i:=-i;
+   end;
+   n[j]:=i;
+  end else begin
+   exit;
+  end;
+ end;
+ if (n[0]>=70) and (n[1]>=70) then begin
+  exit;
+ end;
+ if n[0]>=70 then begin
+  y:=n[0]+1900;
+  m:=n[1];
+  d:=n[2];
+ end else begin
+  m:=n[0];
+  d:=n[1];
+  y:=n[2];
+  if y<100 then begin
+   y:=n[0]+1900;
+  end;
+ end;
+ if (m<0) or ((d<1) or (d>31)) then begin
+  exit;
+ end;
+
+ hr:=0;
+ min:=0;
+ sec:=0;
+ ms:=0;
+
+ if not ((p<=length(s)) and IsWhite(s[p])) then begin
+  SkipWhite;
+
+  if (p<=length(s)) and IsDigit(s[p]) then begin
+   i:=0;
+   while (p<=length(s)) and IsDigit(s[p]) do begin
+    i:=(i*10)+(UInt8(AnsiChar(s[p]))-ord('0'));
+    inc(p);
+   end;
+   hr:=i;
+   SkipWhite;
+   if (p<=length(s)) and (s[p]=':') then begin
+    inc(p);
+    SkipWhite;
+
+    if (p<=length(s)) and IsDigit(s[p]) then begin
+     i:=0;
+     while (p<=length(s)) and IsDigit(s[p]) do begin
+      i:=(i*10)+(UInt8(AnsiChar(s[p]))-ord('0'));
+      inc(p);
+     end;
+     min:=i;
+     SkipWhite;
+     if (p<=length(s)) and (s[p]=':') then begin
+      inc(p);
+      SkipWhite;
+
+      if (p<=length(s)) and IsDigit(s[p]) then begin
+       i:=0;
+       while (p<=length(s)) and IsDigit(s[p]) do begin
+        i:=(i*10)+(UInt8(AnsiChar(s[p]))-ord('0'));
+        inc(p);
+       end;
+       sec:=i;
+       SkipWhite;
+       if (p<=length(s)) and ((s[p]=':') or (s[p]='.')) then begin
+        inc(p);
+        SkipWhite;
+        if (p<=length(s)) and IsDigit(s[p]) then begin
+         i:=0;
+         while (p<=length(s)) and IsDigit(s[p]) do begin
+          i:=(i*10)+(UInt8(AnsiChar(s[p]))-ord('0'));
+          inc(p);
+         end;
+         ms:=i;
+         SkipWhite;
+        end;
+       end;
+      end else begin
+       exit;
+      end;
+
+     end;
+
+     if ((p+1)<=length(s)) and (ToLower(s[p+1])='m') then begin
+      if ToLower(s[p])='a' then begin
+       if (hr<1) or (hr>12) then begin
+        exit;
+       end;
+       hr:=(hr mod 12)+12;
+      end else if ToLower(s[p])='p' then begin
+       if (hr<1) or (hr>12) then begin
+        exit;
+       end;
+       hr:=hr mod 12;
+      end else begin
+       exit;
+      end;
+      inc(p,2);
+      SkipWhite;
+     end;
+
+    end else begin
+     exit;
+    end;
+
+   end;
+  end;
+
+ end;
+
+ if ((hr<0) or (hr>=24)) or ((min<0) or (min>=60)) or ((sec<0) or (sec>=60)) or ((ms<0) or (ms>=1000)) then begin
+  exit;
+ end;
+
+ result:=DateTimeFromLocalTimeToUniversalTime(MakeDate(y,m,d)+MakeTime(hr,min,sec,ms));
+
+end;
+
+function ParseDateTime(const aDateTime:TPOCARawByteString):TDateTime;
+begin
+ result:=ParseTime(aDateTime);
+ if IsNaN(result) then begin
+  result:=ParseISOTime(aDateTime);
+  if IsNaN(result) then begin
+   result:=ParseNetscapeTime(aDateTime);
+{$if declared(StrToDateTimeDef)}
+   if IsNaN(result) then begin
+    result:=StrToDateTimeDef(aDateTime,NaN);
+   end;
+{$ifend}
+  end;
+ end;
+end;
 
 function PosEx(const SubStr,s:TPOCARawByteString;Offset:TPOCAInt32=1):TPOCAInt32;
 var i,x,LenSubStr:TPOCAInt32;
@@ -13813,12 +14340,96 @@ begin
  result.Num:=POCAGetNumberValue(Context,Arguments^[0])*86400000;
 end;
 
+function POCADateTimeFunctionUTCOFFSET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var DateTime:TDateTime;
+begin
+ if CountArguments>0 then begin
+  DateTime:=POCAGetNumberValue(Context,Arguments^[0]);
+ end else begin
+  DateTime:=SysUtils.Now;
+ end;
+ result.Num:=GetDateTimeUTCOffset(DateTime);
+end;
+
+function POCADateTimeFunctionTOLOCAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "DateTime.toLocal"');
+ end;
+ result.Num:=DateTimeFromUniversalTimeToLocalTime(POCAGetNumberValue(Context,Arguments^[0]));
+end;
+
+function POCADateTimeFunctionTOUNIVERSAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "DateTime.toUniversal"');
+ end;
+ result.Num:=DateTimeFromLocalTimeToUniversalTime(POCAGetNumberValue(Context,Arguments^[0]));
+end;
+
+function POCADateTimeFunctionFROMUNIXTIME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "DateTime.fromUnixTime"');
+ end;
+ result.Num:=DateTimeFromUnixTime(trunc(POCAGetNumberValue(Context,Arguments^[0])));
+end;
+
+function POCADateTimeFunctionTOUNIXTIME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "DateTime.toUnixTime"');
+ end;
+ result.Num:=DateTimeToUnixTime(POCAGetNumberValue(Context,Arguments^[0]));
+end;
+
+function POCADateTimeFunctionTOSTRING(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var DateTime:TDateTime;
+    Format:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  DateTime:=POCAGetNumberValue(Context,Arguments^[0]);
+ end else begin
+  DateTime:=SysUtils.Now;
+ end;
+ if CountArguments>1 then begin
+  Format:=POCAGetStringValue(Context,Arguments^[1]);
+ end else begin
+  Format:='yyyy-mm-dd hh:nn:ss.zzz';
+ end;
+ result:=POCANewString(Context,FormatDateTime(Format,DateTime,[]));
+end;
+
+function POCADateTimeFunctionPARSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var DateTime:TPOCARawByteString;
+//  Format:TPOCARawByteString;
+begin
+ if CountArguments>0 then begin
+  DateTime:=POCAGetStringValue(Context,Arguments^[0]);
+ end else begin
+  DateTime:='';
+ end;
+{if CountArguments>1 then begin
+  Format:=POCAGetStringValue(Context,Arguments^[1]);
+ end else begin
+  Format:='yyyy-mm-dd hh:nn:ss.zzz';
+ end;//}
+ result.Num:=ParseDateTime(DateTime);
+end;
+
 function POCAInitDateTimeNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'now',POCADateTimeFunctionNOW);
  POCAAddNativeFunction(Context,result,'nowUTC',POCADateTimeFunctionNOWUTC);
  POCAAddNativeFunction(Context,result,'milliseconds',POCADateTimeFunctionMILLISECONDS);
+ POCAAddNativeFunction(Context,result,'utcOffset',POCADateTimeFunctionUTCOFFSET);
+ POCAAddNativeFunction(Context,result,'toLocal',POCADateTimeFunctionTOLOCAL);
+ POCAAddNativeFunction(Context,result,'toUniversal',POCADateTimeFunctionTOUNIVERSAL);
+ POCAAddNativeFunction(Context,result,'fromUnixTime',POCADateTimeFunctionFROMUNIXTIME);
+ POCAAddNativeFunction(Context,result,'toUnixTime',POCADateTimeFunctionTOUNIXTIME);
+ POCAAddNativeFunction(Context,result,'toString',POCADateTimeFunctionTOSTRING);
+ POCAAddNativeFunction(Context,result,'parse',POCADateTimeFunctionPARSE);
 end;
 
 function POCAArrayFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;

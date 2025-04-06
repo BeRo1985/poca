@@ -553,6 +553,13 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_datetime_now">DateTime.now</a></li>
 <li><a href="#_datetime_nowutc">DateTime.nowUTC</a></li>
 <li><a href="#_datetime_milliseconds">DateTime.milliseconds</a></li>
+<li><a href="#_datetime_utcoffset">DateTime.utcOffset</a></li>
+<li><a href="#_datetime_tolocal">DateTime.toLocal</a></li>
+<li><a href="#_datetime_touniversal">DateTime.toUniversal</a></li>
+<li><a href="#_datetime_fromunixtime">DateTime.fromUnixTime</a></li>
+<li><a href="#_datetime_tounixtime">DateTime.toUnixTime</a></li>
+<li><a href="#_datetime_tostring">DateTime.toString</a></li>
+<li><a href="#_datetime_parse">DateTime.parse</a></li>
 </ul>
 </li>
 <li><a href="#_summary_5">Summary</a></li>
@@ -3016,7 +3023,7 @@ puts("Current UTC time: " + utcNow);</code></pre>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> Converts a TDateTime value (representing days) into
+<p><strong>Description:</strong> Converts a date time value (representing days) into
 milliseconds. Since one day equals 86,400,000 milliseconds, the function
 multiplies the input value by 86,400,000.</p>
 </li>
@@ -3025,7 +3032,7 @@ multiplies the input value by 86,400,000.</p>
 <div class="ulist">
 <ul>
 <li>
-<p><code>timeValue</code> (number): A TDateTime value (in days) to be converted
+<p><code>timeValue</code> (number): A date time value (in days) to be converted
 to milliseconds.</p>
 </li>
 </ul>
@@ -3042,6 +3049,339 @@ milliseconds.</p>
 <pre class="highlight"><code class="language-js" data-lang="js">// Convert current time (in days) to milliseconds.
 let ms = DateTime.milliseconds(DateTime.now());
 puts("Milliseconds since base date: " + ms);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_datetime_utcoffset">DateTime.utcOffset</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let offset = DateTime.utcOffset(dateTimeValue);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns the UTC offset in hours for the current local
+time zone. This is useful for converting between local and UTC times.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>dateTimeValue</code> (number, optional): A TDateTime value (in days)
+for which to calculate the UTC offset. If omitted, the current
+date/time is used.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value representing the UTC offset.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Get the UTC offset for the current local time.
+let offset = DateTime.utcOffset(DateTime.now());
+puts("UTC offset: " + offset);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_datetime_tolocal">DateTime.toLocal</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let localTime = DateTime.toLocal(dateTimeValue);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Converts a date time value (in days) to the local time
+format. This is useful for displaying date/time values in the local
+time zone.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>dateTimeValue</code> (number): A date time value (in days) to be
+converted to local time.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value representing the local time in
+date time format.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Convert a UTC date/time value to local time.
+let utcTime = DateTime.nowUTC();
+let localTime = DateTime.toLocal(utcTime);
+puts("Local time: " + localTime);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_datetime_touniversal">DateTime.toUniversal</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let utcTime = DateTime.toUniversal(dateTimeValue);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Converts a date time value (in days) to the UTC time
+format. This is useful for displaying date/time values in UTC.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>dateTimeValue</code> (number): A date time value (in days) to be
+converted to UTC time.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value representing the UTC time in date
+time format.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Convert a local date/time value to UTC.
+let localTime = DateTime.now();
+let utcTime = DateTime.toUniversal(localTime);
+puts("UTC time: " + utcTime);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_datetime_fromunixtime">DateTime.fromUnixTime</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let dateTimeValue = DateTime.fromUnixTime(unixTime);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Converts a Unix timestamp (seconds since the epoch)
+to a date time value (in days). The Unix timestamp is typically
+represented as a 32-bit integer, and this function converts it to
+a date time value.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>unixTime</code> (number): A Unix timestamp (seconds since the epoch)</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value representing the date time in
+date time format.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Convert a Unix timestamp to a date/time value.
+let unixTime = 1633072800; // Example Unix timestamp
+let dateTimeValue = DateTime.fromUnixTime(unixTime);
+puts("Date/time value: ", dateTimeValue);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_datetime_tounixtime">DateTime.toUnixTime</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let unixTime = DateTime.toUnixTime(dateTimeValue);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Converts a date time value (in days) to a Unix
+timestamp (seconds since the epoch). This is useful for
+interoperating with systems that use Unix timestamps.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>dateTimeValue</code> (number): A date time value (in days) to be
+converted to a Unix timestamp.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value representing the Unix timestamp.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Convert a date/time value to a Unix timestamp.
+let dateTimeValue = DateTime.now();
+let unixTime = DateTime.toUnixTime(dateTimeValue);
+puts("Unix timestamp: ", unixTime);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_datetime_tostring">DateTime.toString</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let dateTimeString = DateTime.toString(dateTimeValue, format);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Converts a date time value (in days) to a string
+representation. The format string specifies how the date and time
+should be displayed. The format string can include various placeholders
+for year, month, day, hour, minute, second, etc.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>dateTimeValue</code> (number): A date time value (in days) to be
+converted to a string.</p>
+</li>
+<li>
+<p><code>format</code> (string, optional): A format string that specifies how
+the date and time should be displayed. Placeholders in the format
+string are replaced with the corresponding date/time components. If
+omitted, a default format is used.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A string representing the date and time in the
+specified format.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Convert a date/time value to a string with the default format.
+let dateTimeValue = DateTime.now();
+let formattedString = DateTime.toString(dateTimeValue);
+puts("Formatted date/time: ", formattedString);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_datetime_parse">DateTime.parse</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let dateTimeValue = DateTime.parse(dateTimeString);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Parses a date time string and converts it to a date
+time value (in days). The input string should be in a recognized date
+time format. The function attempts to parse the string and return a
+date time value. If the string cannot be parsed, an error is raised.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>dateTimeString</code> (string): A string representing a date and time
+to be parsed.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value representing the parsed date and
+time in date time format.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Parse a date/time string and convert it to a date time value.
+let dateTimeString = "2023-10-01 12:34:56";
+let dateTimeValue = DateTime.parse(dateTimeString);
+puts("Parsed date/time value: ", dateTimeValue);</code></pre>
 </div>
 </div>
 </li>
@@ -3072,6 +3412,23 @@ represents the time of day.</p>
 </li>
 <li>
 <p><strong>milliseconds:</strong> Converts a TDateTime value (in days) to milliseconds.</p>
+</li>
+<li>
+<p><strong>utcOffset:</strong> Returns the UTC offset in hours for the current local
+time zone.</p>
+</li>
+<li>
+<p><strong>toLocal:</strong> Converts a TDateTime value (in days) to local time.</p>
+</li>
+<li>
+<p><strong>toUniversal:</strong> Converts a TDateTime value (in days) to UTC time.</p>
+</li>
+<li>
+<p><strong>toString:</strong> Converts a TDateTime value (in days) to a string
+representation, using a specified format string.</p>
+</li>
+<li>
+<p><strong>parse:</strong> Parses a date time string and converts it to a TDateTime</p>
 </li>
 </ul>
 </div>
@@ -12884,7 +13241,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-06 07:27:51 +0200
+Last updated 2025-04-06 11:33:17 +0200
 </div>
 </div>
 </body>
