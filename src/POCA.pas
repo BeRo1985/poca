@@ -13672,9 +13672,9 @@ begin
   if assigned(CoroutineData) then begin
    try
     if length(CoroutineData^.Arguments)>0 then begin
-     POCACall(CoroutineData^.Context,CoroutineData^.Func,@CoroutineData^.Arguments[0],length(CoroutineData^.Arguments),POCAValueNull,POCAValueNull);
+     POCACall(CoroutineData^.Context,CoroutineData^.Func,@CoroutineData^.Arguments[0],length(CoroutineData^.Arguments),CoroutineData^.DataValue,POCAValueNull);
     end else begin
-     POCACall(CoroutineData^.Context,CoroutineData^.Func,nil,0,POCAValueNull,POCAValueNull);
+     POCACall(CoroutineData^.Context,CoroutineData^.Func,nil,0,CoroutineData^.DataValue,POCAValueNull);
     end;
    except
     CoroutineData^.ExceptionHolder:=Exception(AcquireExceptionObject);
@@ -13720,7 +13720,7 @@ begin
   CoroutineData^.ToValue:=POCAValueNull;}
   CoroutineData^.FromValue.CastedUInt64:=POCAValueNullCastedUInt64;
   CoroutineData^.ToValue.CastedUInt64:=POCAValueNullCastedUInt64;
-  CoroutineData^.DataValue.CastedUInt64:=POCAValueNullCastedUInt64;
+  CoroutineData^.DataValue:=POCANewHash(Context);
   CoroutineData^.ExceptionHolder:=nil;
   if not assigned(CoroutineData) then begin
    POCARuntimeError(Context,'Coroutine creation failed');

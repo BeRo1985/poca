@@ -10,8 +10,8 @@ const LIMIT = 1111;
 
 // So we use a closure instead.
 
-let corofun = ( (j) -> {
-  (i) -> {
+let corofun = ( (j) => {
+  (i) => {
     while (i < j) {
       puts('corofun state: ' ~ coro.state());
       puts('corofun alive: ' ~ coro.alive());
