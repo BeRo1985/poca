@@ -28,9 +28,9 @@ let corofun = ( (j) => {
 
 var coro = Coroutine.create(corofun, START);
 
-puts('coro alive: ' ~ coro.alive());               // true
-try { puts('coro resumed: ' ~ coro.resumed()); }  // false
-puts('coro terminated: ' ~ coro.terminated());   // false
+puts('coro alive: ' ~ coro.alive());               //  true
+puts('coro resumed: ' ~ coro.resumed());          //  false
+puts('coro terminated: ' ~ coro.terminated());   //   false
 
 puts();
 puts("Let's go!");
@@ -40,31 +40,31 @@ puts(coro.resume(100));
 
 // corofun started!
 
-puts('coro alive: ' ~ coro.alive());               // true
-try { puts('coro resumed: ' ~ coro.resumed()); }  // false
-puts('coro terminated: ' ~ coro.terminated());   // false
+puts('coro alive: ' ~ coro.alive());               //  true
+puts('coro resumed: ' ~ coro.resumed());          //   true
+puts('coro terminated: ' ~ coro.terminated());   //   false
 
 puts('coro state: ' ~ coro.state()); // always outside
 
 puts();
 puts(coro.resume(10));
 
-puts('coro alive: ' ~ coro.alive());               // true
-try { puts('coro resumed: ' ~ coro.resumed()); }  // false
-puts('coro terminated: ' ~ coro.terminated());   // false
+puts('coro alive: ' ~ coro.alive());               //  true
+puts('coro resumed: ' ~ coro.resumed());          //   true
+puts('coro terminated: ' ~ coro.terminated());   //   false
 
 puts();
 puts(coro.resume(1));
 
-puts('coro alive: ' ~ coro.alive());               // true
-try { puts('coro resumed: ' ~ coro.resumed()); }  // false
-puts('coro terminated: ' ~ coro.terminated());   // false
+puts('coro alive: ' ~ coro.alive());               //  true
+puts('coro resumed: ' ~ coro.resumed());          //   true
+puts('coro terminated: ' ~ coro.terminated());   //   false
 
 puts();
 coro.resume(); // this resume will terminate the loop
 
 // corofun ended!
 
-puts('coro alive: ' ~ coro.alive());               // true
-try { puts('coro resumed: ' ~ coro.resumed()); }  // false
-puts('coro terminated: ' ~ coro.terminated());   // false
+puts('coro alive: ' ~ coro.alive());               // false
+puts('coro resumed: ' ~ coro.resumed());          //   true
+puts('coro terminated: ' ~ coro.terminated());   //    true
