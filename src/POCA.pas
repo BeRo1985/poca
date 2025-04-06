@@ -13271,12 +13271,118 @@ begin
  end;
 end;
 
+function POCACoroutineFunctionSTATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var CoroutineData:PPOCACoroutineData;
+begin
+ if POCAGhostGetType(This)=@POCACoroutineGhost then begin
+  CoroutineData:=PPOCACoroutineData(POCAGhostGetPointer(This));
+  if assigned(CoroutineData) then begin
+   case CoroutineData^.Coroutine^.State of
+    pcsOUTSIDE:begin
+     result:=POCANewString(Context,'outside');
+    end;
+    pcsINSIDE:begin
+     result:=POCANewString(Context,'inside');
+    end;
+    pcsINSIDETERMINATED:begin
+     result:=POCANewString(Context,'insideterminated');
+    end;
+    pcsTERMINATED:begin
+     result:=POCANewString(Context,'terminated');
+    end;
+    else begin
+     result:=POCANewString(Context,'none');
+    end;     
+   end;
+  end else begin
+// result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end else begin
+// result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCACoroutineFunctionINSIDE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var CoroutineData:PPOCACoroutineData;
+begin
+ if POCAGhostGetType(This)=@POCACoroutineGhost then begin
+  CoroutineData:=PPOCACoroutineData(POCAGhostGetPointer(This));
+  if assigned(CoroutineData) then begin
+   result.Num:=ord((CoroutineData^.Coroutine^.State=pcsINSIDE) or (CoroutineData^.Coroutine^.State=pcsINSIDETERMINATED)) and 1;
+  end else begin
+// result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end else begin
+// result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCACoroutineFunctionOUTSIDE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var CoroutineData:PPOCACoroutineData;
+begin
+ if POCAGhostGetType(This)=@POCACoroutineGhost then begin
+  CoroutineData:=PPOCACoroutineData(POCAGhostGetPointer(This));
+  if assigned(CoroutineData) then begin
+   result.Num:=ord(CoroutineData^.Coroutine^.State=pcsOUTSIDE) and 1;
+  end else begin
+// result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end else begin
+// result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCACoroutineFunctionTERMINATED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var CoroutineData:PPOCACoroutineData;
+begin
+ if POCAGhostGetType(This)=@POCACoroutineGhost then begin
+  CoroutineData:=PPOCACoroutineData(POCAGhostGetPointer(This));
+  if assigned(CoroutineData) then begin
+   result.Num:=ord((CoroutineData^.Coroutine^.State=pcsINSIDETERMINATED) or (CoroutineData^.Coroutine^.State=pcsTERMINATED)) and 1;
+  end else begin
+// result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end else begin
+// result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCACoroutineFunctionALIVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var CoroutineData:PPOCACoroutineData;
+begin
+ if POCAGhostGetType(This)=@POCACoroutineGhost then begin
+  CoroutineData:=PPOCACoroutineData(POCAGhostGetPointer(This));
+  if assigned(CoroutineData) then begin
+   result.Num:=ord((CoroutineData^.Coroutine^.State=pcsOUTSIDE) or (CoroutineData^.Coroutine^.State=pcsINSIDE)) and 1;
+  end else begin
+// result:=POCAValueNull;
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end else begin
+// result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
 function POCAInitCoroutineNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'create',POCACoroutineFunctionCREATE);
  POCAAddNativeFunction(Context,result,'yield',POCACoroutineFunctionYIELD);
  POCAAddNativeFunction(Context,result,'get',POCACoroutineFunctionGET);
+ POCAAddNativeFunction(Context,result,'state',POCACoroutineFunctionSTATE);
+ POCAAddNativeFunction(Context,result,'inside',POCACoroutineFunctionINSIDE);
+ POCAAddNativeFunction(Context,result,'outside',POCACoroutineFunctionOUTSIDE);
+ POCAAddNativeFunction(Context,result,'terminated',POCACoroutineFunctionTERMINATED);
+ POCAAddNativeFunction(Context,result,'alive',POCACoroutineFunctionALIVE);
 end;
 
 function POCAInitCoroutineHash(Context:PPOCAContext):TPOCAValue;

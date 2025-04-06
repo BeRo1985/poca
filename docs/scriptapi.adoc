@@ -929,7 +929,7 @@ function.
 
 [source,js]
 ----
-let result = co.resume(value);
+let result = coroutine.resume(value);
 ----
 
 * *Description:* Resumes the execution of a previously created
@@ -946,7 +946,7 @@ suspension, or the final return value if the coroutine completes.
 [source,js]
 ----
 // Resume the coroutine, passing "continue" as the resume value.
-let output = co.resume("continue");
+let output = coroutine.resume("continue");
 puts("Coroutine yielded: " + output);
 ----
 
@@ -1009,6 +1009,145 @@ let resumeValue = Coroutine.get();
 puts("Received on resume: " + resumeValue);
 ----
 
+'''''
+
+=== Coroutine Additional Instance Methods
+
+A coroutine is a ghost object that have the following API methods:
+
+==== Coroutine.state
+
+*Usage:*
+[source,js]
+----
+let state = coroutine.state();
+----
+
+* *Description:* Returns the current state of the coroutine. The state
+can be one of the following:
+** `none`: The coroutine has not been started yet.
+** `outside`: The coroutine is currently outside of its execution context.
+** `inside`: The coroutine is currently inside its execution context.
+** `insideterminated`: The coroutine is inside its execution context and
+ is terminated.
+** `terminated`: The coroutine has been terminated.
+* *Parameters:* None.
+* *Return Value:* A string representing the current state of the
+coroutine.
+* *Example:*
++
+[source,js]
+----
+let state = coroutine.state();
+puts("Coroutine state: ", state);
+----
+
+'''''
+
+==== Coroutine.inside
+
+*Usage:*
+[source,js]
+----
+let isInside = coroutine.inside();
+----
+
+* *Description:* Checks if the coroutine is currently inside its
+execution context. This is useful for determining if the coroutine is
+actively executing or has been suspended.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 for true, 0 for false).
+* *Example:*
++
+[source,js]
+----
+let isInside = coroutine.inside();
+if (isInside) {
+  puts("Coroutine is currently executing.");
+} else {
+  puts("Coroutine is not executing.");
+}
+----
+
+'''''
+
+==== Coroutine.outside
+
+*Usage:*
+[source,js]
+----
+let isOutside = coroutine.outside();
+----
+
+* *Description:* Checks if the coroutine is currently outside its
+execution context. This is useful for determining if the coroutine is
+suspended or has completed its execution.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 for true, 0 for false).
+* *Example:*
++
+[source,js]
+----
+let isOutside = coroutine.outside();
+if (isOutside) {
+  puts("Coroutine is currently suspended.");
+} else {
+  puts("Coroutine is executing.");
+}
+----
+
+'''''
+
+==== Coroutine.terminated
+
+*Usage:*
+[source,js]
+----
+let isTerminated = coroutine.terminated();
+----
+
+* *Description:* Checks if the coroutine has been terminated. This
+indicates that the coroutine has completed its execution and is no
+longer active.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 for true, 0 for false).
+* *Example:*
++
+[source,js]
+----
+let isTerminated = coroutine.terminated();
+if (isTerminated) {
+  puts("Coroutine has been terminated.");
+} else {
+  puts("Coroutine is still active.");
+}
+----
+
+'''''
+
+==== Coroutine.alive
+
+*Usage:*
+[source,js]
+----
+let isAlive = coroutine.alive();
+----
+
+* *Description:* Checks if the coroutine is alive. This indicates that
+the coroutine is still active and has not been terminated.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 for true, 0 for false).
+* *Example:*
++
+[source,js]
+----
+let isAlive = coroutine.alive();
+if (isAlive) {
+  puts("Coroutine is alive.");
+} else {
+  puts("Coroutine has been terminated.");
+}
+----
 '''''
 
 === Coroutine Lifecycle and Resource Management

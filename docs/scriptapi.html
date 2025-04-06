@@ -531,6 +531,15 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_coroutine_get">Coroutine.get</a></li>
 </ul>
 </li>
+<li><a href="#_coroutine_additional_instance_methods">Coroutine Additional Instance Methods</a>
+<ul class="sectlevel3">
+<li><a href="#_coroutine_state">Coroutine.state</a></li>
+<li><a href="#_coroutine_inside">Coroutine.inside</a></li>
+<li><a href="#_coroutine_outside">Coroutine.outside</a></li>
+<li><a href="#_coroutine_terminated">Coroutine.terminated</a></li>
+<li><a href="#_coroutine_alive">Coroutine.alive</a></li>
+</ul>
+</li>
 <li><a href="#_coroutine_lifecycle_and_resource_management">Coroutine Lifecycle and Resource Management</a></li>
 <li><a href="#_example_usage">Example Usage</a></li>
 <li><a href="#_summary_4">Summary</a></li>
@@ -2422,7 +2431,7 @@ function.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let result = co.resume(value);</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let result = coroutine.resume(value);</code></pre>
 </div>
 </div>
 <div class="ulist">
@@ -2453,7 +2462,7 @@ suspension, or the final return value if the coroutine completes.</p>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-js" data-lang="js">// Resume the coroutine, passing "continue" as the resume value.
-let output = co.resume("continue");
+let output = coroutine.resume("continue");
 puts("Coroutine yielded: " + output);</code></pre>
 </div>
 </div>
@@ -2552,6 +2561,227 @@ puts("Received on resume: " + resumeValue);</code></pre>
 </ul>
 </div>
 <hr>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_coroutine_additional_instance_methods">Coroutine Additional Instance Methods</h3>
+<div class="paragraph">
+<p>A coroutine is a ghost object that have the following API methods:</p>
+</div>
+<div class="sect3">
+<h4 id="_coroutine_state">Coroutine.state</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let state = coroutine.state();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns the current state of the coroutine. The state
+can be one of the following:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>none</code>: The coroutine has not been started yet.</p>
+</li>
+<li>
+<p><code>outside</code>: The coroutine is currently outside of its execution context.</p>
+</li>
+<li>
+<p><code>inside</code>: The coroutine is currently inside its execution context.</p>
+</li>
+<li>
+<p><code>insideterminated</code>: The coroutine is inside its execution context and
+is terminated.</p>
+</li>
+<li>
+<p><code>terminated</code>: The coroutine has been terminated.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A string representing the current state of the
+coroutine.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let state = coroutine.state();
+puts("Coroutine state: ", state);</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_coroutine_inside">Coroutine.inside</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isInside = coroutine.inside();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Checks if the coroutine is currently inside its
+execution context. This is useful for determining if the coroutine is
+actively executing or has been suspended.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 for true, 0 for false).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isInside = coroutine.inside();
+if (isInside) {
+  puts("Coroutine is currently executing.");
+} else {
+  puts("Coroutine is not executing.");
+}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_coroutine_outside">Coroutine.outside</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isOutside = coroutine.outside();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Checks if the coroutine is currently outside its
+execution context. This is useful for determining if the coroutine is
+suspended or has completed its execution.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 for true, 0 for false).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isOutside = coroutine.outside();
+if (isOutside) {
+  puts("Coroutine is currently suspended.");
+} else {
+  puts("Coroutine is executing.");
+}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_coroutine_terminated">Coroutine.terminated</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isTerminated = coroutine.terminated();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Checks if the coroutine has been terminated. This
+indicates that the coroutine has completed its execution and is no
+longer active.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 for true, 0 for false).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isTerminated = coroutine.terminated();
+if (isTerminated) {
+  puts("Coroutine has been terminated.");
+} else {
+  puts("Coroutine is still active.");
+}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_coroutine_alive">Coroutine.alive</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isAlive = coroutine.alive();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Checks if the coroutine is alive. This indicates that
+the coroutine is still active and has not been terminated.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 for true, 0 for false).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isAlive = coroutine.alive();
+if (isAlive) {
+  puts("Coroutine is alive.");
+} else {
+  puts("Coroutine has been terminated.");
+}</code></pre>
+</div>
+</div>
+<hr>
+</li>
+</ul>
+</div>
 </div>
 </div>
 <div class="sect2">
@@ -11389,7 +11619,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-05 12:35:03 +0200
+Last updated 2025-04-06 06:56:49 +0200
 </div>
 </div>
 </body>
