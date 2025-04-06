@@ -77,8 +77,8 @@ function make_closure() {
   };
 };
 
-let counter = make_closure();
+let numeraire = make_closure();
 
-puts(counter()); // => 1
-puts(counter()); // => 2
-puts(counter()); // => 3
+puts(numeraire()); // => 1
+puts(numeraire()); // => 2
+puts(numeraire()); // => 3
