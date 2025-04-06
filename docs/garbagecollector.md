@@ -1,4 +1,4 @@
-Below is a high-level review of the full GC system in POCA. The review is divided into several processing parts to make it easier to follow, highlighting both the overall structure and specific details within the full context.
+Below is a high‑level review of the full GC system in POCA. The review is divided into several processing parts to make it easier to follow, highlighting both the overall structure and the specific details within the full context.
 
 # Overview
 
@@ -6,57 +6,48 @@ Below is a high-level review of the full GC system in POCA. The review is divide
 
 **1. Overall GC Architecture**
 
-The GC system is structured as a state machine with well-defined phases (e.g., `pgcsRESET`, `pgcsINIT`, `pgcsMARKROOTS`, `pgcsMARKCONTEXTS`, `pgcsMARKPERSISTENTS`, `pgcsMARKPROTECTED`, `pgcsMARKGREYS`, `pgcsSWEEPINIT`, `pgcsMARKWHITEGHOSTS`, `pgcsMARKWHITEGHOSTGREYS`, `pgcsSWEEP`, `pgcsFLIP`, `pgcsDONE`). This structure clearly separates the marking of roots, contexts, persistent objects, and ghost objects from the sweeping phase. The state transitions are clearly laid out in the procedure for collecting a cycle, making it straightforward to understand which objects are handled at each phase.
+The GC system is structured as a state machine with well‑defined phases (e.g., `pgcsRESET`, `pgcsINIT`, `pgcsMARKROOTS`, `pgcsMARKPERSISTENTS`, `pgcsMARKPROTECTED`, `pgcsMARKGREYS`, `pgcsSWEEPINIT`, `pgcsMARKWHITEGHOSTS`, `pgcsMARKWHITEGHOSTGREYS`, `pgcsSWEEP`, `pgcsFLIP`, `pgcsDONE`). This design clearly delineates the processing stages, ensuring that the marking of roots, contexts, persistent objects, and ghost objects is distinctly separated from the sweeping phase. The state transitions are laid out explicitly in the cycle collection procedure, which makes it straightforward to understand how each category of objects is handled during a GC cycle.
 
 ──────────────────────────────
 
 **2. Marking and List Management**
 
-A significant part of the GC functionality relies on managing various object lists (gray, black, persistent, etc.) using a custom linked list implementation. Procedures such as
-
-- `POCAGarbageCollectorLinkedListReset`,
-- `POCAGarbageCollectorLinkedListPush`, and
-- `POCAGarbageCollectorLinkedListPop`
-
-handle these low-level list operations.
-
-These functions are used throughout the marking phases to move objects between lists, ensuring that objects marked (gray, black, or persistent) are properly tracked. The functions for moving list segments between lists (e.g., `POCAGarbageCollectorLinkedListMove` and `POCAGarbageCollectorLinkedListMoveMark`) are well integrated into the overall marking flow.
+A significant part of the GC functionality relies on the efficient management of various object lists (gray, black, persistent, etc.) using a custom linked list implementation. In the current design, the low‑level list operations have been fully encapsulated as methods within the `TPOCAGarbageCollectorLinkedList` record. Methods such as `Initialize`, `Push`, `Pop`, and `PopFromFront` now perform these fundamental operations, while additional methods like `TakeOver`, `TakeOverAppend`, `TakeOverAppendMark`, and the class method `Swap` are used to move list segments between lists during the marking phases. This encapsulation not only improves code organization but also integrates list management seamlessly into the overall marking flow.
 
 ──────────────────────────────
 
 **3. GC Cycle and State Transitions**
 
-The core routines `POCAGarbageCollectorCollectCycle` and `POCAGarbageCollectorCollectAll` implement the state machine. In particular, `POCAGarbageCollectorCollectCycle` goes through each phase—marking roots, contexts, persistent objects, and finally sweeping the unreferenced objects. There's a clear distinction between ephemeral and persistent objects, and the code carefully handles the inter-generational write barriers (see write barrier routines in POCA.pas). The use of a step factor and factors for ghost, sweep, and flip allows for some tuning of how aggressively the GC processes objects.
+The core routines CollectCycle and CollectAll, which are methods of TPOCAGarbageCollector, implement the state machine that drives garbage collection. In particular, CollectCycle traverses each phase: marking roots, processing contexts, handling persistent objects, and finally sweeping unreferenced objects. There's a clear distinction between ephemeral and persistent objects, and the code carefully handles the inter‑generational write barriers (see write barrier routines in POCA.pas). Tuning parameters, such as the step factor and factors for ghost, sweep, and flip, allow for fine tuning how aggressively the GC processes objects. Additionally, the collector now supports optional incremental and generational modes, enabling the system to perform collections in smaller, incremental steps or to segregate objects by their lifetimes, which can lead to significant performance optimizations in various application scenarios.
 
 ──────────────────────────────
 
 **4. Thread Synchronization and Bottleneck Handling**
 
-Given that POCA is designed for a multithreaded environment, the GC code uses a mix of locks, semaphores, and interlocked operations (for instance, `TPasMPInterlocked.Exchange`, `TPasMPInterlocked.Increment`, and `TPasMPInterlocked.CompareExchange`) to ensure thread safety. The bottleneck procedures (such as `POCAGarbageCollectorBottleneck` as seen in POCA.pas) help coordinate threads during collection. These mechanisms appear to be carefully designed to avoid race conditions and deadlocks. The lock and unlock procedures (`POCAGarbageCollectorLock` and `POCAGarbageCollectorUnlock`) correctly adjust thread counts and protect shared state.
+Considering that POCA is designed for multithreaded environments, robust thread synchronization is a critical aspect of the GC system. The code employs a mix of locks, semaphores, and interlocked operations (for example, `TPasMPInterlocked.Exchange`, `TPasMPInterlocked.Increment`, and `TPasMPInterlocked.CompareExchange`) to ensure that thread safety is maintained throughout the collection process. Dedicated bottleneck handling routines coordinate thread execution during GC cycles to prevent race conditions and deadlocks. The lock and unlock mechanisms adjust thread counts appropriately and protect shared state consistently, ensuring that the GC can operate safely even under high concurrency and when running in incremental or generational modes.
 
 ──────────────────────────────
 
-**5. Write Barriers and Inter-Generation References**
+**5. Write Barriers and Inter‑Generation References**
 
-The GC also includes write-barrier implementations to handle the transition of objects from white to gray when a reference is updated. In particular, `POCAGarbageCollectorWriteBarrier` checks the state of both the parent and the new value. If the parent is already black (i.e. finalized), the referenced object is marked gray to ensure it gets processed in the next cycle. This approach helps maintain the invariants required by incremental or generational collectors.
+The GC subsystem includes robust write‑barrier implementations to manage the transition of objects from white to gray when a reference is updated. In practice, the `POCAGarbageCollectorWriteBarrier` routine verifies the state of both the parent and the new value. If the parent is already marked as black (i.e., finalized), the referenced object is re‑marked gray to guarantee that it will be processed in the next cycle. This mechanism is crucial for preserving the invariants required by both incremental and generational collection strategies, ensuring that inter‑generation references are handled correctly while maintaining the integrity of the object graph.
 
 ──────────────────────────────
 
 **6. Memory Pool and Dead Blocks Management**
 
-The GC code is tightly integrated with the memory pool system for objects. Procedures such as `POCAPoolFreeBlock` and `POCAFreeDead` reliably ensure that memory is reclaimed correctly. The system keeps track of **“dead blocks”** and adjusts their capacity as needed (as seen in parts of the code in POCA.pas). This coordinated strategy provides reliable object finalization and consistent reclamation of unused memory.
+The GC is tightly integrated with the memory pool system used for object allocation. Procedures such as `POCAPoolFreeBlock` and `POCAFreeDead` work in tandem to ensure that memory is reclaimed reliably. The system meticulously tracks **“dead blocks”** and dynamically adjusts their capacity as needed. This coordinated strategy provides reliable object finalization and ensures the consistent reclamation of unused memory, regardless of whether the collector is running in full, incremental, or generational mode.
 
 ──────────────────────────────
 
-# Conclusion
+**Conclusion**
 
-In the full context, the GC code shows a sophisticated design that:
+In the full context, the GC subsystem in POCA demonstrates a sophisticated design that:
 
-- Clearly separates the different GC phases through a well‑structured state machine.
-- Uses custom linked list operations to manage object sets across different GC generations.
-- Incorporates thread synchronization primitives to allow safe concurrent GC operations.
-- Implements write barriers to maintain the proper marking of objects across updates.
-- Integrates with the object memory pool to manage and reclaim memory efficiently.
+- Clearly separates the different GC phases via a well‑structured state machine.
+- Employs custom linked list operations — encapsulated within the `TPOCAGarbageCollectorLinkedList` record — to manage object sets effectively.
+- Maintains a clear distinction between ephemeral and persistent objects, with careful handling of inter‑generational write barriers.
+- Utilizes robust thread synchronization and bottleneck handling mechanisms to enable safe concurrent garbage collection.
+- Integrates closely with the memory pool system to reclaim memory efficiently.
 
-Overall, the GC subsystem appears robust and well‑thought‑out. However, thorough multithreaded testing is recommended to ensure proper functionality of all state transitions and edge cases (such as interleaved GC operations and object updates) within the runtime environment.
-
+Overall, the GC subsystem appears robust and well‑thought‑out. Comprehensive multithreaded testing is recommended to ensure that all state transitions and edge cases (such as interleaved GC operations and object updates) operate correctly in the runtime environment.
