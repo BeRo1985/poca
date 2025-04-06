@@ -3841,14 +3841,13 @@ begin
  end;
 end;
 
-{$ifdef Wimdows}
-{$undef UseThreadsForCoroutines}
+{$ifdef Windows}
+{$define UseFibersForCoroutines}
 {$else}
 {$define UseThreadsForCoroutines}
 {$endif}
 
-{$if not defined(UseThreadsForCoroutines)}
-{$if defined(Windows)}
+{$if defined(UseFibersForCoroutines)}
 function CreateFiber(dwStackSize:TPOCAUInt32;lpStartAddress,lpParameter:TPOCAPointer):TPOCAPointer; stdcall; external 'kernel32.dll' name 'CreateFiber';
 procedure DeleteFiber(lpFiber:TPOCAPointer); stdcall; external 'kernel32.dll' name 'DeleteFiber';
 procedure SwitchToFiber(lpFiber:TPOCAPointer); stdcall; external 'kernel32.dll' name 'SwitchToFiber';
@@ -3877,7 +3876,8 @@ asm
 {$endif}
 {$endif}
 end;
-{$elseif defined(cpu386)}
+{$elseif not defined(UseThreadsForCoroutines)}
+{$if defined(cpu386)}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
      TPOCACoroutineContextJmpBuf=record
       RegEBX,RegESI,RegEDI,RegESP,RegEBP,RegEIP:TPOCAUInt32;
@@ -4086,7 +4086,7 @@ begin
  POCACoroutineContextSetJmp(@Context^.JmpBuf);
 end;
 {$else}
-{$define UseThreadsForCoroutines}
+ {$define UseThreadsForCoroutines}
 {$ifend}
 {$ifend}
 
@@ -4134,7 +4134,6 @@ begin
   RTLEventWaitFor(PPOCACoroutineContext(CoroutineContext)^.ResumeEvent);
 {$else}
   PPOCACoroutineContext(CoroutineContext)^.ResumeEvent.WaitFor;
-  PPOCACoroutineContext(CoroutineContext)^.ResumeEvent.ResetEvent;
 {$endif}
   try
    POCACoroutineEntrypoint(PPOCACoroutineContext(CoroutineContext)^.Coroutine);
@@ -4142,6 +4141,7 @@ begin
   end;
   EndThread(0);
  end;
+ result:=0;
 end;
 
 function POCACoroutineContextCreate(StackSize:TPOCAInt32;Entrypoint:TPOCAPointer;Coroutine:PPOCACoroutine):PPOCACoroutineContext;
@@ -4150,9 +4150,9 @@ begin
  FillChar(result^,sizeof(TPOCACoroutineContext),#0);
  if assigned(Entrypoint) then begin
   result^.Coroutine:=Coroutine;
-  result^.ResumeEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
-  result^.YieldEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
-  result^.TerminatedEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
+  result^.ResumeEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
+  result^.YieldEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
+  result^.TerminatedEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
 {$ifdef fpc}
   result^.Handle:=BeginThread(POCACoroutineContextEntrypoint,result,result^.ThreadID);
 {$else}
@@ -4164,40 +4164,42 @@ end;
 procedure POCACoroutineContextDestroy(Context:PPOCACoroutineContext);
 begin
  if assigned(Context) then begin
-  if Context^.Coroutine^.State<>pcsTERMINATED then begin
+  if (Context^.Coroutine^.State<>pcsINSIDETERMINATED) and (Context^.Coroutine^.State<>pcsTERMINATED) then begin
    TPasMPInterlocked.Write(Context^.Coroutine.Terminated,TPasMPBool32(true));
+{$ifdef fpc}
    RTLEventSetEvent(Context^.ResumeEvent);
-   RTLEventWaitFor(Context^.YieldEvent);
-   RTLEventWaitFor(Context^.TerminatedEvent);
-  end;
-  if Context^.Coroutine^.State<>pcsTERMINATED then begin
-   try
- {$ifdef fpc}
-//  System.KillThread(Context^.Handle);
- {$else}
-    TerminateThread(Context^.Handle,0);
- {$endif}
-   except
+   RTLEventWaitFor(Context^.YieldEvent,1000);
+   RTLEventWaitFor(Context^.TerminatedEvent,1000);
+{$else}
+   Context^.ResumeEvent.SetEvent;
+   Context^.YieldEvent.WaitFor(1000);
+   Context^.TerminatedEvent.WaitFor(1000);
+{$endif}
+   if (Context^.Coroutine^.State<>pcsINSIDETERMINATED) and (Context^.Coroutine^.State<>pcsTERMINATED) then begin
+    try
+{$ifdef fpc}
+     System.KillThread(Context^.ThreadID);
+{$else}
+     TerminateThread(Context^.Handle,0);
+{$endif}
+    except
+    end;
    end;
   end;
 {$ifdef fpc}
-  CloseThread(Context^.Handle);
+  WaitForThreadTerminate(Context^.ThreadID,0);
+  CloseThread(Context^.ThreadID);
 {$else}
 {$ifdef win32}
+  WaitForSingleObject(Context^.Handle,TPOCAUInt32($ffffffff));
   CloseHandle(Context^.Handle);
 {$endif}
 {$endif}
 {$ifdef fpc}
-  RTLEventSetEvent(Context^.ResumeEvent);
-  RTLEventSetEvent(Context^.YieldEvent);
-  RTLEventSetEvent(Context^.TerminatedEvent);
   RTLEventDestroy(Context^.ResumeEvent);
   RTLEventDestroy(Context^.YieldEvent);
   RTLEventDestroy(Context^.TerminatedEvent);
 {$else}
-  Context^.ResumeEvent.SetEvent;
-  Context^.YieldEvent.SetEvent;
-  Context^.TerminatedEvent.SetEvent;
   FreeAndNil(Context^.ResumeEvent);
   FreeAndNil(Context^.YieldEvent);
   FreeAndNil(Context^.TerminatedEvent);
@@ -4220,42 +4222,38 @@ begin
  result^.State:=pcsOUTSIDE;
  result^.Resumed:=false;
  result^.Terminated:=false;
- result^.Event:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,true,false,''){$endif};
-{$ifdef UseThreadsForCoroutines}
- result^.Fiber:=POCACoroutineContextCreate(StackSize,@POCACoroutineEntrypoint,result);
- result^.Back:=nil;
-{$else}
-{$ifdef windows}
+ result^.Event:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
+{$if defined(UseFibersForCoroutines)}
  result^.Fiber:=CreateFiber(StackSize,@POCACoroutineEntrypoint,result);
  if not assigned(result^.Fiber) then begin
   RaiseLastOSError;
  end;
+{$elseif defined(UseThreadsForCoroutines)}
+ result^.Fiber:=POCACoroutineContextCreate(StackSize,@POCACoroutineEntrypoint,result);
+ result^.Back:=nil;
 {$else}
  result^.Fiber:=POCACoroutineContextCreate(StackSize,@POCACoroutineEntrypoint,result);
  result^.Back:=POCACoroutineContextCreate(0,nil,nil);
-{$endif}
-{$endif}
+{$ifend}
 end;
 
 procedure POCACoroutineDestroy(Coroutine:PPOCACoroutine);
 begin
  if assigned(Coroutine) then begin
-{$ifdef UseThreadsForCoroutines}
-  POCACoroutineContextDestroy(Coroutine^.Fiber);
-  Coroutine^.Fiber:=nil;
-{$else}
-{$ifdef windows}
+{$if defined(UseFibersForCoroutines)}
   if assigned(Coroutine^.Fiber) then begin
    DeleteFiber(Coroutine^.Fiber);
    Coroutine^.Fiber:=nil;
   end;
+{$elseif defined(UseThreadsForCoroutines)}
+  POCACoroutineContextDestroy(Coroutine^.Fiber);
+  Coroutine^.Fiber:=nil;
 {$else}
   POCACoroutineContextDestroy(Coroutine^.Fiber);
   POCACoroutineContextDestroy(Coroutine^.Back);
   Coroutine^.Fiber:=nil;
   Coroutine^.Back:=nil;
-{$endif}
-{$endif}
+{$ifend}
 {$ifdef fpc}
   RTLEventDestroy(Coroutine^.Event);
 {$else}
@@ -4272,12 +4270,12 @@ begin
 end;
 
 function POCACoroutineResume(Coroutine:PPOCACoroutine;Throw:Boolean):Boolean;
-{$ifdef windows}
+{$ifdef UseFibersForCoroutines}
 var Current:TPOCAPointer;
 {$endif}
 begin
  if assigned(Coroutine) then begin
-  if Coroutine^.State=pcsTERMINATED then begin
+  if (Coroutine^.State=pcsINSIDETERMINATED) or (Coroutine^.State=pcsTERMINATED) then begin
    if Throw then begin
     POCACoroutineRaise('Coroutine is already terminated');
    end;
@@ -4290,21 +4288,8 @@ begin
     Coroutine^.Event.WaitFor(INFINITE);
 {$endif}
    end;
-{$ifndef fpc}
-   Coroutine^.Event.ResetEvent;
-{$endif}
    if assigned(Coroutine^.Fiber) then begin
-{$ifdef UseThreadsForCoroutines}
-{$ifdef fpc}
-    RTLEventSetEvent(PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent);
-    RTLEventWaitFor(PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent);
-{$else}
-    PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent.SetEvent;
-    PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent.WaitFor(INFINITE);
-    PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent.ResetEvent;
-{$endif}
-{$else}
-{$ifdef windows}
+{$if defined(UseFibersForCoroutines)}
     Current:=GetCurrentFiber;
     if (not assigned(Current)) or (Current=TPOCAPointer(TPOCAPtrUInt($1e00))) then begin
      Coroutine^.Back:=ConvertThreadToFiber(nil);
@@ -4314,11 +4299,18 @@ begin
     Coroutine^.BackFPUCW:=Get8087CW;
     SwitchToFiber(Coroutine^.Fiber);
     Set8087CW(Coroutine^.BackFPUCW);
+{$elseif defined(UseThreadsForCoroutines)}
+{$ifdef fpc}
+    RTLEventSetEvent(PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent);
+    RTLEventWaitFor(PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent);
+{$else}
+    PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent.SetEvent;
+    PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent.WaitFor(INFINITE);
+{$endif}
 {$else}
     POCACoroutineContextGet(Coroutine^.Back);
     POCACoroutineContextSwitch(Coroutine^.Back,Coroutine^.Fiber);
-{$endif}
-{$endif}
+{$ifend}
    end;
    case Coroutine^.State of
     pcsINSIDE:begin
@@ -4343,38 +4335,47 @@ end;
 procedure POCACoroutineYield(Coroutine:PPOCACoroutine);
 begin
  if assigned(Coroutine) then begin
-{$ifdef UseThreadsForCoroutines}
+{$if defined(UseFibersForCoroutines)}
+  if Coroutine^.State in [pcsINSIDE,pcsINSIDETERMINATED] then begin
+   Coroutine^.FiberFPUCW:=Get8087CW;
+   SwitchToFiber(Coroutine^.Back);
+   Set8087CW(Coroutine^.FiberFPUCW);
+  end else begin
+   POCACoroutineRaise('The program control flow is outside coroutine');
+  end;
+{$elseif defined(UseThreadsForCoroutines)}
 {$ifdef fpc}
   RTLEventSetEvent(PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent);
   RTLEventWaitFor(PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent);
 {$else}
   PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent.SetEvent;
   PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent.WaitFor(INFINITE);
-  PPOCACoroutineContext(Coroutine^.Fiber)^.ResumeEvent.ResetEvent;
 {$endif}
   if Coroutine^.Terminated then begin
    raise EPOCACoroutineTerminated.Create('Coroutine terminated');
   end;
 {$else}
   if Coroutine^.State in [pcsINSIDE,pcsINSIDETERMINATED] then begin
-{$ifdef windows}
-   Coroutine^.FiberFPUCW:=Get8087CW;
-   SwitchToFiber(Coroutine^.Back);
-   Set8087CW(Coroutine^.FiberFPUCW);
-{$else}
    POCACoroutineContextSwitch(Coroutine^.Fiber,Coroutine^.Back);
-{$endif}
   end else begin
    POCACoroutineRaise('The program control flow is outside coroutine');
   end;
-{$endif}
+{$ifend}
  end;
 end;
 
 procedure POCACoroutineEndYield(Coroutine:PPOCACoroutine);
 begin
  if assigned(Coroutine) then begin
-{$ifdef UseThreadsForCoroutines}
+{$if defined(UseFibersForCoroutines)}
+  if Coroutine^.State in [pcsINSIDE,pcsINSIDETERMINATED] then begin
+   Coroutine^.FiberFPUCW:=Get8087CW;
+   SwitchToFiber(Coroutine^.Back);
+   Set8087CW(Coroutine^.FiberFPUCW);
+  end else begin
+   POCACoroutineRaise('The program control flow is outside coroutine');
+  end;
+{$elseif defined(UseThreadsForCoroutines)}
 {$ifdef fpc}
   RTLEventSetEvent(PPOCACoroutineContext(Coroutine^.Fiber)^.YieldEvent);
   RTLEventSetEvent(PPOCACoroutineContext(Coroutine^.Fiber)^.TerminatedEvent);
@@ -4384,17 +4385,11 @@ begin
 {$endif}
 {$else}
   if Coroutine^.State in [pcsINSIDE,pcsINSIDETERMINATED] then begin
-{$ifdef windows}
-   Coroutine^.FiberFPUCW:=Get8087CW;
-   SwitchToFiber(Coroutine^.Back);
-   Set8087CW(Coroutine^.FiberFPUCW);
-{$else}
    POCACoroutineContextSwitch(Coroutine^.Fiber,Coroutine^.Back);
-{$endif}
   end else begin
    POCACoroutineRaise('The program control flow is outside coroutine');
   end;
-{$endif}
+{$ifend}
  end;
 end;
 
