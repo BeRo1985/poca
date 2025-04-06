@@ -13916,17 +13916,17 @@ begin
  POCAAddNativeFunction(Context,result,'create',POCACoroutineFunctionCREATE);
  POCAAddNativeFunction(Context,result,'yield',POCACoroutineFunctionYIELD);
  POCAAddNativeFunction(Context,result,'get',POCACoroutineFunctionGET);
- POCAAddNativeFunction(Context,result,'state',POCACoroutineFunctionSTATE);
- POCAAddNativeFunction(Context,result,'inside',POCACoroutineFunctionINSIDE);
- POCAAddNativeFunction(Context,result,'outside',POCACoroutineFunctionOUTSIDE);
- POCAAddNativeFunction(Context,result,'terminated',POCACoroutineFunctionTERMINATED);
- POCAAddNativeFunction(Context,result,'alive',POCACoroutineFunctionALIVE);
 end;
 
 function POCAInitCoroutineHash(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'resume',POCACoroutineFunctionRESUME);
+ POCAAddNativeFunction(Context,result,'state',POCACoroutineFunctionSTATE);
+ POCAAddNativeFunction(Context,result,'inside',POCACoroutineFunctionINSIDE);
+ POCAAddNativeFunction(Context,result,'outside',POCACoroutineFunctionOUTSIDE);
+ POCAAddNativeFunction(Context,result,'terminated',POCACoroutineFunctionTERMINATED);
+ POCAAddNativeFunction(Context,result,'alive',POCACoroutineFunctionALIVE);
 end;
 
 procedure POCAThreadDestroy(Data:TPOCAPointer);

@@ -6,6 +6,7 @@ function testcoroutinefunction(i){
 }
 
 var testcoroutine = new Coroutine(testcoroutinefunction, 1000);
+print("State:", testcoroutine.state(), "\r\n");
 print("Go!\r\n");
 print(testcoroutine.resume(100), "\r\n");
 print(testcoroutine.resume(10), "\r\n");
