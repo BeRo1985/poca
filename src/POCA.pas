@@ -1527,7 +1527,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCAUserIOWrite=procedure(const aContext:PPOCAContext;const aString:String);
      TPOCAUserIOWriteLn=procedure(const aContext:PPOCAContext;const aString:String);
-     TPOCAUserIOReadLn=procedure(const aContext:PPOCAContext;out aString:String);
+     TPOCAUserIOReadLn=procedure(const aContext:PPOCAContext;out aString:String;out aNull:Boolean);
      TPOCAUserIOFlush=procedure(const aContext:PPOCAContext);
 
      TPOCAContext=record
@@ -2349,7 +2349,7 @@ begin
    end;
   end;
   if assigned(aContext) and assigned(aContext^.UserIOReadLn) then begin
-   aContext^.UserIOReadLn(aContext,t);
+   aContext^.UserIOReadLn(aContext,t,aNull);
    s:=t;
   end else begin
    System.ReadLn(s);
@@ -2371,7 +2371,7 @@ begin
   end;
  end;
  if assigned(aContext) and assigned(aContext^.UserIOReadLn) then begin
-  aContext^.UserIOReadLn(aContext,t);
+  aContext^.UserIOReadLn(aContext,t,aNull);
   s:=t;
  end else begin
   System.ReadLn(s);
@@ -10499,8 +10499,9 @@ begin
  System.WriteLn(aString);
 end;
 
-procedure POCADefaultUserIOReadLn(const aContext:PPOCAContext;out aString:String);
+procedure POCADefaultUserIOReadLn(const aContext:PPOCAContext;out aString:String;out aNull:Boolean);
 begin
+ aNull:=false;
  System.ReadLn(aString);
 end;
 
