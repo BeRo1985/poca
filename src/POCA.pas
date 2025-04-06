@@ -3307,7 +3307,7 @@ begin
 end;
 
 {$ifdef unix}
-{-$define UseThreadsForCoroutines}
+{$define UseThreadsForCoroutines}
 {$else}
 {$undef UseThreadsForCoroutines}
 {$endif}
@@ -3564,8 +3564,11 @@ procedure POCACoroutineYield(Coroutine:PPOCACoroutine); forward;
 procedure POCACoroutineEntrypoint(Coroutine:PPOCACoroutine); {$ifndef UseThreadsForCoroutines}{$ifdef cpuamd64}register;{$else}{$ifdef windows}stdcall;{$else}cdecl;{$endif}{$endif}{$endif}
 begin
  if assigned(Coroutine) then begin
-  if assigned(Coroutine^.Entrypoint) then begin
-   Coroutine^.Entrypoint(Coroutine);
+  try
+   if assigned(Coroutine^.Entrypoint) then begin
+    Coroutine^.Entrypoint(Coroutine);
+   end;
+  except
   end;
   TPasMPInterlocked.Exchange(Coroutine^.State,pcsINSIDETERMINATED);
   POCACoroutineYield(Coroutine);
@@ -3594,7 +3597,10 @@ begin
   PPOCACoroutineContext(CoroutineContext)^.ResumeEvent.WaitFor;
   PPOCACoroutineContext(CoroutineContext)^.ResumeEvent.ResetEvent;
 {$endif}
-  POCACoroutineEntrypoint(PPOCACoroutineContext(CoroutineContext)^.Coroutine);
+  try
+   POCACoroutineEntrypoint(PPOCACoroutineContext(CoroutineContext)^.Coroutine);
+  except
+  end;
   EndThread(0);
  end;
 end;
@@ -3634,9 +3640,13 @@ begin
 {$endif}
 {$endif}
 {$ifdef fpc}
+  RTLEventSetEvent(Context^.ResumeEvent);
+  RTLEventSetEvent(Context^.YieldEvent);
   RTLEventDestroy(Context^.ResumeEvent);
   RTLEventDestroy(Context^.YieldEvent);
 {$else}
+  Context^.ResumeEvent.SetEvent;
+  Context^.YieldEvent.SetEvent;
   FreeAndNil(Context^.ResumeEvent);
   FreeAndNil(Context^.YieldEvent);
 {$endif}
