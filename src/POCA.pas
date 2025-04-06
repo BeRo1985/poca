@@ -21636,7 +21636,12 @@ var TokenList:PPOCAToken;
           inc(SourcePosition);
           if (SourcePosition<=SourceLength) and (Source[SourcePosition]='=') then begin
            inc(SourcePosition);
-           AddToken(ptSEQ,'',0);
+           if (SourcePosition<=SourceLength) and (Source[SourcePosition]='>') then begin
+            inc(SourcePosition);
+            AddToken(ptFASTLAMBDA,'',0);
+           end else begin
+            AddToken(ptSEQ,'',0);
+           end;
           end else begin
            AddToken(ptEQ,'',0);
           end;
@@ -21651,7 +21656,7 @@ var TokenList:PPOCAToken;
          end;
          '>':begin
           inc(SourcePosition);
-          AddToken(ptFASTLAMBDA,'',0);
+          AddToken(ptLAMBDA,'',0);
          end;
          else begin
           AddToken(ptASSIGN,'',0);
