@@ -6,7 +6,7 @@ Below is a high‑level review of the full GC system in POCA. The review is divi
 
 **1. Overall GC Architecture**
 
-The GC system is structured as a state machine with well‑defined phases (e.g., `pgcsRESET`, `pgcsINIT`, `pgcsMARKROOTS`, `pgcsMARKPERSISTENTS`, `pgcsMARKPROTECTED`, `pgcsMARKGREYS`, `pgcsSWEEPINIT`, `pgcsMARKWHITEGHOSTS`, `pgcsMARKWHITEGHOSTGREYS`, `pgcsSWEEP`, `pgcsFLIP`, `pgcsDONE`). This design clearly delineates the processing stages, ensuring that the marking of roots, contexts, persistent objects, and ghost objects is distinctly separated from the sweeping phase. The state transitions are laid out explicitly in the cycle collection procedure, which makes it straightforward to understand how each category of objects is handled during a GC cycle.
+The GC system is structured as a state machine with well‑defined phases (e.g., `pgcsRESET`, `pgcsINIT`, `pgcsMARKROOTS`, `pgcsMARKPROTECTED`, `pgcsMARKGREYS`, `pgcsSWEEPINIT`, `pgcsMARKWHITEGHOSTS`, `pgcsMARKWHITEGHOSTGREYS`, `pgcsSWEEP`, `pgcsFLIP`, `pgcsDONE`). This design clearly delineates the processing stages, ensuring that the marking of roots, contexts, persistent objects, and ghost objects is distinctly separated from the sweeping phase. The state transitions are laid out explicitly in the cycle collection procedure, which makes it straightforward to understand how each category of objects is handled during a GC cycle.
 
 ──────────────────────────────
 
