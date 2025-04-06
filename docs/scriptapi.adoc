@@ -4904,6 +4904,697 @@ system.
 POCA with flexibility similar to JavaScript, providing robust options
 for numeric string representation in a dynamic, typeless environment.
 
+== Path
+
+=== Overview
+
+The POCA Path API provides a variety of functions for manipulating file
+system paths. These functions allow you to extract directories, file
+names, file extensions, and perform path transformations (such as
+converting to relative or absolute paths), split or join path
+components, and perform file system operations (like creating
+directories, checking file existence, and copying or moving files). This
+API works with both Windows and Unix-style paths.
+
+'''''
+
+==== Path.dir
+
+*Usage:*
+
+[source,js]
+----
+let directory = Path.dir(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The full file path.
+* *Description:* Returns the directory portion of a path, excluding the
+file name and any trailing delimiter.
+* *Return Value:* A new string containing the directory portion.
+* *Example:*
+
+[source,js]
+----
+let dir = Path.dir("/folder/file.txt");
+// Returns "/folder"
+----
+
+'''''
+
+==== Path.fileName
+
+*Usage:*
+
+[source,js]
+----
+let name = Path.fileName(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The full file path.
+* *Description:* Extracts and returns the file name from the given path.
+* *Return Value:* A new string containing the file name.
+* *Example:*
+
+[source,js]
+----
+let fileName = Path.fileName("/folder/file.txt");
+// Returns "file.txt"
+----
+
+'''''
+
+==== Path.fileExtension
+
+*Usage:*
+
+[source,js]
+----
+let ext = Path.fileExtension(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The full file path.
+* *Description:* Returns the file extension from the given path.
+* *Return Value:* A new string with the file extension.
+* *Example:*
+
+[source,js]
+----
+let extension = Path.fileExtension("/folder/file.txt");
+// Returns ".txt"
+----
+
+'''''
+
+==== Path.currentScriptFile
+
+*Usage:*
+
+[source,js]
+----
+let currentScript = Path.currentScriptFile(absolute);
+----
+
+* *Parameters:*
+** `+absolute+` (boolean, optional):
+*** `+true+`: Return an absolute file path.
+*** `+false+` (or omitted): Return a relative file path.
+* *Description:* Returns the current script file name. The boolean flag
+determines whether the returned path is absolute or relative.
+* *Return Value:* A new string representing the current script file
+name.
+* *Example:*
+
+[source,js]
+----
+let scriptPath = Path.currentScriptFile(true);
+// Returns the absolute path of the current script file (e.g., "/home/user/project/script.poca")
+----
+
+'''''
+
+==== Path.relative
+
+*Usage:*
+
+[source,js]
+----
+let relativePath = Path.relative(targetPath, basePath);
+----
+
+* *Parameters:*
+** `+targetPath+` (string): The path to be converted.
+** `+basePath+` (string, optional): The base path to compare against
+(default is empty string).
+* *Description:* Converts a given path to a relative path based on an
+optional base path.
+* *Return Value:* A new string containing the relative path.
+* *Example:*
+
+[source,js]
+----
+let relPath = Path.relative("/folder/subfolder/file.txt", "/folder");
+// Returns "subfolder/file.txt"
+----
+
+'''''
+
+==== Path.absolute
+
+*Usage:*
+
+[source,js]
+----
+let absolutePath = Path.absolute(relativePath, basePath);
+----
+
+* *Parameters:*
+** `+relativePath+` (string): The relative path.
+** `+basePath+` (string, optional): The base path to expand from
+(default is empty string).
+* *Description:* Converts a relative path to an absolute path using an
+optional base path.
+* *Return Value:* A new string with the absolute path.
+* *Example:*
+
+[source,js]
+----
+let absPath = Path.absolute("subfolder/file.txt", "/folder");
+// Returns "/folder/subfolder/file.txt"
+----
+
+'''''
+
+==== Path.split
+
+*Usage:*
+
+[source,js]
+----
+let parts = Path.split(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The file path to split.
+* *Description:* Splits a path string into its component parts, removing
+any empty segments.
+* *Return Value:* An array of strings representing each part of the
+path.
+* *Example:*
+
+[source,js]
+----
+let segments = Path.split("/folder/subfolder/file.txt");
+// Returns ["/", "folder", "subfolder", "file.txt"]
+----
+
+'''''
+
+==== Path.join
+
+*Usage:*
+
+[source,js]
+----
+let fullPath = Path.join(pathList);
+----
+
+* *Parameters:*
+** `+pathList+` (array): An array of path segments.
+* *Description:* Joins an array of path segments into a single path
+string, using the platform-specific delimiter.
+* *Return Value:* A new string with the combined path.
+* *Example:*
+
+[source,js]
+----
+let pathJoined = Path.join(["/", "folder", "file.txt"]);
+// Returns "/folder/file.txt"
+----
+
+'''''
+
+==== Path.isAbsolute
+
+*Usage:*
+
+[source,js]
+----
+let isAbs = Path.isAbsolute(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The file path to check.
+* *Description:* Checks whether a given path is absolute.
+* *Return Value:* A numeric boolean: `+1+` if the path is absolute,
+`+0+` otherwise.
+* *Example:*
+
+[source,js]
+----
+let absoluteCheck = Path.isAbsolute("/folder/file.txt");
+// Returns 1
+----
+
+'''''
+
+==== Path.delimiter
+
+*Usage:*
+
+[source,js]
+----
+let delim = Path.delimiter();
+----
+
+* *Parameters:* None.
+* *Description:* Returns the directory delimiter character for the
+platform (forward slash on Unix, backslash on Windows).
+* *Return Value:* A new string containing the delimiter.
+* *Example:*
+
+[source,js]
+----
+let delimiter = Path.delimiter();  // Returns "/" on Unix or "\" on Windows.
+----
+
+'''''
+
+==== Path.current
+
+*Usage:*
+
+[source,js]
+----
+let currDir = Path.current();
+----
+
+* *Parameters:* None.
+* *Description:* Returns the current working directory.
+* *Return Value:* A new string with the current directory path.
+* *Example:*
+
+[source,js]
+----
+let currentDirectory = Path.current();
+// Returns, for example, "/home/user/project"
+----
+
+'''''
+
+==== Path.getEntries
+
+*Usage:*
+
+[source,js]
+----
+let entries = Path.getEntries(dirPath);
+----
+
+* *Parameters:*
+** `+dirPath+` (string): The directory path.
+* *Description:* Retrieves an array of directory entry names (files and
+subdirectories) from the specified directory.
+* *Return Value:* An array of strings representing the directory
+entries.
+* *Example:*
+
+[source,js]
+----
+let dirEntries = Path.getEntries("/usr/local/bin");
+// Returns an array of file and directory names.
+----
+
+'''''
+
+==== Path.stat
+
+*Usage:*
+
+[source,js]
+----
+let stats = Path.stat(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The file or directory path.
+* *Description:* Retrieves a hash containing file or directory
+statistics. The hash includes keys such as:
+** `+size+`: File size in bytes.
+** `+mtime+`: Modification time.
+** `+ctime+`: Creation time.
+** `+atime+`: Access time.
+** `+type+`: A string indicating the type (e.g., `+"file"+` or
+`+"directory"+`).
+** `+symlink+`: A numeric boolean (`+0+` or `+1+`) indicating whether
+the path is a symbolic link.
++
+*Note:* The time values are returned as Object Pascal TDateTime values
+(64-bit doubles compatible with Delphi/FreePascal), not as Unix
+timestamps.
+* *Return Value:* A hash with keys `+size+`, `+mtime+`, `+ctime+`,
+`+atime+`, `+type+`, and `+symlink+`.
+* *Example:*
+
+[source,js]
+----
+let fileStats = Path.stat("/folder/file.txt");
+// Returns a hash like: { size: 1024, mtime: 44500.1234, ctime: 44400.5678, atime: 44500.1234, type: "file", symlink: 0 }
+----
+
+'''''
+
+==== Path.isDir
+
+*Usage:*
+
+[source,js]
+----
+let isDirectory = Path.isDir(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The path to check.
+* *Description:* Checks if the given path represents a directory.
+* *Return Value:* A numeric boolean: `+1+` if it is a directory, `+0+`
+otherwise.
+* *Example:*
+
+[source,js]
+----
+let dirCheck = Path.isDir("/folder");
+// Returns 1 if "/folder" is a directory.
+----
+
+'''''
+
+==== Path.isFile
+
+*Usage:*
+
+[source,js]
+----
+let isFile = Path.isFile(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The path to check.
+* *Description:* Checks if the given path represents a file.
+* *Return Value:* A numeric boolean: `+1+` if it is a file, `+0+`
+otherwise.
+* *Example:*
+
+[source,js]
+----
+let fileCheck = Path.isFile("/folder/file.txt");
+// Returns 1 if it is a file.
+----
+
+'''''
+
+==== Path.isSymLink
+
+*Usage:*
+
+[source,js]
+----
+let isLink = Path.isSymLink(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The path to check.
+* *Description:* Checks if the given path is a symbolic link.
+* *Return Value:* A numeric boolean: `+1+` if it is a symlink, `+0+`
+otherwise.
+* *Example:*
+
+[source,js]
+----
+let symlinkCheck = Path.isSymLink("/usr/local/bin/symlink");
+// Returns 1 if it is a symbolic link.
+----
+
+'''''
+
+==== Path.resolve
+
+*Usage:*
+
+[source,js]
+----
+let resolved = Path.resolve(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The path to resolve.
+* *Description:* Resolves the target of a symbolic link. If the given
+path is a symlink, returns the target path.
+* *Return Value:* A new string representing the resolved path.
+* *Example:*
+
+[source,js]
+----
+let targetPath = Path.resolve("/usr/local/bin/symlink");
+// Returns the target path of the symlink.
+----
+
+'''''
+
+==== Path.mkdir
+
+*Usage:*
+
+[source,js]
+----
+let created = Path.mkdir(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The directory path to create.
+* *Description:* Creates a new directory at the specified path. If the
+directory already exists, nothing is done.
+* *Return Value:* A numeric boolean: `+1+` if the directory was created
+successfully, `+0+` otherwise.
+* *Example:*
+
+[source,js]
+----
+let success = Path.mkdir("/newFolder");
+// Returns 1 if created successfully.
+----
+
+'''''
+
+==== Path.chdir
+
+*Usage:*
+
+[source,js]
+----
+let changed = Path.chdir(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The directory path to change to.
+* *Description:* Changes the current working directory to the specified
+path.
+* *Return Value:* A numeric boolean: `+1+` if the directory was changed
+successfully, `+0+` otherwise.
+* *Example:*
+
+[source,js]
+----
+let changeResult = Path.chdir("/folder");
+// Returns 1 on success.
+----
+
+'''''
+
+==== Path.rmdir
+
+*Usage:*
+
+[source,js]
+----
+let removed = Path.rmdir(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The directory path to remove.
+* *Description:* Removes the specified directory if it exists.
+* *Return Value:* A numeric boolean: `+1+` if removed successfully,
+`+0+` otherwise.
+* *Example:*
+
+[source,js]
+----
+let removalStatus = Path.rmdir("/folder");
+// Returns 1 if the directory was removed.
+----
+
+'''''
+
+==== Path.exist
+
+*Usage:*
+
+[source,js]
+----
+let exists = Path.exist(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The file or directory path to check.
+* *Description:* Checks if a file or directory exists at the specified
+path.
+* *Return Value:* A numeric boolean: `+1+` if it exists, `+0+`
+otherwise.
+* *Example:*
+
+[source,js]
+----
+let existence = Path.exist("/folder/file.txt");
+// Returns 1 if the path exists.
+----
+
+'''''
+
+==== Path.remove
+
+*Usage:*
+
+[source,js]
+----
+let success = Path.remove(path);
+----
+
+* *Parameters:*
+** `+path+` (string): The file path to delete.
+* *Description:* Deletes a file at the specified path.
+* *Return Value:* A numeric boolean: `+1+` if deletion was successful,
+`+0+` otherwise.
+* *Example:*
+
+[source,js]
+----
+let deleteResult = Path.remove("/folder/file.txt");
+// Returns 1 if deletion succeeded.
+----
+
+'''''
+
+==== Path.copy
+
+*Usage:*
+
+[source,js]
+----
+let success = Path.copy(sourcePath, destinationPath);
+----
+
+* *Parameters:*
+[arabic]
+. `+sourcePath+` (string): The source file path.
+. `+destinationPath+` (string): The destination file path.
+* *Description:* Copies a file from the source path to the destination
+path.
+* *Return Value:* A numeric boolean: `+1+` if the file was copied
+successfully, `+0+` otherwise.
+* *Example:*
+
+[source,js]
+----
+let copyResult = Path.copy("/folder/source.txt", "/folder/dest.txt");
+// Returns 1 on success.
+----
+
+'''''
+
+==== Path.move
+
+*Usage:*
+
+[source,js]
+----
+let success = Path.move(sourcePath, destinationPath);
+----
+
+* *Parameters:*
+[arabic]
+. `+sourcePath+` (string): The source file path.
+. `+destinationPath+` (string): The destination file path.
+* *Description:* Moves a file from the source path to the destination
+path.
+* *Return Value:* A numeric boolean: `+1+` if the move was successful,
+`+0+` otherwise.
+* *Example:*
+
+[source,js]
+----
+let moveResult = Path.move("/folder/source.txt", "/folder/dest.txt");
+// Returns 1 on success.
+----
+
+'''''
+
+==== Path.rename
+
+*Usage:*
+
+[source,js]
+----
+let success = Path.rename(sourcePath, newPath);
+----
+
+* *Parameters:*
+[arabic]
+. `+sourcePath+` (string): The current file path.
+. `+newPath+` (string): The new file path.
+* *Description:* Renames a file from the current file path to the new
+file path.
+* *Return Value:* A numeric boolean: `+1+` if renaming was successful,
+`+0+` otherwise.
+* *Example:*
+
+[source,js]
+----
+let renameResult = Path.rename("/folder/old.txt", "/folder/new.txt");
+// Returns 1 if renaming succeeded.
+----
+
+'''''
+
+=== Summary
+
+* *Global Object:* The *Path* object provides a comprehensive API for
+working with file system paths. It enables you to extract and manipulate
+path components, determine path properties, and perform file system
+operations.
+* *Path API Functions:*
+** *Path.dir:* Extracts the directory portion of a path.
+** *Path.fileName:* Retrieves the file name from a path.
+** *Path.fileExtension:* Retrieves the file extension.
+** *Path.currentScriptFile:* Returns the current script file name, with
+a boolean flag (`+absolute+`) indicating whether the path is absolute
+(`+true+`) or relative (`+false+`).
+** *Path.relative:* Converts a path to a relative form based on an
+optional base.
+** *Path.absolute:* Converts a relative path to an absolute one using an
+optional base.
+** *Path.split:* Splits a path into its component parts.
+** *Path.join:* Joins an array of path segments into a single path.
+** *Path.isAbsolute:* Checks if a path is absolute.
+** *Path.delimiter:* Returns the path delimiter for the platform.
+** *Path.current:* Returns the current working directory.
+** *Path.getEntries:* Returns an array of directory entries from a given
+directory.
+** *Path.stat:* Retrieves file/directory statistics in a hash.
+** *Path.isDir:* Checks if a path represents a directory.
+** *Path.isFile:* Checks if a path represents a file.
+** *Path.isSymLink:* Checks if a path is a symbolic link.
+** *Path.resolve:* Resolves a symbolic link to its target path.
+** *Path.mkdir:* Creates a new directory.
+** *Path.chdir:* Changes the current working directory.
+** *Path.rmdir:* Removes a directory.
+** *Path.exist:* Checks if a file or directory exists.
+** *Path.remove:* Deletes a file.
+** *Path.copy:* Copies a file.
+** *Path.move:* Moves a file.
+** *Path.rename:* Renames a file.
+* *Usage:* The POCA Path API lets you handle file system paths and
+perform file operations easily in your POCA scripts. Whether you need to
+manipulate path strings or interact with the file system (e.g., create
+directories, check file existence, copy or move files), this
+comprehensive API provides the necessary functionality in a dynamic,
+typeless environment.
+* *Note:* The Path API is designed to work with both Windows and Unix
+file systems, making it versatile for cross-platform development. The
+API handles path delimiters and file operations in a consistent way,
+allowing you to write scripts that can run on different operating
+systems without modification.
+
 == RegExp
 
 === Overview

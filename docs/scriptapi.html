@@ -826,9 +826,43 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_summary_13">Summary</a></li>
 </ul>
 </li>
+<li><a href="#_path">Path</a>
+<ul class="sectlevel2">
+<li><a href="#_overview_14">Overview</a>
+<ul class="sectlevel3">
+<li><a href="#_path_dir">Path.dir</a></li>
+<li><a href="#_path_filename">Path.fileName</a></li>
+<li><a href="#_path_fileextension">Path.fileExtension</a></li>
+<li><a href="#_path_currentscriptfile">Path.currentScriptFile</a></li>
+<li><a href="#_path_relative">Path.relative</a></li>
+<li><a href="#_path_absolute">Path.absolute</a></li>
+<li><a href="#_path_split">Path.split</a></li>
+<li><a href="#_path_join">Path.join</a></li>
+<li><a href="#_path_isabsolute">Path.isAbsolute</a></li>
+<li><a href="#_path_delimiter">Path.delimiter</a></li>
+<li><a href="#_path_current">Path.current</a></li>
+<li><a href="#_path_getentries">Path.getEntries</a></li>
+<li><a href="#_path_stat">Path.stat</a></li>
+<li><a href="#_path_isdir">Path.isDir</a></li>
+<li><a href="#_path_isfile">Path.isFile</a></li>
+<li><a href="#_path_issymlink">Path.isSymLink</a></li>
+<li><a href="#_path_resolve">Path.resolve</a></li>
+<li><a href="#_path_mkdir">Path.mkdir</a></li>
+<li><a href="#_path_chdir">Path.chdir</a></li>
+<li><a href="#_path_rmdir">Path.rmdir</a></li>
+<li><a href="#_path_exist">Path.exist</a></li>
+<li><a href="#_path_remove">Path.remove</a></li>
+<li><a href="#_path_copy">Path.copy</a></li>
+<li><a href="#_path_move">Path.move</a></li>
+<li><a href="#_path_rename">Path.rename</a></li>
+</ul>
+</li>
+<li><a href="#_summary_14">Summary</a></li>
+</ul>
+</li>
 <li><a href="#_regexp">RegExp</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_14">Overview</a></li>
+<li><a href="#_overview_15">Overview</a></li>
 <li><a href="#_global_regexp_object">Global RegExp Object</a>
 <ul class="sectlevel3">
 <li><a href="#_regexp_create_regexp_compile_and_the_new_operator">RegExp.create, RegExp.compile, and the new Operator</a></li>
@@ -846,12 +880,12 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_regexp_replace">RegExp.replace</a></li>
 </ul>
 </li>
-<li><a href="#_summary_14">Summary</a></li>
+<li><a href="#_summary_15">Summary</a></li>
 </ul>
 </li>
 <li><a href="#_semaphore">Semaphore</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_15">Overview</a></li>
+<li><a href="#_overview_16">Overview</a></li>
 <li><a href="#_global_semaphore_object">Global Semaphore Object</a>
 <ul class="sectlevel3">
 <li><a href="#_semaphore_create_or_new_semaphore">Semaphore.create(), or new Semaphore()</a></li>
@@ -863,12 +897,12 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_semaphore_up">Semaphore.up</a></li>
 </ul>
 </li>
-<li><a href="#_summary_15">Summary</a></li>
+<li><a href="#_summary_16">Summary</a></li>
 </ul>
 </li>
 <li><a href="#_string">String</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_16">Overview</a></li>
+<li><a href="#_overview_17">Overview</a></li>
 <li><a href="#_global_string_object">Global String Object</a>
 <ul class="sectlevel3">
 <li><a href="#_string_create_new_string_or_literal_syntax">String.create(), new String(), or Literal Syntax</a></li>
@@ -910,12 +944,12 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_string_fromcodeunits">String.fromCodeUnits</a></li>
 </ul>
 </li>
-<li><a href="#_summary_16">Summary</a></li>
+<li><a href="#_summary_17">Summary</a></li>
 </ul>
 </li>
 <li><a href="#_thread">Thread</a>
 <ul class="sectlevel2">
-<li><a href="#_overview_17">Overview</a></li>
+<li><a href="#_overview_18">Overview</a></li>
 <li><a href="#_global_thread_object">Global Thread Object</a>
 <ul class="sectlevel3">
 <li><a href="#_thread_create">Thread.create</a></li>
@@ -930,7 +964,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_thread_wait">Thread.wait</a></li>
 </ul>
 </li>
-<li><a href="#_summary_17">Summary</a></li>
+<li><a href="#_summary_18">Summary</a></li>
 </ul>
 </li>
 </ul>
@@ -9328,10 +9362,1241 @@ for numeric string representation in a dynamic, typeless environment.</p>
 </div>
 </div>
 <div class="sect1">
-<h2 id="_regexp">RegExp</h2>
+<h2 id="_path">Path</h2>
 <div class="sectionbody">
 <div class="sect2">
 <h3 id="_overview_14">Overview</h3>
+<div class="paragraph">
+<p>The POCA Path API provides a variety of functions for manipulating file
+system paths. These functions allow you to extract directories, file
+names, file extensions, and perform path transformations (such as
+converting to relative or absolute paths), split or join path
+components, and perform file system operations (like creating
+directories, checking file existence, and copying or moving files). This
+API works with both Windows and Unix-style paths.</p>
+</div>
+<hr>
+<div class="sect3">
+<h4 id="_path_dir">Path.dir</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let directory = Path.dir(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The full file path.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the directory portion of a path, excluding the
+file name and any trailing delimiter.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string containing the directory portion.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let dir = Path.dir("/folder/file.txt");
+// Returns "/folder"</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_filename">Path.fileName</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let name = Path.fileName(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The full file path.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Extracts and returns the file name from the given path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string containing the file name.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let fileName = Path.fileName("/folder/file.txt");
+// Returns "file.txt"</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_fileextension">Path.fileExtension</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let ext = Path.fileExtension(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The full file path.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the file extension from the given path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string with the file extension.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let extension = Path.fileExtension("/folder/file.txt");
+// Returns ".txt"</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_currentscriptfile">Path.currentScriptFile</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let currentScript = Path.currentScriptFile(absolute);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>absolute</code> (boolean, optional):</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>true</code>: Return an absolute file path.</p>
+</li>
+<li>
+<p><code>false</code> (or omitted): Return a relative file path.</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the current script file name. The boolean flag
+determines whether the returned path is absolute or relative.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string representing the current script file
+name.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let scriptPath = Path.currentScriptFile(true);
+// Returns the absolute path of the current script file (e.g., "/home/user/project/script.poca")</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_relative">Path.relative</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let relativePath = Path.relative(targetPath, basePath);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>targetPath</code> (string): The path to be converted.</p>
+</li>
+<li>
+<p><code>basePath</code> (string, optional): The base path to compare against
+(default is empty string).</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Converts a given path to a relative path based on an
+optional base path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string containing the relative path.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let relPath = Path.relative("/folder/subfolder/file.txt", "/folder");
+// Returns "subfolder/file.txt"</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_absolute">Path.absolute</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let absolutePath = Path.absolute(relativePath, basePath);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>relativePath</code> (string): The relative path.</p>
+</li>
+<li>
+<p><code>basePath</code> (string, optional): The base path to expand from
+(default is empty string).</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Converts a relative path to an absolute path using an
+optional base path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string with the absolute path.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let absPath = Path.absolute("subfolder/file.txt", "/folder");
+// Returns "/folder/subfolder/file.txt"</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_split">Path.split</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let parts = Path.split(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The file path to split.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Splits a path string into its component parts, removing
+any empty segments.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> An array of strings representing each part of the
+path.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let segments = Path.split("/folder/subfolder/file.txt");
+// Returns ["/", "folder", "subfolder", "file.txt"]</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_join">Path.join</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let fullPath = Path.join(pathList);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>pathList</code> (array): An array of path segments.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Joins an array of path segments into a single path
+string, using the platform-specific delimiter.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string with the combined path.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let pathJoined = Path.join(["/", "folder", "file.txt"]);
+// Returns "/folder/file.txt"</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_isabsolute">Path.isAbsolute</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isAbs = Path.isAbsolute(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The file path to check.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Checks whether a given path is absolute.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if the path is absolute,
+<code>0</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let absoluteCheck = Path.isAbsolute("/folder/file.txt");
+// Returns 1</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_delimiter">Path.delimiter</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let delim = Path.delimiter();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the directory delimiter character for the
+platform (forward slash on Unix, backslash on Windows).</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string containing the delimiter.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let delimiter = Path.delimiter();  // Returns "/" on Unix or "\" on Windows.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_current">Path.current</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let currDir = Path.current();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Description:</strong> Returns the current working directory.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string with the current directory path.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let currentDirectory = Path.current();
+// Returns, for example, "/home/user/project"</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_getentries">Path.getEntries</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let entries = Path.getEntries(dirPath);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>dirPath</code> (string): The directory path.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Retrieves an array of directory entry names (files and
+subdirectories) from the specified directory.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> An array of strings representing the directory
+entries.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let dirEntries = Path.getEntries("/usr/local/bin");
+// Returns an array of file and directory names.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_stat">Path.stat</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let stats = Path.stat(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The file or directory path.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Retrieves a hash containing file or directory
+statistics. The hash includes keys such as:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>size</code>: File size in bytes.</p>
+</li>
+<li>
+<p><code>mtime</code>: Modification time.</p>
+</li>
+<li>
+<p><code>ctime</code>: Creation time.</p>
+</li>
+<li>
+<p><code>atime</code>: Access time.</p>
+</li>
+<li>
+<p><code>type</code>: A string indicating the type (e.g., <code>"file"</code> or
+<code>"directory"</code>).</p>
+</li>
+<li>
+<p><code>symlink</code>: A numeric boolean (<code>0</code> or <code>1</code>) indicating whether
+the path is a symbolic link.</p>
+<div class="paragraph">
+<p><strong>Note:</strong> The time values are returned as Object Pascal TDateTime values
+(64-bit doubles compatible with Delphi/FreePascal), not as Unix
+timestamps.</p>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A hash with keys <code>size</code>, <code>mtime</code>, <code>ctime</code>,
+<code>atime</code>, <code>type</code>, and <code>symlink</code>.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let fileStats = Path.stat("/folder/file.txt");
+// Returns a hash like: { size: 1024, mtime: 44500.1234, ctime: 44400.5678, atime: 44500.1234, type: "file", symlink: 0 }</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_isdir">Path.isDir</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isDirectory = Path.isDir(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The path to check.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Checks if the given path represents a directory.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if it is a directory, <code>0</code>
+otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let dirCheck = Path.isDir("/folder");
+// Returns 1 if "/folder" is a directory.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_isfile">Path.isFile</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isFile = Path.isFile(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The path to check.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Checks if the given path represents a file.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if it is a file, <code>0</code>
+otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let fileCheck = Path.isFile("/folder/file.txt");
+// Returns 1 if it is a file.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_issymlink">Path.isSymLink</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let isLink = Path.isSymLink(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The path to check.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Checks if the given path is a symbolic link.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if it is a symlink, <code>0</code>
+otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let symlinkCheck = Path.isSymLink("/usr/local/bin/symlink");
+// Returns 1 if it is a symbolic link.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_resolve">Path.resolve</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let resolved = Path.resolve(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The path to resolve.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Resolves the target of a symbolic link. If the given
+path is a symlink, returns the target path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string representing the resolved path.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let targetPath = Path.resolve("/usr/local/bin/symlink");
+// Returns the target path of the symlink.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_mkdir">Path.mkdir</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let created = Path.mkdir(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The directory path to create.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Creates a new directory at the specified path. If the
+directory already exists, nothing is done.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if the directory was created
+successfully, <code>0</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let success = Path.mkdir("/newFolder");
+// Returns 1 if created successfully.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_chdir">Path.chdir</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let changed = Path.chdir(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The directory path to change to.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Changes the current working directory to the specified
+path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if the directory was changed
+successfully, <code>0</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let changeResult = Path.chdir("/folder");
+// Returns 1 on success.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_rmdir">Path.rmdir</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let removed = Path.rmdir(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The directory path to remove.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Removes the specified directory if it exists.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if removed successfully,
+<code>0</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let removalStatus = Path.rmdir("/folder");
+// Returns 1 if the directory was removed.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_exist">Path.exist</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let exists = Path.exist(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The file or directory path to check.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Checks if a file or directory exists at the specified
+path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if it exists, <code>0</code>
+otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let existence = Path.exist("/folder/file.txt");
+// Returns 1 if the path exists.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_remove">Path.remove</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let success = Path.remove(path);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>path</code> (string): The file path to delete.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Deletes a file at the specified path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if deletion was successful,
+<code>0</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let deleteResult = Path.remove("/folder/file.txt");
+// Returns 1 if deletion succeeded.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_copy">Path.copy</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let success = Path.copy(sourcePath, destinationPath);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>sourcePath</code> (string): The source file path.</p>
+</li>
+<li>
+<p><code>destinationPath</code> (string): The destination file path.</p>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Copies a file from the source path to the destination
+path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if the file was copied
+successfully, <code>0</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let copyResult = Path.copy("/folder/source.txt", "/folder/dest.txt");
+// Returns 1 on success.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_move">Path.move</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let success = Path.move(sourcePath, destinationPath);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>sourcePath</code> (string): The source file path.</p>
+</li>
+<li>
+<p><code>destinationPath</code> (string): The destination file path.</p>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Moves a file from the source path to the destination
+path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if the move was successful,
+<code>0</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let moveResult = Path.move("/folder/source.txt", "/folder/dest.txt");
+// Returns 1 on success.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_path_rename">Path.rename</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let success = Path.rename(sourcePath, newPath);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>sourcePath</code> (string): The current file path.</p>
+</li>
+<li>
+<p><code>newPath</code> (string): The new file path.</p>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p><strong>Description:</strong> Renames a file from the current file path to the new
+file path.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean: <code>1</code> if renaming was successful,
+<code>0</code> otherwise.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let renameResult = Path.rename("/folder/old.txt", "/folder/new.txt");
+// Returns 1 if renaming succeeded.</code></pre>
+</div>
+</div>
+<hr>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_summary_14">Summary</h3>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Global Object:</strong> The <strong>Path</strong> object provides a comprehensive API for
+working with file system paths. It enables you to extract and manipulate
+path components, determine path properties, and perform file system
+operations.</p>
+</li>
+<li>
+<p><strong>Path API Functions:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Path.dir:</strong> Extracts the directory portion of a path.</p>
+</li>
+<li>
+<p><strong>Path.fileName:</strong> Retrieves the file name from a path.</p>
+</li>
+<li>
+<p><strong>Path.fileExtension:</strong> Retrieves the file extension.</p>
+</li>
+<li>
+<p><strong>Path.currentScriptFile:</strong> Returns the current script file name, with
+a boolean flag (<code>absolute</code>) indicating whether the path is absolute
+(<code>true</code>) or relative (<code>false</code>).</p>
+</li>
+<li>
+<p><strong>Path.relative:</strong> Converts a path to a relative form based on an
+optional base.</p>
+</li>
+<li>
+<p><strong>Path.absolute:</strong> Converts a relative path to an absolute one using an
+optional base.</p>
+</li>
+<li>
+<p><strong>Path.split:</strong> Splits a path into its component parts.</p>
+</li>
+<li>
+<p><strong>Path.join:</strong> Joins an array of path segments into a single path.</p>
+</li>
+<li>
+<p><strong>Path.isAbsolute:</strong> Checks if a path is absolute.</p>
+</li>
+<li>
+<p><strong>Path.delimiter:</strong> Returns the path delimiter for the platform.</p>
+</li>
+<li>
+<p><strong>Path.current:</strong> Returns the current working directory.</p>
+</li>
+<li>
+<p><strong>Path.getEntries:</strong> Returns an array of directory entries from a given
+directory.</p>
+</li>
+<li>
+<p><strong>Path.stat:</strong> Retrieves file/directory statistics in a hash.</p>
+</li>
+<li>
+<p><strong>Path.isDir:</strong> Checks if a path represents a directory.</p>
+</li>
+<li>
+<p><strong>Path.isFile:</strong> Checks if a path represents a file.</p>
+</li>
+<li>
+<p><strong>Path.isSymLink:</strong> Checks if a path is a symbolic link.</p>
+</li>
+<li>
+<p><strong>Path.resolve:</strong> Resolves a symbolic link to its target path.</p>
+</li>
+<li>
+<p><strong>Path.mkdir:</strong> Creates a new directory.</p>
+</li>
+<li>
+<p><strong>Path.chdir:</strong> Changes the current working directory.</p>
+</li>
+<li>
+<p><strong>Path.rmdir:</strong> Removes a directory.</p>
+</li>
+<li>
+<p><strong>Path.exist:</strong> Checks if a file or directory exists.</p>
+</li>
+<li>
+<p><strong>Path.remove:</strong> Deletes a file.</p>
+</li>
+<li>
+<p><strong>Path.copy:</strong> Copies a file.</p>
+</li>
+<li>
+<p><strong>Path.move:</strong> Moves a file.</p>
+</li>
+<li>
+<p><strong>Path.rename:</strong> Renames a file.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Usage:</strong> The POCA Path API lets you handle file system paths and
+perform file operations easily in your POCA scripts. Whether you need to
+manipulate path strings or interact with the file system (e.g., create
+directories, check file existence, copy or move files), this
+comprehensive API provides the necessary functionality in a dynamic,
+typeless environment.</p>
+</li>
+<li>
+<p><strong>Note:</strong> The Path API is designed to work with both Windows and Unix
+file systems, making it versatile for cross-platform development. The
+API handles path delimiters and file operations in a consistent way,
+allowing you to write scripts that can run on different operating
+systems without modification.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_regexp">RegExp</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_overview_15">Overview</h3>
 <div class="paragraph">
 <p>The POCA RegExp API brings powerful pattern matching to your POCA
 scripts. Regular expressions in POCA are dynamic, typeless objects
@@ -9831,7 +11096,7 @@ specified).</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_summary_14">Summary</h3>
+<h3 id="_summary_15">Summary</h3>
 <div class="ulist">
 <ul>
 <li>
@@ -9897,7 +11162,7 @@ manipulation both flexible and powerful in your POCA projects.</p>
 <h2 id="_semaphore">Semaphore</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_15">Overview</h3>
+<h3 id="_overview_16">Overview</h3>
 <div class="paragraph">
 <p>The POCA Semaphore API provides counting semaphore mechanisms for
 synchronizing access to shared resources in concurrent POCA scripts.
@@ -10043,7 +11308,7 @@ sem.up();</code></pre>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_summary_15">Summary</h3>
+<h3 id="_summary_16">Summary</h3>
 <div class="ulist">
 <ul>
 <li>
@@ -10087,7 +11352,7 @@ execution.</p>
 <h2 id="_string">String</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_16">Overview</h3>
+<h3 id="_overview_17">Overview</h3>
 <div class="paragraph">
 <p>The POCA String API provides a rich set of operations for manipulating
 strings in POCA scripts. Strings in POCA are a native type (not ghost
@@ -11187,7 +12452,7 @@ units.</p>
 </div>
 </div>
 <div class="sect2">
-<h3 id="_summary_16">Summary</h3>
+<h3 id="_summary_17">Summary</h3>
 <div class="ulist">
 <ul>
 <li>
@@ -11262,7 +12527,7 @@ string manipulation in POCA.</p>
 <h2 id="_thread">Thread</h2>
 <div class="sectionbody">
 <div class="sect2">
-<h3 id="_overview_17">Overview</h3>
+<h3 id="_overview_18">Overview</h3>
 <div class="paragraph">
 <p>The POCA Thread API allows you to execute functions concurrently in
 separate threads. Threads in POCA are dynamic, typeless ghost objects
@@ -11568,7 +12833,7 @@ if (th.wait(1000)) {
 </div>
 </div>
 <div class="sect2">
-<h3 id="_summary_17">Summary</h3>
+<h3 id="_summary_18">Summary</h3>
 <div class="ulist">
 <ul>
 <li>
@@ -11619,7 +12884,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-06 06:56:49 +0200
+Last updated 2025-04-06 07:27:51 +0200
 </div>
 </div>
 </body>
