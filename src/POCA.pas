@@ -8735,15 +8735,15 @@ begin
      if (Right-Left)<16 then begin
       // Insertion sort
       i:=Left+1;
-      while i<= Right do begin
-       Temp:=POCAArrayGet(ArrayObject,i);
+      while i<=Right do begin
+       Temp:=ArrayRecord^.Data[i];
        j:=i-1;
-       if (j>=Left) and (POCACompare(Context,POCAArrayGet(ArrayObject,j),Temp)>0) then begin
+       if (j>=Left) and (POCACompare(Context,ArrayRecord^.Data[j],Temp)>0) then begin
         repeat
-         POCAArraySet(ArrayObject,j+1,POCAArrayGet(ArrayObject,j));
+         ArrayRecord^.Data[j+1]:=ArrayRecord^.Data[j];
          dec(j);
-        until not ((j>=Left) and (POCACompare(Context,POCAArrayGet(ArrayObject,j),Temp)>0));
-        POCAArraySet(ArrayObject,j+1,Temp);
+        until not ((j>=Left) and (POCACompare(Context,ArrayRecord^.Data[j],Temp)>0));
+        ArrayRecord^.Data[j+1]:=Temp;
        end;
        inc(i);
       end;
@@ -8756,69 +8756,69 @@ begin
        repeat
         if i>Left then begin
          dec(i);
-         Temp:=POCAArrayGet(ArrayObject,Left+i);
+         Temp:=ArrayRecord^.Data[Left+i];
         end else begin
          if Size=0 then begin
           break;
          end else begin
           dec(Size);
-          Temp:=POCAArrayGet(ArrayObject,Left+Size);
-          POCAArraySet(ArrayObject,Left+Size,POCAArrayGet(ArrayObject,Left));
+          Temp:=ArrayRecord^.Data[Left+Size];
+          ArrayRecord^.Data[Left+Size]:=ArrayRecord^.Data[Left];
          end;
         end;
         Parent:=i;
         Child:=(i*2)+1;
         while Child<Size do begin
-         if ((Child+1)<Size) and (POCACompare(Context,POCAArrayGet(ArrayObject,Left+Child+1),POCAArrayGet(ArrayObject,Left+Child))>0) then begin
+         if ((Child+1)<Size) and (POCACompare(Context,ArrayRecord^.Data[Left+Child+1],ArrayRecord^.Data[Left+Child])>0) then begin
           inc(Child);
          end;
-         if POCACompare(Context,POCAArrayGet(ArrayObject,Left+Child),Temp)>0 then begin
-          POCAArraySet(ArrayObject,Left+Parent,POCAArrayGet(ArrayObject,Left+Child));
+         if POCACompare(Context,ArrayRecord^.Data[Left+Child],Temp)>0 then begin
+          POCAArraySet(ArrayObject,Left+Parent,ArrayRecord^.Data[Left+Child]);
           Parent:=Child;
           Child:=(Parent*2)+1;
          end else begin
           break;
          end;
         end;
-        POCAArraySet(ArrayObject,Left+Parent,Temp);
+        ArrayRecord^.Data[Left+Parent]:=Temp;
        until false;
       end else begin
        // Quick sort width median-of-three optimization
        Middle:=Left+((Right-Left) shr 1);
        if (Right-Left)>3 then begin
-        if POCACompare(Context,POCAArrayGet(ArrayObject,Left),POCAArrayGet(ArrayObject,Middle))>0 then begin
-         Temp:=POCAArrayGet(ArrayObject,Left);
-         POCAArraySet(ArrayObject,Left,POCAArrayGet(ArrayObject,Middle));
-         POCAArraySet(ArrayObject,Middle,Temp);
+        if POCACompare(Context,ArrayRecord^.Data[Left],ArrayRecord^.Data[Middle])>0 then begin
+         Temp:=ArrayRecord^.Data[Left];
+         ArrayRecord^.Data[Left]:=ArrayRecord^.Data[Middle];
+         ArrayRecord^.Data[Middle]:=Temp;
         end;
-        if POCACompare(Context,POCAArrayGet(ArrayObject,Left),POCAArrayGet(ArrayObject,Right))>0 then begin
-         Temp:=POCAArrayGet(ArrayObject,Left);
-         POCAArraySet(ArrayObject,Left,POCAArrayGet(ArrayObject,Right));
-         POCAArraySet(ArrayObject,Right,Temp);
+        if POCACompare(Context,ArrayRecord^.Data[Left],ArrayRecord^.Data[Right])>0 then begin
+         Temp:=ArrayRecord^.Data[Left];
+         ArrayRecord^.Data[Left]:=ArrayRecord^.Data[Right];
+         ArrayRecord^.Data[Right]:=Temp;
         end;
-        if POCACompare(Context,POCAArrayGet(ArrayObject,Middle),POCAArrayGet(ArrayObject,Right))>0 then begin
-         Temp:=POCAArrayGet(ArrayObject,Middle);
-         POCAArraySet(ArrayObject,Middle,POCAArrayGet(ArrayObject,Right));
-         POCAArraySet(ArrayObject,Right,Temp);
+        if POCACompare(Context,ArrayRecord^.Data[Middle],ArrayRecord^.Data[Right])>0 then begin
+         Temp:=ArrayRecord^.Data[Middle];
+         ArrayRecord^.Data[Middle]:=ArrayRecord^.Data[Right];
+         ArrayRecord^.Data[Right]:=Temp;
         end;
        end;
-       Pivot:=POCAArrayGet(ArrayObject,Middle);
+       Pivot:=ArrayRecord^.Data[Middle];
        i:=Left;
        j:=Right;
        repeat
-        while (i<Right) and (POCACompare(Context,POCAArrayGet(ArrayObject,i),Pivot)<0) do begin
+        while (i<Right) and (POCACompare(Context,ArrayRecord^.Data[i],Pivot)<0) do begin
          inc(i);
         end;
-        while (j>=i) and (POCACompare(Context,POCAArrayGet(ArrayObject,j),Pivot)>0) do begin
+        while (j>=i) and (POCACompare(Context,ArrayRecord^.Data[j],Pivot)>0) do begin
          dec(j);
         end;
         if i>j then begin
          break;
         end else begin
          if i<>j then begin
-          Temp:=POCAArrayGet(ArrayObject,i);
-          POCAArraySet(ArrayObject,i,POCAArrayGet(ArrayObject,j));
-          POCAArraySet(ArrayObject,j,Temp);
+          Temp:=ArrayRecord^.Data[i];
+          ArrayRecord^.Data[i]:=ArrayRecord^.Data[j];
+          ArrayRecord^.Data[j]:=Temp;
          end;
          inc(i);
          dec(j);
@@ -8910,15 +8910,15 @@ begin
      if (Right-Left)<16 then begin
       // Insertion sort
       i:=Left+1;
-      while i<= Right do begin
-       Temp:=POCAArrayGet(ArrayObject,i);
+      while i<=Right do begin
+       Temp:=ArrayRecord^.Data[i];
        j:=i-1;
-       if (j>=Left) and (Compare(POCAArrayGet(ArrayObject,j),Temp)>0) then begin
+       if (j>=Left) and (Compare(ArrayRecord^.Data[j],Temp)>0) then begin
         repeat
-         POCAArraySet(ArrayObject,j+1,POCAArrayGet(ArrayObject,j));
+         ArrayRecord^.Data[j+1]:=ArrayRecord^.Data[j];
          dec(j);
-        until not ((j>=Left) and (Compare(POCAArrayGet(ArrayObject,j),Temp)>0));
-        POCAArraySet(ArrayObject,j+1,Temp);
+        until not ((j>=Left) and (Compare(ArrayRecord^.Data[j],Temp)>0));
+        ArrayRecord^.Data[j+1]:=Temp;
        end;
        inc(i);
       end;
@@ -8931,69 +8931,69 @@ begin
        repeat
         if i>Left then begin
          dec(i);
-         Temp:=POCAArrayGet(ArrayObject,Left+i);
+         Temp:=ArrayRecord^.Data[Left+i];
         end else begin
          if Size=0 then begin
           break;
          end else begin
           dec(Size);
-          Temp:=POCAArrayGet(ArrayObject,Left+Size);
-          POCAArraySet(ArrayObject,Left+Size,POCAArrayGet(ArrayObject,Left));
+          Temp:=ArrayRecord^.Data[Left+Size];
+          ArrayRecord^.Data[Left+Size]:=ArrayRecord^.Data[Left];
          end;
         end;
         Parent:=i;
         Child:=(i*2)+1;
         while Child<Size do begin
-         if ((Child+1)<Size) and (Compare(POCAArrayGet(ArrayObject,Left+Child+1),POCAArrayGet(ArrayObject,Left+Child))>0) then begin
+         if ((Child+1)<Size) and (Compare(ArrayRecord^.Data[Left+Child+1],ArrayRecord^.Data[Left+Child])>0) then begin
           inc(Child);
          end;
-         if Compare(POCAArrayGet(ArrayObject,Left+Child),Temp)>0 then begin
-          POCAArraySet(ArrayObject,Left+Parent,POCAArrayGet(ArrayObject,Left+Child));
+         if Compare(ArrayRecord^.Data[Left+Child],Temp)>0 then begin
+          POCAArraySet(ArrayObject,Left+Parent,ArrayRecord^.Data[Left+Child]);
           Parent:=Child;
           Child:=(Parent*2)+1;
          end else begin
           break;
          end;
         end;
-        POCAArraySet(ArrayObject,Left+Parent,Temp);
+        ArrayRecord^.Data[Left+Parent]:=Temp;
        until false;
       end else begin
        // Quick sort width median-of-three optimization
        Middle:=Left+((Right-Left) shr 1);
        if (Right-Left)>3 then begin
-        if Compare(POCAArrayGet(ArrayObject,Left),POCAArrayGet(ArrayObject,Middle))>0 then begin
-         Temp:=POCAArrayGet(ArrayObject,Left);
-         POCAArraySet(ArrayObject,Left,POCAArrayGet(ArrayObject,Middle));
-         POCAArraySet(ArrayObject,Middle,Temp);
+        if Compare(ArrayRecord^.Data[Left],ArrayRecord^.Data[Middle])>0 then begin
+         Temp:=ArrayRecord^.Data[Left];
+         ArrayRecord^.Data[Left]:=ArrayRecord^.Data[Middle];
+         ArrayRecord^.Data[Middle]:=Temp;
         end;
-        if Compare(POCAArrayGet(ArrayObject,Left),POCAArrayGet(ArrayObject,Right))>0 then begin
-         Temp:=POCAArrayGet(ArrayObject,Left);
-         POCAArraySet(ArrayObject,Left,POCAArrayGet(ArrayObject,Right));
-         POCAArraySet(ArrayObject,Right,Temp);
+        if Compare(ArrayRecord^.Data[Left],ArrayRecord^.Data[Right])>0 then begin
+         Temp:=ArrayRecord^.Data[Left];
+         ArrayRecord^.Data[Left]:=ArrayRecord^.Data[Right];
+         ArrayRecord^.Data[Right]:=Temp;
         end;
-        if Compare(POCAArrayGet(ArrayObject,Middle),POCAArrayGet(ArrayObject,Right))>0 then begin
-         Temp:=POCAArrayGet(ArrayObject,Middle);
-         POCAArraySet(ArrayObject,Middle,POCAArrayGet(ArrayObject,Right));
-         POCAArraySet(ArrayObject,Right,Temp);
+        if Compare(ArrayRecord^.Data[Middle],ArrayRecord^.Data[Right])>0 then begin
+         Temp:=ArrayRecord^.Data[Middle];
+         ArrayRecord^.Data[Middle]:=ArrayRecord^.Data[Right];
+         ArrayRecord^.Data[Right]:=Temp;
         end;
        end;
-       Pivot:=POCAArrayGet(ArrayObject,Middle);
+       Pivot:=ArrayRecord^.Data[Middle];
        i:=Left;
        j:=Right;
        repeat
-        while (i<Right) and (Compare(POCAArrayGet(ArrayObject,i),Pivot)<0) do begin
+        while (i<Right) and (Compare(ArrayRecord^.Data[i],Pivot)<0) do begin
          inc(i);
         end;
-        while (j>=i) and (Compare(POCAArrayGet(ArrayObject,j),Pivot)>0) do begin
+        while (j>=i) and (Compare(ArrayRecord^.Data[j],Pivot)>0) do begin
          dec(j);
         end;
         if i>j then begin
          break;
         end else begin
          if i<>j then begin
-          Temp:=POCAArrayGet(ArrayObject,i);
-          POCAArraySet(ArrayObject,i,POCAArrayGet(ArrayObject,j));
-          POCAArraySet(ArrayObject,j,Temp);
+          Temp:=ArrayRecord^.Data[i];
+          ArrayRecord^.Data[i]:=ArrayRecord^.Data[j];
+          ArrayRecord^.Data[j]:=Temp;
          end;
          inc(i);
          dec(j);
