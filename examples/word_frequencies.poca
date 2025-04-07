@@ -1,0 +1,45 @@
+#!/usr/bin/env poca
+
+// A very simple word frequency counter thatdoes not take punctuation into account.
+
+function pad(n, l, c = '0') {
+  const cl = n.toString().length();
+  (cl < l) ? c.toString().repeat(l - cl) ~ n.toString() : n.toString();
+}
+
+var words = {};
+
+let file = IO.open(arguments.pop() ?? __FILE__, 'r');
+
+while (!file.eof()) {
+  const ws = file.readln().split(' ');
+  foreach (let s in ws) {
+    if (s == '') // POCA returns multiple empty strings for repetitive split characters
+      continue;
+
+    if (words.contains(s))
+      words[s] += 1;
+    else
+      words[s] = 1;
+  }
+}
+
+file.close();
+
+let temp = [];
+forkey (let word in words)
+  temp.push(`${pad(words[word], 5)} ${word}`);
+
+// BUG: toSorted and toReversed don't work
+temp = temp.sort();
+temp = temp.reverse();
+
+for (let i = 0; i < temp.size(); ++i) {
+  let w = temp[i];
+
+  const idx = w.indexOf(' ');
+  const cnt = w.substr(0, idx);
+  w = w.substr(idx+1, w.length()-(idx+1));
+
+  puts(`${w} ${words[w]}`);
+}
