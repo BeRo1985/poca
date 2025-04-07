@@ -12,23 +12,23 @@ while (!file.eof()) {
 }
 file.close();
 tb = DateTime.now();
-puts(`Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
+puts(`Read In Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
 
 ta = DateTime.now();
 let temp = [];
 forkey(let word in words)temp.push([ word, words[word] ]);
 tb = DateTime.now();
-puts(`Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
+puts(`Array Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
 
 ta = DateTime.now();
 temp.sort(1).reverse();
 tb = DateTime.now();
-puts(`Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
+puts(`Sort Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
 
 ta = DateTime.now();
 foreach(let w in temp) {
-  puts(`${w[1]} ${w[0]}`);
+  puts(`${w[0]} ${w[1]}`);
 }
 tb = DateTime.now();
-puts(`Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
+puts(`Output Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
 
