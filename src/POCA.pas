@@ -488,7 +488,8 @@ const POCAVersion='2025-04-06-09-34-0000';
       popJIFNOTNULL=146;
       popSAFEEXTRACT=147;
       popSAFEGETMEMBER=148;
-      popCOUNT=149;
+      popSETCONSTLOCAL=149;
+      popCOUNT=150;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -1125,6 +1126,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCAHashEntity=record
       Key:TPOCAValue;
       Value:TPOCAValue;
+      Constant:Boolean;
      end;
 
      PPOCAHashEntityIndex=^TPOCAHashEntityIndex;
@@ -1430,6 +1432,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Instance:PPOCAInstance;
 
       StrictMode:TPOCABool32;
+
+      ScopeIDCounter:TPOCAUInt64;
 
 {$ifdef POCAMemoryPools}
       Pools:TPOCAPools;
@@ -1867,11 +1871,11 @@ function POCAObjectEqual(const a,b:TPOCAValue):boolean; {$ifdef caninline}inline
 procedure POCASetUserData(Context:PPOCAContext;p:TPOCAPointer); {$ifdef caninline}inline;{$endif}
 function POCAGetUserData(Context:PPOCAContext):TPOCAPointer; {$ifdef caninline}inline;{$endif}
 
-procedure POCAAddSymbol(Context:PPOCAContext;const Dst:TPOCAValue;Symbol:TPOCARawByteString;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
+procedure POCAAddSymbol(Context:PPOCAContext;const Dst:TPOCAValue;Symbol:TPOCARawByteString;const Value:TPOCAValue;const Constant:Boolean=false); {$ifdef caninline}inline;{$endif}
 
-procedure POCAAddNativeFunction(Context:PPOCAContext;const Hash:TPOCAValue;const FunctionName:TPOCARawByteString;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:TPOCAPointer=nil); {$ifdef caninline}inline;{$endif}
+procedure POCAAddNativeFunction(Context:PPOCAContext;const Hash:TPOCAValue;const FunctionName:TPOCARawByteString;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:TPOCAPointer=nil;const Constant:Boolean=false); {$ifdef caninline}inline;{$endif}
 
-function POCAInternSymbol(Context:PPOCAContext;Instance:PPOCAInstance;const Symbol:TPOCAValue):TPOCAValue; {$ifdef caninline}inline;{$endif}
+function POCAInternSymbol(Context:PPOCAContext;Instance:PPOCAInstance;const Symbol:TPOCAValue;const Constant:Boolean=false):TPOCAValue; {$ifdef caninline}inline;{$endif}
 
 function POCAMarkValue(Instance:PPOCAInstance;const Value:TPOCAValue):TPOCABool32;
 
@@ -1927,19 +1931,19 @@ function POCAHashGetKind(const Hash:TPOCAValue):TPOCAInt32;
 function POCAHashRawSize(const Hash:TPOCAValue):TPOCAInt32;
 function POCAHashRawExist(const Hash:TPOCAValue;const Key:TPOCAValue):boolean;
 function POCAHashRawGet(const Hash:TPOCAValue;const Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
-function POCAHashRawSet(const Hash,Key,Value:TPOCAValue):boolean;
+function POCAHashRawSet(const Hash,Key,Value:TPOCAValue;const Constant:Boolean=false):boolean;
 function POCAHashRawDelete(const Hash,Key:TPOCAValue):boolean;
 procedure POCAHashRawKeys(const Dst,Hash:TPOCAValue);
 function POCAHashSize(Context:PPOCAContext;const Hash:TPOCAValue):TPOCAInt32;
 function POCAHashExist(Context:PPOCAContext;const Hash,Key:TPOCAValue):boolean;
 function POCAHashGet(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
 function POCAHashGetInherited(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue):boolean;
-function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue):boolean;
+function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean=false):boolean;
 function POCAHashDelete(Context:PPOCAContext;const Hash,Key:TPOCAValue):boolean;
 procedure POCAHashOwnKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
 procedure POCAHashKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
 function POCAHashGetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString):TPOCAValue;
-procedure POCAHashSetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString;const Value:TPOCAValue);
+procedure POCAHashSetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString;const Value:TPOCAValue;const Constant:Boolean=false);
 procedure POCAHashCombine(Context:PPOCAContext;const Hash,Source:TPOCAValue);
 function POCAHashInstanceOf(Context:PPOCAContext;const Hash,OfHash:TPOCAValue):TPOCABool32;
 function POCAHashIs(Context:PPOCAContext;const Hash,OfObject:TPOCAValue):TPOCABool32;
@@ -8371,14 +8375,14 @@ begin
  end;
 end;
 
-procedure POCAAddSymbol(Context:PPOCAContext;const Dst:TPOCAValue;Symbol:TPOCARawByteString;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
+procedure POCAAddSymbol(Context:PPOCAContext;const Dst:TPOCAValue;Symbol:TPOCARawByteString;const Value:TPOCAValue;const Constant:Boolean); {$ifdef caninline}inline;{$endif}
 begin
- POCAHashSet(Context,Dst,POCAInternSymbol(Context,Context^.Instance,POCANewString(Context,Symbol)),Value);
+ POCAHashSet(Context,Dst,POCAInternSymbol(Context,Context^.Instance,POCANewString(Context,Symbol)),Value,Constant);
 end;
 
-procedure POCAAddNativeFunction(Context:PPOCAContext;const Hash:TPOCAValue;const FunctionName:TPOCARawByteString;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction=nil;const UserData:TPOCAPointer=nil); {$ifdef caninline}inline;{$endif}
+procedure POCAAddNativeFunction(Context:PPOCAContext;const Hash:TPOCAValue;const FunctionName:TPOCARawByteString;const FunctionPointer:TPOCANativeFunction;const DestroyFunctionPointer:TPOCANativeDestroyFunction;const UserData:TPOCAPointer;const Constant:Boolean); {$ifdef caninline}inline;{$endif}
 begin
- POCAAddSymbol(Context,Hash,FunctionName,POCANewFunction(Context,POCANewNativeCode(Context,FunctionPointer,DestroyFunctionPointer,UserData)));
+ POCAAddSymbol(Context,Hash,FunctionName,POCANewFunction(Context,POCANewNativeCode(Context,FunctionPointer,DestroyFunctionPointer,UserData)),Constant);
 end;
 
 function POCAArrayNewRecord(Old:PPOCAArrayRecord):PPOCAArrayRecord;
@@ -9860,7 +9864,7 @@ begin
  end;
 end;
 
-procedure POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue);
+procedure POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean);
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
@@ -9882,6 +9886,7 @@ begin
   TPasMPInterlocked.Increment(HashRec^.RealSize);
   HashRec^.Entities^[Entity].Key:=Key;
   HashRec^.Entities^[Entity].Value:=Value;
+  HashRec^.Entities^[Entity].Constant:=Constant;
   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
@@ -9890,7 +9895,7 @@ begin
  end;
 end;
 
-procedure POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;var CacheIndex:TPOCAUInt32);
+procedure POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32);
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
@@ -9923,6 +9928,7 @@ begin
   TPasMPInterlocked.Increment(HashRec^.RealSize);
   HashRec^.Entities^[Entity].Key:=Key;
   HashRec^.Entities^[Entity].Value:=Value;
+  HashRec^.Entities^[Entity].Constant:=Constant;
   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
@@ -9985,7 +9991,7 @@ begin
    if Cell>=0 then begin
     Entity:=HashRec^.CellToEntityIndex^[Cell];
     if Entity>=0 then begin
-     POCAHashPut(Hash,result,HashRec^.Entities^[Entity].Key,HashRec^.Entities^[Entity].Value);
+     POCAHashPut(Hash,result,HashRec^.Entities^[Entity].Key,HashRec^.Entities^[Entity].Value,HashRec^.Entities^[Entity].Constant);
     end;
    end;
    inc(i);
@@ -10066,7 +10072,7 @@ begin
  end;
 end;
 
-function POCAHashRawSet(const Hash,Key,Value:TPOCAValue):boolean;
+function POCAHashRawSet(const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
 begin
@@ -10078,7 +10084,7 @@ begin
    HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
   end;
   if assigned(HashRec) then begin
-   POCAHashPut(HashInstance,HashRec,Key,Value);
+   POCAHashPut(HashInstance,HashRec,Key,Value,Constant);
    result:=true;
   end;
  end;
@@ -10321,7 +10327,7 @@ begin
  end;
 end;
 
-function POCAHashNewSymbol(Instance:PPOCAInstance;Hash:PPOCAHash;const Key,Value:TPOCAValue):boolean;
+function POCAHashNewSymbol(Instance:PPOCAInstance;Hash:PPOCAHash;const Key,Value:TPOCAValue;const Constant:Boolean):boolean;
 var HashRec:PPOCAHashRecord;
     Mask,Step,Cell:TPOCAUInt32;
     Entity:TPOCAInt32;
@@ -10356,6 +10362,7 @@ begin
   he:=@HashRec^.Entities^[Entity];
   he^.Key:=Key;
   he^.Value:=Value;
+  he^.Constant:=Constant;
   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
@@ -10365,7 +10372,7 @@ begin
  end;
 end;
 
-function POCAHashTrySet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue):boolean;
+function POCAHashTrySet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     Cell:TPOCAUInt32;
@@ -10379,7 +10386,7 @@ begin
    SubContext:=POCAContextSub(Context);
    try
     if POCAGetBooleanValue(SubContext,POCACall(SubContext,HashInstance^.Events^.HashRecord^.Events^[pmoEXIST],@Key,1,Hash,POCAValueNull)) then begin
-     result:=POCAHashSet(SubContext,Hash,Key,Value);
+     result:=POCAHashSet(SubContext,Hash,Key,Value,Constant);
     end;
    finally
     POCAContextDestroy(SubContext);
@@ -10390,19 +10397,24 @@ begin
     Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
     Entity:=HashRec^.CellToEntityIndex^[Cell];
     if Entity>=0 then begin
-     HashRec^.Entities^[Entity].Value:=Value;
-     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
-     if assigned(HashRec^.Events) then begin
-      POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+     if HashRec^.Entities^[Entity].Constant then begin
+      POCARuntimeError(Context,'Constant write access attempt');
+     end else begin
+      HashRec^.Entities^[Entity].Value:=Value;
+      HashRec^.Entities^[Entity].Constant:=Constant;
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+      if assigned(HashRec^.Events) then begin
+       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+      end;
+      result:=true;
      end;
-     result:=true;
     end;
    end;
   end;
  end;
 end;
 
-function POCAHashTrySetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;var CacheIndex:TPOCAUInt32):boolean;
+function POCAHashTrySetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     Cell:TPOCAUInt32;
@@ -10416,7 +10428,7 @@ begin
    SubContext:=POCAContextSub(Context);
    try
     if POCAGetBooleanValue(SubContext,POCACall(SubContext,HashInstance^.Events^.HashRecord^.Events^[pmoEXIST],@Key,1,Hash,POCAValueNull)) then begin
-     result:=POCAHashSet(SubContext,Hash,Key,Value);
+     result:=POCAHashSet(SubContext,Hash,Key,Value,Constant);
     end;
    finally
     POCAContextDestroy(SubContext);
@@ -10426,24 +10438,34 @@ begin
    if assigned(HashRec) then begin
     Entity:=CacheIndex;
     if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and POCAEqual(HashRec^.Entities^[Entity].Key,Key) then begin
-     HashRec^.Entities^[Entity].Value:=Value;
-     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
-     if assigned(HashRec^.Events) then begin
-      POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+     if HashRec^.Entities^[Entity].Constant then begin
+      POCARuntimeError(Context,'Constant write access attempt');
+     end else begin
+      HashRec^.Entities^[Entity].Value:=Value;
+      HashRec^.Entities^[Entity].Constant:=Constant;
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+      if assigned(HashRec^.Events) then begin
+       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+      end;
+      result:=true;
      end;
-     result:=true;
      exit;
     end;
     Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
     Entity:=HashRec^.CellToEntityIndex^[Cell];
     if Entity>=0 then begin
      TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
-     HashRec^.Entities^[Entity].Value:=Value;
-     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
-     if assigned(HashRec^.Events) then begin
-      POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+     if HashRec^.Entities^[Entity].Constant then begin
+      POCARuntimeError(Context,'Constant write access attempt');
+     end else begin
+      HashRec^.Entities^[Entity].Value:=Value;
+      HashRec^.Entities^[Entity].Constant:=Constant;
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+      if assigned(HashRec^.Events) then begin
+       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+      end;
+      result:=true;
      end;
-     result:=true;
     end;
    end;
   end;
@@ -10783,7 +10805,7 @@ begin
  end;
 end;
 
-function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue):boolean;
+function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
 begin
@@ -10798,14 +10820,14 @@ begin
     HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
    end;
    if assigned(HashRec) then begin
-    POCAHashPut(HashInstance,HashRec,Key,Value);
+    POCAHashPut(HashInstance,HashRec,Key,Value,Constant);
     result:=true;
    end;
   end;
  end;
 end;
 
-function POCAHashSetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;var CacheIndex:TPOCAUInt32):boolean;
+function POCAHashSetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
 begin
@@ -10820,7 +10842,7 @@ begin
     HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
    end;
    if assigned(HashRec) then begin
-    POCAHashPutCache(HashInstance,HashRec,Key,Value,CacheIndex);
+    POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
     result:=true;
    end;
   end;
@@ -10904,7 +10926,7 @@ procedure POCAHashKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
    for i:=0 to POCAArraySize(Keys)-1 do begin
     Key:=POCAArrayGet(Keys,i);
     if (not POCAHashGet(Context,DstHash,Key,DstValue)) and POCAHashGet(Context,SrcHash,Key,SrcValue) then begin
-     POCAHashSet(Context,DstHash,Key,SrcValue);
+     POCAHashSet(Context,DstHash,Key,SrcValue,false);
     end;
    end;
    HashInstance:=PPOCAHash(POCAGetValueReferencePointer(SrcHash));
@@ -10917,7 +10939,7 @@ procedure POCAHashKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
      for i:=0 to POCAArraySize(Keys)-1 do begin
       Key:=POCAArrayGet(Keys,i);
       if (not POCAHashGet(Context,DstHash,Key,DstValue)) and POCAHashGet(Context,SrcHash,Key,SrcValue) then begin
-       POCAHashSet(Context,DstHash,Key,SrcValue);
+       POCAHashSet(Context,DstHash,Key,SrcValue,false);
       end;
      end;
      HashInstance:=HashInstance^.Prototype;
@@ -10942,10 +10964,10 @@ begin
  end;
 end;
 
-procedure POCAHashSetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString;const Value:TPOCAValue);
+procedure POCAHashSetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString;const Value:TPOCAValue;const Constant:Boolean);
 begin
  if POCAIsValueHash(Hash) then begin
-  POCAHashSet(Context,Hash,POCANewUniqueString(Context,Key),Value);
+  POCAHashSet(Context,Hash,POCANewUniqueString(Context,Key),Value,Constant);
  end;
 end;
 
@@ -10963,7 +10985,7 @@ begin
    for i:=0 to POCAArraySize(Keys)-1 do begin
     Key:=POCAArrayGet(Keys,0);
     if POCAHashGet(Context,Source,Key,Value) then begin
-     POCAHashSet(Context,Hash,Key,Value);
+     POCAHashSet(Context,Hash,Key,Value,false);
     end;
    end;
    if assigned(HashInstance^.Prototype) then begin
@@ -10977,7 +10999,7 @@ begin
      if Entity>=0 then begin
       Key:=HashRec^.Entities^[Entity].Key;
       Value:=HashRec^.Entities^[Entity].Value;
-      POCAHashSet(Context,Hash,Key,Value);
+      POCAHashSet(Context,Hash,Key,Value,HashRec^.Entities^[Entity].Constant);
      end;
     end;
    end;
@@ -11052,12 +11074,12 @@ begin
  end;
 end;
 
-function POCAInternSymbol(Context:PPOCAContext;Instance:PPOCAInstance;const Symbol:TPOCAValue):TPOCAValue; {$ifdef caninline}inline;{$endif}
+function POCAInternSymbol(Context:PPOCAContext;Instance:PPOCAInstance;const Symbol:TPOCAValue;const Constant:Boolean):TPOCAValue; {$ifdef caninline}inline;{$endif}
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
  if not POCAHashGet(Context,Instance.Globals.Symbols,Symbol,result) then begin
-  POCAHashSet(Context,Instance.Globals.Symbols,Symbol,Symbol);
+  POCAHashSet(Context,Instance.Globals.Symbols,Symbol,Symbol,Constant);
   result:=Symbol;
  end;
 end;
@@ -14903,7 +14925,7 @@ begin
      PropertyItem^.Method:=NativeFunction;
      PropertyItem^.Value:=POCANewFunction(pContext,POCANewNativeCode(pContext,TPOCANativeObjectFunctionNativeMethodCall,nil,PropertyItem));
      if IsEvent then begin
-      POCAHashSet(pContext,fEventsHashValue,POCANewUniqueString(pContext,TPOCAUTF8String(MethodName)),PropertyItem^.Value);
+      POCAHashSet(pContext,fEventsHashValue,POCANewUniqueString(pContext,TPOCAUTF8String(MethodName)),PropertyItem^.Value,false);
      end;
      inc(Count);
     end;
@@ -15613,11 +15635,17 @@ begin
 end;
 
 function POCAGlobalFunctionRAWSET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Constant:Boolean;
 begin
  if (CountArguments<3) or not POCAIsValueHash(Arguments^[0]) then begin
   POCARuntimeError(Context,'Bad arguments to "rawSet"');
  end;
- POCAHashRawSet(Arguments^[0],Arguments^[1],Arguments^[2]);
+ if CountArguments>3 then begin
+  Constant:=POCAGetBooleanValue(Context,Arguments^[3]);
+ end else begin
+  Constant:=false;
+ end;
+ POCAHashRawSet(Arguments^[0],Arguments^[1],Arguments^[2],Constant);
  result:=Arguments^[0];
 end;
 
@@ -16404,11 +16432,17 @@ begin
 end;
 
 function POCAHashFunctionRAWSET(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Constant:Boolean;
 begin
  if (not POCAIsValueHash(This)) or (CountArguments<2) then begin
   POCARuntimeError(Context,'Bad arguments to "rawSet"');
  end;
- POCAHashRawSet(This,Arguments^[0],Arguments^[1]);
+ if CountArguments>2 then begin
+  Constant:=POCAGetBooleanValue(Context,Arguments^[2]);
+ end else begin
+  Constant:=false;
+ end;
+ POCAHashRawSet(This,Arguments^[0],Arguments^[1],Constant);
  result:=This;
 end;
 
@@ -17450,6 +17484,7 @@ begin
  result^.IncludeDirectories:=TStringList.Create;
  begin
   result^.Globals.StrictMode:=true;
+  result^.Globals.ScopeIDCounter:=0;
  end;
  begin
   result^.Globals.GarbageCollector.Instance:=result;
@@ -17721,7 +17756,7 @@ const POCATokenPrecedences:array[0..31] of TPOCATokenPrecedence=((Tokens:[ptSEMI
                                                                  (Tokens:[ptCOLON,ptQUESTION];Rule:prREVERSE),
                                                                  (Tokens:[ptINSTANCEOF,ptIN,ptIS];Rule:prBINARY),
                                                                  (Tokens:[ptDOTDOT];Rule:prREVERSE),
-                                                                 (Tokens:[ptVAR,ptREGISTER,ptCONST];Rule:prPREFIX),
+                                                                 (Tokens:[ptVAR,ptLET,ptCONST];Rule:prPREFIX),
                                                                  (Tokens:[ptELVIS];Rule:prBINARY),
                                                                  (Tokens:[ptNULLISHOR];Rule:prBINARY),
                                                                  (Tokens:[ptOR];Rule:prBINARY),
@@ -20886,8 +20921,8 @@ var TokenList:PPOCAToken;
     ptLOR:begin
      Token:=ptOR;
     end;
-    ptLET,ptREG:begin
-     Token:=ptREGISTER;
+    ptREG,ptREGISTER:begin
+     Token:=ptLET;
     end;
     ptFUNC:begin
      Token:=ptFUNCTION;
@@ -21004,10 +21039,10 @@ var TokenList:PPOCAToken;
       ptASSIGN,ptLT,ptLTEQ,ptEQ,ptNEQ,ptGT,ptGTEQ,ptCMP,ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptEMPTY,
       ptNULL,ptELLIPSIS,ptQUESTION,ptVAR,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptFORINDEX,ptLAND,ptLOR,ptTRY,ptCATCH,ptFINALLY,
       ptTHROW,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptPOSTDEC,ptPOSTINC,ptPREDEC,ptPREINC,ptBAND,ptBOR,ptBXOR,ptBNOT,ptBSHL,ptBSHR,
-      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptREGISTER,ptSCOPE,ptCODE,
+      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptLET,ptSCOPE,ptCODE,
       ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
-      ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptREG,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
+      ptCLASSFUNCTION,ptMODULEFUNCTION,ptREGISTER,ptREG,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
       ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptELVISEQ,ptSYMBOLNAME,
       ptNULLISHOR])) then begin
     AddToken(ptAUTOSEMI,'',0);
@@ -22734,7 +22769,7 @@ var TokenList:PPOCAToken;
       result:=result^.Next;
       if assigned(result) and (result^.Token=ptLPAR) then begin
        result:=result^.Next;
-       if assigned(result) and (result^.Token in [ptVAR,ptREGISTER,ptCONST]) then begin
+       if assigned(result) and (result^.Token in [ptVAR,ptLET,ptCONST]) then begin
         result:=result^.Next;
        end;
        if assigned(result) and (result^.Token=ptSYMBOL) then begin
@@ -23194,7 +23229,7 @@ var TokenList:PPOCAToken;
         end;
         result:=result^.Next;
        end else begin
-        if (result^.Next^.Token=ptSYMBOL) and ((not assigned(result^.Previous)) or not (result^.Previous^.Token in [ptVAR,ptREGISTER,ptCONST])) then begin
+        if (result^.Next^.Token=ptSYMBOL) and ((not assigned(result^.Previous)) or not (result^.Previous^.Token in [ptVAR,ptLET,ptCONST])) then begin
          InsertBefore(result,ptVAR);
         end;
         if (result^.Next^.Token=ptSYMBOL) and not (assigned(result^.Next^.Next) and (result^.Next^.Next^.Token=ptSYMBOLNAME)) then begin
@@ -23254,7 +23289,7 @@ var TokenList:PPOCAToken;
                                                              ptPROTOTYPE,
                                                              ptCONSTRUCTOR,
                                                              ptHASHKIND]) then begin
-       if (not assigned(result^.Previous)) or not (result^.Previous^.Token in [ptVAR,ptREGISTER,ptCONST]) then begin
+       if (not assigned(result^.Previous)) or not (result^.Previous^.Token in [ptVAR,ptLET,ptCONST]) then begin
         result^.Token:=ptVAR;
         result:=result^.Next^.Next;
        end else begin
@@ -23374,7 +23409,7 @@ var TokenList:PPOCAToken;
         end;
         InsertBefore(result,ptLPAR);
         if assigned(IdentifierTokenList) then begin
-         InsertBefore(result,ptREGISTER);
+         InsertBefore(result,ptLET);
          InsertSymbolBefore(result,#1'PROTO'#1);
         end;
         InsertBefore(result,ptRPAR);
@@ -23489,7 +23524,7 @@ var TokenList:PPOCAToken;
        SyntaxError('Missed symbol',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
       end;
      end;
-     ptVAR,ptREGISTER,ptCONST:begin
+     ptVAR,ptLET,ptCONST:begin
       if IgnoreVarLocal or (assigned(result^.Next) and (result^.Next^.Token in [ptFASTFUNCTION,ptFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION])) then begin
        result:=result^.Next;
       end else begin
@@ -24419,8 +24454,21 @@ var TokenList:PPOCAToken;
        BreakRegisters,ContinueRegisters:array of TPOCACodeGeneratorRegisters;
       end;
       TPOCACodeGeneratorLoops=array of TPOCACodeGeneratorLoop;
+      PPOCACodeGeneratorScopeSymbol=^TPOCACodeGeneratorScopeSymbol;
+      TPOCACodeGeneratorScopeSymbol=record
+       Name:TPOCARawByteString;
+       Constant:Boolean;
+       Freeable:Boolean;
+       Register:TPOCAInt32;
+       ScopeID:TPOCAUInt64;
+      end;
+      TPOCACodeGeneratorScopeSymbols=array of PPOCACodeGeneratorScopeSymbol;
+      PPOCACodeGeneratorScope=^TPOCACodeGeneratorScope;
       TPOCACodeGeneratorScope=record
-       SymbolRegisterHashMap:TPOCAStringHashMap;
+       SymbolNameHashMap:TPOCAStringHashMap;
+       Symbols:TPOCACodeGeneratorScopeSymbols;
+       CountSymbols:TPOCAInt32;
+       ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopes=array of TPOCACodeGeneratorScope;
       PPOCACodeGeneratorWhenSwitchCaseBlock=^TPOCACodeGeneratorWhenSwitchCaseBlock;
@@ -24444,6 +24492,7 @@ var TokenList:PPOCAToken;
       TPOCACodeGeneratorBreakContinueScopes=array of TPOCACodeGeneratorBreakContinueScope;
       PPOCACodeGenerator=^TPOCACodeGenerator;
       TPOCACodeGenerator=record
+       ParentCodeGenerator:PPOCACodeGenerator;
        LastLine:TPOCAInt32;
        ByteCode:PPOCAUInt32Array;
        ByteCodeSize:TPOCAInt32;
@@ -24461,6 +24510,7 @@ var TokenList:PPOCAToken;
        RestArgSymbolString:TPOCAUTF8String;
        RestArgSym:TPOCAValue;
        HasRestArguments:TPOCABool32;
+       HasNestedFunctions:TPOCABool32;
        SwitchTop:TPOCAInt32;
        SwitchAllocated:TPOCAInt32;
        Switchs:TPOCACodeGeneratorSwitchs;
@@ -24488,7 +24538,7 @@ var TokenList:PPOCAToken;
        CountConstants:TPOCAInt32;
        CountRegExps:TPOCAInt32;
       end;
-  function GenerateCode(var Parser:TPOCAParser;Block:PPOCAToken;ArgumentList:PPOCAToken;CodeToken:TPOCATokenType;const CodeName:TPOCARawByteString):TPOCAValue;
+  function GenerateCode(var Parser:TPOCAParser;Block:PPOCAToken;ArgumentList:PPOCAToken;CodeToken:TPOCATokenType;const CodeName:TPOCARawByteString;const ParentCodeGenerator:PPOCACodeGenerator):TPOCAValue;
   var CodeGenerator:PPOCACodeGenerator;
    function GetRegisters:TPOCACodeGeneratorRegisters;
    begin
@@ -24817,9 +24867,124 @@ var TokenList:PPOCAToken;
       ArgList:=t^.Left^.Left;
      end;
     end;
-    result:=GenerateCode(Parser,t^.Right^.Left,ArgList,t^.Token,Name);
+    result:=GenerateCode(Parser,t^.Right^.Left,ArgList,t^.Token,Name,CodeGenerator);
    end;
-   function FindConstantIndex(t:PPOCAToken):TPOCAInt32;
+   function FindScopeSymbol(t:PPOCAToken;const SearchOnlyParents:Boolean=false;const MultiLevels:Boolean=true;const SingleScope:Boolean=false):PPOCACodeGeneratorScopeSymbol;
+   var CurrentCodeGenerator:PPOCACodeGenerator;
+       i:TPOCAInt32;
+       HashMap:TPOCAStringHashMap;
+       Item:PPOCAStringHashMapItem;
+   begin
+    if assigned(t) and (t^.Token=ptSYMBOL) then begin
+     if SearchOnlyParents then begin
+      CurrentCodeGenerator:=CodeGenerator^.ParentCodeGenerator;
+     end else begin
+      CurrentCodeGenerator:=CodeGenerator;
+     end;
+     while assigned(CurrentCodeGenerator) do begin
+      for i:=CurrentCodeGenerator^.CountScopes-1 downto 0 do begin
+       HashMap:=CurrentCodeGenerator^.Scopes[i].SymbolNameHashMap;
+       if assigned(HashMap) then begin
+        Item:=HashMap.GetKey(t^.Str);
+        if assigned(Item) then begin
+         result:=CurrentCodeGenerator^.Scopes[i].Symbols[Item^.Value];
+         exit;
+        end;
+       end;
+       if SingleScope then begin
+        result:=nil;
+        exit;
+       end;
+      end;
+      if MultiLevels then begin
+       CurrentCodeGenerator:=CurrentCodeGenerator^.ParentCodeGenerator;
+      end else begin
+       result:=nil;
+       exit;
+      end;
+     end;
+    end;
+    result:=nil;
+   end;
+   function ExistScopeSymbol(t:PPOCAToken;const SearchOnlyParents:Boolean=false;const MultiLevels:Boolean=true;const SingleScope:Boolean=false):Boolean;
+   begin
+    result:=assigned(FindScopeSymbol(t,SearchOnlyParents,MultiLevels,SingleScope));
+   end;
+   function IsScopeSymbolConstant(t:PPOCAToken;const SearchOnlyParents:Boolean=false;const MultiLevels:Boolean=true;const SingleScope:Boolean=false):Boolean;
+   var Symbol:PPOCACodeGeneratorScopeSymbol;
+   begin
+    Symbol:=FindScopeSymbol(t,SearchOnlyParents,MultiLevels,SingleScope);
+    result:=assigned(Symbol) and Symbol^.Constant;
+   end;
+   function IsScopeSymbolFreeable(t:PPOCAToken;const SearchOnlyParents:Boolean=false;const MultiLevels:Boolean=true;const SingleScope:Boolean=false):Boolean;
+   var Symbol:PPOCACodeGeneratorScopeSymbol;
+   begin
+    Symbol:=FindScopeSymbol(t,SearchOnlyParents,MultiLevels,SingleScope);
+    result:=assigned(Symbol) and Symbol^.Freeable;
+   end;
+   function GetScopeSymbolRegister(t:PPOCAToken;const SearchOnlyParents:Boolean=false;const MultiLevels:Boolean=true;const SingleScope:Boolean=false):TPOCAInt32;
+   var Symbol:PPOCACodeGeneratorScopeSymbol;
+   begin
+    Symbol:=FindScopeSymbol(t,SearchOnlyParents,MultiLevels,SingleScope);
+    if assigned(Symbol) then begin
+     result:=Symbol^.Register;
+    end else begin
+     result:=-1;
+    end;
+   end;
+   function GetSymbolName(t:PPOCAToken;const SearchOnlyParents:Boolean=false;const MultiLevels:Boolean=true;const SingleScope:Boolean=false):TPOCARawByteString;
+   var Symbol:PPOCACodeGeneratorScopeSymbol;
+   begin
+    if assigned(t) and (t^.Token=ptSYMBOL) then begin
+     Symbol:=FindScopeSymbol(t,SearchOnlyParents,MultiLevels,SingleScope);
+     if assigned(Symbol) then begin
+      result:=Symbol^.Name;
+     end else begin
+      result:=t^.Str;
+     end;
+    end else begin
+     result:='';
+    end;
+   end;
+   function DefineScopeSymbol(t:PPOCAToken;const LetConst,Constant,Freeable:Boolean;const aRegister:TPOCAInt32):PPOCACodeGeneratorScopeSymbol;
+   var CurrentCodeGenerator:PPOCACodeGenerator;
+       i,SymbolIndex:TPOCAInt32;
+       HashMap:TPOCAStringHashMap;
+       Item:PPOCAStringHashMapItem;
+   begin
+    if assigned(t) and (t^.Token=ptSYMBOL) then begin
+     CurrentCodeGenerator:=CodeGenerator;
+     i:=CurrentCodeGenerator^.CountScopes-1;
+     HashMap:=CurrentCodeGenerator^.Scopes[i].SymbolNameHashMap;
+     SymbolIndex:=CurrentCodeGenerator^.Scopes[i].CountSymbols;
+     Item:=HashMap.GetKey(t^.Str);
+     if assigned(Item) then begin
+      SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+      result:=nil;
+     end else begin
+      Item:=HashMap.NewKey(t^.Str,true);
+      Item^.Value:=SymbolIndex;
+      inc(CurrentCodeGenerator^.Scopes[i].CountSymbols);
+      if length(CurrentCodeGenerator^.Scopes[i].Symbols)<CurrentCodeGenerator^.Scopes[i].CountSymbols then begin
+       SetLength(CurrentCodeGenerator^.Scopes[i].Symbols,CurrentCodeGenerator^.Scopes[i].CountSymbols*2);
+      end;
+      GetMem(CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex],SizeOf(TPOCACodeGeneratorScopeSymbol));
+      result:=CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex];
+      Initialize(result^);
+      result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
+      if LetConst then begin
+       result^.Name:=t^.Str+#0+IntToStr(result^.ScopeID);
+      end else begin
+       result^.Name:=t^.Str;
+      end;
+      result^.Constant:=Constant;
+      result^.Register:=aRegister;
+     end;
+    end else begin
+     result:=nil;
+    end;
+   end;
+   function FindConstantIndex(t:PPOCAToken;const ForScope:Boolean):TPOCAInt32;
    var c:TPOCAValue;
    begin
     case t^.Token of
@@ -24831,7 +24996,11 @@ var TokenList:PPOCAToken;
       c:=POCANewUniqueString(Parser.Context,t^.Str);
      end;
      ptSYMBOL:begin
-      c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,t^.Str));
+      if ForScope then begin
+       c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,GetSymbolName(t)));
+      end else begin
+       c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,t^.Str));
+      end;
      end;
      ptSUPERCODESYMBOL:begin
       if length(CodeName)>0 then begin
@@ -24873,12 +25042,13 @@ var TokenList:PPOCAToken;
      end else if (t^.Token in [ptPLUS,ptNUM]) and (assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM)) then begin
       result:=DefineArgument(t^.Right);
      end else begin
-      result:=FindConstantIndex(t);
+      result:=FindConstantIndex(t,true);
      end;
     end;
    end;
    procedure ScopeStart;
    var OldCount,NewCount,i:TPOCAInt32;
+       Scope:PPOCACodeGeneratorScope;
    begin
     OldCount:=length(CodeGenerator^.Scopes);
     if CodeGenerator^.CountScopes>=OldCount then begin
@@ -24889,32 +25059,45 @@ var TokenList:PPOCAToken;
      end;
      SetLength(CodeGenerator^.Scopes,NewCount);
      for i:=OldCount to NewCount-1 do begin
-      CodeGenerator^.Scopes[i].SymbolRegisterHashMap:=nil;
+      Scope:=@CodeGenerator^.Scopes[i];
+      Scope^.SymbolNameHashMap:=nil;
+      Scope^.Symbols:=nil;
+      Scope^.CountSymbols:=0;
      end;
     end;
-    CodeGenerator^.Scopes[CodeGenerator^.CountScopes].SymbolRegisterHashMap:=TPOCAStringHashMap.Create(true);
+    Scope:=@CodeGenerator^.Scopes[CodeGenerator^.CountScopes];
     inc(CodeGenerator^.CountScopes);
+    Scope^.SymbolNameHashMap:=TPOCAStringHashMap.Create(true);
+    Scope^.Symbols:=nil;
+    Scope^.CountSymbols:=0;
+    inc(Instance^.Globals.ScopeIDCounter);
+    Scope^.ScopeID:=Instance^.Globals.ScopeIDCounter;
    end;
    procedure ScopeEnd;
-   var HashMap:TPOCAStringHashMap;
-       Item:PPOCAStringHashMapItem;
-       Reg:TPOCAInt32;
+   var ScopeIndex,Index,Reg:TPOCAInt32;
+       Scope:PPOCACodeGeneratorScope;
+       Symbol:PPOCACodeGeneratorScopeSymbol;
    begin
     dec(CodeGenerator^.CountScopes);
-    HashMap:=CodeGenerator^.Scopes[CodeGenerator^.CountScopes].SymbolRegisterHashMap;
-    CodeGenerator^.Scopes[CodeGenerator^.CountScopes].SymbolRegisterHashMap:=nil;
-    if assigned(HashMap) then begin
-     try
-      Item:=HashMap.First;
-      while assigned(Item) do begin
-       Reg:=Item^.Value;
-       FreeRegister(Reg,true);
-       Item:=Item^.Next;
+    ScopeIndex:=CodeGenerator^.CountScopes;
+    Scope:=@CodeGenerator^.Scopes[ScopeIndex];
+    begin
+     for Index:=0 to Scope^.CountSymbols-1 do begin
+      Symbol:=Scope^.Symbols[Index];
+      Scope^.Symbols[Index]:=nil;
+      if assigned(Symbol) then begin
+       Reg:=Symbol^.Register;
+       if Reg>=0 then begin
+        FreeRegister(Reg,true);
+       end;
+       Finalize(Symbol^);
+       FreeMem(Symbol);
       end;
-     finally
-      FreeAndNil(HashMap);
      end;
     end;
+    Scope^.Symbols:=nil;
+    Scope^.CountSymbols:=0;
+    FreeAndNil(Scope^.SymbolNameHashMap);
    end;
    function GenerateScalarConstant(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
    var v:TPOCAInt32;
@@ -24945,7 +25128,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    EmitOpcode(popLOADCONST,result,FindConstantIndex(t));
+    EmitOpcode(popLOADCONST,result,FindConstantIndex(t,true));
     SetRegisterNumber(result,t^.Token=ptLITERALNUM);
    end;
    function GenerateNumberConstant(Num:Double;OutReg:TPOCAInt32):TPOCAInt32;
@@ -24977,14 +25160,18 @@ var TokenList:PPOCAToken;
    function IsSymbolRegister(t:PPOCAToken):boolean;
    var i:TPOCAInt32;
        HashMap:TPOCAStringHashMap;
+       Item:PPOCAStringHashMapItem;
    begin
     result:=false;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
      for i:=CodeGenerator^.CountScopes-1 downto 0 do begin
-      HashMap:=CodeGenerator^.Scopes[i].SymbolRegisterHashMap;
-      if assigned(HashMap) and assigned(HashMap.GetKey(t^.Str)) then begin
-       result:=true;
-       break;
+      HashMap:=CodeGenerator^.Scopes[i].SymbolNameHashMap;
+      if assigned(HashMap) then begin
+       Item:=HashMap.GetKey(t^.Str);
+       if assigned(Item) then begin
+        result:=CodeGenerator^.Scopes[i].Symbols[Item^.Value].Register>=0;
+        break;
+       end;
       end;
      end;
     end;
@@ -24997,11 +25184,11 @@ var TokenList:PPOCAToken;
     result:=false;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
      for i:=CodeGenerator^.CountScopes-1 downto 0 do begin
-      HashMap:=CodeGenerator^.Scopes[i].SymbolRegisterHashMap;
+      HashMap:=CodeGenerator^.Scopes[i].SymbolNameHashMap;
       if assigned(HashMap) then begin
        Item:=HashMap.GetKey(t^.Str);
        if assigned(Item) then begin
-        result:=((Item^.Value>=0) and (Item^.Value<CodeGenerator^.CountRegisters)) and CodeGenerator^.Registers[Item^.Value].IsConst;
+        result:=CodeGenerator^.Scopes[i].Symbols[Item^.Value].Constant;
         break;
        end;
       end;
@@ -25011,25 +25198,42 @@ var TokenList:PPOCAToken;
    function GetSymbolRegister(t:PPOCAToken;CreateIfNotFound,IsConst:boolean):TPOCAUInt32;
    var HashMap:TPOCAStringHashMap;
        Item:PPOCAStringHashMapItem;
-       i:TPOCAInt32;
+       i,SymbolIndex:TPOCAInt32;
+       Symbol:PPOCACodeGeneratorScopeSymbol;
    begin
     result:=0;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
      for i:=CodeGenerator^.CountScopes-1 downto 0 do begin
-      HashMap:=CodeGenerator^.Scopes[i].SymbolRegisterHashMap;
+      HashMap:=CodeGenerator^.Scopes[i].SymbolNameHashMap;
       if assigned(HashMap) then begin
        Item:=HashMap.GetKey(t^.Str);
        if assigned(Item) then begin
-        if (((Item^.Value>=0) and (Item^.Value<CodeGenerator^.CountRegisters)) and CodeGenerator^.Registers[Item^.Value].IsConst) and CreateIfNotFound then begin
-         SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+        if CodeGenerator^.Scopes[i].Symbols[Item^.Value].Register>=0 then begin
+         if CodeGenerator^.Scopes[i].Symbols[Item^.Value].Constant and CreateIfNotFound then begin
+          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+         end;
+         SymbolIndex:=Item^.Value;
+         Symbol:=CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
+         result:=Symbol^.Register;
         end;
-        result:=Item^.Value;
         break;
        end else begin
         if CreateIfNotFound then begin
          Item:=HashMap.NewKey(t^.Str,true);
-         Item^.Value:=GetRegister(false,IsConst);
-         result:=Item^.Value;
+         SymbolIndex:=CodeGenerator^.Scopes[i].CountSymbols;
+         Item^.Value:=SymbolIndex;
+         inc(CodeGenerator^.Scopes[i].CountSymbols);
+         if length(CodeGenerator^.Scopes[i].Symbols)<CodeGenerator^.Scopes[i].CountSymbols then begin
+          SetLength(CodeGenerator^.Scopes[i].Symbols,CodeGenerator^.Scopes[i].CountSymbols*2);
+         end;
+         GetMem(CodeGenerator^.Scopes[i].Symbols[SymbolIndex],SizeOf(TPOCACodeGeneratorScopeSymbol));
+         Symbol:=@CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
+         Initialize(Symbol^);
+         Symbol^.Name:=t^.Str;
+         Symbol^.Constant:=IsConst;
+         Symbol^.Register:=GetRegister(false,IsConst);
+         Symbol^.ScopeID:=CodeGenerator^.Scopes[i].ScopeID;
+         result:=Symbol^.Register;
          break;
         end;
        end;
@@ -25041,6 +25245,8 @@ var TokenList:PPOCAToken;
    var HashMap:TPOCAStringHashMap;
        Item:PPOCAStringHashMapItem;
        i,r:TPOCAInt32;
+       SymbolIndex:TPOCAInt32;
+       Symbol:PPOCACodeGeneratorScopeSymbol;
    begin
     result:=false;
     if t^.Token=ptSYMBOL then begin
@@ -25049,12 +25255,17 @@ var TokenList:PPOCAToken;
        break;
       end;
       dec(Depth);
-      HashMap:=CodeGenerator^.Scopes[i].SymbolRegisterHashMap;
+      HashMap:=CodeGenerator^.Scopes[i].SymbolNameHashMap;
       if assigned(HashMap) then begin
        Item:=HashMap.GetKey(t^.Str);
        if assigned(Item) then begin
+        SymbolIndex:=Item^.Value;
+        Symbol:=@CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
+        r:=Symbol^.Register;
+        Symbol^.Name:='';
+        Symbol^.Constant:=false;
+        Symbol^.Register:=-1;
         HashMap.DeleteKey(Item);
-        r:=Item^.Value;
         FreeRegister(r,true);
         result:=true;
         break;
@@ -25118,15 +25329,20 @@ var TokenList:PPOCAToken;
         end;
        end;
       end;
-      if not (t^.Token in [ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION]) then begin
-       if assigned(t^.Children) and (t^.Children<>t^.LastChild) and (t^.Children<>t^.Next) then begin
-        ScanToken(t^.Children,t);
+      case t^.Token of
+       ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin
+        CodeGenerator^.HasNestedFunctions:=true;
        end;
-       if assigned(t^.LastChild) and (t^.LastChild<>t^.Next) then begin
-        ScanToken(t^.LastChild,t);
-       end;
-       if assigned(t^.Next) then begin
-        ScanToken(t^.Next,t);
+       else begin
+        if assigned(t^.Children) and (t^.Children<>t^.LastChild) and (t^.Children<>t^.Next) then begin
+         ScanToken(t^.Children,t);
+        end;
+        if assigned(t^.LastChild) and (t^.LastChild<>t^.Next) then begin
+         ScanToken(t^.LastChild,t);
+        end;
+        if assigned(t^.Next) then begin
+         ScanToken(t^.Next,t);
+        end;
        end;
       end;
      end;
@@ -25164,6 +25380,30 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
+   end;
+   procedure ScanForNestedFunctions(ta,tb:PPOCAToken);
+    procedure ScanToken(t:PPOCAToken);
+    begin
+     if (not CodeGenerator^.HasNestedFunctions) and (assigned(t) and not t^.Visited) then begin
+      t^.Visited:=true;
+      case t^.Token of
+       ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin
+        CodeGenerator^.HasNestedFunctions:=true;
+       end else begin
+        ScanToken(t^.Children);
+        ScanToken(t^.LastChild);
+        ScanToken(t^.Previous);
+        ScanToken(t^.Next);
+        ScanToken(t^.Left);
+        ScanToken(t^.Right);
+       end;
+      end;
+     end;
+    end;
+   begin
+    ResetTokenVisited;
+    ScanToken(ta);
+    ScanToken(tb);
    end;
    procedure ProcessConstantFolding(t:PPOCAToken);
     procedure ScanToken(t,p:PPOCAToken;IsExpression:boolean);
@@ -25973,6 +26213,8 @@ var TokenList:PPOCAToken;
     end;
     function GetLeftValueLocalRegister(t:PPOCAToken):TPOCAInt32;
     var Token:TPOCATokenType;
+        Symbol:PPOCACodeGeneratorScopeSymbol;
+        IsVar:Boolean;
     begin
      result:=-1;
      if not assigned(t) then begin
@@ -25986,34 +26228,65 @@ var TokenList:PPOCAToken;
        end;
       end;
       ptSYMBOL:begin
-       if IsSymbolRegister(t) then begin
-        if IsSymbolRegisterConstant(t) then begin
+       Symbol:=FindScopeSymbol(t,false,true,false);
+       if assigned(Symbol) and (Symbol^.Register>=0) then begin
+        if Symbol^.Constant then begin
          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
-        result:=GetSymbolRegister(t,false,false);
+        result:=Symbol^.Register;
        end;
       end;
       ptSUPERCODESYMBOL:begin
        SyntaxError('Invalid super syntax usage',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
       end;
-      ptREGISTER,ptCONST:begin
+      ptVAR,ptLET,ptCONST:begin
        t:=t^.Right;
        while assigned(t) and ((t^.Token=ptLPAR) and (t^.Rule<>prSUFFIX)) do begin
         t:=t^.Left;
        end;
        if assigned(t) and (t^.Token=ptSYMBOL) then begin
-        result:=GetSymbolRegister(t,true,Token=ptCONST);
-       end;
-      end;
-      ptVAR:begin
-       if IsSymbolRegisterConstant(t) then begin
-        SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+        if IsScopeSymbolConstant(t,false,false) then begin
+         SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+        end;
+        case Token of
+         ptVAR:begin
+          IsVar:=true;
+         end;
+         else {ptLET,ptCONST:}begin
+{         if ExistScopeSymbol(t,false,false,true) then begin
+           SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+          end else}begin
+           if CodeGenerator^.HasNestedFunctions then begin
+            IsVar:=true;
+           end else begin
+            IsVar:=false;
+           end;
+          end;
+         end;
+        end;
+        if IsVar then begin
+         result:=-1;
+         exit;
+        end else begin
+         Symbol:=FindScopeSymbol(t,false,true,false);
+         if not assigned(Symbol) then begin
+          Symbol:=DefineScopeSymbol(t,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         end;
+         if assigned(Symbol) then begin
+          result:=Symbol^.Register;
+         end else begin
+          result:=-1;
+         end;
+         exit;
+        end;
        end;
       end;
      end;
     end;
     function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2:TPOCAInt32):TPOCAUInt32;
     var Token:TPOCATokenType;
+        Symbol:PPOCACodeGeneratorScopeSymbol;
+        IsVar:Boolean;
     begin
      result:=0;
      if not assigned(t) then begin
@@ -26028,14 +26301,15 @@ var TokenList:PPOCAToken;
        end;
       end;
       ptSYMBOL:begin
-       if IsSymbolRegister(t) then begin
-        if IsSymbolRegisterConstant(t) then begin
+       Symbol:=FindScopeSymbol(t,false,true,false);
+       if assigned(Symbol) and (Symbol^.Register>=0) then begin
+        if Symbol^.Constant then begin
          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
-        Reg1:=GetSymbolRegister(t,false,false);
+        Reg1:=Symbol^.Register;
         result:=popCOPY;
        end else begin
-        ConstantIndex:=FindConstantIndex(t);
+        ConstantIndex:=FindConstantIndex(t,true);
         result:=popSETSYM;
        end;
        exit;
@@ -26052,7 +26326,7 @@ var TokenList:PPOCAToken;
        end else if assigned(t^.Right) and (t^.Right^.Token=ptHASHKIND) then begin
         result:=popSETHASHKIND;
        end else begin
-        ConstantIndex:=FindConstantIndex(t^.Right);
+        ConstantIndex:=FindConstantIndex(t^.Right,false);
         result:=popSETMEMBER;
        end;
        exit;
@@ -26069,33 +26343,52 @@ var TokenList:PPOCAToken;
       ptSAFELBRA:begin
        SyntaxError('??[ is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
       end;
-      ptVAR:begin
-       if CodeToken=ptFASTFUNCTION then begin
-        SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-       end;
-       CodeGenerator^.HasLocals:=true;
+      ptVAR,ptLET,ptCONST:begin
        t:=t^.Right;
        while assigned(t) and ((t^.Token=ptLPAR) and (t^.Rule<>prSUFFIX)) do begin
         t:=t^.Left;
        end;
        if assigned(t) and (t^.Token=ptSYMBOL) then begin
-        if IsSymbolRegisterConstant(t) then begin
+        if IsScopeSymbolConstant(t,false,false) then begin
          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
-        ConstantIndex:=FindConstantIndex(t);
-        result:=popSETLOCAL;
-        exit;
-       end;
-      end;
-      ptREGISTER,ptCONST:begin
-       t:=t^.Right;
-       while assigned(t) and ((t^.Token=ptLPAR) and (t^.Rule<>prSUFFIX)) do begin
-        t:=t^.Left;
-       end;
-       if assigned(t) and (t^.Token=ptSYMBOL) then begin
-        Reg1:=GetSymbolRegister(t,true,Token=ptCONST);
-        result:=popCOPY;
-        exit;
+        case Token of
+         ptVAR:begin
+          IsVar:=true;
+         end;
+         else {ptLET,ptCONST:}begin
+          if ExistScopeSymbol(t,false,false,true) then begin
+           SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+          end else begin
+           if CodeGenerator^.HasNestedFunctions then begin
+            IsVar:=true;
+           end else begin
+            IsVar:=false;
+           end;
+          end;
+         end;
+        end;
+        if IsVar then begin
+         if CodeToken=ptFASTFUNCTION then begin
+          SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+         end;
+         CodeGenerator^.HasLocals:=true;
+         DefineScopeSymbol(t,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         ConstantIndex:=FindConstantIndex(t,true);
+         if Token=ptCONST then begin
+          result:=popSETCONSTLOCAL;
+         end else begin
+          result:=popSETLOCAL;
+         end;
+         exit;
+        end else begin
+         Symbol:=DefineScopeSymbol(t,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         if assigned(Symbol) then begin
+          Reg1:=Symbol^.Register;
+          result:=popCOPY;
+          exit;
+         end;
+        end;
        end;
       end;
      end;
@@ -26127,6 +26420,9 @@ var TokenList:PPOCAToken;
       end;
       popSETLOCAL:begin
        EmitOpcode(popSETLOCAL,ConstantIndex,Reg,$ffffffff);
+      end;
+      popSETCONSTLOCAL:begin
+       EmitOpcode(popSETCONSTLOCAL,ConstantIndex,Reg,$ffffffff);
       end;
       popSETSYM:begin
        EmitOpcode(popSETSYM,ConstantIndex,Reg,$ffffffff);
@@ -26223,6 +26519,18 @@ var TokenList:PPOCAToken;
        EmitOpcode(Op,result,result,Reg2);
        FreeRegister(Reg2);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
+      end;
+      popSETCONSTLOCAL:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       EmitOpcode(Op,result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(popSETCONSTLOCAL,ConstantIndex,result,$ffffffff);
       end;
       popSETSYM:begin
        if OutReg<0 then begin
@@ -26399,6 +26707,29 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
       end;
+      popSETCONSTLOCAL:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       if GetRegisterNumber(result) then begin
+        EmitOpcode(popN_JIFTRUE,0,result);
+       end else begin
+        EmitOpcode(popJIFTRUE,0,result);
+       end;
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSETCONSTLOCAL,ConstantIndex,result,$ffffffff);
+      end;
       popSETSYM:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
@@ -26531,6 +26862,18 @@ var TokenList:PPOCAToken;
        EmitOpcode(popSETLOCAL,ConstantIndex,Reg1,$ffffffff);
        FreeRegister(Reg1);
       end;
+      popSETCONSTLOCAL:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       Reg1:=GetRegister(true,false);
+       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitOpcode(Op,Reg1,result);
+       EmitOpcode(popSETCONSTLOCAL,ConstantIndex,Reg1,$ffffffff);
+       FreeRegister(Reg1);
+      end;
       popSETSYM:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
@@ -26639,6 +26982,16 @@ var TokenList:PPOCAToken;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
+      end;
+      popSETCONSTLOCAL:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitOpcode(Op,result,result);
+       EmitOpcode(popSETCONSTLOCAL,ConstantIndex,result,$ffffffff);
       end;
       popSETSYM:begin
        if OutReg<0 then begin
@@ -26871,7 +27224,7 @@ var TokenList:PPOCAToken;
         end else if assigned(t^.Left^.Right) and (t^.Left^.Right^.Token=ptHASHKIND) then begin
          EmitOpcode(popGETHASHKIND,Reg2,Reg3);
         end else begin
-         EmitOpcode(popGETMEMBER,Reg2,Reg3,FindConstantIndex(t^.Left^.Right),$ffffffff,$ffffffff);
+         EmitOpcode(popGETMEMBER,Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
         end;
         FreeRegister(Reg3);
        end else begin
@@ -26884,7 +27237,7 @@ var TokenList:PPOCAToken;
         end else if assigned(t^.Left^.Right) and (t^.Left^.Right^.Token=ptHASHKIND) then begin
          EmitOpcode(popGETHASHKIND,Reg2,Reg1);
         end else begin
-         EmitOpcode(popGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right),$ffffffff,$ffffffff);
+         EmitOpcode(popGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
         end;
        end;
       end else if assigned(t^.Left) and (t^.Left^.Token=ptATDOT) and assigned(t^.Left^.Left) and (t^.Left^.Left^.Token=ptSUPERTHAT) then begin
@@ -26894,14 +27247,14 @@ var TokenList:PPOCAToken;
        EmitOpcode(popLOADTHAT,Reg1);
        SetRegisterNumber(Reg1,false);
        Reg2:=GetRegister(true,false);
-       EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right),$ffffffff,$ffffffff);
+       EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
        EmitOpcode(popLOADTHIS,Reg1);
       end else if assigned(t^.Left) and (t^.Left^.Token=ptATDOT) then begin
        IsSafeMethod:=false;
        IsMethod:=true;
        Reg1:=GenerateExpression(t^.Left^.Left,-1,true);
        Reg2:=GetRegister(true,false);
-       EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right),$ffffffff,$ffffffff);
+       EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
       end else begin
        IsSafeMethod:=false;
        IsMethod:=false;
@@ -27470,7 +27823,7 @@ var TokenList:PPOCAToken;
        if assigned(CatchIdentifier) and (CatchIdentifier^.Token=ptLPAR) then begin
         FullCatchIdentifier:=CatchIdentifier^.Children;
         TemporaryCatchIdentifier:=FullCatchIdentifier;
-        if assigned(TemporaryCatchIdentifier) and (TemporaryCatchIdentifier^.Token in [ptVAR,ptREGISTER]) then begin
+        if assigned(TemporaryCatchIdentifier) and (TemporaryCatchIdentifier^.Token in [ptVAR,ptLET]) then begin
          TemporaryCatchIdentifier:=TemporaryCatchIdentifier^.Right;
         end;
         if assigned(TemporaryCatchIdentifier) and (TemporaryCatchIdentifier^.Token=ptSYMBOL) then begin
@@ -27508,7 +27861,7 @@ var TokenList:PPOCAToken;
           begin
            ClearRegisters;
            FixTargetImmediate(CatchBlockPos);
-           if assigned(CatchIdentifier) and assigned(FullCatchIdentifier) and (FullCatchIdentifier^.Token in [ptVAR,ptREGISTER]) then begin
+           if assigned(CatchIdentifier) and assigned(FullCatchIdentifier) and (FullCatchIdentifier^.Token in [ptVAR,ptLET]) then begin
             ScopeStart;
             GenerateBlock(FullCatchIdentifier,-1,false,false);
             GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
@@ -27562,7 +27915,7 @@ var TokenList:PPOCAToken;
          begin
           ClearRegisters;
           FixTargetImmediate(CatchBlockPos);
-          if assigned(CatchIdentifier) and assigned(FullCatchIdentifier) and (FullCatchIdentifier^.Token in [ptVAR,ptREGISTER]) then begin
+          if assigned(CatchIdentifier) and assigned(FullCatchIdentifier) and (FullCatchIdentifier^.Token in [ptVAR,ptLET]) then begin
            ScopeStart;
            GenerateBlock(FullCatchIdentifier,-1,false,false);
            GenerateLeftValue(CatchIdentifier,CatchIdentifierRegister);
@@ -28004,7 +28357,7 @@ var TokenList:PPOCAToken;
        Reg1:=GenerateExpression(Element,-1,false);
        FreeRegister(Reg1);
        Element:=Element^.Left;
-       if (Element^.Token in [ptVAR,ptREGISTER,ptCONST]) and assigned(Element^.Right) then begin
+       if (Element^.Token in [ptVAR,ptLET,ptCONST]) and assigned(Element^.Right) then begin
         Element:=Element^.Right;
        end;
       end;
@@ -28236,6 +28589,8 @@ var TokenList:PPOCAToken;
         Len,Variable:TPOCAInt32;
      procedure EmitMultiLeftValue(t:PPOCAToken;Variable,Reg:TPOCAInt32);
      var r:TPOCAInt32;
+         Symbol:PPOCACodeGeneratorScopeSymbol;
+         IsVar:Boolean;
      begin
       if Variable=0 then begin
        GenerateLeftValue(t,Reg);
@@ -28245,13 +28600,40 @@ var TokenList:PPOCAToken;
        end else begin
         case Variable of
          1:begin
-          EmitOpcode(popSETLOCAL,FindConstantIndex(t),Reg,$ffffffff);
+          IsVar:=true;
          end;
-         2,3:begin
-          r:=GetSymbolRegister(t,true,Variable=3);
+         else {2,3:}begin
+          if ExistScopeSymbol(t,false,false,true) then begin
+           SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+          end else begin
+           if CodeGenerator^.HasNestedFunctions then begin
+            IsVar:=true;
+           end else begin
+            IsVar:=false;
+           end;
+          end;
+         end;
+        end;
+        if IsVar then begin
+         if CodeToken=ptFASTFUNCTION then begin
+          SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+         end;
+         CodeGenerator^.HasLocals:=true;
+         DefineScopeSymbol(t,(Variable=2) or (Variable=3),Variable=3,false,-1);
+         if Variable=3 then begin
+          EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
+         end else begin
+          EmitOpcode(popSETLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
+         end;
+         exit;
+        end else begin
+         Symbol:=DefineScopeSymbol(t,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+         if assigned(Symbol) then begin
+          r:=Symbol^.Register;
           EmitOpcode(popCOPY,r,Reg);
           SetRegisterNumber(r,GetRegisterNumber(Reg));
          end;
+         exit;
         end;
        end;
       end;
@@ -28261,6 +28643,8 @@ var TokenList:PPOCAToken;
          tat,tpt,t:PPOCAToken;
          Regs:array of TPOCAInt32;
          LastHasNoLeft,OnlyLiterals:boolean;
+         Symbol:PPOCACodeGeneratorScopeSymbol;
+         IsVar:Boolean;
      begin
       result:=-1;
       try
@@ -28290,45 +28674,38 @@ var TokenList:PPOCAToken;
        end;
        if OnlyLiterals then begin
         while (assigned(at) and (at^.Token=ptCOMMA)) and (assigned(pt) and (pt^.Token=ptCOMMA)) do begin
-         if Variable in [2,3] then begin
-          if at^.Left^.Token<>ptSYMBOL then begin
-           SyntaxError('Bad lvalue',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
-          end else begin
-           Reg2:=GetSymbolRegister(at^.Left,true,Variable=3);
-           Reg:=GenerateExpression(pt^.Left,Reg2,true);
-           if Reg<>Reg2 then begin
-            EmitOpcode(popCOPY,Reg2,Reg);
-            SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
-            FreeRegister(Reg);
-           end;
-          end;
-         end else begin
+         if Variable=0 then begin
           Reg:=GenerateExpression(pt^.Left,-1,true);
           EmitMultiLeftValue(at^.Left,Variable,Reg);
           FreeRegister(Reg);
-         end;
-         at:=at^.Right;
-         pt:=pt^.Right;
-        end;
-        if assigned(at) and assigned(pt) then begin
-         if Variable in [2,3] then begin
-          if at^.Token<>ptSYMBOL then begin
-           SyntaxError('Bad lvalue',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
-          end else begin
-           if OutReg<0 then begin
-            result:=GetSymbolRegister(at,true,Variable=3);
-            Reg:=GenerateExpression(pt,result,true);
-            if Reg<>result then begin
-             EmitOpcode(popCOPY,result,Reg);
-             SetRegisterNumber(result,GetRegisterNumber(Reg));
-             FreeRegister(Reg);
+         end else if at^.Left^.Token<>ptSYMBOL then begin
+          SyntaxError('Bad lvalue',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
+         end else begin
+          case Variable of
+           1:begin
+            IsVar:=true;
+           end;
+           else {2,3:}begin
+            if ExistScopeSymbol(at^.Left,false,false,true) then begin
+             SyntaxError('Symbol already defined',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
+            end else begin
+             if CodeGenerator^.HasNestedFunctions then begin
+              IsVar:=true;
+             end else begin
+              IsVar:=false;
+             end;
             end;
-           end else begin
-            result:=OutReg;
-            Reg2:=GetSymbolRegister(at,true,Variable=3);
-            Reg:=GenerateExpression(pt,Reg2,true);
-            EmitOpcode(popCOPY,result,Reg);
-            SetRegisterNumber(result,GetRegisterNumber(Reg));
+           end;
+          end;
+          if IsVar then begin
+           Reg:=GenerateExpression(pt^.Left,-1,true);
+           EmitMultiLeftValue(at^.Left,Variable,Reg);
+           FreeRegister(Reg);
+          end else begin
+           Symbol:=DefineScopeSymbol(at^.Left,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+           if assigned(Symbol) then begin
+            Reg2:=Symbol^.Register;
+            Reg:=GenerateExpression(pt^.Left,Reg2,true);
             if Reg<>Reg2 then begin
              EmitOpcode(popCOPY,Reg2,Reg);
              SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
@@ -28336,9 +28713,61 @@ var TokenList:PPOCAToken;
             end;
            end;
           end;
-         end else begin
+         end;
+         at:=at^.Right;
+         pt:=pt^.Right;
+        end;
+        if assigned(at) and assigned(pt) then begin
+         if Variable=0 then begin
           result:=GenerateExpression(pt,OutReg,true);
           EmitMultiLeftValue(at,Variable,result);
+         end else if at^.Token<>ptSYMBOL then begin
+          SyntaxError('Bad lvalue',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
+         end else begin
+          case Variable of
+           1:begin
+            IsVar:=true;
+           end;
+           else {2,3:}begin
+            if ExistScopeSymbol(at,false,false,true) then begin
+             SyntaxError('Symbol already defined',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
+            end else begin
+             if CodeGenerator^.HasNestedFunctions then begin
+              IsVar:=true;
+             end else begin
+              IsVar:=false;
+             end;
+            end;
+           end;
+          end;
+          if IsVar then begin
+           result:=GenerateExpression(pt,OutReg,true);
+           EmitMultiLeftValue(at,Variable,result);
+          end else begin
+           Symbol:=DefineScopeSymbol(at,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+           if assigned(Symbol) then begin
+            if OutReg<0 then begin
+             result:=Symbol^.Register;
+             Reg:=GenerateExpression(pt,result,true);
+             if Reg<>result then begin
+              EmitOpcode(popCOPY,result,Reg);
+              SetRegisterNumber(result,GetRegisterNumber(Reg));
+              FreeRegister(Reg);
+             end;
+            end else begin
+             result:=OutReg;
+             Reg2:=Symbol^.Register;
+             Reg:=GenerateExpression(pt,Reg2,true);
+             EmitOpcode(popCOPY,result,Reg);
+             SetRegisterNumber(result,GetRegisterNumber(Reg));
+             if Reg<>Reg2 then begin
+              EmitOpcode(popCOPY,Reg2,Reg);
+              SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
+              FreeRegister(Reg);
+             end;
+            end;
+           end;
+          end;
          end;
         end;
        end else begin
@@ -28369,17 +28798,40 @@ var TokenList:PPOCAToken;
           end else begin
            t:=tat^.Left;
           end;
-          if Variable in [2,3] then begin
-           if t^.Token<>ptSYMBOL then begin
-            SyntaxError('Bad lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-           end else begin
-            Reg2:=GetSymbolRegister(t,true,Variable=3);
-            EmitOpcode(popCOPY,Reg2,Reg);
-            SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
-            FreeRegister(Reg2);
-           end;
-          end else begin
+          if Variable=0 then begin
            EmitMultiLeftValue(t,Variable,Reg);
+          end else if t^.Token<>ptSYMBOL then begin
+           SyntaxError('Bad lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+          end else begin
+           case Variable of
+            1:begin
+             IsVar:=true;
+            end;
+            else {2,3:}begin
+             if ExistScopeSymbol(t,false,false,true) then begin
+              SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+             end else begin
+              if CodeGenerator^.HasNestedFunctions then begin
+               IsVar:=true;
+              end else begin
+               IsVar:=false;
+              end;
+             end;
+            end;
+           end;
+           if IsVar then begin
+            EmitMultiLeftValue(t,Variable,Reg);
+           end else begin
+            Symbol:=DefineScopeSymbol(t,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+            if assigned(Symbol) then begin
+             if OutReg<0 then begin
+              Reg2:=Symbol^.Register;
+              EmitOpcode(popCOPY,Reg2,Reg);
+              SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
+              FreeRegister(Reg2);
+             end;
+            end;
+           end;
           end;
           if Index=(Count-1) then begin
            result:=Reg;
@@ -28454,7 +28906,7 @@ var TokenList:PPOCAToken;
      rv:=t^.Right;
      Variable:=0;
      Len:=ParameterListLen(lv);
-     if (Len=0) and (lv^.Token in [ptVAR,ptREGISTER,ptCONST]) then begin
+     if (Len=0) and (lv^.Token in [ptVAR,ptLET,ptCONST]) then begin
       Len:=ParameterListLen(lv^.Right);
      end;
      if Len<>0 then begin
@@ -28467,7 +28919,7 @@ var TokenList:PPOCAToken;
         lv:=lv^.Right;
         Variable:=1;
        end;
-       ptREGISTER:begin
+       ptLET:begin
         lv:=lv^.Right;
         Variable:=2;
        end;
@@ -29049,9 +29501,9 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         if Safe then begin
-         EmitOpcode(popSAFEGETMEMBER,result,Reg,FindConstantIndex(t^.Right),$ffffffff,$ffffffff);
+         EmitOpcode(popSAFEGETMEMBER,result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
         end else begin
-         EmitOpcode(popGETMEMBER,result,Reg,FindConstantIndex(t^.Right),$ffffffff,$ffffffff);
+         EmitOpcode(popGETMEMBER,result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
         end;
        end;
        else begin
@@ -29120,7 +29572,7 @@ var TokenList:PPOCAToken;
           end;
           case t^.Right^.Right^.Token of
            ptSYMBOL:begin
-            ConstantIndex:=FindConstantIndex(t^.Right^.Right);
+            ConstantIndex:=FindConstantIndex(t^.Right^.Right,false);
             Reg1:=GenerateExpression(t^.Right^.Left,-1,true);
             EmitOpcode(popDEFINED,result,Reg1,ConstantIndex);
             FreeRegister(Reg1);
@@ -29340,7 +29792,7 @@ var TokenList:PPOCAToken;
        end;
        case t^.Right^.Right^.Token of
         ptSYMBOL:begin
-         ConstantIndex:=FindConstantIndex(t^.Right^.Right);
+         ConstantIndex:=FindConstantIndex(t^.Right^.Right,false);
          Reg1:=GenerateExpression(t^.Right^.Left,-1,true);
          EmitOpcode(popDELETE,result,Reg1,ConstantIndex);
          FreeRegister(Reg1);
@@ -29394,7 +29846,7 @@ var TokenList:PPOCAToken;
        end else begin
         Reg1:=GetRegister(true,false);
         EmitOpcode(popLOADLOCAL,Reg1);
-        ConstantIndex:=FindConstantIndex(t^.Right);
+        ConstantIndex:=FindConstantIndex(t^.Right,true);
         EmitOpcode(popDELETE,result,Reg1,ConstantIndex);
         FreeRegister(Reg1);
        end;
@@ -29436,7 +29888,9 @@ var TokenList:PPOCAToken;
      SetRegisterNumber(result,true);
     end;
    var i:TPOCAInt32;
-       ot:TPOCATokenType;
+       Symbol:PPOCACodeGeneratorScopeSymbol;
+       Token:TPOCATokenType;
+       IsVar:Boolean;
    begin
     result:=-1;
     if not assigned(t) then begin
@@ -29544,8 +29998,9 @@ var TokenList:PPOCAToken;
         CodeGenerator^.HasRestArguments:=true;
         CodeGenerator^.HasLocals:=true;
        end;
-       if IsSymbolRegister(t) then begin
-        result:=GetSymbolRegister(t,false,false);
+       Symbol:=FindScopeSymbol(t,false,true,false);
+       if assigned(Symbol) and (Symbol^.Register>=0) then begin
+        result:=Symbol^.Register;
         if OutReg>=0 then begin
          EmitOpcode(popCOPY,OutReg,result);
          SetRegisterNumber(OutReg,GetRegisterNumber(result));
@@ -29557,7 +30012,7 @@ var TokenList:PPOCAToken;
         end else begin
          result:=OutReg;
         end;
-        EmitOpcode(popGETLOCAL,result,FindConstantIndex(t),$ffffffff);
+        EmitOpcode(popGETLOCAL,result,FindConstantIndex(t,true),$ffffffff);
         SetRegisterNumber(result,false);
        end;
       end;
@@ -29572,37 +30027,63 @@ var TokenList:PPOCAToken;
        end;
        SetRegisterNumber(result,t^.Token=ptLITERALNUM);
       end;
-      ptVAR:begin
-       if CodeToken=ptFASTFUNCTION then begin
-        SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-       end;
+      ptVAR,ptLET,ptCONST:begin
+       Token:=t^.Token;
        if assigned(t^.Right) and (t^.Right^.Token=ptSYMBOL) then begin
-        CodeGenerator^.HasLocals:=true;
-        if OutReg<0 then begin
-         result:=GetRegister(true,false);
-        end else begin
-         result:=OutReg;
+        if IsScopeSymbolConstant(t^.Right,false,false) then begin
+         SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
-        EmitOpcode(popLOADNULL,result);
-        SetRegisterNumber(result,false);
-        EmitOpcode(popSETLOCAL,FindConstantIndex(t^.Right),result,$ffffffff);
-       end else begin
-        SyntaxError('Symbol expected',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-       end;
-      end;
-      ptREGISTER,ptCONST:begin
-       ot:=t^.Token;
-       if assigned(t^.Right) and (t^.Right^.Token=ptSYMBOL) then begin
-        if OutReg<0 then begin
-         result:=GetRegister(true,false);
-        end else begin
-         result:=OutReg;
+        case Token of
+         ptVAR:begin
+          IsVar:=true;
+         end;
+         else {ptLET,ptCONST:}begin
+          if ExistScopeSymbol(t^.Right,false,false,true) then begin
+           SyntaxError('Symbol already defined',t^.Right^.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
+          end else begin
+           if CodeGenerator^.HasNestedFunctions then begin
+            IsVar:=true;
+           end else begin
+            IsVar:=false;
+           end;
+          end;
+         end;
         end;
-        EmitOpcode(popLOADNULL,result);
-        SetRegisterNumber(result,false);
-        i:=GetSymbolRegister(t^.Right,true,ot=ptCONST);
-        EmitOpcode(popCOPY,i,result);
-        SetRegisterNumber(i,GetRegisterNumber(result));
+        if IsVar then begin
+         if CodeToken=ptFASTFUNCTION then begin
+          SyntaxError('VAR is not allowed in fastfunctions',t^.Right^.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
+         end;
+         CodeGenerator^.HasLocals:=true;
+         DefineScopeSymbol(t^.Right,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         if OutReg<0 then begin
+          result:=GetRegister(true,false);
+         end else begin
+          result:=OutReg;
+         end;
+         EmitOpcode(popLOADNULL,result);
+         SetRegisterNumber(result,false);
+         if Token=ptCONST then begin
+          EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
+         end else begin
+          EmitOpcode(popSETLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
+         end;
+         exit;
+        end else begin
+         Symbol:=DefineScopeSymbol(t^.Right,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         if assigned(Symbol) then begin
+          if OutReg<0 then begin
+           result:=GetRegister(true,false);
+          end else begin
+           result:=OutReg;
+          end;
+          EmitOpcode(popLOADNULL,result);
+          SetRegisterNumber(result,false);
+          i:=Symbol^.Register;
+          EmitOpcode(popCOPY,i,result);
+          SetRegisterNumber(i,GetRegisterNumber(result));
+         end;
+         exit;
+        end;
        end else begin
         SyntaxError('Symbol expected',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end;
@@ -30072,6 +30553,7 @@ var TokenList:PPOCAToken;
    procedure PreprocessArgumentList(t:PPOCAToken);
    var IsLocal,IsConst:boolean;
        Symbol:PPOCAToken;
+       ScopeScope:PPOCACodeGeneratorScopeSymbol;
    begin
     IsConst:=false;
     if assigned(t) and (t^.Token<>ptEMPTY) then begin
@@ -30084,7 +30566,7 @@ var TokenList:PPOCAToken;
        end;
       end;
       ptASSIGN:begin
-       IsLocal:=assigned(t^.Left) and (t^.Left^.Token in [ptREGISTER,ptCONST]);
+       IsLocal:=assigned(t^.Left) and (t^.Left^.Token in [ptLET,ptCONST]);
        if IsLocal then begin
         if assigned(t^.Left^.Right) and (t^.Left^.Right^.Token=ptSYMBOL) then begin
          Symbol:=t^.Left^.Right;
@@ -30100,7 +30582,7 @@ var TokenList:PPOCAToken;
         end;
        end;
       end;
-      ptREGISTER,ptCONST:begin
+      ptLET,ptCONST:begin
        IsLocal:=true;
        IsConst:=t^.Token=ptCONST;
        if assigned(t^.Right) and (t^.Right^.Token=ptSYMBOL) then begin
@@ -30133,6 +30615,9 @@ var TokenList:PPOCAToken;
        SyntaxError('Bad function argument expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
       end;
      end;
+     if CodeGenerator^.HasNestedFunctions then begin
+      IsLocal:=false;
+     end;
      if CodeGenerator^.CountLocalArguments>=length(CodeGenerator^.LocalArguments) then begin
       if CodeGenerator^.CountLocalArguments=0 then begin
        SetLength(CodeGenerator^.LocalArguments,128);
@@ -30141,7 +30626,13 @@ var TokenList:PPOCAToken;
       end;
      end;
      if IsLocal then begin
-      CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments]:=GetSymbolRegister(Symbol,true,IsConst);
+      ScopeScope:=FindScopeSymbol(Symbol,false,true,false);
+      if not assigned(ScopeScope) then begin
+       ScopeScope:=DefineScopeSymbol(t,true,IsConst,false,GetRegister(false,IsConst));
+      end;
+      if assigned(ScopeScope) then begin
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments]:=ScopeScope^.Register;
+      end;
      end else begin
       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments]:=-1;
       CodeGenerator^.HasLocals:=true;
@@ -30168,7 +30659,7 @@ var TokenList:PPOCAToken;
         end;
        end;
        ptASSIGN:begin
-        if assigned(t^.Left) and (t^.Left^.Token in [ptREGISTER,ptCONST]) then begin
+        if assigned(t^.Left) and (t^.Left^.Token in [ptLET,ptCONST]) then begin
          if (not assigned(t^.Left^.Right)) or (t^.Left^.Right^.Token<>ptSYMBOL) then begin
           SyntaxError('Bad function argument expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
          end else begin
@@ -30178,7 +30669,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
-          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right);
+          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right,true);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           CodeGenerator^.OptionalArgumentValues[Code^.CountOptionalArguments]:=DefineArgument(t^.Right);
           inc(Code^.CountOptionalArguments);
@@ -30194,7 +30685,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
-          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right);
+          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right,true);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           CodeGenerator^.OptionalArgumentValues[Code^.CountOptionalArguments]:=DefineArgument(t^.Right);
           inc(Code^.CountOptionalArguments);
@@ -30209,14 +30700,14 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
-          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left);
+          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left,true);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           CodeGenerator^.OptionalArgumentValues[Code^.CountOptionalArguments]:=DefineArgument(t^.Right);
           inc(Code^.CountOptionalArguments);
          end;
         end;
        end;
-       ptREGISTER,ptCONST:begin
+       ptLET,ptCONST:begin
         if Code^.CountOptionalArguments>0 then begin
          SyntaxError('Optional arguments must be last',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end else begin
@@ -30228,7 +30719,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
            ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
           end;
-          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right);
+          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right,true);
           CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           inc(Code^.CountArguments);
           Code^.HasArgumentLocals:=true;
@@ -30247,7 +30738,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
            ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
           end;
-          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right);
+          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right,true);
           CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           inc(Code^.CountArguments);
          end;
@@ -30262,7 +30753,7 @@ var TokenList:PPOCAToken;
           ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
          end;
-         CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t);
+         CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t,true);
          CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
          inc(Code^.CountArguments);
         end;
@@ -30281,14 +30772,16 @@ var TokenList:PPOCAToken;
     end;
    end;
   var Code:PPOCACode;
-      i:TPOCAInt32;
+      i,j:TPOCAInt32;
       IsEmpty:TPOCABool32;
+      Symbol:PPOCACodeGeneratorScopeSymbol;
   begin
    New(CodeGenerator);
    try
     begin
      FillChar(CodeGenerator^,sizeof(TPOCACodeGenerator),#0);
      Initialize(CodeGenerator^);
+     CodeGenerator^.ParentCodeGenerator:=ParentCodeGenerator;
      CodeGenerator^.ByteCodeAllocated:=1024;
      GetMem(CodeGenerator^.ByteCode,CodeGenerator^.ByteCodeAllocated*sizeof(TPOCAUInt32));
      FillChar(CodeGenerator^.ByteCode^,CodeGenerator^.ByteCodeAllocated*sizeof(TPOCAUInt32),#0);
@@ -30296,6 +30789,7 @@ var TokenList:PPOCAToken;
      CodeGenerator^.RestArgSym:=Instance^.Globals.ArgumentsValueReference;
      CodeGenerator^.RestArgSymbolString:='arguments';
      CodeGenerator^.HasRestArguments:=false;
+     CodeGenerator^.HasNestedFunctions:=false;
      CodeGenerator^.FastFunction:=CodeToken=ptFASTFUNCTION;
      CodeGenerator^.Consts:=POCANewArray(Parser.Context);
      CodeGenerator^.SwitchTop:=0;
@@ -30325,6 +30819,7 @@ var TokenList:PPOCAToken;
      CodeGenerator^.CountRegExps:=0;
     end;
     begin
+     ScanForNestedFunctions(ArgumentList,Block);
      ScopeStart;
      ProcessConstantFolding(ArgumentList);
      PreprocessArgumentList(ArgumentList);                                 
@@ -30474,9 +30969,16 @@ var TokenList:PPOCAToken;
     SetLength(CodeGenerator^.WhenSwitchCaseBlocks,0);
     SetLength(CodeGenerator^.BreakContinueScopes,0);
     for i:=0 to length(CodeGenerator^.Scopes)-1 do begin
-     if assigned(CodeGenerator^.Scopes[i].SymbolRegisterHashMap) then begin
-      FreeAndNil(CodeGenerator^.Scopes[i].SymbolRegisterHashMap);
+     for j:=0 to CodeGenerator^.Scopes[i].CountSymbols-1 do begin
+      Symbol:=CodeGenerator^.Scopes[i].Symbols[j];
+      CodeGenerator^.Scopes[i].Symbols[j]:=nil;
+      if assigned(Symbol) then begin
+       Finalize(Symbol^);
+       FreeMem(Symbol);
+      end;
      end;
+     CodeGenerator^.Scopes[i].Symbols:=nil;
+     FreeAndNil(CodeGenerator^.Scopes[i].SymbolNameHashMap);
     end;
     SetLength(CodeGenerator^.Scopes,0);
     SetLength(CodeGenerator^.Registers,0);
@@ -30489,7 +30991,7 @@ var TokenList:PPOCAToken;
    end;
   end;
  begin
-  result:=GenerateCode(Parser,@Parser.Tree,nil,ptTOP,'');
+  result:=GenerateCode(Parser,@Parser.Tree,nil,ptTOP,'',nil);
  end;
  procedure FreeParser(var Parser:TPOCAParser);
  var CurrentToken,NextToken:PPOCAToken;
@@ -30774,14 +31276,14 @@ begin
  end;
 end;
 
-function POCASetMember(Context:PPOCAContext;const Obj,Field,Value:TPOCAValue;var CacheIndex:TPOCAUInt32;Throw:boolean):boolean;
+function POCASetMember(Context:PPOCAContext;const Obj,Field,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32;Throw:boolean):boolean;
 var p:TPOCAValue;
     Ghost:PPOCAGhost;
     PropertyIndex:TPOCAInt32;
 begin
  case POCAGetValueType(Obj) of
   pvtHASH:begin
-   result:=POCAHashSetCache(Context,Obj,Field,Value,CacheIndex);
+   result:=POCAHashSetCache(Context,Obj,Field,Value,Constant,CacheIndex);
   end;
   pvtGHOST:begin
    Ghost:=POCAGetValueReferencePointer(Obj);
@@ -30800,14 +31302,14 @@ begin
    end else begin
     p:=POCAGhostGetHashValue(Obj);
     if POCAIsValueHash(p) then begin
-     result:=POCASetMember(Context,p,Field,Value,CacheIndex,Throw);
+     result:=POCASetMember(Context,p,Field,Value,Constant,CacheIndex,Throw);
   {   if not result then begin
       p:=POCAHashGetPrototypeValue(p);
       if POCAIsValueHash(p) and assigned(POCAHashGetGhost(p)) then begin
        p:=POCAHashGetGhostValue(p);
       end;
       if POCAIsValueHash(p) or POCAIsValueGhost(p) then begin
-       result:=POCASetMember(Context,p,Field,Value,CacheIndex,Throw);
+       result:=POCASetMember(Context,p,Field,Value,Constant,CacheIndex,Throw);
       end;
      end;{}
     end else begin
@@ -30890,9 +31392,9 @@ begin
    if Code^.ArgumentLocals[i]<0 then begin
     if assigned(Hash) then begin
      if assigned(Hash^.Events) then begin
-      POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.ArgumentSymbols[i]],Value);
+      POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.ArgumentSymbols[i]],Value,false);
      end else begin
-      POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.ArgumentSymbols[i]],Value);
+      POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.ArgumentSymbols[i]],Value,false);
      end;
     end else begin
      POCARuntimeError(Context,'Function has no locals');
@@ -30919,9 +31421,9 @@ begin
    if Code^.OptionalArgumentLocals[i]<0 then begin
     if assigned(Hash) then begin
      if assigned(Hash^.Events) then begin
-      POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value);
+      POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value,false);
      end else begin
-      POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value);
+      POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value,false);
      end;
     end else begin
      POCARuntimeError(Context,'Function has no locals');
@@ -30954,9 +31456,9 @@ begin
    end;
    if assigned(Hash) then begin
     if assigned(Hash^.Events) then begin
-     POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.RestArgSym],Arguments);
+     POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.RestArgSym],Arguments,false);
     end else begin
-     POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.RestArgSym],Arguments);
+     POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.RestArgSym],Arguments,false);
     end;
    end else begin
     POCARuntimeError(Context,'Function has no locals');
@@ -30989,11 +31491,11 @@ begin
   Sym:=Code^.Constants[Code^.OptionalArgumentSymbols[i]];
   if assigned(Hash^.Events) then begin
    if not POCAHashGet(Context,HashValue,Sym,Value) then begin
-    POCAHashSet(Context,HashValue,Sym,Code^.Constants[Code^.OptionalArgumentValues[i]]);
+    POCAHashSet(Context,HashValue,Sym,Code^.Constants[Code^.OptionalArgumentValues[i]],false);
    end;
   end else begin
    if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Sym)),Value) then begin
-    POCAHashNewSymbol(Context^.Instance,Hash,Sym,Code^.Constants[Code^.OptionalArgumentValues[i]]);
+    POCAHashNewSymbol(Context^.Instance,Hash,Sym,Code^.Constants[Code^.OptionalArgumentValues[i]],false);
    end;
   end;
  end;
@@ -31001,11 +31503,11 @@ begin
   Sym:=Code^.Constants[Code^.RestArgSym];
   if assigned(Hash^.Events) then begin
    if not POCAHashGet(Context,HashValue,Sym,Value) then begin
-    POCAHashSet(Context,HashValue,Sym,POCANewArray(Context));
+    POCAHashSet(Context,HashValue,Sym,POCANewArray(Context),false);
    end;
   end else begin
    if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Sym)),Value) then begin
-    POCAHashNewSymbol(Context^.Instance,Hash,Sym,POCANewArray(Context));
+    POCAHashNewSymbol(Context^.Instance,Hash,Sym,POCANewArray(Context),false);
    end;
   end;
  end;
@@ -31022,7 +31524,7 @@ begin
   if POCAHashGet(Context,Hash,Sym,Value) then begin
    if Code^.ArgumentLocals[i]<0 then begin
     if POCAIsValueHash(Locals) then begin
-     POCAHashSet(Context,Locals,Sym,Value);
+     POCAHashSet(Context,Locals,Sym,Value,false);
     end else begin
      POCARuntimeError(Context,'Function has no locals');
     end;
@@ -31041,7 +31543,7 @@ begin
   end;
   if Code^.OptionalArgumentLocals[i]<0 then begin
    if POCAIsValueHash(Locals) then begin
-    POCAHashSet(Context,Locals,Sym,Value);
+    POCAHashSet(Context,Locals,Sym,Value,false);
    end else begin
     POCARuntimeError(Context,'Function has no locals');
    end;
@@ -31055,7 +31557,7 @@ begin
    Value:=POCANewArray(Context);
   end;
   if POCAIsValueHash(Locals) then begin
-   POCAHashSet(Context,Locals,Sym,Value);
+   POCAHashSet(Context,Locals,Sym,Value,false);
   end else begin
    POCARuntimeError(Context,'Function has no locals');
   end;
@@ -31363,12 +31865,12 @@ begin
  POCARunGetLocalError(Context,Sym);
 end;
 
-procedure POCARunSetSymbol(Context:PPOCAContext;Frame:PPOCAFrame;const Sym,Value:TPOCAValue;var CacheIndex:TPOCAUInt32);
+procedure POCARunSetSymbol(Context:PPOCAContext;Frame:PPOCAFrame;const Sym,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32);
 var Func:PPOCAFunction;
 begin
  begin
   // 1. Function frame locals "if exist"
-  if POCAHashTrySetCache(Context,Frame^.Locals,Sym,Value,CacheIndex) then begin
+  if POCAHashTrySetCache(Context,Frame^.Locals,Sym,Value,Constant,CacheIndex) then begin
    exit;
   end;
  end;
@@ -31376,7 +31878,7 @@ begin
   // 2. Outer closure name spaces
   Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
   while assigned(Func) do begin
-   if POCAHashTrySetCache(Context,Func^.Namespace,Sym,Value,CacheIndex) then begin
+   if POCAHashTrySetCache(Context,Func^.Namespace,Sym,Value,Constant,CacheIndex) then begin
     exit;
    end;
    Func:=PPOCAFunction(POCAGetValueReferencePointer(Func.Next));
@@ -31389,7 +31891,7 @@ begin
   end else begin
    if POCAIsValueHash(Frame^.Locals) then begin
     // 3. Function frame locals with creation, because symbol isn't existing already
-    POCAHashSetCache(Context,Frame^.Locals,Sym,Value,CacheIndex);
+    POCAHashSetCache(Context,Frame^.Locals,Sym,Value,Constant,CacheIndex);
    end else begin
     POCARuntimeError(Context,'Could not define symbol: '+POCAGetStringValue(Context,Sym));
    end;
@@ -31408,9 +31910,9 @@ begin
  POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,HashCacheIndex,IsInherited,false);
 end;
 
-procedure POCARunSetMember(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;var CacheIndex:TPOCAUInt32); {$ifdef caninline}inline;{$endif}
+procedure POCARunSetMember(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32); {$ifdef caninline}inline;{$endif}
 begin
- POCASetMember(Context,Obj,Fld,Value,CacheIndex,true);
+ POCASetMember(Context,Obj,Fld,Value,Constant,CacheIndex,true);
 end;
 
 procedure POCARunGetThat(Context:PPOCAContext;const Frame:PPOCAFrame;out Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
@@ -31591,7 +32093,7 @@ begin
  end;
 end;
 
-procedure POCARunContainerSet(Context:PPOCAContext;const Box,Key,Value:TPOCAValue);
+procedure POCARunContainerSet(Context:PPOCAContext;const Box,Key,Value:TPOCAValue;const Constant:Boolean);
 var CodePoint:TPOCAInt32;
     CharValue:TPOCAUInt32;
 begin
@@ -31600,7 +32102,7 @@ begin
  end else begin
   case POCAGetValueType(Box) of
    pvtHASH:begin
-    POCAHashSet(Context,Box,Key,Value);
+    POCAHashSet(Context,Box,Key,Value,Constant);
    end;
    pvtARRAY:begin
     POCAArraySet(Box,POCARunCheckArray(Context,Box,Key),Value);
@@ -35440,6 +35942,9 @@ begin
     popSAFEGETMEMBER:begin
      DoItByVMOpcodeDispatcher;
     end;
+    popSETCONSTLOCAL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
     else begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -35935,7 +36440,7 @@ begin
     Registers^[Operands^[0]]:=Registers^[Operands^[1]];
    end;
    popINSERT:begin
-    POCARunContainerSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]]);
+    POCARunContainerSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],false);
     Context^.TemporarySavedObjectCount:=0;
    end;
    popEXTRACT:begin
@@ -35946,13 +36451,13 @@ begin
     POCARunGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
    end;
    popSETMEMBER:begin
-    POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],Operands^[3]);
+    POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
    end;
    popGETLOCAL:begin
     POCARunGetLocal(Context,Frame,Code^.Constants^[Operands^[1]],Registers^[Operands^[0]],Operands^[2]);
    end;
    popSETLOCAL:begin
-    POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],Operands^[2]);
+    POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
    end;
    popNEWARRAY:begin
     Registers^[Operands^[0]]:=POCANewArray(Context);
@@ -35969,10 +36474,10 @@ begin
     Context^.TemporarySavedObjectCount:=0;
    end;
    popHASHAPPEND:begin
-    POCAHashSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]]);
+    POCAHashSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],false);
    end;
    popSETSYM:begin
-    POCARunSetSymbol(Context,Frame,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],Operands^[2]);
+    POCARunSetSymbol(Context,Frame,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
    end;
    popINDEX:begin
     if POCARunEvalForIndex(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]]) then begin
@@ -36614,6 +37119,9 @@ begin
    end;
    popSAFEGETMEMBER:begin
     POCARunSafeGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
+   end;
+   popSETCONSTLOCAL:begin
+    POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],true,Operands^[2]);
    end;
    popCOUNT..255:begin
     POCARuntimeError(Context,'Invalid unknown opcode instruction');
