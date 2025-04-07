@@ -1,7 +1,14 @@
 // 3D Donut
 
+// Set the garbage collector to non-incremental mode for performance, since at an incremental garbage collection, it can happen that
+// ther incremental garbage collector must be started often from scratch due to invariants of the garbage collection algorithm,
+// where the full garbage collection at other larger intervals needs then more time, to scan the then more allocated memory than
+// the full garbage collector would need to scan in the same time. So the incremental garbage collector is not really useful in this case. 
+// This is important for performance in a tight loop.
+GarbageCollector.setIncremental(false); 
+
 (function(){
-  GarbageCollector.setIncremental(false); 
+  
   const (canvasWidth, canvasHeight) = (80, 24);
   const (canvasSize, xOffset, yOffset, innerRadius, fov, w, tau, u) = (canvasHeight * canvasWidth, 40, 12, 2, 5, 30, Math.PI * 2.0, '.,-~:;=!*#$@');
   const q = (((u.length() + 1) * 2) / 3) << 0;      
