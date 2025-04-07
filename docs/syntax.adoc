@@ -113,67 +113,172 @@ into a complete scripting language.
 
 === Scoping
 
-POCA supports lexical scoping. This means that the scope of a variable is
-determined by its position in the source code. 
+POCA supports lexical scoping, meaning that a variable’s scope is determined by 
+its position in the source code.
 
-Variables declared with `var` are local-scoped, which means they are 
-accessible only within the scope in which they are declared and any nested 
-scopes. This is similar to how variables are scoped in JavaScript and ECMAScript, 
-where variables declared with `var` are function-scoped. These variables are 
-stored in a local hash table and are accessible from the current frame and all 
-nested frames.
+Variables declared with `var` are local-scoped; they are accessible only within 
+the scope in  which they are declared and any nested scopes. This behavior is 
+similar to JavaScript’s function-scoped variables declared with `var`. Such 
+variables are stored in a local hash table and can be accessed from the current 
+frame as well as all nested frames.
 
-However, variables declared with `let` and `const` are block-scoped as well, 
-but unlike `var`, they are not accessible beyond the *execution context frame* 
-boundaries, such as a function or the global scope. Because of this, POCA 
-assigns so-called "registers" to variables declared with `let` and `const`. 
-These variables are not stored in the local hash table but directly in the 
-VM's registers. VM registers are frame-specific, which means they cannot be 
-accessed from outside the current frame.
-
-This is different from JavaScript and ECMAScript, where variables declared
-with `let` and `const` are block-scoped but can still be accessed from
-the outer scope.
-
-Here are some scoping examples in POCA to show what the above means:
+In contrast, variables declared with `let` and `const` are block-scoped. They are 
+bound to the block in which they are declared (and any nested blocks) and, unlike 
+`var`, are not stored in the local hash table by default. Instead, they reside in 
+the VM's registers. Only when nested functions or closures are created, or when 
+the block is exited and the variables are needed again, are these variables 
+transferred to the local hash table. The POCA byte-code generator converts `let` 
+and `const` variables into a special form of `var` variables on-demand, which are 
+then stored in the local hash table. For example, consider the following code:
 
 [source,javascript]
 ----
-
 let a = 1;
-
-var b = 2;
-
+const b = 2;
 function Func1(){
-  // a is not accessible here, but b is accessible
   let c = 3;
+  {
+    let c = 4;
+    puts(c);
+  }
   var d = 4;
   function Func2(){
-    // b and d are accessible here, but a and c are not
-    // ...
+    let e = 5;
+    {
+      let e = 6;
+      puts(e);
+    }
+    return a + b + c + d + e;
   }
-
-  if(1){
-
-    // b, c and d are accessible here, because still same execution context frame, but a is not accessible here
-
-  }
-
+  Func2();
 }
-
+Func1();
 ----
 
-POCA also supports closures, which means that functions can capture and
-remember the environment in which they were created, even if that
-environment is no longer in scope.
+This code is virtually converted into:
 
-This allows for powerful programming techniques, such as creating
-functions that can maintain state or encapsulate private variables.
+[source,javascript]
+----
+var a@0 = 1;
+constvar b@0 = 2; // 'var' with const semantics, internal only
+function Func1@0(){
+  var c@1 = 3;
+  {
+    var c@2 = 4;
+    puts(c@2);
+  }
+  var d@1 = 4;
+  function Func2@0(){
+    // `let` and `const` variables are stored in registers here, 
+    // because no nested function or closure is created inside Func2.
+    let e = 5;
+    {
+      let e = 6;  
+      puts(e); // prints 6
+    }
+    // e is 5 again here, since never overwritten, e was just a 
+    // different register in the inner scope.
+    return a@0 + b@0 + c@1 + d@1 + e;
+  }
+  Func2@0();
+}
+Func1@0();
+----
 
-POCA also supports the `scope` and `code` keywords to create explicit
-scopes. The `scope` keyword creates a new scope, while the `code` keyword
-creates a new code block without introducing a new scope. This allows for
-more control over variable visibility and lifetime.
+This approach ensures that `let` and `const` variables occupy the local hash table 
+only when necessary, reducing overhead—much like how ECMAScript/JavaScript optimizes 
+variable storage between registers and the stack.
+
+POCA also supports closures, allowing functions to capture and remember the 
+environment in which they were created—even if that environment is no longer in scope. 
+This enables powerful programming techniques such as maintaining state or 
+encapsulating private variables. Note that closures in POCA behave slightly differently 
+from those in ECMAScript/JavaScript: in POCA, closures capture variables at the time 
+the function is defined rather than when the block is exited. For example, consider 
+the following code:
+
+[source,javascript]
+----
+let a = 1;
+let t = new Array();
+for(let i = 0; i < 10; i++){
+  let b = i;
+  t.push(
+    function(){
+      return a + b + i;
+    }
+  );
+}
+for(let i = 0; i < 10; i++){
+  puts(t[i]());
+}
+----
+
+This code outputs:
+
+[source,javascript]
+----
+20
+20
+20
+20
+20
+20
+20
+20
+20
+20
+----
+
+Here, the variable `i` is captured when the function is defined, causing each closure 
+to reference the same (final) value of `i`. In contrast, ECMAScript/JavaScript typically 
+captures the variable when the block is exited. To create a closure that captures the 
+current value of `i` in POCA, you can use an inline function to create a new scope:
+
+[source,javascript]
+----
+let a = 1;
+let t = new Array();
+for(let i = 0; i < 10; i++){
+  t.push(
+    function(i){
+      let b = i;
+      return function(){
+        return a + b + i;
+      }
+    }(i)
+  );
+}
+for(let i = 0; i < 10; i++){
+  puts(t[i]());
+}
+----
+
+This code outputs:
+
+[source,javascript]
+----
+1
+3
+5
+7
+9
+11
+13
+15
+17
+19
+----
+
+In this case, the inline function creates a new scope that captures the current 
+value of `i`, resulting in each closure maintaining its own copy of `i`. This 
+behavior is similar to how closures are handled in Python, where variables are 
+captured at function definition time.
+
+Finally, POCA supports the `scope` and `code` keywords to create explicit scopes. 
+The `scope` keyword creates a new scope, while the `code` keyword creates a new 
+code block without introducing a new scope. This provides additional control over 
+variable visibility and lifetime.
 
 == A quick tour
 
