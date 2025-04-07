@@ -35,5 +35,3 @@ tb = DateTime.now();
 puts(`Output Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
 
 GarbageCollector.setActive(true);
-GarbageCollector.collect();
-
