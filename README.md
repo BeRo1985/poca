@@ -28,19 +28,23 @@ Here's how to clone the repo and build POCA using the FreePascal compiler:
 ```sh
 # clone
 git clone https://github.com/BeRo1985/poca.git
+
 cd poca
 
 # clone dependencies
 git submodule init
 git submodule update --remote --recursive
 
-# build POCA
+# build POCA directly using fpc
 fpc -B -O3 -g -gl pocarun.dpr
+
+# or build POCA using Lazarus (adapt the paths to your fpc and lazarus paths)
+~/fpcupdeluxe/lazarus/lazbuild --pcp="${HOME}/fpcupdeluxe/config_lazarus" --os=linux -B src/pocarun.lpi
 
 # run a script (ctrl-c to abort)
 bin/poca examples/donut.poca
 
-# run POCA's REPL (ctrl-d to exit)
+# run POCA's REPL (ctrl-c or ctrl-d to exit)
 bin/poca
 ```
 
