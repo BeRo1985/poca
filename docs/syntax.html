@@ -800,6 +800,47 @@ behavior is similar to how closures are handled in Python, where variables are
 captured at function definition time.</p>
 </div>
 <div class="paragraph">
+<p>Below is a Python script that demonstrates the "freeze effect" in closures, with
+print statements that refer to the POCA behavior:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-python" data-lang="python"># Without using default arguments:
+# All closures refer to the final values of 'i' and 'b'.
+a = 1
+closures_without_freeze = []
+for i in range(10):
+    b = i
+    closures_without_freeze.append(lambda: a + b + i)
+
+print("Without freeze (no default arguments), like at POCA without inline function:")
+for func in closures_without_freeze:
+    # Since 'i' and 'b' end with the value 9, each call returns: 1 + 9 + 9 = 19.
+    print(func())
+
+# Using default arguments to capture (freeze) the current values at function definition time:
+closures_with_freeze = []
+for i in range(10):
+    b = i
+    # Here, 'i=i' and 'b=b' freeze the current values.
+    closures_with_freeze.append(lambda i=i, b=b: a + b + i)
+
+print("\nWith freeze (using default arguments), like at POCA with inline function:")
+for func in closures_with_freeze:
+    print(func())
+
+### Explanation
+#
+# - **Without Freeze:**
+#   The closures are created without default arguments, so they capture `i` and `b` by reference. When the loop ends, both `i` and `b` have the final value of 9, and every closure returns the same result (19). This is analogous to POCA code that doesn’t use an inline function to create a new scope.
+#
+# - **With Freeze:**
+#   Using default arguments (`i=i, b=b`), each lambda captures the current values of `i` and `b` at the time it is defined. This “freezes” the values, similar to how an inline function in POCA creates a new scope, ensuring that each closure maintains its own copy of `i` and `b`.
+#
+# This script clearly illustrates the difference in behavior between closures that do not freeze variable values and those that do.</code></pre>
+</div>
+</div>
+<div class="paragraph">
 <p>Finally, POCA supports the <code>scope</code> and <code>code</code> keywords to create explicit scopes.
 The <code>scope</code> keyword creates a new scope, while the <code>code</code> keyword creates a new
 code block without introducing a new scope. This provides additional control over
@@ -1723,7 +1764,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-07 22:40:56 +0200
+Last updated 2025-04-07 22:55:33 +0200
 </div>
 </div>
 </body>
