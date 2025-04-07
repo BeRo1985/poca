@@ -16747,7 +16747,7 @@ begin
   end;
  end else begin
   j:=1;
-  while j<=length(FromString) do begin
+  while j<=(length(FromString)+1) do begin
    i:=PosEx(DelimeterString,FromString,j);
    if i>0 then begin
     POCAArrayPush(result,POCANewString(Context,copy(FromString,j,i-j)));
