@@ -308,12 +308,19 @@ for func in closures_with_freeze:
 ### Explanation
 #
 # - **Without Freeze:**  
-#   The closures are created without default arguments, so they capture `i` and `b` by reference. When the loop ends, both `i` and `b` have the final value of 9, and every closure returns the same result (19). This is analogous to POCA code that doesn’t use an inline function to create a new scope.
+#   The closures are created without default arguments, so they capture `i` 
+#   and `b` by reference. When the loop ends, both `i` and `b` have the final 
+#   value of 9, and every closure returns the same result (19). This is analogous 
+#   to POCA code that doesn’t use an inline function to create a new scope.
 # 
 # - **With Freeze:**  
-#   Using default arguments (`i=i, b=b`), each lambda captures the current values of `i` and `b` at the time it is defined. This “freezes” the values, similar to how an inline function in POCA creates a new scope, ensuring that each closure maintains its own copy of `i` and `b`.
+#   Using default arguments (`i=i, b=b`), each lambda captures the current values 
+#   of `i` and `b` at the time it is defined. This “freezes” the values, similar
+#   to how an inline function in POCA creates a new scope, ensuring that each 
+#   closure maintains its own copy of `i` and `b`.
 # 
-# This script clearly illustrates the difference in behavior between closures that do not freeze variable values and those that do.
+# This script clearly illustrates the difference in behavior between closures that 
+# do not freeze variable values and those that do.
 
 ----
 
