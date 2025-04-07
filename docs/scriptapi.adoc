@@ -1628,6 +1628,19 @@ objects to mark or sweep in a partial/stepped collection cycle
 
 '''''
 
+==== GarbageCollector.getFullIntervalFactor
+
+*Usage:*
+[source,js]
+----
+let factor = GarbageCollector.getFullIntervalFactor();
+----
+* *Description:* Returns the "`full interval factor`" that controls how
+many cycles elapse before a full collection is triggered.
+* *Return Value:* A numeric value (integer).
+
+'''''
+
 ==== GarbageCollector.getIntervalFactor
 
 *Usage:*
@@ -1638,7 +1651,7 @@ let factor = GarbageCollector.getIntervalFactor();
 ----
 
 * *Description:* Returns the "`interval factor`" that controls how many
-cycles elapse before persistent objects are reconsidered.
+cycles elapse before an incremental collection is triggered.
 * *Return Value:* A numeric value (integer).
 
 '''''
@@ -1868,6 +1881,21 @@ this factor helps determine how many objects to handle in each GC step.
 
 '''''
 
+==== GarbageCollector.setFullIntervalFactor
+
+*Usage:*
+[source,js]
+----
+let old = GarbageCollector.setFullIntervalFactor(100);
+----
+* *Description:* Sets the "`full interval factor`," which affects how
+many cycles elapse before a full collection is triggered.
+* *Parameters:*
+** _newFullIntervalFactor_ (number): The new full interval factor.
+* *Return Value:* The old full interval factor.
+
+''''' 
+
 ==== GarbageCollector.setIntervalFactor
 
 *Usage:*
@@ -1877,8 +1905,8 @@ this factor helps determine how many objects to handle in each GC step.
 let old = GarbageCollector.setIntervalFactor(128);
 ----
 
-* *Description:* Sets the "`interval factor,`" which affects the rate at
-which persistent objects are reconsidered.
+* *Description:* Sets the "`interval factor,`" which affects how many
+cycles elapse before an incremental collection is triggered.
 * *Parameters:*
 ** _newIntervalFactor_ (number): The new interval factor.
 * *Return Value:* The old interval factor.
@@ -2206,6 +2234,8 @@ plus persistent objects are handled.
 * *Parameter Getter/Setter Functions:*
 ** `+GarbageCollector.getStepFactor+`,
 `+GarbageCollector.setStepFactor+`
+** `+GarbageCollector.getFullIntervalFactor+`,
+`+GarbageCollector.setFullIntervalFactor+`
 ** `+GarbageCollector.getIntervalFactor+`,
 `+GarbageCollector.setIntervalFactor+`
 ** `+GarbageCollector.getGhostFactor+`,

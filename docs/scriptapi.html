@@ -574,6 +574,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_getting_parameters">Getting Parameters</a>
 <ul class="sectlevel3">
 <li><a href="#_garbagecollector_getstepfactor">GarbageCollector.getStepFactor</a></li>
+<li><a href="#_garbagecollector_getfullintervalfactor">GarbageCollector.getFullIntervalFactor</a></li>
 <li><a href="#_garbagecollector_getintervalfactor">GarbageCollector.getIntervalFactor</a></li>
 <li><a href="#_garbagecollector_getghostfactor">GarbageCollector.getGhostFactor</a></li>
 <li><a href="#_garbagecollector_getsweepfactor">GarbageCollector.getSweepFactor</a></li>
@@ -591,6 +592,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_setting_parameters">Setting Parameters</a>
 <ul class="sectlevel3">
 <li><a href="#_garbagecollector_setstepfactor">GarbageCollector.setStepFactor</a></li>
+<li><a href="#_garbagecollector_setfullintervalfactor">GarbageCollector.setFullIntervalFactor</a></li>
 <li><a href="#_garbagecollector_setintervalfactor">GarbageCollector.setIntervalFactor</a></li>
 <li><a href="#_garbagecollector_setghostfactor">GarbageCollector.setGhostFactor</a></li>
 <li><a href="#_garbagecollector_setsweepfactor">GarbageCollector.setSweepFactor</a></li>
@@ -3602,6 +3604,29 @@ objects to mark or sweep in a partial/stepped collection cycle
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_garbagecollector_getfullintervalfactor">GarbageCollector.getFullIntervalFactor</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let factor = GarbageCollector.getFullIntervalFactor();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns the &#8220;full interval factor&#8221; that controls how
+many cycles elapse before a full collection is triggered.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value (integer).</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_garbagecollector_getintervalfactor">GarbageCollector.getIntervalFactor</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -3615,7 +3640,7 @@ objects to mark or sweep in a partial/stepped collection cycle
 <ul>
 <li>
 <p><strong>Description:</strong> Returns the &#8220;interval factor&#8221; that controls how many
-cycles elapse before persistent objects are reconsidered.</p>
+cycles elapse before an incremental collection is triggered.</p>
 </li>
 <li>
 <p><strong>Return Value:</strong> A numeric value (integer).</p>
@@ -3965,6 +3990,39 @@ this factor helps determine how many objects to handle in each GC step.</p>
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_garbagecollector_setfullintervalfactor">GarbageCollector.setFullIntervalFactor</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setFullIntervalFactor(100);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Sets the "`full interval factor`," which affects how
+many cycles elapse before a full collection is triggered.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><em>newFullIntervalFactor</em> (number): The new full interval factor.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The old full interval factor.</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_garbagecollector_setintervalfactor">GarbageCollector.setIntervalFactor</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -3977,8 +4035,8 @@ this factor helps determine how many objects to handle in each GC step.</p>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> Sets the &#8220;interval factor,&#8221; which affects the rate at
-which persistent objects are reconsidered.</p>
+<p><strong>Description:</strong> Sets the &#8220;interval factor,&#8221; which affects how many
+cycles elapse before an incremental collection is triggered.</p>
 </li>
 <li>
 <p><strong>Parameters:</strong></p>
@@ -4556,6 +4614,10 @@ plus persistent objects are handled.</p>
 <li>
 <p><code>GarbageCollector.getStepFactor</code>,
 <code>GarbageCollector.setStepFactor</code></p>
+</li>
+<li>
+<p><code>GarbageCollector.getFullIntervalFactor</code>,
+<code>GarbageCollector.setFullIntervalFactor</code></p>
 </li>
 <li>
 <p><code>GarbageCollector.getIntervalFactor</code>,
@@ -13461,7 +13523,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-07 21:01:10 +0200
+Last updated 2025-04-07 21:25:37 +0200
 </div>
 </div>
 </body>
