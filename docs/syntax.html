@@ -677,30 +677,45 @@ Func1();</code></pre>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-javascript" data-lang="javascript">var a@0 = 1;
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">// Scope ID 0 begins
+
+var a@0 = 1;
 constvar b@0 = 2; // 'var' with const semantics, internal only
 function Func1@0(){
+  // Scope ID 1 begins
   var c@1 = 3;
   {
+    // Scope ID 2 begins
     var c@2 = 4;
     puts(c@2);
+    // Scope ID 2 ends
   }
+  // Scope ID 1 resumes
+  // c@1 is still 3 here, since c@2 is a different variable in a different scope.
+  // c@1 is stored in the local hash table, since it is used in Func2.
   var d@1 = 4;
-  function Func2@0(){
-    // `let` and `const` variables are stored in registers here,
-    // because no nested function or closure is created inside Func2.
+  function Func2@1(){
+    // Scope ID 3 begins, but `let` and `const` variables are stored in
+    // VM registers here, because no nested function or closure is created
+    // inside Func2.
     let e = 5;
     {
+      // Scope ID 4 begins, but still in VM registers.
       let e = 6;
       puts(e); // prints 6
+      // Scope ID 4 ends
     }
     // e is 5 again here, since never overwritten, e was just a
     // different register in the inner scope.
     return a@0 + b@0 + c@1 + d@1 + e;
+    // Scope ID 3 ends
   }
-  Func2@0();
+  Func2@1();
+  // Scope ID 1 ends
 }
-Func1@0();</code></pre>
+// Scope ID 0 resumes
+Func1@0();
+// Scope ID 0 ends</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -1771,7 +1786,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-07 22:57:15 +0200
+Last updated 2025-04-07 23:05:39 +0200
 </div>
 </div>
 </body>
