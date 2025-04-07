@@ -24973,7 +24973,7 @@ var TokenList:PPOCAToken;
       Initialize(result^);
       result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
       if LetConst then begin
-       result^.Name:=t^.Str+#0+IntToStr(result^.ScopeID);
+       result^.Name:=t^.Str+'@'+IntToStr(result^.ScopeID);
       end else begin
        result^.Name:=t^.Str;
       end;
@@ -25157,90 +25157,6 @@ var TokenList:PPOCAToken;
      SetRegisterNumber(result,true);
     end;
    end;
-   function IsSymbolRegister(t:PPOCAToken):boolean;
-   var i:TPOCAInt32;
-       HashMap:TPOCAStringHashMap;
-       Item:PPOCAStringHashMapItem;
-   begin
-    result:=false;
-    if assigned(t) and (t^.Token=ptSYMBOL) then begin
-     for i:=CodeGenerator^.CountScopes-1 downto 0 do begin
-      HashMap:=CodeGenerator^.Scopes[i].SymbolNameHashMap;
-      if assigned(HashMap) then begin
-       Item:=HashMap.GetKey(t^.Str);
-       if assigned(Item) then begin
-        result:=CodeGenerator^.Scopes[i].Symbols[Item^.Value].Register>=0;
-        break;
-       end;
-      end;
-     end;
-    end;
-   end;
-   function IsSymbolRegisterConstant(t:PPOCAToken):boolean;
-   var i:TPOCAInt32;
-       HashMap:TPOCAStringHashMap;
-       Item:PPOCAStringHashMapItem;
-   begin
-    result:=false;
-    if assigned(t) and (t^.Token=ptSYMBOL) then begin
-     for i:=CodeGenerator^.CountScopes-1 downto 0 do begin
-      HashMap:=CodeGenerator^.Scopes[i].SymbolNameHashMap;
-      if assigned(HashMap) then begin
-       Item:=HashMap.GetKey(t^.Str);
-       if assigned(Item) then begin
-        result:=CodeGenerator^.Scopes[i].Symbols[Item^.Value].Constant;
-        break;
-       end;
-      end;
-     end;
-    end;
-   end;
-   function GetSymbolRegister(t:PPOCAToken;CreateIfNotFound,IsConst:boolean):TPOCAUInt32;
-   var HashMap:TPOCAStringHashMap;
-       Item:PPOCAStringHashMapItem;
-       i,SymbolIndex:TPOCAInt32;
-       Symbol:PPOCACodeGeneratorScopeSymbol;
-   begin
-    result:=0;
-    if assigned(t) and (t^.Token=ptSYMBOL) then begin
-     for i:=CodeGenerator^.CountScopes-1 downto 0 do begin
-      HashMap:=CodeGenerator^.Scopes[i].SymbolNameHashMap;
-      if assigned(HashMap) then begin
-       Item:=HashMap.GetKey(t^.Str);
-       if assigned(Item) then begin
-        if CodeGenerator^.Scopes[i].Symbols[Item^.Value].Register>=0 then begin
-         if CodeGenerator^.Scopes[i].Symbols[Item^.Value].Constant and CreateIfNotFound then begin
-          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-         end;
-         SymbolIndex:=Item^.Value;
-         Symbol:=CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
-         result:=Symbol^.Register;
-        end;
-        break;
-       end else begin
-        if CreateIfNotFound then begin
-         Item:=HashMap.NewKey(t^.Str,true);
-         SymbolIndex:=CodeGenerator^.Scopes[i].CountSymbols;
-         Item^.Value:=SymbolIndex;
-         inc(CodeGenerator^.Scopes[i].CountSymbols);
-         if length(CodeGenerator^.Scopes[i].Symbols)<CodeGenerator^.Scopes[i].CountSymbols then begin
-          SetLength(CodeGenerator^.Scopes[i].Symbols,CodeGenerator^.Scopes[i].CountSymbols*2);
-         end;
-         GetMem(CodeGenerator^.Scopes[i].Symbols[SymbolIndex],SizeOf(TPOCACodeGeneratorScopeSymbol));
-         Symbol:=@CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
-         Initialize(Symbol^);
-         Symbol^.Name:=t^.Str;
-         Symbol^.Constant:=IsConst;
-         Symbol^.Register:=GetRegister(false,IsConst);
-         Symbol^.ScopeID:=CodeGenerator^.Scopes[i].ScopeID;
-         result:=Symbol^.Register;
-         break;
-        end;
-       end;
-      end;
-     end;
-    end;
-   end;
    function DeleteSymbolRegister(t:PPOCAToken;Depth:TPOCAInt32):boolean;
    var HashMap:TPOCAStringHashMap;
        Item:PPOCAStringHashMapItem;
@@ -25260,10 +25176,11 @@ var TokenList:PPOCAToken;
        Item:=HashMap.GetKey(t^.Str);
        if assigned(Item) then begin
         SymbolIndex:=Item^.Value;
-        Symbol:=@CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
+        Symbol:=CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
         r:=Symbol^.Register;
         Symbol^.Name:='';
         Symbol^.Constant:=false;
+        Symbol^.Freeable:=false;
         Symbol^.Register:=-1;
         HashMap.DeleteKey(Item);
         FreeRegister(r,true);
@@ -29529,6 +29446,7 @@ var TokenList:PPOCAToken;
     end;
     function GenerateDefined(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Reg,Reg1,Reg2,ConstantIndex,EndPos,TryBlockPos,CatchBlockPos:TPOCAInt32;
+        Symbol:PPOCACodeGeneratorScopeSymbol;
     begin
      if OutReg<0 then begin
       result:=GetRegister(true,false);
@@ -29538,7 +29456,8 @@ var TokenList:PPOCAToken;
      if (not assigned(t^.Right)) or (t^.Right^.Token=ptEMPTY) then begin
       SyntaxError('Missed expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
      end else begin
-      if (t^.Right^.Token=ptSYMBOL) and IsSymbolRegister(t^.Right) then begin
+      Symbol:=FindScopeSymbol(t^.Right,false,false,false);
+      if assigned(Symbol) and (Symbol^.Register>=0) then begin
        EmitOpcode(popLOADONE,result);
       end else begin
        EmitImmediate(popTRY,6);
@@ -29761,6 +29680,7 @@ var TokenList:PPOCAToken;
     end;
     function GenerateDelete(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Reg1,Reg2,ConstantIndex:TPOCAInt32;
+        Symbol:PPOCACodeGeneratorScopeSymbol;
     begin
      result:=OutReg;
      if not assigned(t^.Right) then begin
@@ -29833,8 +29753,9 @@ var TokenList:PPOCAToken;
        SyntaxError('??. at Delete is not allowed',Parser.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
       end;
       ptSYMBOL:begin
-       if IsSymbolRegister(t^.Right) then begin
-        if IsSymbolRegisterConstant(t^.Right) then begin
+       Symbol:=FindScopeSymbol(t,false,false,false);
+       if assigned(Symbol) and (Symbol^.Register>=0) then begin
+        if Symbol^.Constant then begin
          SyntaxError('Constants aren''t deleteable',Parser.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
         end else begin
          if DeleteSymbolRegister(t^.Right,1) then begin
