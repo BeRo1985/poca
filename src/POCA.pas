@@ -1361,6 +1361,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       PersistentThreshold:TPOCAInt32;
       PersistentInterval:TPOCAInt32;
       FullCollect:TPOCABool32;
+      Active:TPOCABool32;
       Incremental:TPOCABool32;
       Generational:TPOCABool32;
       LocalContextPoolSize:TPOCAInt32;
@@ -6556,7 +6557,10 @@ var i:TPOCAInt32;
     Ghost:boolean;
 begin
 
- result:=true;
+ result:=Active;
+ if not result then begin
+  exit;
+ end;
 
  POCALockEnter(Lock);
  try
@@ -11828,6 +11832,11 @@ begin
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.FullCollect) and 1;
 end;
 
+function POCAGarbageCollectorFunctionGETACTIVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Active) and 1;
+end;
+
 function POCAGarbageCollectorFunctionGETINCREMENTAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Incremental) and 1;
@@ -11916,6 +11925,15 @@ begin
  TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.FullCollect),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
 end;
 
+function POCAGarbageCollectorFunctionSETACTIVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setActive"');
+ end;
+ result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Active) and 1;
+ TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.Active),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
+end;
+
 function POCAGarbageCollectorFunctionSETINCREMENTAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
@@ -12000,6 +12018,7 @@ begin
  POCAAddNativeFunction(Context,result,'getPersistentInterval',POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'getPersistentThreshold',POCAGarbageCollectorFunctionGETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'getFullCollect',POCAGarbageCollectorFunctionGETFULLCOLLECT);
+ POCAAddNativeFunction(Context,result,'getActive',POCAGarbageCollectorFunctionGETACTIVE);
  POCAAddNativeFunction(Context,result,'getIncremental',POCAGarbageCollectorFunctionGETINCREMENTAL);
  POCAAddNativeFunction(Context,result,'getGenerational',POCAGarbageCollectorFunctionGETGENERATIONAL);
  POCAAddNativeFunction(Context,result,'getLocalContextPoolSize',POCAGarbageCollectorFunctionGETLOCALCONTEXTPOOLSIZE);
@@ -12012,6 +12031,7 @@ begin
  POCAAddNativeFunction(Context,result,'setPersistentInterval',POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'setPersistentThreshold',POCAGarbageCollectorFunctionSETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'setFullCollect',POCAGarbageCollectorFunctionSETFULLCOLLECT);
+ POCAAddNativeFunction(Context,result,'setActive',POCAGarbageCollectorFunctionSETACTIVE);
  POCAAddNativeFunction(Context,result,'setIncremental',POCAGarbageCollectorFunctionSETINCREMENTAL);
  POCAAddNativeFunction(Context,result,'setGenerational',POCAGarbageCollectorFunctionSETGENERATIONAL);
  POCAAddNativeFunction(Context,result,'setLocalContextPoolSize',POCAGarbageCollectorFunctionSETLOCALCONTEXTPOOLSIZE);
@@ -17973,6 +17993,7 @@ begin
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
   result^.Globals.GarbageCollector.FullCollect:=true;
+  result^.Globals.GarbageCollector.Active:=true;
   result^.Globals.GarbageCollector.Incremental:=false;
   result^.Globals.GarbageCollector.Generational:=false;
   result^.Globals.GarbageCollector.LocalContextPoolSize:=256;

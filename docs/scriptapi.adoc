@@ -1720,6 +1720,33 @@ persistent) is performed (`+1+` for true, `+0+` for false).
 
 '''''
 
+==== GarbageCollector.getActive
+
+*Usage:*
+[source,js]
+----
+let active = GarbageCollector.getActive();
+----
+
+* *Description:* Returns whether the garbage collector is active
+(`+1+` for true, `+0+` for false). This is a global setting that affects
+all collections.
+* *Return Value:* A numeric boolean (1 or 0).
+* *Example:*
++
+[source,js]
+----
+// Check if the garbage collector is active.
+let isActive = GarbageCollector.getActive();
+if (isActive) {
+  puts("Garbage collector is active.");
+} else {
+  puts("Garbage collector is inactive.");
+}
+----
+
+'''''
+
 ==== GarbageCollector.getIncremental
 
 *Usage:*
@@ -1944,6 +1971,34 @@ persistent generations.
 
 '''''
 
+==== GarbageCollector.setActive
+
+*Usage:*
+[source,js]
+----
+let old = GarbageCollector.setActive(active);
+----
+
+* *Description:* Enables or disables the garbage collector (`+1+` for
+true, `+0+` for false). This is a global setting that affects all
+collections.
+* *Parameters:*
+** _active_ (number): 0 or 1 (false or true)
+* *Return Value:* The old setting (0 or 1).
+* *Example:*
++
+[source,js]
+----
+// Enable the garbage collector.
+let oldSetting = GarbageCollector.setActive(1);
+puts("Old garbage collector setting: ", oldSetting);
+// Disable the garbage collector.
+oldSetting = GarbageCollector.setActive(0);
+puts("Old garbage collector setting: ", oldSetting);
+----
+
+'''''
+
 ==== GarbageCollector.setIncremental
 
 *Usage:*
@@ -2163,6 +2218,8 @@ plus persistent objects are handled.
 `+GarbageCollector.setPersistentThreshold+`
 ** `+GarbageCollector.getFullCollect+`,
 `+GarbageCollector.setFullCollect+`
+** `+GarbageCollector.getActive+`,
+`+GarbageCollector.setActive+`
 ** `+GarbageCollector.getIncremental+`,
 `+GarbageCollector.setIncremental+`
 ** `+GarbageCollector.getGenerational+`,
