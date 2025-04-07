@@ -31859,6 +31859,17 @@ begin
  end;
 end;
 
+function POCARunSafeCheckArray(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
+begin
+ result:=trunc(POCAGetNumberValue(Context,Index));
+ if result<0 then begin
+  inc(result,POCAArraySize(r));
+ end;
+ if (result<0) or (result>=TPOCAInt32(POCAArraySize(r))) then begin
+  result:=-1;
+ end;
+end;
+
 function POCARunCheckString(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32;
 var s:TPOCARawByteString;
 begin
@@ -31893,7 +31904,7 @@ begin
 end;
 
 function POCARunContainerGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
-var CodePoint,CodeUnit:TPOCAInt32;
+var CodePoint,CodeUnit,Index:TPOCAInt32;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -31919,7 +31930,12 @@ begin
       POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
      end;
     end else begin
-     result:=POCAArrayGet(Box,POCARunCheckArray(Context,Box,Key));
+     Index:=POCARunCheckArray(Context,Box,Key);
+     if Index>=0 then begin
+      result:=POCAArrayGet(Box,Index);
+     end else begin
+      result.CastedUInt64:=POCAValueNullCastedUInt64;
+     end;
     end;
    end;
    pvtSTRING:begin
@@ -31954,7 +31970,7 @@ begin
 end;
 
 function POCARunContainerSafeGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
-var CodePoint,CodeUnit:TPOCAInt32;
+var CodePoint,CodeUnit,Index:TPOCAInt32;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -31980,7 +31996,12 @@ begin
       result.CastedUInt64:=POCAValueNullCastedUInt64;
      end;
     end else begin
-     result:=POCAArrayGet(Box,POCARunCheckArray(Context,Box,Key));
+     Index:=POCARunSafeCheckArray(Context,Box,Key);
+     if Index>=0 then begin
+      result:=POCAArrayGet(Box,Index);
+     end else begin
+      result.CastedUInt64:=POCAValueNullCastedUInt64;
+     end;
     end;
    end;
    pvtSTRING:begin
