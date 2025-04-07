@@ -17103,8 +17103,9 @@ end;
 
 function POCAStringFunctionSPLIT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var DelimeterString,FromString:TPOCARawByteString;
-    FromStringIsUTF8,i,j:TPOCAInt32;
+    FromStringIsUTF8,i,j,l:TPOCAInt32;
     p:PPOCAString;
+    SkipEmpty:Boolean;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "split"');
@@ -17120,6 +17121,11 @@ begin
   DelimeterString:=p^.Data;
  end else begin
   DelimeterString:=POCAGetStringValue(Context,Arguments^[0]);
+ end;
+ if CountArguments>1 then begin
+  SkipEmpty:=POCAGetBooleanValue(Context,Arguments^[1]);
+ end else begin
+  SkipEmpty:=false;
  end;
  result:=POCANewArray(Context);
  if length(DelimeterString)=0 then begin
@@ -17138,10 +17144,16 @@ begin
   while j<=(length(FromString)+1) do begin
    i:=PosEx(DelimeterString,FromString,j);
    if i>0 then begin
-    POCAArrayPush(result,POCANewString(Context,copy(FromString,j,i-j)));
+    l:=i-j;
+    if (l>0) or not SkipEmpty then begin
+     POCAArrayPush(result,POCANewString(Context,copy(FromString,j,l)));
+    end;
     j:=i+length(DelimeterString);
    end else begin
-    POCAArrayPush(result,POCANewString(Context,copy(FromString,j,(length(FromString)-j)+1)));
+    l:=(length(FromString)-j)+1;
+    if (l>0) or not SkipEmpty then begin
+     POCAArrayPush(result,POCANewString(Context,copy(FromString,j,l)));
+    end;
     break;
    end;
   end;
@@ -32472,7 +32484,7 @@ begin
    ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(Obj))^.ArrayRecord;
    if assigned(ArrayRecord) and ((CurrentIndex>=0) and (CurrentIndex<ArrayRecord^.Size)) then begin
     Index.Num:=CurrentIndex+1;
-    Value:=POCAArrayGet(Obj,CurrentIndex);
+    Value:=ArrayRecord^.Data[CurrentIndex];
     result:=true;
    end;
   end;
@@ -32555,7 +32567,7 @@ begin
    ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(Keys))^.ArrayRecord;
    if assigned(ArrayRecord) and ((CurrentIndex>=0) and (CurrentIndex<ArrayRecord^.Size)) then begin
     Index.Num:=CurrentIndex+1;
-    Value:=POCAArrayGet(Keys,CurrentIndex);
+    Value:=ArrayRecord^.Data[CurrentIndex];
     result:=true;
    end;
   end else begin

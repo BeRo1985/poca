@@ -297,12 +297,14 @@ let newArr = arr.toSpliced(2, 1, "new item");
 
 [source,js]
 ----
-arr.sort();
+arr.sort(compareFunctionOrArrayIndex);
 ----
 
 * *Description:* Sorts the array elements in place using the default
 comparison.
-* *Parameters:* None.
+* *Parameters:*
+** `+compareFunctionOrArrayIndex+` (function or number): A function
+to compare two elements, or an array index to sort by.
 * *Return Value:* The sorted array itself.
 * *Example:*
 +
@@ -318,12 +320,14 @@ arr.sort();
 *Usage:*
 [source,js]
 ----
-let sortedArray = arr.toSorted();
+let sortedArray = arr.toSorted(compareFunctionOrArrayIndex);
 ----
 
 * *Description:* Returns a new array with the elements sorted, without
 modifying the original array.
-* *Parameters:* None.
+* *Parameters:*
+** `+compareFunctionOrArrayIndex+` (function or number): A function
+to compare two elements, or an array index to sort by.
 * *Return Value:* A new array with the elements sorted.
 * *Example:*
 +
@@ -6535,13 +6539,15 @@ not found.
 
 [source,js]
 ----
-let parts = "a,b,c".split(",");
+let parts = "a,b,c".split(delimiter, skipEmpty);
 ----
 
 * *Description:* Splits the string into an array of substrings using the
 specified delimiter.
 * *Parameters:*
 ** _delimiter_ (string): The string used to split the text.
+** _skipEmpty_ (optional, number): If set to 1, empty substrings are
+ignored.
 * *Return Value:* An array of strings.
 
 '''''

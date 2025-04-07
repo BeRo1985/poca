@@ -1430,7 +1430,7 @@ added.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">arr.sort();</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">arr.sort(compareFunctionOrArrayIndex);</code></pre>
 </div>
 </div>
 <div class="ulist">
@@ -1440,7 +1440,15 @@ added.</p>
 comparison.</p>
 </li>
 <li>
-<p><strong>Parameters:</strong> None.</p>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>compareFunctionOrArrayIndex</code> (function or number): A function
+to compare two elements, or an array index to sort by.</p>
+</li>
+</ul>
+</div>
 </li>
 <li>
 <p><strong>Return Value:</strong> The sorted array itself.</p>
@@ -1464,7 +1472,7 @@ comparison.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let sortedArray = arr.toSorted();</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let sortedArray = arr.toSorted(compareFunctionOrArrayIndex);</code></pre>
 </div>
 </div>
 <div class="ulist">
@@ -1474,7 +1482,15 @@ comparison.</p>
 modifying the original array.</p>
 </li>
 <li>
-<p><strong>Parameters:</strong> None.</p>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>compareFunctionOrArrayIndex</code> (function or number): A function
+to compare two elements, or an array index to sort by.</p>
+</li>
+</ul>
+</div>
 </li>
 <li>
 <p><strong>Return Value:</strong> A new array with the elements sorted.</p>
@@ -12157,7 +12173,7 @@ not found.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let parts = "a,b,c".split(",");</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let parts = "a,b,c".split(delimiter, skipEmpty);</code></pre>
 </div>
 </div>
 <div class="ulist">
@@ -12172,6 +12188,10 @@ specified delimiter.</p>
 <ul>
 <li>
 <p><em>delimiter</em> (string): The string used to split the text.</p>
+</li>
+<li>
+<p><em>skipEmpty</em> (optional, number): If set to 1, empty substrings are
+ignored.</p>
 </li>
 </ul>
 </div>
@@ -13321,7 +13341,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-06 15:10:39 +0200
+Last updated 2025-04-07 19:41:47 +0200
 </div>
 </div>
 </body>
