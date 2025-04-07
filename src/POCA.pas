@@ -12922,11 +12922,13 @@ begin
 end; 
 
 function POCAInitIONamespace(Context:PPOCAContext):TPOCAValue;
+var FileNil:^File;
 begin
+ FileNil:=nil;
  result:=POCANewHash(Context);
-{POCAHashSetString(Context,result,'stdIn',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.Input,true)));
- POCAHashSetString(Context,result,'stdOut',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.Output,true)));
- POCAHashSetString(Context,result,'stdErr',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.ErrOutput,true)));}
+ POCAHashSetString(Context,result,'stdIn',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.Input,FileNil^,true)));
+ POCAHashSetString(Context,result,'stdOut',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.Output,FileNil^,true)));
+ POCAHashSetString(Context,result,'stdErr',POCANewGhost(Context,@POCAIOGhost,POCAIOGhostNew(System.ErrOutput,FileNil^,true)));//}
  POCAAddNativeFunction(Context,result,'open',POCAIOFunctionOPEN);
  POCAAddNativeFunction(Context,result,'getDirectoryEntries',POCAIOFunctionGETDIRECTORYENTRIES);
 end;
