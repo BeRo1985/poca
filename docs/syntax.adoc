@@ -137,14 +137,14 @@ let a = 1;
 const b = 2;
 function Func1(){
   let c = 3;
-  {
+  scope{
     let c = 4;
     puts(c);
   }
   var d = 4;
   function Func2(){
     let e = 5;
-    {
+    scope{
       let e = 6;
       puts(e);
     }
@@ -167,7 +167,7 @@ constvar b@0 = 2; // 'var' with const semantics, internal only
 function Func1@0(){
   // Scope ID 1 begins
   var c@1 = 3;
-  {
+  scope{
     // Scope ID 2 begins 
     var c@2 = 4;
     puts(c@2);
@@ -182,7 +182,7 @@ function Func1@0(){
     // VM registers here, because no nested function or closure is created 
     // inside Func2.
     let e = 5;
-    {
+    scope{
       // Scope ID 4 begins, but still in VM registers.
       let e = 6;  
       puts(e); // prints 6
