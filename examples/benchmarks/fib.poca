@@ -1,16 +1,16 @@
 
-fastfunction fibR(reg n){
+fastfunction fibR(let n){
   n = +n;
   return (n < 2) ? n : (fibR(n-2) + fibR(n-1));
 }
 
-function fibI(reg n){
-    reg last = 0, cur = 1;
+function fibI(let n){
+    let last = 0, cur = 1;
     n = +n;
     n = n - 1;
     while(n){
         --n;
-        reg tmp = cur;
+        let tmp = cur;
         cur = last + cur;
         last = tmp;
     }
@@ -27,7 +27,7 @@ puts("fibI time: ", Math.round(DateTime.milliseconds(tb-ta)), " milliseconds");
 puts("");
 
 ta=DateTime.now();
-for(reg i = 0; i < 5; i++){
+for(let i = 0; i < 5; i++){
   puts("fibR: ", fibR(N));
 }
 tb=DateTime.now();
