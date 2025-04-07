@@ -17992,9 +17992,9 @@ begin
   result^.Globals.GarbageCollector.SweepFactor:=64;
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
-  result^.Globals.GarbageCollector.FullCollect:=true;
+  result^.Globals.GarbageCollector.FullCollect:=false;
   result^.Globals.GarbageCollector.Active:=true;
-  result^.Globals.GarbageCollector.Incremental:=false;
+  result^.Globals.GarbageCollector.Incremental:=true;
   result^.Globals.GarbageCollector.Generational:=false;
   result^.Globals.GarbageCollector.LocalContextPoolSize:=256;
   result^.Globals.GarbageCollector.ContextCacheSize:=128;

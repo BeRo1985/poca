@@ -2,8 +2,6 @@
 
 // A very simple word frequency counter thatdoes not take punctuation into account.
 
-GarbageCollector.setActive(false);
-
 let ta, tb;
 
 ta = DateTime.now();
@@ -34,4 +32,3 @@ foreach(let w in temp) {
 tb = DateTime.now();
 puts(`Output Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
 
-GarbageCollector.setActive(true);
