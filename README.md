@@ -7,17 +7,17 @@ Yet another scripting language that is still in the design phase - for example, 
 - [Syntax](./docs/syntax.adoc)
 - [Stdlib](./docs/scriptapi.adoc)
 
-You can also find many short examples of language features and various POCA idioms and  in the [examples](./examples/) directory.
+You can also find many short examples of language features and various POCA idioms in the [examples](./examples/) directory.
 
 ## Dependencies
 
 To build POCA the following dependencies are required:
 
-- [FLRE](https://github.com/BeRo1985/flre) for regular expression support
-- [PUCU](https://github.com/BeRo1985/pucu) for Unicode strings and conversions
-- [PasMP](https://github.com/BeRo1985/pasmp) for multithreading support
-- [PasJSON](https://github.com/BeRo1985/pasjson) for JSON support
-- [pasdblstrutils](https://github.com/BeRo1985/pasdblstrutils) for double-precision floating point numbers and string conversions
+- [FLRE](https://github.com/BeRo1985/flre) for its regular expression support
+- [PUCU](https://github.com/BeRo1985/pucu) for its Unicode strings and conversions
+- [PasMP](https://github.com/BeRo1985/pasmp) for its multithreading support
+- [PasJSON](https://github.com/BeRo1985/pasjson) for its JSON support
+- [pasdblstrutils](https://github.com/BeRo1985/pasdblstrutils) for its double-precision floating point number and string conversion support
 
 ## Compilation
 
