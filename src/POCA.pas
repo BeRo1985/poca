@@ -30549,7 +30549,7 @@ var TokenList:PPOCAToken;
      if IsLocal then begin
       ScopeScope:=FindScopeSymbol(Symbol,false,true,false);
       if not assigned(ScopeScope) then begin
-       ScopeScope:=DefineScopeSymbol(t,true,IsConst,false,GetRegister(false,IsConst));
+       ScopeScope:=DefineScopeSymbol(Symbol,true,IsConst,false,GetRegister(false,IsConst));
       end;
       if assigned(ScopeScope) then begin
        CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments]:=ScopeScope^.Register;
