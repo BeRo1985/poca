@@ -1892,6 +1892,7 @@ procedure POCAArraySetSize(const ArrayObject:TPOCAValue;Size:TPOCAInt32);
 function POCAArrayPop(const ArrayObject:TPOCAValue):TPOCAValue;
 procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue); overload;
 procedure POCAArraySort(Context:PPOCAContext;const ArrayObject,CompareFunction:TPOCAValue); overload;
+procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue;const ItemIndex:TPOCAInt32); overload;
 
 function POCAHashString(const Str:TPOCARawByteString):TPOCAUInt32;
 function POCAHashNumber(const Num:double):TPOCAUInt32;
@@ -8894,6 +8895,183 @@ begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject))^.ArrayRecord;
   if assigned(ArrayRecord) and (ArrayRecord^.Size>0) then begin
+   Left:=0;
+   Right:=ArrayRecord^.Size-1;
+   if Left<Right then begin
+    StackItem:=@Stack[0];
+    StackItem^.Left:=Left;
+    StackItem^.Right:=Right;
+    StackItem^.Depth:=IntLog2((Right-Left)+1) shl 1;
+    inc(StackItem);
+    while TPOCAPtrUInt(TPOCAPointer(StackItem))>TPOCAPtrUInt(TPOCAPointer(@Stack[0])) do begin
+     dec(StackItem);
+     Left:=StackItem^.Left;
+     Right:=StackItem^.Right;
+     Depth:=StackItem^.Depth;
+     if (Right-Left)<16 then begin
+      // Insertion sort
+      i:=Left+1;
+      while i<=Right do begin
+       Temp:=ArrayRecord^.Data[i];
+       j:=i-1;
+       if (j>=Left) and (Compare(ArrayRecord^.Data[j],Temp)>0) then begin
+        repeat
+         ArrayRecord^.Data[j+1]:=ArrayRecord^.Data[j];
+         dec(j);
+        until not ((j>=Left) and (Compare(ArrayRecord^.Data[j],Temp)>0));
+        ArrayRecord^.Data[j+1]:=Temp;
+       end;
+       inc(i);
+      end;
+     end else begin
+      if (Depth=0) or (TPOCAPtrUInt(TPOCAPointer(StackItem))>=TPOCAPtrUInt(TPOCAPointer(@Stack[high(Stack)-1]))) then begin
+       // Heap sort
+       Size:=(Right-Left)+1;
+       i:=Size div 2;
+       Temp.CastedInt64:=0;
+       repeat
+        if i>Left then begin
+         dec(i);
+         Temp:=ArrayRecord^.Data[Left+i];
+        end else begin
+         if Size=0 then begin
+          break;
+         end else begin
+          dec(Size);
+          Temp:=ArrayRecord^.Data[Left+Size];
+          ArrayRecord^.Data[Left+Size]:=ArrayRecord^.Data[Left];
+         end;
+        end;
+        Parent:=i;
+        Child:=(i*2)+1;
+        while Child<Size do begin
+         if ((Child+1)<Size) and (Compare(ArrayRecord^.Data[Left+Child+1],ArrayRecord^.Data[Left+Child])>0) then begin
+          inc(Child);
+         end;
+         if Compare(ArrayRecord^.Data[Left+Child],Temp)>0 then begin
+          POCAArraySet(ArrayObject,Left+Parent,ArrayRecord^.Data[Left+Child]);
+          Parent:=Child;
+          Child:=(Parent*2)+1;
+         end else begin
+          break;
+         end;
+        end;
+        ArrayRecord^.Data[Left+Parent]:=Temp;
+       until false;
+      end else begin
+       // Quick sort width median-of-three optimization
+       Middle:=Left+((Right-Left) shr 1);
+       if (Right-Left)>3 then begin
+        if Compare(ArrayRecord^.Data[Left],ArrayRecord^.Data[Middle])>0 then begin
+         Temp:=ArrayRecord^.Data[Left];
+         ArrayRecord^.Data[Left]:=ArrayRecord^.Data[Middle];
+         ArrayRecord^.Data[Middle]:=Temp;
+        end;
+        if Compare(ArrayRecord^.Data[Left],ArrayRecord^.Data[Right])>0 then begin
+         Temp:=ArrayRecord^.Data[Left];
+         ArrayRecord^.Data[Left]:=ArrayRecord^.Data[Right];
+         ArrayRecord^.Data[Right]:=Temp;
+        end;
+        if Compare(ArrayRecord^.Data[Middle],ArrayRecord^.Data[Right])>0 then begin
+         Temp:=ArrayRecord^.Data[Middle];
+         ArrayRecord^.Data[Middle]:=ArrayRecord^.Data[Right];
+         ArrayRecord^.Data[Right]:=Temp;
+        end;
+       end;
+       Pivot:=ArrayRecord^.Data[Middle];
+       i:=Left;
+       j:=Right;
+       repeat
+        while (i<Right) and (Compare(ArrayRecord^.Data[i],Pivot)<0) do begin
+         inc(i);
+        end;
+        while (j>=i) and (Compare(ArrayRecord^.Data[j],Pivot)>0) do begin
+         dec(j);
+        end;
+        if i>j then begin
+         break;
+        end else begin
+         if i<>j then begin
+          Temp:=ArrayRecord^.Data[i];
+          ArrayRecord^.Data[i]:=ArrayRecord^.Data[j];
+          ArrayRecord^.Data[j]:=Temp;
+         end;
+         inc(i);
+         dec(j);
+        end;
+       until false;
+       if i<Right then begin
+        StackItem^.Left:=i;
+        StackItem^.Right:=Right;
+        StackItem^.Depth:=Depth-1;
+        inc(StackItem);
+       end;
+       if Left<j then begin
+        StackItem^.Left:=Left;
+        StackItem^.Right:=j;
+        StackItem^.Depth:=Depth-1;
+        inc(StackItem);
+       end;
+      end;
+     end;
+    end;
+   end;
+  end;
+ end;
+end;
+
+procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue;const ItemIndex:TPOCAInt32); overload;
+type PStackItem=^TStackItem;
+     TStackItem=record
+      Left,Right,Depth:TPOCAInt32;
+     end;
+ function IntLog2(x:TPOCAUInt32):TPOCAUInt32; {$ifdef cpu386}assembler; register;
+ asm
+  test eax,eax
+  jz @Done
+  bsr eax,eax
+  @Done:
+ end;
+{$else}
+ begin
+  x:=x or (x shr 1);
+  x:=x or (x shr 2);
+  x:=x or (x shr 4);
+  x:=x or (x shr 8);
+  x:=x or (x shr 16);
+  x:=x shr 1;
+  x:=x-((x shr 1) and $55555555);
+  x:=((x shr 2) and $33333333)+(x and $33333333);
+  x:=((x shr 4)+x) and $0f0f0f0f;
+  x:=x+(x shr 8);
+  x:=x+(x shr 16);
+  result:=x and $3f;
+ end;
+{$endif}
+ function Compare(const a,b:TPOCAValue):TPOCAInt32;
+ var ArrayRecords:array[0..1] of PPOCAArrayRecord;
+ begin
+  if POCAIsValueArray(a) and POCAIsValueArray(b) then begin
+   ArrayRecords[0]:=PPOCAArray(POCAGetValueReferencePointer(a))^.ArrayRecord;
+   ArrayRecords[1]:=PPOCAArray(POCAGetValueReferencePointer(b))^.ArrayRecord;
+   if (ItemIndex<ArrayRecords[0]^.Size) and (ItemIndex<ArrayRecords[1]^.Size) then begin
+    result:=POCACompare(Context,ArrayRecords[0]^.Data[ItemIndex],ArrayRecords[1]^.Data[ItemIndex]);
+   end else begin
+    result:=0;
+   end;
+  end else begin
+   result:=0;
+  end;
+ end;
+var Left,Right,Depth,i,j,Middle,Size,Parent,Child:TPOCAInt64;
+    Pivot,Temp:TPOCAValue;
+    ArrayRecord:PPOCAArrayRecord;
+    StackItem:PStackItem;
+    Stack:array[0..31] of TStackItem;
+begin
+ if POCAIsValueArray(ArrayObject) then begin
+  ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject))^.ArrayRecord;
+  if assigned(ArrayRecord) and (ArrayRecord^.Size>0) and (ItemIndex>=0) then begin
    Left:=0;
    Right:=ArrayRecord^.Size-1;
    if Left<Right then begin
@@ -16206,15 +16384,15 @@ begin
 end;
 
 function POCAArrayFunctionSORT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
-var CompareFunction:TPOCAValue;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "sort"');
  end;
  if CountArguments>0 then begin
-  CompareFunction:=Arguments^[0];
-  if POCAIsValueFunctionOrNativeCode(CompareFunction) then begin
-   POCAArraySort(Context,This,CompareFunction);
+  if POCAIsValueFunctionOrNativeCode(Arguments^[0]) then begin
+   POCAArraySort(Context,This,Arguments^[0]);
+  end else if POCAIsValueNumber(Arguments^[0]) then begin
+   POCAArraySort(Context,This,trunc(POCAGetNumberValue(Context,Arguments^[0])));
   end else begin
    POCARuntimeError(Context,'Bad arguments to "sort"');
   end;
@@ -16226,7 +16404,6 @@ end;
 
 function POCAArrayFunctionTOSORTED(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var i:TPOCAInt32;
-    CompareFunction:TPOCAValue;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "toSorted"');
@@ -16237,9 +16414,10 @@ begin
   POCAArraySet(result,i,POCAArrayGet(This,i));
  end;
  if CountArguments>0 then begin
-  CompareFunction:=Arguments^[0];
-  if POCAIsValueFunctionOrNativeCode(CompareFunction) then begin
-   POCAArraySort(Context,result,CompareFunction);
+  if POCAIsValueFunctionOrNativeCode(Arguments^[0]) then begin
+   POCAArraySort(Context,result,Arguments^[0]);
+  end else if POCAIsValueNumber(Arguments^[0]) then begin
+   POCAArraySort(Context,result,trunc(POCAGetNumberValue(Context,Arguments^[0])));
   end else begin
    POCARuntimeError(Context,'Bad arguments to "toSorted"');
   end;

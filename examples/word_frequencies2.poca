@@ -11,7 +11,7 @@ while (!file.eof()) {
 file.close();
 
 let temp = [];
-forkey(let word in words)temp.push({"word": word, "count": words[word]});
-foreach(let w in temp.sort((a, b) => { a.count > b.count ? 1 : a.count < b.count ? -1 : 0; }).reverse()) {
-  puts(`${w.count} ${w.word}`);
+forkey(let word in words)temp.push([word, words[word]]);
+foreach(let w in temp.sort(1).reverse()) {
+  puts(`${w[1]} ${w[0]}`);
 }
