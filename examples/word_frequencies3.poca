@@ -15,8 +15,7 @@ tb = DateTime.now();
 puts(`Read In Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
 
 ta = DateTime.now();
-let temp = [];
-forkey(let word in words)temp.push([ word, words[word] ]);
+let temp = words.toArray(); 
 tb = DateTime.now();
 puts(`Array Time taken: ${DateTime.milliseconds(tb - ta)}ms`);
 

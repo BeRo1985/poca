@@ -2860,6 +2860,20 @@ let present = myHash.contains("keyName");
 
 '''''
 
+==== Hash.toArray
+
+*Usage:*
+[source,js]
+----
+let arr = myHash.toArray();
+----
+
+* *Description:* Converts the hash into an array of key–value pairs.
+* *Parameters:* None.
+* *Return Value:* An array of key–value pairs.
+
+'''''
+
 ==== Hash.keys
 
 *Usage:*
@@ -3039,6 +3053,7 @@ functions for querying and manipulating its entries.
 ** *Hash.size:* Returns the number of entries.
 ** *Hash.merge:* Merges other hash objects into the current hash.
 ** *Hash.contains:* Checks for the presence of a key.
+** *Hash.toArray:* Converts the hash to an array of key–value pairs.
 ** *Hash.keys / Hash.ownKeys:* Retrieve sorted arrays of keys.
 ** *Hash.setHashEvents / Hash.getHashEvents:* Attach or retrieve custom
 event handlers for hash operations.

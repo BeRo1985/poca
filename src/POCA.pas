@@ -1949,6 +1949,7 @@ procedure POCAHashSetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key
 procedure POCAHashCombine(Context:PPOCAContext;const Hash,Source:TPOCAValue);
 function POCAHashInstanceOf(Context:PPOCAContext;const Hash,OfHash:TPOCAValue):TPOCABool32;
 function POCAHashIs(Context:PPOCAContext;const Hash,OfObject:TPOCAValue):TPOCABool32;
+function POCAHashArray(Context:PPOCAContext;const Hash:TPOCAValue):TPOCAValue;
 
 function POCAObjectInstanceOf(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
 function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
@@ -11337,7 +11338,7 @@ begin
    Keys:=POCANewArray(Context);
    POCAHashKeys(Context,Keys,Source);
    for i:=0 to POCAArraySize(Keys)-1 do begin
-    Key:=POCAArrayGet(Keys,0);
+    Key:=POCAArrayGet(Keys,i);
     if POCAHashGet(Context,Source,Key,Value) then begin
      POCAHashSet(Context,Hash,Key,Value,false);
     end;
@@ -11408,6 +11409,53 @@ begin
    end;
   end;
  end;
+end;
+
+function POCAHashArray(Context:PPOCAContext;const Hash:TPOCAValue):TPOCAValue;
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    i,Entity:TPOCAInt32;
+    Keys,KeyValuePair,Key,Value:TPOCAValue;    
+begin
+ if POCAIsValueHash(Hash) then begin
+  result:=POCANewArray(Context);
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
+  if assigned(HashInstance) then begin
+   if assigned(HashInstance^.Events) or assigned(HashInstance^.Prototype) then begin
+    Keys:=POCANewArray(Context);
+    POCAHashKeys(Context,Keys,Hash);
+    for i:=0 to POCAArraySize(Keys)-1 do begin
+     Key:=POCAArrayGet(Keys,i);
+     if POCAHashGet(Context,Hash,Key,Value) then begin
+      KeyValuePair:=POCANewArray(Context);
+      POCAArrayPush(KeyValuePair,Key);
+      POCAArrayPush(KeyValuePair,Value);
+      POCAArrayPush(result,KeyValuePair);
+     end;
+    end;
+   end else begin
+    HashRec:=HashInstance^.HashRecord;
+    if assigned(HashRec) then begin
+     for i:=0 to (2 shl HashRec^.LogSize)-1 do begin
+      Key:=POCAValueNull;
+      Value:=POCAValueNull;
+      Key.CastedUInt64:=i;
+      Entity:=HashRec^.CellToEntityIndex^[i];
+      if Entity>=0 then begin
+       Key:=HashRec^.Entities^[Entity].Key;
+       Value:=HashRec^.Entities^[Entity].Value;
+       KeyValuePair:=POCANewArray(Context);
+       POCAArrayPush(KeyValuePair,Key);
+       POCAArrayPush(KeyValuePair,Value);
+       POCAArrayPush(result,KeyValuePair);
+      end;
+     end;
+    end;
+   end;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end; 
 end;
 
 function POCAObjectInstanceOf(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
@@ -16759,6 +16807,14 @@ begin
  result.Num:=ord(POCAHashGet(Context,Hash,Key,Key)) and 1;
 end;
 
+function POCAHashFunctionTOARRAY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if not POCAIsValueHash(This) then begin
+  POCARuntimeError(Context,'Bad this value to "toArray"');
+ end;
+ result:=POCAHashArray(Context,This);
+end;
+
 function POCAHashFunctionKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if not POCAIsValueHash(This) then begin
@@ -16859,6 +16915,7 @@ begin
  POCAAddNativeFunction(Context,result,'size',POCAHashFunctionSIZE);
  POCAAddNativeFunction(Context,result,'merge',POCAHashFunctionMERGE);
  POCAAddNativeFunction(Context,result,'contains',POCAHashFunctionCONTAINS);
+ POCAAddNativeFunction(Context,result,'toArray',POCAHashFunctionTOARRAY);
  POCAAddNativeFunction(Context,result,'keys',POCAHashFunctionKEYS);
  POCAAddNativeFunction(Context,result,'ownKeys',POCAHashFunctionOWNKEYS);
  POCAAddNativeFunction(Context,result,'setHashEvents',POCAHashFunctionSETHASHEVENTS);

@@ -10,8 +10,6 @@ while (!file.eof()) {
 }
 file.close();
 
-let temp = [];
-forkey(let word in words)temp.push([word, words[word]]);
-foreach(let w in temp.sort(1).reverse()) {
+foreach(let w in words.toArray().sort(1).reverse()) {
   puts(`${w[0]} ${w[1]}`);
 }

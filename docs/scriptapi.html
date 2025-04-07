@@ -662,6 +662,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_hash_size">Hash.size</a></li>
 <li><a href="#_hash_merge">Hash.merge</a></li>
 <li><a href="#_hash_contains">Hash.contains</a></li>
+<li><a href="#_hash_toarray">Hash.toArray</a></li>
 <li><a href="#_hash_keys">Hash.keys</a></li>
 <li><a href="#_hash_ownkeys">Hash.ownKeys</a></li>
 <li><a href="#_hash_sethashevents">Hash.setHashEvents</a></li>
@@ -5774,6 +5775,31 @@ ignored.</p>
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_hash_toarray">Hash.toArray</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let arr = myHash.toArray();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Converts the hash into an array of key–value pairs.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> An array of key–value pairs.</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_hash_keys">Hash.keys</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -6098,6 +6124,9 @@ functions for querying and manipulating its entries.</p>
 </li>
 <li>
 <p><strong>Hash.contains:</strong> Checks for the presence of a key.</p>
+</li>
+<li>
+<p><strong>Hash.toArray:</strong> Converts the hash to an array of key–value pairs.</p>
 </li>
 <li>
 <p><strong>Hash.keys / Hash.ownKeys:</strong> Retrieve sorted arrays of keys.</p>
@@ -13341,7 +13370,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-07 19:41:47 +0200
+Last updated 2025-04-07 19:59:29 +0200
 </div>
 </div>
 </body>
