@@ -1,6 +1,7 @@
 // 3D Donut
 
 (function(){
+  GarbageCollector.setIncremental(false); 
   const (canvasWidth, canvasHeight) = (80, 24);
   const (canvasSize, xOffset, yOffset, innerRadius, fov, w, tau, u) = (canvasHeight * canvasWidth, 40, 12, 2, 5, 30, Math.PI * 2.0, '.,-~:;=!*#$@');
   const q = (((u.length() + 1) * 2) / 3) << 0;      

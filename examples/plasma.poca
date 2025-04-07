@@ -1,6 +1,11 @@
 // OLdschool Plasma Effect in POCA
 
 (function(){
+  
+  // Set the garbage collector to non-incremental mode for performance.
+  // This is important for performance in a tight loop.
+  GarbageCollector.setIncremental(false); 
+
   // Define canvas dimensions and palette characters.
   const (canvasWidth, canvasHeight) = (80, 24);
   const canvasSize = canvasWidth * canvasHeight;
