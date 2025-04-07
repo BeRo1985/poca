@@ -1,24 +1,49 @@
 # POCA
 
-Yet another scripting language, which is still in the design phase - e.g. the syntax and the builtin standard library objects aren't finalized yet.
+Yet another scripting language that is still in the design phase - for example, its syntax and built-in standard library are not finalized yet.
 
-## License
+# Documentation
 
-zlib-licensed as per LICENSE file.
+- [Syntax](./docs/syntax.adoc)
+- [Stdlib](./docs/scriptapi.adoc)
+
+You can also find many short examples of language features and various POCA idioms and  in the `examples` directory.
 
 ## Dependencies
 
 To build POCA the following dependencies are required:
 
-- [FLRE](https://github.com/BeRo1985/flre) for the regular expression support in POCA
-- [PasMP](https://github.com/BeRo1985/pasmp) for the multithreading-related stuff in POCA
-- [PUCU](https://github.com/BeRo1985/pucu) for the Unicode-support-related stuff in POCA
+- [FLRE](https://github.com/BeRo1985/flre) for regular expression support
+- [PUCU](https://github.com/BeRo1985/pucu) for Unicode strings and conversions
+- [PasMP](https://github.com/BeRo1985/pasmp) for multithreading support
+- [PasJSON](https://github.com/BeRo1985/pasjson) for JSON support
+- [pasdblstrutils](https://github.com/BeRo1985/pasdblstrutils) for double-precision floating point numbers and string conversions
 
-## Compiler
+## Compilation
 
-Either Delphi >= 7 or FreePascal >= 3.0 are needed to build POCA.
+Either Delphi >= 7 or FreePascal >= 3.0 is required to build POCA.
 
-Here's how to build POCA with the FreePascal compiler:
+Here's how to clone the repo and build POCA using the FreePascal compiler:
 
-    fpc -B -O3 -g -gl pocarun.dpr
-    
+```sh
+# clone
+git clone https://github.com/BeRo1985/poca.git
+cd poca
+
+# clone dependencies
+git submodule init
+git submodule update --remote --recursive
+
+# build POCA
+fpc -B -O3 -g -gl pocarun.dpr
+
+# run a script (ctrl-c to abort)
+bin/poca examples/donut.poca
+
+# run POCA's REPL (ctrl-d to exit)
+bin/poca
+```
+
+## License
+
+Zlib-licensed as per [LICENSE](./LICENSE) file.
