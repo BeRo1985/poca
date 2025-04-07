@@ -2,12 +2,12 @@
 
 Yet another scripting language that is still in the design phase - for example, its syntax and built-in standard library are not finalized yet.
 
-# Documentation
+## Documentation
 
 - [Syntax](./docs/syntax.adoc)
 - [Stdlib](./docs/scriptapi.adoc)
 
-You can also find many short examples of language features and various POCA idioms and  in the `examples` directory.
+You can also find many short examples of language features and various POCA idioms and  in the [examples](./examples/) directory.
 
 ## Dependencies
 
