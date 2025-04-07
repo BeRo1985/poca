@@ -12599,18 +12599,26 @@ begin
  end;
  IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
  if assigned(IOData^.TextHandle) then begin
-  Read(IOData^.TextHandle^,s);
-  result:=POCANewString(Context,s);
- end else if assigned(IOData^.BinaryHandle) then begin
-  if (CountArguments>0) and POCAIsValueNumber(Arguments^[0]) then begin
-   Len:=trunc(POCAGetNumberValue(Context,Arguments^[0]));
+  if EOF(IOData^.TextHandle^) then begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end else begin
-   Len:=1;
+   Read(IOData^.TextHandle^,s);
+   result:=POCANewString(Context,s);
   end;
-  i:=Min(FileSize(IOData^.BinaryHandle^)-FilePos(IOData^.BinaryHandle^),Len);
-  SetLength(s,i);
-  BlockRead(IOData^.BinaryHandle^,s[1],i);
-  result:=POCANewString(Context,s);
+ end else if assigned(IOData^.BinaryHandle) then begin
+  if EOF(IOData^.BinaryHandle^) then begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end else begin
+   if (CountArguments>0) and POCAIsValueNumber(Arguments^[0]) then begin
+    Len:=trunc(POCAGetNumberValue(Context,Arguments^[0]));
+   end else begin
+    Len:=1;
+   end;
+   i:=Min(FileSize(IOData^.BinaryHandle^)-FilePos(IOData^.BinaryHandle^),Len);
+   SetLength(s,i);
+   BlockRead(IOData^.BinaryHandle^,s[1],i);
+   result:=POCANewString(Context,s);
+  end;
  end else begin
 //result:=POCAValueNull;
   result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -12678,8 +12686,12 @@ begin
  end;
  IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
  if assigned(IOData^.TextHandle) then begin
-  Readln(IOData^.TextHandle^,s);
-  result:=POCANewString(Context,s);
+  if EOF(IOData^.TextHandle^) then begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end else begin
+   ReadLn(IOData^.TextHandle^,s);
+   result:=POCANewString(Context,s);
+  end;
  end else if assigned(IOData^.BinaryHandle) then begin
   result.Num:=0;
  end else begin
