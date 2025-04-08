@@ -1718,18 +1718,35 @@ can survive GC before it is considered "`persistent.`"
 
 '''''
 
-==== GarbageCollector.getFullCollect
+==== GarbageCollector.getExhaustionCollect
 
 *Usage:*
 
 [source,js]
 ----
-let full = GarbageCollector.getFullCollect();
+let exhaustion = GarbageCollector.getExhaustionCollect();
 ----
 
-* *Description:* Returns whether a full collection (ephemeral plus
-persistent) is performed (`+1+` for true, `+0+` for false).
+* *Description:* Returns whether a collection is triggered when a
+memory pool is exhausted (`+1+` for true, `+0+` for false). This is a
+global setting that affects all collections.
+* *Parameters:* None.
 * *Return Value:* A numeric boolean (1 or 0).
+
+'''''
+
+==== GarbageCollector.getExhaustionIncrementalFullCycleThreshold
+
+*Usage:*
+[source,js]
+----
+let threshold = GarbageCollector.getExhaustionIncrementalFullCycleThreshold();
+----
+
+* *Description:* Returns the threshold of incremental cycles after which a
+full collection is triggered when a memory pool is exhausted. This is
+a global setting that affects all collections.
+* *Return Value:* A numeric value (integer).
 
 '''''
 
@@ -1981,23 +1998,45 @@ it’s considered persistent (long-lived).
 
 '''''
 
-==== GarbageCollector.setFullCollect
+==== GarbageCollector.setExhaustionCollect
 
 *Usage:*
 
 [source,js]
 ----
-let old = GarbageCollector.setFullCollect(1);
+let old = GarbageCollector.setExhaustionCollect(1);
 ----
 
-* *Description:* Enables or disables "`full`" collections (`+1+` for
-true, `+0+` for false). Full collections handle both ephemeral and
-persistent generations.
+* *Description:* Enables or disables "`exhaustion collection`" (0 or 1), 
+which triggers a collection when a memory pool is exhausted. This is a global
+setting that affects all collections.
 * *Parameters:*
-** _fullCollect_ (number): 0 or 1
+** _exhaustionCollect_ (number): 0 or 1 (false or true)
 * *Return Value:* The old setting (0 or 1).
 
 '''''
+
+==== GarbageCollector.setExhaustionIncrementalFullCycleThreshold
+
+*Usage:*
+[source,js]
+----
+let old = GarbageCollector.setExhaustionIncrementalFullCycleThreshold(512);
+----
+
+* *Description:* Sets the threshold of incremental cycles after which
+a full collection is triggered when a memory pool is exhausted. This is
+a global setting that affects all collections.
+* *Parameters:*
+** _newExhaustionIncrementalFullCycleThreshold_ (number): The new
+exhaustion incremental full cycle threshold, where 0 means no
+full collection is triggered after exhaustion, and -1 means
+full collection is triggered immediately in every case, otherwise
+it is the number of incremental cycles after which a full
+collection is triggered.
+* *Return Value:* The old threshold value.
+
+''''' 
 
 ==== GarbageCollector.setActive
 
@@ -2246,8 +2285,8 @@ plus persistent objects are handled.
 `+GarbageCollector.setPersistentInterval+`
 ** `+GarbageCollector.getPersistentThreshold+`,
 `+GarbageCollector.setPersistentThreshold+`
-** `+GarbageCollector.getFullCollect+`,
-`+GarbageCollector.setFullCollect+`
+** `+GarbageCollector.getExhaustionCollect+`,
+`+GarbageCollector.setExhaustionCollect+`
 ** `+GarbageCollector.getActive+`,
 `+GarbageCollector.setActive+`
 ** `+GarbageCollector.getIncremental+`,
