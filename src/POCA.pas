@@ -382,114 +382,116 @@ const POCAVersion='2025-04-06-09-34-0000';
       popSETMEMBER=40;
       popGETLOCAL=41;
       popSETLOCAL=42;
-      popNEWARRAY=43;
-      popARRAYPUSH=44;
-      popARRAYRANGEPUSH=45;
-      popNEWHASH=46;
-      popHASHAPPEND=47;
-      popSETSYM=48;
-      popINDEX=49;
-      popFCALLH=50;
-      popMCALLH=51;
-      popUNPACK=52;
-      popSLICE=53;
-      popSLICE2=54;
-      popSLICE3=55;
-      popTRY=56;
-      popTRYBLOCKEND=57;
-      popTHROW=58;
-      popDEC=59;
-      popINC=60;
-      popBAND=61;
-      popBXOR=62;
-      popBOR=63;
-      popBNOT=64;
-      popBSHL=65;
-      popBSHR=66;
-      popBUSHR=67;
-      popMOD=68;
-      popPOW=69;
-      popINHERITEDGETMEMBER=70;
-      popKEY=71;
-      popIN=72;
-      popINRANGE=73;
-      popFTAILCALL=74;
-      popMTAILCALL=75;
-      popFTAILCALLH=76;
-      popMTAILCALLH=77;
-      popINSTANCEOF=78;
-      popBREAKPOINT=79;
-      popNUM=80;
-      popN_NOT=81;
-      popN_ADD=82;
-      popN_SUB=83;
-      popN_MUL=84;
-      popN_DIV=85;
-      popN_NEG=86;
-      popN_LT=87;
-      popN_LTEQ=88;
-      popN_GT=89;
-      popN_GTEQ=90;
-      popN_EQ=91;
-      popN_NEQ=92;
-      popN_CMP=93;
-      popN_DEC=94;
-      popN_INC=95;
-      popN_BAND=96;
-      popN_BXOR=97;
-      popN_BOR=98;
-      popN_BNOT=99;
-      popN_BSHL=100;
-      popN_BSHR=101;
-      popN_BUSHR=102;
-      popN_MOD=103;
-      popN_POW=104;
-      popN_INRANGE=105;
-      popN_JIFTRUE=106;
-      popN_JIFFALSE=107;
-      popN_JIFTRUELOOP=108;
-      popN_JIFFALSELOOP=109;
-      popN_JIFLT=110;
-      popN_JIFLTEQ=111;
-      popN_JIFGT=112;
-      popN_JIFGTEQ=113;
-      popN_JIFEQ=114;
-      popN_JIFNEQ=115;
-      popN_JIFLTLOOP=116;
-      popN_JIFLTEQLOOP=117;
-      popN_JIFGTLOOP=118;
-      popN_JIFGTEQLOOP=119;
-      popN_JIFEQLOOP=120;
-      popN_JIFNEQLOOP=121;
-      popUPDATESTRING=122;
-      popREGEXP=123;
-      popREGEXPEQ=124;
-      popREGEXPNEQ=125;
-      popSQRT=126;
-      popN_SQRT=127;
-      popGETPROTOTYPE=128;
-      popSETPROTOTYPE=129;
-      popGETCONSTRUCTOR=130;
-      popSETCONSTRUCTOR=131;
-      popDELETE=132;
-      popDELETEEX=133;
-      popDEFINED=134;
-      popDEFINEDEX=135;
-      popLOADGLOBAL=136;
-      popLOADBASECLASS=137;
-      popGETHASHKIND=138;
-      popSETHASHKIND=139;
-      popTYPEOF=140;
-      popIDOF=141;
-      popGHOSTTYPEOF=142;
-      popELVIS=143;
-      popIS=144;
-      popJIFNULL=145;
-      popJIFNOTNULL=146;
-      popSAFEEXTRACT=147;
-      popSAFEGETMEMBER=148;
-      popSETCONSTLOCAL=149;
-      popCOUNT=150;
+      popGETUPVALUE=43;
+      popSETUPVALUE=44;
+      popNEWARRAY=45;
+      popARRAYPUSH=46;
+      popARRAYRANGEPUSH=47;
+      popNEWHASH=48;
+      popHASHAPPEND=49;
+      popSETSYM=50;
+      popINDEX=51;
+      popFCALLH=52;
+      popMCALLH=53;
+      popUNPACK=54;
+      popSLICE=55;
+      popSLICE2=56;
+      popSLICE3=57;
+      popTRY=58;
+      popTRYBLOCKEND=59;
+      popTHROW=60;
+      popDEC=61;
+      popINC=62;
+      popBAND=63;
+      popBXOR=64;
+      popBOR=65;
+      popBNOT=66;
+      popBSHL=67;
+      popBSHR=68;
+      popBUSHR=69;
+      popMOD=70;
+      popPOW=71;
+      popINHERITEDGETMEMBER=72;
+      popKEY=73;
+      popIN=74;
+      popINRANGE=75;
+      popFTAILCALL=76;
+      popMTAILCALL=77;
+      popFTAILCALLH=78;
+      popMTAILCALLH=79;
+      popINSTANCEOF=80;
+      popBREAKPOINT=81;
+      popNUM=82;
+      popN_NOT=83;
+      popN_ADD=84;
+      popN_SUB=85;
+      popN_MUL=86;
+      popN_DIV=87;
+      popN_NEG=88;
+      popN_LT=89;
+      popN_LTEQ=90;
+      popN_GT=91;
+      popN_GTEQ=92;
+      popN_EQ=93;
+      popN_NEQ=94;
+      popN_CMP=95;
+      popN_DEC=96;
+      popN_INC=97;
+      popN_BAND=98;
+      popN_BXOR=99;
+      popN_BOR=100;
+      popN_BNOT=101;
+      popN_BSHL=102;
+      popN_BSHR=103;
+      popN_BUSHR=104;
+      popN_MOD=105;
+      popN_POW=106;
+      popN_INRANGE=107;
+      popN_JIFTRUE=108;
+      popN_JIFFALSE=109;
+      popN_JIFTRUELOOP=110;
+      popN_JIFFALSELOOP=111;
+      popN_JIFLT=112;
+      popN_JIFLTEQ=113;
+      popN_JIFGT=114;
+      popN_JIFGTEQ=115;
+      popN_JIFEQ=116;
+      popN_JIFNEQ=117;
+      popN_JIFLTLOOP=118;
+      popN_JIFLTEQLOOP=119;
+      popN_JIFGTLOOP=120;
+      popN_JIFGTEQLOOP=121;
+      popN_JIFEQLOOP=122;
+      popN_JIFNEQLOOP=123;
+      popUPDATESTRING=124;
+      popREGEXP=125;
+      popREGEXPEQ=126;
+      popREGEXPNEQ=127;
+      popSQRT=128;
+      popN_SQRT=129;
+      popGETPROTOTYPE=130;
+      popSETPROTOTYPE=131;
+      popGETCONSTRUCTOR=132;
+      popSETCONSTRUCTOR=133;
+      popDELETE=134;
+      popDELETEEX=135;
+      popDEFINED=136;
+      popDEFINEDEX=137;
+      popLOADGLOBAL=138;
+      popLOADBASECLASS=139;
+      popGETHASHKIND=140;
+      popSETHASHKIND=141;
+      popTYPEOF=142;
+      popIDOF=143;
+      popGHOSTTYPEOF=144;
+      popELVIS=145;
+      popIS=146;
+      popJIFNULL=147;
+      popJIFNOTNULL=148;
+      popSAFEEXTRACT=149;
+      popSAFEGETMEMBER=150;
+      popSETCONSTLOCAL=151;
+      popCOUNT=152;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -1122,6 +1124,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCAValues=array[0..($7fffffff div sizeof(TPOCAValue))-1] of TPOCAValue;
 
+     TPPOCAValues=array[0..($7fffffff div sizeof(PPOCAValues))-1] of PPOCAValues;
+     PPPOCAValues=^TPPOCAValues;
+
      PPOCAHashEntity=^TPOCAHashEntity;
      TPOCAHashEntity=record
       Key:TPOCAValue;
@@ -1189,6 +1194,20 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCACodeLines=array of TPOCACodeLine;
 
+     TPOCACodeArgument=record
+      public
+       const pcakVAR=0;
+             pcakREG=1;
+             pcakUPVALUE=2;
+      public
+       Kind:TPOCAUInt32;
+       Index:TPOCAUInt32;
+     end;
+     PPOCACodeArgument=^TPOCACodeArgument;
+
+     TPOCACodeArguments=array[0..($7fffffff div sizeof(TPOCACodeArgument))-1] of TPOCACodeArgument;
+     PPOCACodeArguments=^TPOCACodeArguments;
+
      TPOCACode=packed record
       Header:TPOCAObjectHeader;
       Name:TPOCARawByteString;
@@ -1208,9 +1227,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Constants:PPOCAValues;
       HasArgumentLocals:TPOCABool32;
       ArgumentSymbols:PPOCAInt32Array;
-      ArgumentLocals:PPOCAInt32Array;
+      ArgumentLocals:PPOCACodeArguments;
       OptionalArgumentSymbols:PPOCAInt32Array;
-      OptionalArgumentLocals:PPOCAInt32Array;
+      OptionalArgumentLocals:PPOCACodeArguments;
       OptionalArgumentValues:PPOCAInt32Array;
       RegExps:PPOCAValues;
       CountRegExps:TPOCAUInt32;
@@ -1230,6 +1249,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Code:TPOCAValue;
       Namespace:TPOCAValue;
       Obj:TPOCAValue;
+      UpValueContextID:TPOCAUInt64; // for future
+      UpValues:PPOCAValues; // for future
+      CountUpValues:TPOCAInt32; // for future
       Next:TPOCAValue;
      end;
 
@@ -1244,6 +1266,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       CountRegisters:TPOCAInt32;
       Arguments:TPOCAValueArray;
       CountArguments:TPOCAInt32;
+      UpValues:PPPOCAValues;
      end;
 
      TPOCANativeFunction=function(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -1440,6 +1463,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       StrictMode:TPOCABool32;
 
       ScopeIDCounter:TPOCAUInt64;
+      UpValueContextIDCounter:TPOCAUInt64;
 
 {$ifdef POCAMemoryPools}
       Pools:TPOCAPools;
@@ -1655,15 +1679,15 @@ const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAP
       POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAUInt64(POCAValueReferenceTag) shl 32){$endif};
 
       POCATypeSizes:array[pvtNULL..pvtGHOST] of TPOCAInt32=(-1, // pvtNULL
-                                                         -1, // pvtNUMBER
-                                                         -1, // pvtREFERENCE
-                                                         sizeof(TPOCAString),
-                                                         sizeof(TPOCAArray),
-                                                         sizeof(TPOCAHash),
-                                                         sizeof(TPOCACode),
-                                                         sizeof(TPOCAFunction),
-                                                         sizeof(TPOCANativeCode),
-                                                         sizeof(TPOCAGhost));
+                                                            -1, // pvtNUMBER
+                                                            -1, // pvtREFERENCE
+                                                            sizeof(TPOCAString),
+                                                            sizeof(TPOCAArray),
+                                                            sizeof(TPOCAHash),
+                                                            sizeof(TPOCACode),
+                                                            sizeof(TPOCAFunction),
+                                                            sizeof(TPOCANativeCode),
+                                                            sizeof(TPOCAGhost));
 
       POCADefaultFormatSettings:TFormatSettings=(
 {$ifdef DelphiXEAndUp}
@@ -5462,6 +5486,10 @@ end;
 
 procedure POCAFuncGCClean(Obj:PPOCAFunction);
 begin
+ if (Obj^.UpValueContextID<>0) and assigned(Obj^.UpValues) then begin
+  FreeMem(Obj^.UpValues);
+  Obj^.UpValues:=nil;
+ end;
 end;
 
 procedure POCANativeCodeGCClean(Obj:PPOCANativeCode);
@@ -6234,6 +6262,7 @@ begin
 end;
 
 function TPOCAGarbageCollector.MarkFunctionAsGray(Obj:PPOCAFunction):boolean;
+var i:TPOCAInt32;
 begin
  result:=false;
  if MarkValue(Obj^.Code) then begin
@@ -6244,6 +6273,13 @@ begin
  end;
  if MarkValue(Obj^.Obj) then begin
   result:=true;
+ end;
+ if (Obj^.UpValueContextID<>0) and assigned(Obj^.UpValues) then begin
+  for i:=0 to Obj^.CountUpValues-1 do begin
+   if MarkValue(Obj^.UpValues^[i]) then begin
+    result:=true;
+   end;
+  end;
  end;
  if MarkValue(Obj^.Next) then begin
   result:=true;
@@ -8058,6 +8094,7 @@ begin
  Func^.Next:=POCAValueNull;}
  Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+ Func^.UpValueContextID:=0;
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
@@ -11730,8 +11767,12 @@ begin
   Context^.TemporarySavedObjects:=nil;
  end;
  for i:=0 to POCA_MAX_RECURSION-1 do begin
-  SetLength(Context^.FrameStack[i].Registers,0);
-  SetLength(Context^.FrameStack[i].Arguments,0);
+  Context^.FrameStack[i].Registers:=nil;
+  Context^.FrameStack[i].Arguments:=nil;
+  if assigned(Context^.FrameStack[i].UpValues) then begin
+   FreeMem(Context^.FrameStack[i].UpValues);
+   Context^.FrameStack[i].UpValues:=nil;
+  end;
  end;
 {$ifdef POCAMemoryPools}
  for i:=0 to pvtCOUNT-1 do begin
@@ -18100,6 +18141,7 @@ begin
  begin
   result^.Globals.StrictMode:=true;
   result^.Globals.ScopeIDCounter:=0;
+  result^.Globals.UpValueContextIDCounter:=0;
  end;
  begin
   result^.Globals.GarbageCollector.Instance:=result;
@@ -25075,12 +25117,20 @@ var TokenList:PPOCAToken;
        BreakRegisters,ContinueRegisters:array of TPOCACodeGeneratorRegisters;
       end;
       TPOCACodeGeneratorLoops=array of TPOCACodeGeneratorLoop;
+      TPOCACodeGeneratorScopeSymbolKind=
+       (
+        sskVAR,
+        sskREG,
+        sskUPVALUE
+       );
       PPOCACodeGeneratorScopeSymbol=^TPOCACodeGeneratorScopeSymbol;
       TPOCACodeGeneratorScopeSymbol=record
        Name:TPOCARawByteString;
+       Kind:TPOCACodeGeneratorScopeSymbolKind;
        Constant:Boolean;
        Freeable:Boolean;
        Register:TPOCAInt32;
+       UpValueContextID:TPOCAUInt64;
        ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopeSymbols=array of PPOCACodeGeneratorScopeSymbol;
@@ -25089,6 +25139,7 @@ var TokenList:PPOCAToken;
        SymbolNameHashMap:TPOCAStringHashMap;
        Symbols:TPOCACodeGeneratorScopeSymbols;
        CountSymbols:TPOCAInt32;
+       UpValueContextID:TPOCAUInt64;
        ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopes=array of TPOCACodeGeneratorScope;
@@ -25122,10 +25173,10 @@ var TokenList:PPOCAToken;
        LineCount:TPOCAInt32;
        NextLineIP:TPOCAInt32;
        ArgumentSymbols:PPOCAInt32Array;
-       ArgumentLocals:PPOCAInt32Array;
+       ArgumentLocals:PPOCACodeArguments;
        ArgAllocated:TPOCAUInt32;
        OptionalArgumentSymbols:PPOCAInt32Array;
-       OptionalArgumentLocals:PPOCAInt32Array;
+       OptionalArgumentLocals:PPOCACodeArguments;
        OptionalArgumentValues:PPOCAInt32Array;
        OptionalArgumentAllocated:TPOCAUInt32;
        RestArgSymbolString:TPOCAUTF8String;
@@ -25143,7 +25194,7 @@ var TokenList:PPOCAToken;
        CountScopes:TPOCAInt32;
        Registers:TPOCACodeGeneratorRegisters;
        CountRegisters:TPOCAUInt32;
-       LocalArguments:array of TPOCAInt32;
+       LocalArguments:array of TPOCACodeArgument;
        CountLocalArguments:TPOCAInt32;
        LocalArgumentIndex:TPOCAInt32;
        WhenSwitchCaseBlocks:TPOCACodeGeneratorWhenSwitchCaseBlocks;
@@ -25158,6 +25209,9 @@ var TokenList:PPOCAToken;
        ConstantRegisters:array of TPOCAInt32;
        CountConstants:TPOCAInt32;
        CountRegExps:TPOCAInt32;
+       UpValueContextID:TPOCAUInt64;
+       CountUpValues:TPOCAInt32;
+       Level:TPOCAUInt64;
       end;
   function GenerateCode(var Parser:TPOCAParser;Block:PPOCAToken;ArgumentList:PPOCAToken;CodeToken:TPOCATokenType;const CodeName:TPOCARawByteString;const ParentCodeGenerator:PPOCACodeGenerator):TPOCAValue;
   var CodeGenerator:PPOCACodeGenerator;
@@ -25567,7 +25621,7 @@ var TokenList:PPOCAToken;
      result:='';
     end;
    end;
-   function DefineScopeSymbol(t:PPOCAToken;const LetConst,Constant,Freeable:Boolean;const aRegister:TPOCAInt32):PPOCACodeGeneratorScopeSymbol;
+   function DefineScopeSymbol(t:PPOCAToken;const aKind:TPOCACodeGeneratorScopeSymbolKind;const aLetConst,aConstant,aFreeable:Boolean;const aRegister:TPOCAInt32):PPOCACodeGeneratorScopeSymbol;
    var CurrentCodeGenerator:PPOCACodeGenerator;
        i,SymbolIndex:TPOCAInt32;
        HashMap:TPOCAStringHashMap;
@@ -25592,13 +25646,15 @@ var TokenList:PPOCAToken;
       GetMem(CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex],SizeOf(TPOCACodeGeneratorScopeSymbol));
       result:=CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex];
       Initialize(result^);
+      result^.UpValueContextID:=CurrentCodeGenerator^.Scopes[i].UpValueContextID;
       result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
-      if LetConst then begin
+      if aLetConst then begin
        result^.Name:=t^.Str+'@'+IntToStr(result^.ScopeID);
       end else begin
        result^.Name:=t^.Str;
       end;
-      result^.Constant:=Constant;
+      result^.Kind:=aKind;
+      result^.Constant:=aConstant;
       result^.Register:=aRegister;
      end;
     end else begin
@@ -25693,6 +25749,7 @@ var TokenList:PPOCAToken;
     Scope^.CountSymbols:=0;
     inc(Instance^.Globals.ScopeIDCounter);
     Scope^.ScopeID:=Instance^.Globals.ScopeIDCounter;
+    Scope^.UpValueContextID:=CodeGenerator^.UpValueContextID;
    end;
    procedure ScopeEnd;
    var ScopeIndex,Index,Reg:TPOCAInt32;
@@ -26808,7 +26865,7 @@ var TokenList:PPOCAToken;
         end else begin
          Symbol:=FindScopeSymbol(t,false,true,false);
          if not assigned(Symbol) then begin
-          Symbol:=DefineScopeSymbol(t,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+          Symbol:=DefineScopeSymbol(t,sskREG,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
          end;
          if assigned(Symbol) then begin
           result:=Symbol^.Register;
@@ -26818,6 +26875,9 @@ var TokenList:PPOCAToken;
          exit;
         end;
        end;
+      end;
+      else begin
+       result:=-1;
       end;
      end;
     end;
@@ -26911,7 +26971,11 @@ var TokenList:PPOCAToken;
           SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
          end;
          CodeGenerator^.HasLocals:=true;
-         DefineScopeSymbol(t,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         if (Token=ptLET) or (Token=ptCONST) then begin
+          DefineScopeSymbol(t,sskUPVALUE,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         end else begin
+          DefineScopeSymbol(t,sskVAR,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         end;
          ConstantIndex:=FindConstantIndex(t,true);
          if Token=ptCONST then begin
           result:=popSETCONSTLOCAL;
@@ -26920,7 +26984,7 @@ var TokenList:PPOCAToken;
          end;
          exit;
         end else begin
-         Symbol:=DefineScopeSymbol(t,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         Symbol:=DefineScopeSymbol(t,sskREG,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
          if assigned(Symbol) then begin
           Reg1:=Symbol^.Register;
           result:=popCOPY;
@@ -29157,7 +29221,11 @@ var TokenList:PPOCAToken;
           SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
          end;
          CodeGenerator^.HasLocals:=true;
-         DefineScopeSymbol(t,(Variable=2) or (Variable=3),Variable=3,false,-1);
+         if (Variable=2) or (Variable=3) then begin
+          DefineScopeSymbol(t,sskUPVALUE,(Variable=2) or (Variable=3),Variable=3,false,-1);
+         end else begin
+          DefineScopeSymbol(t,sskVAR,(Variable=2) or (Variable=3),Variable=3,false,-1);
+         end;
          if Variable=3 then begin
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
          end else begin
@@ -29165,7 +29233,7 @@ var TokenList:PPOCAToken;
          end;
          exit;
         end else begin
-         Symbol:=DefineScopeSymbol(t,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+         Symbol:=DefineScopeSymbol(t,sskREG,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
          if assigned(Symbol) then begin
           r:=Symbol^.Register;
           EmitOpcode(popCOPY,r,Reg);
@@ -29240,7 +29308,7 @@ var TokenList:PPOCAToken;
            EmitMultiLeftValue(at^.Left,Variable,Reg);
            FreeRegister(Reg);
           end else begin
-           Symbol:=DefineScopeSymbol(at^.Left,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+           Symbol:=DefineScopeSymbol(at^.Left,sskREG,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
            if assigned(Symbol) then begin
             Reg2:=Symbol^.Register;
             Reg:=GenerateExpression(pt^.Left,Reg2,true);
@@ -29282,7 +29350,7 @@ var TokenList:PPOCAToken;
            result:=GenerateExpression(pt,OutReg,true);
            EmitMultiLeftValue(at,Variable,result);
           end else begin
-           Symbol:=DefineScopeSymbol(at,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+           Symbol:=DefineScopeSymbol(at,sskREG,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
            if assigned(Symbol) then begin
             if OutReg<0 then begin
              result:=Symbol^.Register;
@@ -29360,7 +29428,7 @@ var TokenList:PPOCAToken;
            if IsVar then begin
             EmitMultiLeftValue(t,Variable,Reg);
            end else begin
-            Symbol:=DefineScopeSymbol(t,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+            Symbol:=DefineScopeSymbol(t,sskREG,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
             if assigned(Symbol) then begin
              if OutReg<0 then begin
               Reg2:=Symbol^.Register;
@@ -30596,7 +30664,11 @@ var TokenList:PPOCAToken;
           SyntaxError('VAR is not allowed in fastfunctions',t^.Right^.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
          end;
          CodeGenerator^.HasLocals:=true;
-         DefineScopeSymbol(t^.Right,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         if (Token=ptLET) or (Token=ptCONST) then begin
+          DefineScopeSymbol(t^.Right,sskUPVALUE,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         end else begin
+          DefineScopeSymbol(t^.Right,sskVAR,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         end;
          if OutReg<0 then begin
           result:=GetRegister(true,false);
          end else begin
@@ -30611,7 +30683,7 @@ var TokenList:PPOCAToken;
          end;
          exit;
         end else begin
-         Symbol:=DefineScopeSymbol(t^.Right,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         Symbol:=DefineScopeSymbol(t^.Right,sskREG,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
          if assigned(Symbol) then begin
           if OutReg<0 then begin
            result:=GetRegister(true,false);
@@ -31096,6 +31168,7 @@ var TokenList:PPOCAToken;
    var IsLocal,IsConst:boolean;
        Symbol:PPOCAToken;
        ScopeScope:PPOCACodeGeneratorScopeSymbol;
+       CodeArgument:PPOCACodeArgument;
    begin
     IsConst:=false;
     if assigned(t) and (t^.Token<>ptEMPTY) then begin
@@ -31170,13 +31243,15 @@ var TokenList:PPOCAToken;
      if IsLocal then begin
       ScopeScope:=FindScopeSymbol(Symbol,false,true,false);
       if not assigned(ScopeScope) then begin
-       ScopeScope:=DefineScopeSymbol(Symbol,true,IsConst,false,GetRegister(false,IsConst));
+       ScopeScope:=DefineScopeSymbol(Symbol,sskREG,true,IsConst,false,GetRegister(false,IsConst));
       end;
       if assigned(ScopeScope) then begin
-       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments]:=ScopeScope^.Register;
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Kind:=TPOCACodeArgument.pcakREG;
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Index:=ScopeScope^.Register;
       end;
      end else begin
-      CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments]:=-1;
+      CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Kind:=TPOCACodeArgument.pcakVAR;
+      CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Index:=0;
       CodeGenerator^.HasLocals:=true;
      end;
      inc(CodeGenerator^.CountLocalArguments);
@@ -31208,7 +31283,7 @@ var TokenList:PPOCAToken;
           if Code^.CountOptionalArguments>=CodeGenerator^.OptionalArgumentAllocated then begin
            CodeGenerator^.OptionalArgumentAllocated:=Code^.CountOptionalArguments*2;
            ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
-           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCACodeArgument));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
           CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right,true);
@@ -31224,7 +31299,7 @@ var TokenList:PPOCAToken;
           if Code^.CountOptionalArguments>=CodeGenerator^.OptionalArgumentAllocated then begin
            CodeGenerator^.OptionalArgumentAllocated:=Code^.CountOptionalArguments*2;
            ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
-           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCACodeArgument));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
           CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right,true);
@@ -31239,7 +31314,7 @@ var TokenList:PPOCAToken;
           if Code^.CountOptionalArguments>=CodeGenerator^.OptionalArgumentAllocated then begin
            CodeGenerator^.OptionalArgumentAllocated:=Code^.CountOptionalArguments*2;
            ReallocMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
-           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCACodeArgument));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
           CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left,true);
@@ -31259,7 +31334,7 @@ var TokenList:PPOCAToken;
           if Code^.CountArguments>=CodeGenerator^.ArgAllocated then begin
            CodeGenerator^.ArgAllocated:=Code^.CountArguments*2;
            ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
-           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCACodeArgument));
           end;
           CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right,true);
           CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -31278,7 +31353,7 @@ var TokenList:PPOCAToken;
           if Code^.CountArguments>=CodeGenerator^.ArgAllocated then begin
            CodeGenerator^.ArgAllocated:=Code^.CountArguments*2;
            ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
-           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCACodeArgument));
           end;
           CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right,true);
           CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -31293,7 +31368,7 @@ var TokenList:PPOCAToken;
          if Code^.CountArguments>=CodeGenerator^.ArgAllocated then begin
           CodeGenerator^.ArgAllocated:=Code^.CountArguments*2;
           ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
-          ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+          ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCACodeArgument));
          end;
          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t,true);
          CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
@@ -31359,6 +31434,14 @@ var TokenList:PPOCAToken;
      CodeGenerator^.ConstantRegisters:=nil;
      CodeGenerator^.CountConstants:=0;
      CodeGenerator^.CountRegExps:=0;
+     inc(Instance^.Globals.UpValueContextIDCounter);
+     CodeGenerator^.UpValueContextID:=Instance^.Globals.UpValueContextIDCounter;
+     CodeGenerator^.CountUpValues:=0;
+     if assigned(ParentCodeGenerator) then begin
+      CodeGenerator^.Level:=ParentCodeGenerator^.Level+1;
+     end else begin
+      CodeGenerator^.Level:=0;
+     end;
     end;
     begin
      ScanForNestedFunctions(ArgumentList,Block);
@@ -31414,9 +31497,9 @@ var TokenList:PPOCAToken;
        CodeGenerator^.ArgAllocated:=1024;
        CodeGenerator^.OptionalArgumentAllocated:=1024;
        GetMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
-       GetMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
+       GetMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCACodeArgument));
        GetMem(CodeGenerator^.OptionalArgumentSymbols,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
-       GetMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
+       GetMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCACodeArgument));
        GetMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
        GenerateArgumentList(ArgumentList,Code);
       end;
@@ -31456,16 +31539,16 @@ var TokenList:PPOCAToken;
        begin
         if Code^.CountArguments>0 then begin
          GetMem(Code^.ArgumentSymbols,Code^.CountArguments*sizeof(TPOCAInt32));
-         GetMem(Code^.ArgumentLocals,Code^.CountArguments*sizeof(TPOCAInt32));
+         GetMem(Code^.ArgumentLocals,Code^.CountArguments*sizeof(TPOCACodeArgument));
          Move(CodeGenerator^.ArgumentSymbols^,Code^.ArgumentSymbols^,Code^.CountArguments*sizeof(TPOCAInt32));
-         Move(CodeGenerator^.ArgumentLocals^,Code^.ArgumentLocals^,Code^.CountArguments*sizeof(TPOCAInt32));
+         Move(CodeGenerator^.ArgumentLocals^,Code^.ArgumentLocals^,Code^.CountArguments*sizeof(TPOCACodeArgument));
         end;
         if Code^.CountOptionalArguments>0 then begin
          GetMem(Code^.OptionalArgumentSymbols,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
-         GetMem(Code^.OptionalArgumentLocals,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
+         GetMem(Code^.OptionalArgumentLocals,Code^.CountOptionalArguments*sizeof(TPOCACodeArgument));
          GetMem(Code^.OptionalArgumentValues,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
          Move(CodeGenerator^.OptionalArgumentSymbols^,Code^.OptionalArgumentSymbols^,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
-         Move(CodeGenerator^.OptionalArgumentLocals^,Code^.OptionalArgumentLocals^,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
+         Move(CodeGenerator^.OptionalArgumentLocals^,Code^.OptionalArgumentLocals^,Code^.CountOptionalArguments*sizeof(TPOCACodeArgument));
          Move(CodeGenerator^.OptionalArgumentValues^,Code^.OptionalArgumentValues^,Code^.CountOptionalArguments*sizeof(TPOCAInt32));
         end;
         Code^.Lines:=copy(CodeGenerator^.Lines,0,CodeGenerator^.LineCount);
@@ -31931,18 +32014,26 @@ begin
    if POCAIsValueCode(Value) then begin
     Value:=POCABindFunction(Context,Frame,Value);
    end;
-   if Code^.ArgumentLocals[i]<0 then begin
-    if assigned(Hash) then begin
-     if assigned(Hash^.Events) then begin
-      POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.ArgumentSymbols[i]],Value,false);
+   case Code^.ArgumentLocals[i].Kind of
+    TPOCACodeArgument.pcakVAR:begin
+     if assigned(Hash) then begin
+      if assigned(Hash^.Events) then begin
+       POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.ArgumentSymbols[i]],Value,false);
+      end else begin
+       POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.ArgumentSymbols[i]],Value,false);
+      end;
      end else begin
-      POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.ArgumentSymbols[i]],Value,false);
+      POCARuntimeError(Context,'Function has no locals');
      end;
-    end else begin
-     POCARuntimeError(Context,'Function has no locals');
     end;
-   end else begin
-    Frame^.Registers[Code^.ArgumentLocals[i]]:=Value;
+    TPOCACodeArgument.pcakREG:begin
+     Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
+    end;
+    TPOCACodeArgument.pcakUPVALUE:begin
+///   Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
+    end;
+    else begin
+    end;
    end;
   end;
   inc(j,Code^.CountArguments);
@@ -31960,18 +32051,26 @@ begin
    if POCAIsValueCode(Value) then begin
     Value:=POCABindFunction(Context,Frame,Value);
    end;
-   if Code^.OptionalArgumentLocals[i]<0 then begin
-    if assigned(Hash) then begin
-     if assigned(Hash^.Events) then begin
-      POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value,false);
+   case Code^.OptionalArgumentLocals[i].Kind of
+    TPOCACodeArgument.pcakVAR:begin
+     if assigned(Hash) then begin
+      if assigned(Hash^.Events) then begin
+       POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value,false);
+      end else begin
+       POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value,false);
+      end;
      end else begin
-      POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value,false);
+      POCARuntimeError(Context,'Function has no locals');
      end;
-    end else begin
-     POCARuntimeError(Context,'Function has no locals');
     end;
-   end else begin
-    Frame^.Registers[Code^.OptionalArgumentLocals[i]]:=Value;
+    TPOCACodeArgument.pcakREG:begin
+     Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
+    end;
+    TPOCACodeArgument.pcakUPVALUE:begin
+///  Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
+    end;
+    else begin
+    end;
    end;
    dec(CountArguments);
   end;
@@ -32064,14 +32163,22 @@ begin
  for i:=0 to Code^.CountArguments-1 do begin
   Sym:=Code^.Constants[Code^.ArgumentSymbols[i]];
   if POCAHashGet(Context,Hash,Sym,Value) then begin
-   if Code^.ArgumentLocals[i]<0 then begin
-    if POCAIsValueHash(Locals) then begin
-     POCAHashSet(Context,Locals,Sym,Value,false);
-    end else begin
-     POCARuntimeError(Context,'Function has no locals');
+   case Code^.ArgumentLocals[i].Kind of
+    TPOCACodeArgument.pcakVAR:begin
+     if POCAIsValueHash(Locals) then begin
+      POCAHashSet(Context,Locals,Sym,Value,false);
+     end else begin
+      POCARuntimeError(Context,'Function has no locals');
+     end;
     end;
-   end else begin
-    Frame^.Registers[Code^.ArgumentLocals[i]]:=Value;
+    TPOCACodeArgument.pcakREG:begin
+     Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
+    end;
+    TPOCACodeArgument.pcakUPVALUE:begin
+//   Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
+    end;
+    else begin
+    end;
    end;
   end else begin
    POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Sym))^.Data+'"');
@@ -32083,14 +32190,22 @@ begin
   if not POCAHashGet(Context,Hash,Sym,Value) then begin
    Value:=Code^.Constants[Code^.OptionalArgumentValues[i]];
   end;
-  if Code^.OptionalArgumentLocals[i]<0 then begin
-   if POCAIsValueHash(Locals) then begin
-    POCAHashSet(Context,Locals,Sym,Value,false);
-   end else begin
-    POCARuntimeError(Context,'Function has no locals');
+  case Code^.OptionalArgumentLocals[i].Kind of
+   TPOCACodeArgument.pcakVAR:begin
+    if POCAIsValueHash(Locals) then begin
+     POCAHashSet(Context,Locals,Sym,Value,false);
+    end else begin
+     POCARuntimeError(Context,'Function has no locals');
+    end;
    end;
-  end else begin
-   Frame^.Registers[Code^.OptionalArgumentLocals[i]]:=Value;
+   TPOCACodeArgument.pcakREG:begin
+    Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
+   end;
+   TPOCACodeArgument.pcakUPVALUE:begin
+//   Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
+   end;
+   else begin
+   end;
   end;
  end;
  if Code^.NeedArgumentArray then begin
@@ -32242,6 +32357,7 @@ begin
     end else begin
      result^.Obj:=Obj;
     end;
+    result^.UpValues:=nil;
 
     if PPOCACode(ObjPtr)^.HasArguments or not PPOCACode(ObjPtr)^.IsEmpty then begin
 
@@ -32357,8 +32473,10 @@ end;
 procedure POCARunGetLocal(Context:PPOCAContext;Frame:PPOCAFrame;const Sym:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32);
 var Func:PPOCAFunction;
 begin
+
  // Optimized search
  repeat
+
   // 1. Function frame locals
   case POCAHashSymbolCache(PPOCAHash(POCAGetValueReferencePointer(Frame^.Locals)),Sym,OutValue,CacheIndex) of
    1:begin
@@ -32384,6 +32502,7 @@ begin
   end;
 
   break;
+
  until false;
 
  // Full search
@@ -32393,6 +32512,7 @@ begin
    exit;
   end;
  end;
+
  begin
   // 2. Outer closure name spaces
   Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
@@ -32405,17 +32525,20 @@ begin
  end;
 
  POCARunGetLocalError(Context,Sym);
+
 end;
 
 procedure POCARunSetSymbol(Context:PPOCAContext;Frame:PPOCAFrame;const Sym,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32);
 var Func:PPOCAFunction;
 begin
+
  begin
   // 1. Function frame locals "if exist"
   if POCAHashTrySetCache(Context,Frame^.Locals,Sym,Value,Constant,CacheIndex) then begin
    exit;
   end;
  end;
+
  begin
   // 2. Outer closure name spaces
   Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
@@ -32426,6 +32549,7 @@ begin
    Func:=PPOCAFunction(POCAGetValueReferencePointer(Func.Next));
   end;
  end;
+
  begin
   if Context^.Instance^.Globals.StrictMode then begin
    // 3. Raise error
@@ -32439,6 +32563,7 @@ begin
    end;
   end;
  end;
+
 end;
 
 procedure POCARunGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
@@ -34335,6 +34460,12 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
     popSETLOCAL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popGETUPVALUE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popSETUPVALUE:begin
      DoItByVMOpcodeDispatcher;
     end;
     popNEWARRAY:begin
@@ -37021,6 +37152,12 @@ begin
    end;
    popSETLOCAL:begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
+   end;
+   popGETUPVALUE:begin
+    Registers^[Operands^[0]]:=Frame^.UpValues[Operands^[1]]^[Operands^[2]];
+   end;
+   popSETUPVALUE:begin
+    Frame^.UpValues[Operands^[1]]^[Operands^[2]]:=Registers^[Operands^[0]];
    end;
    popNEWARRAY:begin
     Registers^[Operands^[0]]:=POCANewArray(Context);
