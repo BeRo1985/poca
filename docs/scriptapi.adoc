@@ -1949,13 +1949,14 @@ predictable in terms of collection intervals.
     The allocation counter is incremented with each memory allocation until it reaches a dynamically calculated threshold.  
     This threshold is determined based on current memory usage and a predefined scaling factor (e.g., `IncrementalCollectionThresholdFactor`).  
     When the counter exceeds or matches the threshold, garbage collection is triggered, and the counter is reset to zero.  
+    Because the threshold is evaluated at each allocation increment, its value can “float” as memory usage changes. 
+    This makes the GC trigger condition responsive to current usage patterns — if more objects are used, the threshold increases and vice versa.
     This approach adapts to real-time memory pressure, prioritizing responsiveness to sudden allocation spikes.  
     It is ideal for applications with fluctuating memory demands, such as games or real-time systems.  
 *** When disabled (`false`), the garbage collector uses a decrementing budget-based approach.  
     The allocation counter is initialized to a dynamic budget (calculated post-GC), and decremented with each allocation.  
     When the counter reaches zero, garbage collection is triggered, and a new budget is calculated based on the current memory state.  
-    This mode ensures predictable garbage collection intervals, as allocations consume a fixed (but dynamically adjusted) budget.  
-    It is suited for workloads with stable memory patterns, such as batch processing or steady-state applications.  
+    This approach yields a more predictable interval from GC trigger to trigger, regardless of any fluctuations in object usage during the counting period. The key difference in terms of predictable behavior is that once set, the threshold does not change during the cycle; it is “static” rather than recalculating on every allocation. This mode ensures predictable garbage collection intervals, as allocations consume a fixed (but dynamically adjusted) budget. It is suited for workloads with stable memory patterns, such as batch processing or steady-state applications.  
 ** Key Features:
 *** **Dynamic Threshold Mode (Enabled)**: Adapts to memory usage patterns, triggering GC based on real-time allocation spikes.
 **** **Adaptive**: Threshold recalculates in real time before GC.  

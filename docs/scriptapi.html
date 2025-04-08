@@ -4078,6 +4078,8 @@ predictable in terms of collection intervals.</p>
 The allocation counter is incremented with each memory allocation until it reaches a dynamically calculated threshold.
 This threshold is determined based on current memory usage and a predefined scaling factor (e.g., <code>IncrementalCollectionThresholdFactor</code>).
 When the counter exceeds or matches the threshold, garbage collection is triggered, and the counter is reset to zero.
+Because the threshold is evaluated at each allocation increment, its value can “float” as memory usage changes.
+This makes the GC trigger condition responsive to current usage patterns — if more objects are used, the threshold increases and vice versa.
 This approach adapts to real-time memory pressure, prioritizing responsiveness to sudden allocation spikes.
 It is ideal for applications with fluctuating memory demands, such as games or real-time systems.</p>
 </li>
@@ -4085,8 +4087,7 @@ It is ideal for applications with fluctuating memory demands, such as games or r
 <p>When disabled (<code>false</code>), the garbage collector uses a decrementing budget-based approach.
 The allocation counter is initialized to a dynamic budget (calculated post-GC), and decremented with each allocation.
 When the counter reaches zero, garbage collection is triggered, and a new budget is calculated based on the current memory state.
-This mode ensures predictable garbage collection intervals, as allocations consume a fixed (but dynamically adjusted) budget.
-It is suited for workloads with stable memory patterns, such as batch processing or steady-state applications.</p>
+This approach yields a more predictable interval from GC trigger to trigger, regardless of any fluctuations in object usage during the counting period. The key difference in terms of predictable behavior is that once set, the threshold does not change during the cycle; it is “static” rather than recalculating on every allocation. This mode ensures predictable garbage collection intervals, as allocations consume a fixed (but dynamically adjusted) budget. It is suited for workloads with stable memory patterns, such as batch processing or steady-state applications.</p>
 </li>
 </ul>
 </div>
@@ -13840,7 +13841,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-08 04:08:38 +0200
+Last updated 2025-04-08 04:30:53 +0200
 </div>
 </div>
 </body>
