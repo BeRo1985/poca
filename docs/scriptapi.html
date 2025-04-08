@@ -573,6 +573,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_garbagecollector_object">GarbageCollector Object</a></li>
 <li><a href="#_getting_parameters">Getting Parameters</a>
 <ul class="sectlevel3">
+<li><a href="#_garbagecollector_getdynamicthreshold">GarbageCollector.getDynamicThreshold</a></li>
 <li><a href="#_garbagecollector_getincrementalcollectionthresholdfactor">GarbageCollector.getIncrementalCollectionThresholdFactor</a></li>
 <li><a href="#_garbagecollector_getfullcollectionthresholdfactor">GarbageCollector.getFullCollectionThresholdFactor</a></li>
 <li><a href="#_garbagecollector_getmarkfactor">GarbageCollector.getMarkFactor</a></li>
@@ -592,6 +593,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_setting_parameters">Setting Parameters</a>
 <ul class="sectlevel3">
+<li><a href="#_garbagecollector_setdynamicthreshold">GarbageCollector.setDynamicThreshold</a></li>
 <li><a href="#_garbagecollector_setincrementalcollectionthresholdfactor">GarbageCollector.setIncrementalCollectionThresholdFactor</a></li>
 <li><a href="#_garbagecollector_setfullcollectionthresholdfactor">GarbageCollector.setFullCollectionThresholdFactor</a></li>
 <li><a href="#_garbagecollector_setmarkfactor">GarbageCollector.setMarkFactor</a></li>
@@ -3582,6 +3584,34 @@ query memory usage information.</p>
 <p>These functions read the current settings from the garbage collector:</p>
 </div>
 <div class="sect3">
+<h4 id="_garbagecollector_getdynamicthreshold">GarbageCollector.getDynamicThreshold</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let threshold = GarbageCollector.getDynamicThreshold();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns if the garbage collector is in "dynamic"
+thresshold mode (<code>1</code> for true, <code>0</code> for false). In dynamic mode,
+the GC adapts its threshold based on the current memory usage and
+allocation patterns. In static mode, the threshold is fixed and
+changed only at every collection cycle. This is a global setting
+that affects all collections. For more information, see the
+<code>GarbageCollector.setDynamicThreshold</code> function.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 or 0).</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_garbagecollector_getincrementalcollectionthresholdfactor">GarbageCollector.getIncrementalCollectionThresholdFactor</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -4009,6 +4039,112 @@ used for new allocation blocks in the memory pool.</p>
 <div class="paragraph">
 <p>These functions set the current tuning parameters in the garbage
 collector. Each function returns the old value as a number.</p>
+</div>
+<div class="sect3">
+<h4 id="_garbagecollector_setdynamicthreshold">GarbageCollector.setDynamicThreshold</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setDynamicThreshold(1);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Sets the garbage collector to "dynamic" threshold
+mode. In dynamic mode, the GC adapts its threshold based on the
+current memory usage and allocation patterns. In static mode, the
+threshold is fixed and changed only at every collection cycle. This
+is a global setting that affects all collections.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><em>newDynamicThreshold</em> (boolean): The new dynamic threshold mode.</p>
+<div class="ulist">
+<ul>
+<li>
+<p>When enabled (<code>true</code>), the garbage collector uses an incrementing threshold-based approach.
+The allocation counter is incremented with each memory allocation until it reaches a dynamically calculated threshold.
+This threshold is determined based on current memory usage and a predefined scaling factor (e.g., <code>IncrementalCollectionThresholdFactor</code>).
+When the counter exceeds or matches the threshold, garbage collection is triggered, and the counter is reset to zero.
+This approach adapts to real-time memory pressure, prioritizing responsiveness to sudden allocation spikes.
+It is ideal for applications with fluctuating memory demands, such as games or real-time systems.</p>
+</li>
+<li>
+<p>When disabled (<code>false</code>), the garbage collector uses a decrementing budget-based approach.
+The allocation counter is initialized to a dynamic budget (calculated post-GC), and decremented with each allocation.
+When the counter reaches zero, garbage collection is triggered, and a new budget is calculated based on the current memory state.
+This mode ensures predictable garbage collection intervals, as allocations consume a fixed (but dynamically adjusted) budget.
+It is suited for workloads with stable memory patterns, such as batch processing or steady-state applications.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p>Key Features:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Dynamic Threshold Mode (Enabled)</strong>: Adapts to memory usage patterns, triggering GC based on real-time allocation spikes.</p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Adaptive</strong>: Threshold recalculates in real time before GC.</p>
+</li>
+<li>
+<p><strong>Use Case</strong>: Fluctuating memory usage (e.g., unpredictable allocations).</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Budget Decrement Mode (Disabled)</strong>: Uses a fixed threshold, triggering GC based on a consistent budget.</p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Predictable</strong>: Budget recalculates after GC, based on post-GC memory.</p>
+</li>
+<li>
+<p><strong>Use Case</strong>: Stable memory patterns (e.g., steady-state workloads).</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The old dynamic threshold mode.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Set the garbage collector to dynamic threshold mode.
+let oldDynamicThreshold = GarbageCollector.setDynamicThreshold(1);
+puts("Old dynamic threshold mode: ", oldDynamicThreshold);
+// Set the garbage collector to budget decrement mode.
+oldDynamicThreshold = GarbageCollector.setDynamicThreshold(0);
+puts("Old dynamic threshold mode: ", oldDynamicThreshold);</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p><strong>Note:</strong> The default value is <code>1</code> (enabled). Setting it to <code>0</code> (disabled)
+will switch the garbage collector to budget decrement mode. This
+setting is global and affects all collections.</p>
+</li>
+</ul>
+</div>
+<hr>
 </div>
 <div class="sect3">
 <h4 id="_garbagecollector_setincrementalcollectionthresholdfactor">GarbageCollector.setIncrementalCollectionThresholdFactor</h4>
@@ -4782,6 +4918,10 @@ plus persistent objects are handled.</p>
 <p><strong>Parameter Getter/Setter Functions:</strong></p>
 <div class="ulist">
 <ul>
+<li>
+<p><code>GarbageCollector.getDynamicThreshold</code>,
+<code>GarbageCollector.setDynamicThreshold</code></p>
+</li>
 <li>
 <p><code>GarbageCollector.getIncrementalCollectionThresholdFactor</code>,
 <code>GarbageCollector.setIncrementalCollectionThresholdFactor</code></p>
@@ -13694,7 +13834,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-08 02:56:41 +0200
+Last updated 2025-04-08 04:01:21 +0200
 </div>
 </div>
 </body>

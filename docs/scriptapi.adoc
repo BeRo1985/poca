@@ -1612,6 +1612,25 @@ query memory usage information.
 
 These functions read the current settings from the garbage collector:
 
+==== GarbageCollector.getDynamicThreshold
+
+*Usage:*
+[source,js]
+----
+let threshold = GarbageCollector.getDynamicThreshold();
+----
+
+* *Description:* Returns if the garbage collector is in "dynamic" 
+thresshold mode (`+1+` for true, `+0+` for false). In dynamic mode, 
+the GC adapts its threshold based on the current memory usage and 
+allocation patterns. In static mode, the threshold is fixed and 
+changed only at every collection cycle. This is a global setting 
+that affects all collections. For more information, see the
+`GarbageCollector.setDynamicThreshold` function.
+* *Return Value:* A numeric boolean (1 or 0).
+
+'''''
+
 ==== GarbageCollector.getIncrementalCollectionThresholdFactor
 
 *Usage:*
@@ -1906,6 +1925,57 @@ used for new allocation blocks in the memory pool.
 
 These functions set the current tuning parameters in the garbage
 collector. Each function returns the old value as a number.
+
+==== GarbageCollector.setDynamicThreshold
+
+*Usage:*
+[source,js]
+----
+let old = GarbageCollector.setDynamicThreshold(1);
+----
+
+* *Description:* Sets the garbage collector to "dynamic" threshold
+mode. In dynamic mode, the GC adapts its threshold based on the
+current memory usage and allocation patterns. In static mode, the
+threshold is fixed and changed only at every collection cycle. This
+is a global setting that affects all collections.
+* *Parameters:*
+** _newDynamicThreshold_ (boolean): The new dynamic threshold mode.
+*** When enabled (`true`), the garbage collector uses an incrementing threshold-based approach.  
+    The allocation counter is incremented with each memory allocation until it reaches a dynamically calculated threshold.  
+    This threshold is determined based on current memory usage and a predefined scaling factor (e.g., `IncrementalCollectionThresholdFactor`).  
+    When the counter exceeds or matches the threshold, garbage collection is triggered, and the counter is reset to zero.  
+    This approach adapts to real-time memory pressure, prioritizing responsiveness to sudden allocation spikes.  
+    It is ideal for applications with fluctuating memory demands, such as games or real-time systems.  
+*** When disabled (`false`), the garbage collector uses a decrementing budget-based approach.  
+    The allocation counter is initialized to a dynamic budget (calculated post-GC), and decremented with each allocation.  
+    When the counter reaches zero, garbage collection is triggered, and a new budget is calculated based on the current memory state.  
+    This mode ensures predictable garbage collection intervals, as allocations consume a fixed (but dynamically adjusted) budget.  
+    It is suited for workloads with stable memory patterns, such as batch processing or steady-state applications.  
+** Key Features:
+*** **Dynamic Threshold Mode (Enabled)**: Adapts to memory usage patterns, triggering GC based on real-time allocation spikes.
+**** **Adaptive**: Threshold recalculates in real time before GC.  
+**** **Use Case**: Fluctuating memory usage (e.g., unpredictable allocations).  
+*** **Budget Decrement Mode (Disabled)**: Uses a fixed threshold, triggering GC based on a consistent budget.
+**** **Predictable**: Budget recalculates after GC, based on post-GC memory.  
+**** **Use Case**: Stable memory patterns (e.g., steady-state workloads).
+* *Return Value:* The old dynamic threshold mode.
+* *Example:*
++
+[source,js]
+----
+// Set the garbage collector to dynamic threshold mode.
+let oldDynamicThreshold = GarbageCollector.setDynamicThreshold(1);
+puts("Old dynamic threshold mode: ", oldDynamicThreshold);
+// Set the garbage collector to budget decrement mode.
+oldDynamicThreshold = GarbageCollector.setDynamicThreshold(0);
+puts("Old dynamic threshold mode: ", oldDynamicThreshold);
+----
+* *Note:* The default value is `1` (enabled). Setting it to `0` (disabled)
+will switch the garbage collector to budget decrement mode. This
+setting is global and affects all collections.
+
+'''''
 
 ==== GarbageCollector.setIncrementalCollectionThresholdFactor
 
@@ -2361,6 +2431,8 @@ and interact with POCA’s garbage collection system, controlling how
 aggressively and frequently collection occurs, and whether ephemeral
 plus persistent objects are handled.
 * *Parameter Getter/Setter Functions:*
+** `+GarbageCollector.getDynamicThreshold+`,
+`+GarbageCollector.setDynamicThreshold+`
 ** `+GarbageCollector.getIncrementalCollectionThresholdFactor+`,
 `+GarbageCollector.setIncrementalCollectionThresholdFactor+`
 ** `+GarbageCollector.getFullIntervalFactor+`,
