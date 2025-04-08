@@ -1612,22 +1612,6 @@ query memory usage information.
 
 These functions read the current settings from the garbage collector:
 
-==== GarbageCollector.getStepFactor
-
-*Usage:*
-
-[source,js]
-----
-let factor = GarbageCollector.getStepFactor();
-----
-
-* *Description:* Returns the "`step factor`" used to decide how many
-objects to mark or sweep in a partial/stepped collection cycle
-(triggered by `+GarbageCollector.cycle+`).
-* *Return Value:* A numeric value (integer).
-
-'''''
-
 ==== GarbageCollector.getIncrementalCollectionThresholdFactor
 
 *Usage:*
@@ -1673,6 +1657,24 @@ factor delays full collection, permitting more objects to accumulate
 
 '''''
 
+==== GarbageCollector.getMarkFactor
+
+*Usage:*
+[source,js]
+----
+let factor = GarbageCollector.getMarkFactor();
+----
+
+* *Description:* Returns the "mark factor" that determines how many
+objects are marked in each partial mark step. This factor is multiplied
+by the number of objects in the memory pool to compute the number of
+used objects to be marked in each step. A higher factor results in more
+aggressive marking, while a lower factor results in less aggressive
+marking.
+* *Return Value:* A numeric value (integer).
+
+'''''
+
 ==== GarbageCollector.getGhostFactor
 
 *Usage:*
@@ -1682,9 +1684,12 @@ factor delays full collection, permitting more objects to accumulate
 let factor = GarbageCollector.getGhostFactor();
 ----
 
-* *Description:* Returns the "`ghost factor`" used to determine how
-aggressively ghost objects (special objects like IO streams, threads,
-coroutines, etc.) are processed.
+* *Description:* Returns the "`ghost factor`" that determines how many
+ghost objects are processed in each partial mark step. This factor is
+multiplied by the number of ghost objects in the memory pool to
+compute the number of ghost objects to be processed in each step. A
+higher factor results in more aggressive ghost processing, while a
+lower factor results in less aggressive ghost processing.
 * *Return Value:* A numeric value (integer).
 
 '''''
@@ -1698,8 +1703,12 @@ coroutines, etc.) are processed.
 let factor = GarbageCollector.getSweepFactor();
 ----
 
-* *Description:* Returns the "`sweep factor`" controlling how many
-objects are swept (freed) in each partial sweep step.
+* *Description:* Returns the "`sweep factor`" that determines how 
+many objects are swept in each partial sweep step. This factor is
+multiplied by the number of used objects in the memory pool to compute 
+the number of objects to be swept in each step. A higher factor
+results in more aggressive sweeping, while a lower factor results in
+less aggressive sweeping.
 * *Return Value:* A numeric value (integer).
 
 '''''
@@ -1898,29 +1907,12 @@ used for new allocation blocks in the memory pool.
 These functions set the current tuning parameters in the garbage
 collector. Each function returns the old value as a number.
 
-==== GarbageCollector.setStepFactor
-
-*Usage:*
-
-[source,js]
-----
-let old = GarbageCollector.setStepFactor(300);
-----
-
-* *Description:* Sets the "`step factor`". During incremental GC cycles,
-this factor helps determine how many objects to handle in each GC step.
-* *Parameters:*
-** _newStepFactor_ (number): The new step factor.
-* *Return Value:* The old step factor.
-
-'''''
-
 ==== GarbageCollector.setIncrementalCollectionThresholdFactor
 
 *Usage:*
 [source,js]
 ----
-let old = GarbageCollector.setIncrementalCollectionThresholdFactor(0.125);
+let old = GarbageCollector.setIncrementalCollectionThresholdFactor(0.25);
 ----
 
 * *Description:* Sets the "incremental collection threshold factor."
@@ -1939,16 +1931,16 @@ incremental collection threshold factor.
 +
 [source,js]
 ----
-// Set the incremental collection threshold factor to 0.125.
-let oldFactor = GarbageCollector.setIncrementalCollectionThresholdFactor(0.125);
+// Set the incremental collection threshold factor to 0.25.
+let oldFactor = GarbageCollector.setIncrementalCollectionThresholdFactor(0.25);
 puts("Old incremental collection threshold factor: ", oldFactor);
 // Set the incremental collection threshold factor to 0.5.
 oldFactor = GarbageCollector.setIncrementalCollectionThresholdFactor(0.5);
 puts("Old incremental collection threshold factor: ", oldFactor);
 ----
-* *Note:* The default value is `0.125`, which means that the GC will
+* *Note:* The default value is `0.25`, which means that the GC will
 trigger an incremental collection when the number of used objects
-exceeds 12.5% of the total allocated objects. A value of `0.5` would
+exceeds 25.0% of the total allocated objects. A value of `0.5` would
 trigger the collection when the number of used objects exceeds 50% of
 the total allocated objects.
 
@@ -1993,20 +1985,24 @@ of the total allocated objects.
 
 '''''
 
-==== GarbageCollector.setIntervalFactor
+==== GarbageCollector.setMarkFactor
 
 *Usage:*
 
 [source,js]
 ----
-let old = GarbageCollector.setIntervalFactor(128);
+let old = GarbageCollector.setMarkFactor(0.25)
 ----
 
-* *Description:* Sets the "`interval factor,`" which affects how many
-cycles elapse before an incremental collection is triggered.
+* *Description:* Sets the "`mark factor`". This factor is multiplied
+by the current number of used objects (calculated as Allocated minus
+FreeCount) to compute a count of objects to be marked in a partial
+collection cycle. 
 * *Parameters:*
-** _newIntervalFactor_ (number): The new interval factor.
-* *Return Value:* The old interval factor.
+** _newStepFactor_ (number): The new step factor.
+* *Return Value:* The old step factor.
+* *Note:* The default value is `0.25`, which means that the GC will
+process 25.0% of the used objects in a partial collection cycle.
 
 '''''
 
@@ -2016,14 +2012,22 @@ cycles elapse before an incremental collection is triggered.
 
 [source,js]
 ----
-let old = GarbageCollector.setGhostFactor(512);
+let old = GarbageCollector.setGhostFactor(0.25);
 ----
 
-* *Description:* Sets the factor for partial marking/sweeping of ghost
+* *Description:* Sets the "`ghost factor`". This factor is multiplied by
+the current number of used objects (calculated as Allocated minus
+FreeCount) to compute a count of objects to be marked in a partial
+collection cycle. This is the factor for partial marking/sweeping of
+ghost objects. The ghost factor is used to determine how aggressively
+ghost objects (special objects like IO streams, threads, coroutines,
+etc.) are processed.
 objects.
 * *Parameters:*
 ** _newGhostFactor_ (number)
 * *Return Value:* The old ghost factor.
+* *Note:* The default value is `0.25`, which means that the GC will
+process 25.0% of the used objects in a partial collection cycle.
 
 '''''
 
@@ -2033,14 +2037,20 @@ objects.
 
 [source,js]
 ----
-let old = GarbageCollector.setSweepFactor(400);
+let old = GarbageCollector.setSweepFactor(0.25);
 ----
 
-* *Description:* Sets how aggressively objects are swept (freed) per
-cycle.
+* *Description:* Sets the "`sweep factor`". This factor is multiplied by
+the current number of used objects (calculated as Allocated minus
+FreeCount) to compute a count of objects to be swept in a partial
+collection cycle. This is the factor for partial sweeping of objects,
+which are no longer reachable. The sweep factor is used to determine
+how aggressively objects are swept (freed) per partial collection cycle.
 * *Parameters:*
 ** _newSweepFactor_ (number)
 * *Return Value:* The old sweep factor.
+* *Note:* The default value is `0.25`, which means that the GC will
+process 25.0% of the used objects in a partial collection cycle.
 
 '''''
 
@@ -2351,12 +2361,12 @@ and interact with POCA’s garbage collection system, controlling how
 aggressively and frequently collection occurs, and whether ephemeral
 plus persistent objects are handled.
 * *Parameter Getter/Setter Functions:*
-** `+GarbageCollector.getStepFactor+`,
-`+GarbageCollector.setStepFactor+`
 ** `+GarbageCollector.getIncrementalCollectionThresholdFactor+`,
 `+GarbageCollector.setIncrementalCollectionThresholdFactor+`
 ** `+GarbageCollector.getFullIntervalFactor+`,
 `+GarbageCollector.setFullIntervalFactor+`
+** `+GarbageCollector.getMarkFactor+`,
+`+GarbageCollector.setMarkFactor+`
 ** `+GarbageCollector.getGhostFactor+`,
 `+GarbageCollector.setGhostFactor+`
 ** `+GarbageCollector.getSweepFactor+`,

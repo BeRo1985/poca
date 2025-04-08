@@ -573,9 +573,9 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_garbagecollector_object">GarbageCollector Object</a></li>
 <li><a href="#_getting_parameters">Getting Parameters</a>
 <ul class="sectlevel3">
-<li><a href="#_garbagecollector_getstepfactor">GarbageCollector.getStepFactor</a></li>
 <li><a href="#_garbagecollector_getincrementalcollectionthresholdfactor">GarbageCollector.getIncrementalCollectionThresholdFactor</a></li>
 <li><a href="#_garbagecollector_getfullcollectionthresholdfactor">GarbageCollector.getFullCollectionThresholdFactor</a></li>
+<li><a href="#_garbagecollector_getmarkfactor">GarbageCollector.getMarkFactor</a></li>
 <li><a href="#_garbagecollector_getghostfactor">GarbageCollector.getGhostFactor</a></li>
 <li><a href="#_garbagecollector_getsweepfactor">GarbageCollector.getSweepFactor</a></li>
 <li><a href="#_garbagecollector_getpersistentinterval">GarbageCollector.getPersistentInterval</a></li>
@@ -592,10 +592,9 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 </li>
 <li><a href="#_setting_parameters">Setting Parameters</a>
 <ul class="sectlevel3">
-<li><a href="#_garbagecollector_setstepfactor">GarbageCollector.setStepFactor</a></li>
 <li><a href="#_garbagecollector_setincrementalcollectionthresholdfactor">GarbageCollector.setIncrementalCollectionThresholdFactor</a></li>
 <li><a href="#_garbagecollector_setfullcollectionthresholdfactor">GarbageCollector.setFullCollectionThresholdFactor</a></li>
-<li><a href="#_garbagecollector_setintervalfactor">GarbageCollector.setIntervalFactor</a></li>
+<li><a href="#_garbagecollector_setmarkfactor">GarbageCollector.setMarkFactor</a></li>
 <li><a href="#_garbagecollector_setghostfactor">GarbageCollector.setGhostFactor</a></li>
 <li><a href="#_garbagecollector_setsweepfactor">GarbageCollector.setSweepFactor</a></li>
 <li><a href="#_garbagecollector_setpersistentinterval">GarbageCollector.setPersistentInterval</a></li>
@@ -3583,30 +3582,6 @@ query memory usage information.</p>
 <p>These functions read the current settings from the garbage collector:</p>
 </div>
 <div class="sect3">
-<h4 id="_garbagecollector_getstepfactor">GarbageCollector.getStepFactor</h4>
-<div class="paragraph">
-<p><strong>Usage:</strong></p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let factor = GarbageCollector.getStepFactor();</code></pre>
-</div>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Description:</strong> Returns the &#8220;step factor&#8221; used to decide how many
-objects to mark or sweep in a partial/stepped collection cycle
-(triggered by <code>GarbageCollector.cycle</code>).</p>
-</li>
-<li>
-<p><strong>Return Value:</strong> A numeric value (integer).</p>
-</li>
-</ul>
-</div>
-<hr>
-</div>
-<div class="sect3">
 <h4 id="_garbagecollector_getincrementalcollectionthresholdfactor">GarbageCollector.getIncrementalCollectionThresholdFactor</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -3667,6 +3642,33 @@ factor delays full collection, permitting more objects to accumulate
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_garbagecollector_getmarkfactor">GarbageCollector.getMarkFactor</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let factor = GarbageCollector.getMarkFactor();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns the "mark factor" that determines how many
+objects are marked in each partial mark step. This factor is multiplied
+by the number of objects in the memory pool to compute the number of
+used objects to be marked in each step. A higher factor results in more
+aggressive marking, while a lower factor results in less aggressive
+marking.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value (integer).</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_garbagecollector_getghostfactor">GarbageCollector.getGhostFactor</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -3679,9 +3681,12 @@ factor delays full collection, permitting more objects to accumulate
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> Returns the &#8220;ghost factor&#8221; used to determine how
-aggressively ghost objects (special objects like IO streams, threads,
-coroutines, etc.) are processed.</p>
+<p><strong>Description:</strong> Returns the &#8220;ghost factor&#8221; that determines how many
+ghost objects are processed in each partial mark step. This factor is
+multiplied by the number of ghost objects in the memory pool to
+compute the number of ghost objects to be processed in each step. A
+higher factor results in more aggressive ghost processing, while a
+lower factor results in less aggressive ghost processing.</p>
 </li>
 <li>
 <p><strong>Return Value:</strong> A numeric value (integer).</p>
@@ -3703,8 +3708,12 @@ coroutines, etc.) are processed.</p>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> Returns the &#8220;sweep factor&#8221; controlling how many
-objects are swept (freed) in each partial sweep step.</p>
+<p><strong>Description:</strong> Returns the &#8220;sweep factor&#8221; that determines how
+many objects are swept in each partial sweep step. This factor is
+multiplied by the number of used objects in the memory pool to compute
+the number of objects to be swept in each step. A higher factor
+results in more aggressive sweeping, while a lower factor results in
+less aggressive sweeping.</p>
 </li>
 <li>
 <p><strong>Return Value:</strong> A numeric value (integer).</p>
@@ -4002,46 +4011,13 @@ used for new allocation blocks in the memory pool.</p>
 collector. Each function returns the old value as a number.</p>
 </div>
 <div class="sect3">
-<h4 id="_garbagecollector_setstepfactor">GarbageCollector.setStepFactor</h4>
-<div class="paragraph">
-<p><strong>Usage:</strong></p>
-</div>
-<div class="listingblock">
-<div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setStepFactor(300);</code></pre>
-</div>
-</div>
-<div class="ulist">
-<ul>
-<li>
-<p><strong>Description:</strong> Sets the &#8220;step factor&#8221;. During incremental GC cycles,
-this factor helps determine how many objects to handle in each GC step.</p>
-</li>
-<li>
-<p><strong>Parameters:</strong></p>
-<div class="ulist">
-<ul>
-<li>
-<p><em>newStepFactor</em> (number): The new step factor.</p>
-</li>
-</ul>
-</div>
-</li>
-<li>
-<p><strong>Return Value:</strong> The old step factor.</p>
-</li>
-</ul>
-</div>
-<hr>
-</div>
-<div class="sect3">
 <h4 id="_garbagecollector_setincrementalcollectionthresholdfactor">GarbageCollector.setIncrementalCollectionThresholdFactor</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setIncrementalCollectionThresholdFactor(0.125);</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setIncrementalCollectionThresholdFactor(0.25);</code></pre>
 </div>
 </div>
 <div class="ulist">
@@ -4074,8 +4050,8 @@ incremental collection threshold factor.</p>
 <p><strong>Example:</strong></p>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">// Set the incremental collection threshold factor to 0.125.
-let oldFactor = GarbageCollector.setIncrementalCollectionThresholdFactor(0.125);
+<pre class="highlight"><code class="language-js" data-lang="js">// Set the incremental collection threshold factor to 0.25.
+let oldFactor = GarbageCollector.setIncrementalCollectionThresholdFactor(0.25);
 puts("Old incremental collection threshold factor: ", oldFactor);
 // Set the incremental collection threshold factor to 0.5.
 oldFactor = GarbageCollector.setIncrementalCollectionThresholdFactor(0.5);
@@ -4084,9 +4060,9 @@ puts("Old incremental collection threshold factor: ", oldFactor);</code></pre>
 </div>
 </li>
 <li>
-<p><strong>Note:</strong> The default value is <code>0.125</code>, which means that the GC will
+<p><strong>Note:</strong> The default value is <code>0.25</code>, which means that the GC will
 trigger an incremental collection when the number of used objects
-exceeds 12.5% of the total allocated objects. A value of <code>0.5</code> would
+exceeds 25.0% of the total allocated objects. A value of <code>0.5</code> would
 trigger the collection when the number of used objects exceeds 50% of
 the total allocated objects.</p>
 </li>
@@ -4155,33 +4131,39 @@ of the total allocated objects.</p>
 <hr>
 </div>
 <div class="sect3">
-<h4 id="_garbagecollector_setintervalfactor">GarbageCollector.setIntervalFactor</h4>
+<h4 id="_garbagecollector_setmarkfactor">GarbageCollector.setMarkFactor</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setIntervalFactor(128);</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setMarkFactor(0.25)</code></pre>
 </div>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> Sets the &#8220;interval factor,&#8221; which affects how many
-cycles elapse before an incremental collection is triggered.</p>
+<p><strong>Description:</strong> Sets the &#8220;mark factor&#8221;. This factor is multiplied
+by the current number of used objects (calculated as Allocated minus
+FreeCount) to compute a count of objects to be marked in a partial
+collection cycle.</p>
 </li>
 <li>
 <p><strong>Parameters:</strong></p>
 <div class="ulist">
 <ul>
 <li>
-<p><em>newIntervalFactor</em> (number): The new interval factor.</p>
+<p><em>newStepFactor</em> (number): The new step factor.</p>
 </li>
 </ul>
 </div>
 </li>
 <li>
-<p><strong>Return Value:</strong> The old interval factor.</p>
+<p><strong>Return Value:</strong> The old step factor.</p>
+</li>
+<li>
+<p><strong>Note:</strong> The default value is <code>0.25</code>, which means that the GC will
+process 25.0% of the used objects in a partial collection cycle.</p>
 </li>
 </ul>
 </div>
@@ -4194,13 +4176,19 @@ cycles elapse before an incremental collection is triggered.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setGhostFactor(512);</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setGhostFactor(0.25);</code></pre>
 </div>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> Sets the factor for partial marking/sweeping of ghost
+<p><strong>Description:</strong> Sets the &#8220;ghost factor&#8221;. This factor is multiplied by
+the current number of used objects (calculated as Allocated minus
+FreeCount) to compute a count of objects to be marked in a partial
+collection cycle. This is the factor for partial marking/sweeping of
+ghost objects. The ghost factor is used to determine how aggressively
+ghost objects (special objects like IO streams, threads, coroutines,
+etc.) are processed.
 objects.</p>
 </li>
 <li>
@@ -4216,6 +4204,10 @@ objects.</p>
 <li>
 <p><strong>Return Value:</strong> The old ghost factor.</p>
 </li>
+<li>
+<p><strong>Note:</strong> The default value is <code>0.25</code>, which means that the GC will
+process 25.0% of the used objects in a partial collection cycle.</p>
+</li>
 </ul>
 </div>
 <hr>
@@ -4227,14 +4219,18 @@ objects.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setSweepFactor(400);</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setSweepFactor(0.25);</code></pre>
 </div>
 </div>
 <div class="ulist">
 <ul>
 <li>
-<p><strong>Description:</strong> Sets how aggressively objects are swept (freed) per
-cycle.</p>
+<p><strong>Description:</strong> Sets the &#8220;sweep factor&#8221;. This factor is multiplied by
+the current number of used objects (calculated as Allocated minus
+FreeCount) to compute a count of objects to be swept in a partial
+collection cycle. This is the factor for partial sweeping of objects,
+which are no longer reachable. The sweep factor is used to determine
+how aggressively objects are swept (freed) per partial collection cycle.</p>
 </li>
 <li>
 <p><strong>Parameters:</strong></p>
@@ -4248,6 +4244,10 @@ cycle.</p>
 </li>
 <li>
 <p><strong>Return Value:</strong> The old sweep factor.</p>
+</li>
+<li>
+<p><strong>Note:</strong> The default value is <code>0.25</code>, which means that the GC will
+process 25.0% of the used objects in a partial collection cycle.</p>
 </li>
 </ul>
 </div>
@@ -4783,16 +4783,16 @@ plus persistent objects are handled.</p>
 <div class="ulist">
 <ul>
 <li>
-<p><code>GarbageCollector.getStepFactor</code>,
-<code>GarbageCollector.setStepFactor</code></p>
-</li>
-<li>
 <p><code>GarbageCollector.getIncrementalCollectionThresholdFactor</code>,
 <code>GarbageCollector.setIncrementalCollectionThresholdFactor</code></p>
 </li>
 <li>
 <p><code>GarbageCollector.getFullIntervalFactor</code>,
 <code>GarbageCollector.setFullIntervalFactor</code></p>
+</li>
+<li>
+<p><code>GarbageCollector.getMarkFactor</code>,
+<code>GarbageCollector.setMarkFactor</code></p>
 </li>
 <li>
 <p><code>GarbageCollector.getGhostFactor</code>,
@@ -13694,7 +13694,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-08 02:38:51 +0200
+Last updated 2025-04-08 02:56:41 +0200
 </div>
 </div>
 </body>
