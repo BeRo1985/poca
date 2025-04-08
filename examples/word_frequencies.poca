@@ -1,21 +1,24 @@
 #!/usr/bin/env poca
 
 // A very simple word frequency counter thatdoes not take punctuation into account.
+//
+// In this example we don't make use of the shortly after enhanced sort function,
+// but instead construct a zero-padded string that is sortable ("frequency word").
 
 function pad(n, l, c = '0') {
   const cl = n.toString().length();
   (cl < l) ? c.toString().repeat(l - cl) ~ n.toString() : n.toString();
 }
 
-var words = {};
+let words = {};
 
 let file = IO.open(arguments.pop() ?? __FILE__, 'r');
 
 while (!file.eof()) {
   const ws = file.readln().split(' ');
   foreach (let s in ws) {
-    if (s == '') // POCA returns multiple empty strings for repetitive split characters
-      continue;
+    if (s == '')          // POCA, like JS, returns multiple empty
+      continue;          // strings for repetitive split characters
 
     if (words.contains(s))
       words[s] += 1;
@@ -26,16 +29,14 @@ while (!file.eof()) {
 
 file.close();
 
-let temp = [];
+let ws = [];
 forkey (let word in words)
-  temp.push(`${pad(words[word], 5)} ${word}`);
+  ws.push(`${pad(words[word], 5)} ${word}`);
 
-// BUG: toSorted and toReversed don't work
-temp = temp.sort();
-temp = temp.reverse();
+ws.sort().reverse();
 
-for (let i = 0; i < temp.size(); ++i) {
-  let w = temp[i];
+for (let i = 0; i < ws.size(); ++i) {
+  let w = ws[i];
 
   const idx = w.indexOf(' ');
   const cnt = w.substr(0, idx);
