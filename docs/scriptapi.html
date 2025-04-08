@@ -4093,7 +4093,7 @@ This approach yields a more predictable interval from GC trigger to trigger, reg
 </div>
 </li>
 <li>
-<p>Key Features:</p>
+<p><strong>Key Features:</strong></p>
 <div class="ulist">
 <ul>
 <li>
@@ -4124,6 +4124,9 @@ This approach yields a more predictable interval from GC trigger to trigger, reg
 </li>
 </ul>
 </div>
+</li>
+<li>
+<p><strong>Important Note:</strong> Using dynamic threshold mode may lead to more frequent GC cycles under heavy and bursty allocations, which can be beneficial for real-time responsiveness, while budget decrement mode provides a more consistent GC interval that may improve predictability in applications with stable loads.</p>
 </li>
 </ul>
 </div>
@@ -13841,7 +13844,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-08 04:30:53 +0200
+Last updated 2025-04-08 04:35:28 +0200
 </div>
 </div>
 </body>
