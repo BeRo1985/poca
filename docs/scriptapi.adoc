@@ -1932,7 +1932,7 @@ collector. Each function returns the old value as a number.
 *Usage:*
 [source,js]
 ----
-let old = GarbageCollector.setDynamicThreshold(1);
+let old = GarbageCollector.setDynamicThreshold(newDynamicThreshold);
 ----
 
 * *Description:* Sets the garbage collector to "dynamic" threshold
