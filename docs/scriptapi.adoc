@@ -1621,12 +1621,13 @@ let threshold = GarbageCollector.getDynamicThreshold();
 ----
 
 * *Description:* Returns if the garbage collector is in "dynamic" 
-thresshold mode (`+1+` for true, `+0+` for false). In dynamic mode, 
-the GC adapts its threshold based on the current memory usage and 
-allocation patterns. In static mode, the threshold is fixed and 
-changed only at every collection cycle. This is a global setting 
-that affects all collections. For more information, see the
-`GarbageCollector.setDynamicThreshold` function.
+threshold mode (`+1+` for true, `+0+` for false). In dynamic 
+threshold mode (true), the GC adapts its threshold based on the 
+current memory usage and allocation patterns. In budget decrement mode
+(false), the threshold is fixed and changed only at every collection
+cycle. This is a global setting that affects all collections. For more
+information, see the `GarbageCollector.setDynamicThreshold` function.
+* *Parameters:* None.
 * *Return Value:* A numeric boolean (1 or 0).
 
 '''''
@@ -1935,10 +1936,13 @@ let old = GarbageCollector.setDynamicThreshold(1);
 ----
 
 * *Description:* Sets the garbage collector to "dynamic" threshold
-mode. In dynamic mode, the GC adapts its threshold based on the
-current memory usage and allocation patterns. In static mode, the
-threshold is fixed and changed only at every collection cycle. This
-is a global setting that affects all collections.
+mode. In dynamic threshold mode (true), the GC adapts its threshold
+based on the current memory usage and allocation patterns. In budget
+decrement mode (false), the threshold is fixed and changed only at
+every collection cycle. This is a global setting that affects all
+collections. The dynamic threshold mode is more responsive to
+allocation spikes, while the budget decrement mode is more
+predictable in terms of collection intervals.
 * *Parameters:*
 ** _newDynamicThreshold_ (boolean): The new dynamic threshold mode.
 *** When enabled (`true`), the garbage collector uses an incrementing threshold-based approach.  

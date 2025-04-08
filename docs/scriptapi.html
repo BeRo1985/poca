@@ -3597,12 +3597,15 @@ query memory usage information.</p>
 <ul>
 <li>
 <p><strong>Description:</strong> Returns if the garbage collector is in "dynamic"
-thresshold mode (<code>1</code> for true, <code>0</code> for false). In dynamic mode,
-the GC adapts its threshold based on the current memory usage and
-allocation patterns. In static mode, the threshold is fixed and
-changed only at every collection cycle. This is a global setting
-that affects all collections. For more information, see the
-<code>GarbageCollector.setDynamicThreshold</code> function.</p>
+threshold mode (<code>1</code> for true, <code>0</code> for false). In dynamic
+threshold mode (true), the GC adapts its threshold based on the
+current memory usage and allocation patterns. In budget decrement mode
+(false), the threshold is fixed and changed only at every collection
+cycle. This is a global setting that affects all collections. For more
+information, see the <code>GarbageCollector.setDynamicThreshold</code> function.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
 </li>
 <li>
 <p><strong>Return Value:</strong> A numeric boolean (1 or 0).</p>
@@ -4054,10 +4057,13 @@ collector. Each function returns the old value as a number.</p>
 <ul>
 <li>
 <p><strong>Description:</strong> Sets the garbage collector to "dynamic" threshold
-mode. In dynamic mode, the GC adapts its threshold based on the
-current memory usage and allocation patterns. In static mode, the
-threshold is fixed and changed only at every collection cycle. This
-is a global setting that affects all collections.</p>
+mode. In dynamic threshold mode (true), the GC adapts its threshold
+based on the current memory usage and allocation patterns. In budget
+decrement mode (false), the threshold is fixed and changed only at
+every collection cycle. This is a global setting that affects all
+collections. The dynamic threshold mode is more responsive to
+allocation spikes, while the budget decrement mode is more
+predictable in terms of collection intervals.</p>
 </li>
 <li>
 <p><strong>Parameters:</strong></p>
@@ -13834,7 +13840,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-08 04:01:21 +0200
+Last updated 2025-04-08 04:07:53 +0200
 </div>
 </div>
 </body>
