@@ -1628,31 +1628,48 @@ objects to mark or sweep in a partial/stepped collection cycle
 
 '''''
 
-==== GarbageCollector.getFullIntervalFactor
+==== GarbageCollector.getIncrementalCollectionThresholdFactor
 
 *Usage:*
+
 [source,js]
 ----
-let factor = GarbageCollector.getFullIntervalFactor();
+let factor = GarbageCollector.getIncrementalCollectionThresholdFactor();
 ----
-* *Description:* Returns the "`full interval factor`" that controls how
-many cycles elapse before a full collection is triggered.
+
+* *Description:* Returns the "incremental collection threshold factor" that 
+is used to determine when an incremental garbage collection cycle should be 
+initiated. This factor is multiplied by the current number of used objects 
+(calculated as Allocated minus FreeCount) to compute a threshold. When the 
+number of used objects exceeds this product, an incremental GC cycle is 
+triggered. In essence, the lower the factor, the more aggressive the 
+incremental collection becomes, whereas a higher factor delays GC 
+triggering, potentially allowing more objects to accumulate before 
+collection commences.
+
 * *Return Value:* A numeric value (integer).
 
 '''''
 
-==== GarbageCollector.getIntervalFactor
+==== GarbageCollector.getFullCollectionThresholdFactor
 
 *Usage:*
 
 [source,js]
 ----
-let factor = GarbageCollector.getIntervalFactor();
+let factor = GarbageCollector.getFullCollectionThresholdFactor();
 ----
 
-* *Description:* Returns the "`interval factor`" that controls how many
-cycles elapse before an incremental collection is triggered.
-* *Return Value:* A numeric value (integer).
+* *Description:* Returns the "full collection threshold factor" that 
+is used to determine when a full garbage collection cycle should be 
+initiated. This factor is multiplied by the current number of used 
+objects (calculated as Allocated minus FreeCount) to compute a threshold 
+value. When the number of used objects exceeds this product, a full GC 
+cycle is triggered. In essence, a lower factor causes the GC to run more 
+aggressively, performing full collections more frequently, while a higher 
+factor delays full collection, permitting more objects to accumulate
+ before initiating the process.
+* *Return Value:* A numeric value (integer) representing the full collection threshold factor.
 
 '''''
 
@@ -1898,20 +1915,83 @@ this factor helps determine how many objects to handle in each GC step.
 
 '''''
 
-==== GarbageCollector.setFullIntervalFactor
+==== GarbageCollector.setIncrementalCollectionThresholdFactor
 
 *Usage:*
 [source,js]
 ----
-let old = GarbageCollector.setFullIntervalFactor(100);
+let old = GarbageCollector.setIncrementalCollectionThresholdFactor(0.125);
 ----
-* *Description:* Sets the "`full interval factor`," which affects how
-many cycles elapse before a full collection is triggered.
+
+* *Description:* Sets the "incremental collection threshold factor."
+This factor is multiplied by the current number of used objects
+(calculated as Allocated minus FreeCount) to compute a threshold. When
+the number of used objects exceeds this product, an incremental GC cycle
+is triggered. In essence, the lower the factor, the more aggressive
+the incremental collection becomes, whereas a higher factor delays GC
+triggering, potentially allowing more objects to accumulate before
+collection commences.
 * *Parameters:*
-** _newFullIntervalFactor_ (number): The new full interval factor.
-* *Return Value:* The old full interval factor.
+** _newIncrementalCollectionThresholdFactor_ (number): The new
+incremental collection threshold factor.
+* *Return Value:* The old incremental collection threshold factor.
+* *Example:*
++
+[source,js]
+----
+// Set the incremental collection threshold factor to 0.125.
+let oldFactor = GarbageCollector.setIncrementalCollectionThresholdFactor(0.125);
+puts("Old incremental collection threshold factor: ", oldFactor);
+// Set the incremental collection threshold factor to 0.5.
+oldFactor = GarbageCollector.setIncrementalCollectionThresholdFactor(0.5);
+puts("Old incremental collection threshold factor: ", oldFactor);
+----
+* *Note:* The default value is `0.125`, which means that the GC will
+trigger an incremental collection when the number of used objects
+exceeds 12.5% of the total allocated objects. A value of `0.5` would
+trigger the collection when the number of used objects exceeds 50% of
+the total allocated objects.
 
 ''''' 
+
+==== GarbageCollector.setFullCollectionThresholdFactor
+
+*Usage:*
+[source,js]
+----
+let old = GarbageCollector.setFullCollectionThresholdFactor(0.9375);
+----
+
+* *Description:* Sets the "full collection threshold factor." This
+factor is multiplied by the current number of used objects
+(calculated as Allocated minus FreeCount) to compute a threshold
+value. When the number of used objects exceeds this product, a full
+GC cycle is triggered. In essence, a lower factor causes the GC to run
+more aggressively, performing full collections more frequently,
+while a higher factor delays full collection, permitting more objects
+to accumulate before initiating the process.
+* *Parameters:*
+** _newFullCollectionThresholdFactor_ (number): The new full
+collection threshold factor.
+* *Return Value:* The old full collection threshold factor.
+* *Example:*
++
+[source,js]
+----
+// Set the full collection threshold factor to 0.9375.
+let oldFactor = GarbageCollector.setFullCollectionThresholdFactor(0.9375);
+puts("Old full collection threshold factor: ", oldFactor);
+// Set the full collection threshold factor to 0.5.
+oldFactor = GarbageCollector.setFullCollectionThresholdFactor(0.5);
+puts("Old full collection threshold factor: ", oldFactor);
+----
+* *Note:* The default value is `0.9375`, which means that the GC will
+trigger a full collection when the number of used objects exceeds
+93.75% of the total allocated objects. A value of `0.5` would
+trigger the collection when the number of used objects exceeds 50%
+of the total allocated objects.
+
+'''''
 
 ==== GarbageCollector.setIntervalFactor
 
@@ -2273,10 +2353,10 @@ plus persistent objects are handled.
 * *Parameter Getter/Setter Functions:*
 ** `+GarbageCollector.getStepFactor+`,
 `+GarbageCollector.setStepFactor+`
+** `+GarbageCollector.getIncrementalCollectionThresholdFactor+`,
+`+GarbageCollector.setIncrementalCollectionThresholdFactor+`
 ** `+GarbageCollector.getFullIntervalFactor+`,
 `+GarbageCollector.setFullIntervalFactor+`
-** `+GarbageCollector.getIntervalFactor+`,
-`+GarbageCollector.setIntervalFactor+`
 ** `+GarbageCollector.getGhostFactor+`,
 `+GarbageCollector.setGhostFactor+`
 ** `+GarbageCollector.getSweepFactor+`,

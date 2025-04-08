@@ -1356,8 +1356,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       PersistentCycleCounter:TPOCAInt32;
       PersistentForceScan:TPOCABool32;
       StepFactor:TPOCAInt32;
-      FullIntervalFactor:TPOCAInt32;
-      IntervalFactor:TPOCAInt32;
+      IncrementalCollectionThresholdFactor:TPOCAInt32;
+      FullCollectionThresholdFactor:TPOCAInt32;
       GhostFactor:TPOCAInt32;
       SweepFactor:TPOCAInt32;
       PersistentThreshold:TPOCAInt32;
@@ -7622,9 +7622,9 @@ begin
 
  GarbageCollector:=@Context^.Instance^.Globals.GarbageCollector;
 
- if GarbageCollector^.IntervalFactor>0 then begin
+ if GarbageCollector^.IncrementalCollectionThresholdFactor>0 then begin
   TPasMPInterlocked.Increment(GarbageCollector^.AllocationCounter);
-  Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.IntervalFactor) shr 8;
+  Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.IncrementalCollectionThresholdFactor) shr 8;
   if Count<1024 then begin
    Count:=1024;
   end else if Count>=GarbageCollector^.Allocated then begin
@@ -7637,9 +7637,9 @@ begin
   end;
  end;
 
- if GarbageCollector^.FullIntervalFactor>0 then begin
+ if GarbageCollector^.FullCollectionThresholdFactor>0 then begin
   TPasMPInterlocked.Increment(GarbageCollector^.FullAllocationCounter);
-  Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.FullIntervalFactor) shr 8;
+  Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.FullCollectionThresholdFactor) shr 8;
   if Count<1024 then begin
    Count:=1024;
   end else if Count>=GarbageCollector^.Allocated then begin
@@ -11867,14 +11867,14 @@ begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.StepFactor;
 end;
 
-function POCAGarbageCollectorFunctionGETFULLINTERVALFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETINCREMENTALCOLLECTIONTHRESHOLDFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
- result.Num:=Context^.Instance^.Globals.GarbageCollector.FullIntervalFactor;
+ result.Num:=Context^.Instance^.Globals.GarbageCollector.IncrementalCollectionThresholdFactor/256.0;
 end;
 
-function POCAGarbageCollectorFunctionGETINTERVALFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+function POCAGarbageCollectorFunctionGETFULLCOLLECTIONTHRESHOLDFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
- result.Num:=Context^.Instance^.Globals.GarbageCollector.IntervalFactor;
+ result.Num:=Context^.Instance^.Globals.GarbageCollector.FullCollectionThresholdFactor/256.0;
 end;
 
 function POCAGarbageCollectorFunctionGETGHOSTFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -11946,22 +11946,22 @@ begin
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.StepFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
-function POCAGarbageCollectorFunctionSETFULLINTERVALFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETINCREMENTALCOLLECTIONTHRESHOLDFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
-  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setFullIntervalFactor"');
+  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setIncrementalCollectionThresholdFactor"');
  end;
- result.Num:=Context^.Instance^.Globals.GarbageCollector.FullIntervalFactor;
- TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.FullIntervalFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
+ result.Num:=Context^.Instance^.Globals.GarbageCollector.IncrementalCollectionThresholdFactor/256.0;
+ TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.IncrementalCollectionThresholdFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])*256.0));
 end;
 
-function POCAGarbageCollectorFunctionSETINTERVALFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+function POCAGarbageCollectorFunctionSETFULLCOLLECTIONTHRESHOLDFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments=0 then begin
-  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setIntervalFactor"');
+  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setFullCollectionThresholdFactor"');
  end;
- result.Num:=Context^.Instance^.Globals.GarbageCollector.IntervalFactor;
- TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.IntervalFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])));
+ result.Num:=Context^.Instance^.Globals.GarbageCollector.FullCollectionThresholdFactor/256.0;
+ TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.FullCollectionThresholdFactor,trunc(POCAGetNumberValue(Context,Arguments^[0])*256.0));
 end;
 
 function POCAGarbageCollectorFunctionSETGHOSTFACTOR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -12105,8 +12105,8 @@ function POCAInitGarbageCollectorNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'getStepFactor',POCAGarbageCollectorFunctionGETSTEPFACTOR);
- POCAAddNativeFunction(Context,result,'getFullIntervalFactor',POCAGarbageCollectorFunctionGETFULLINTERVALFACTOR);
- POCAAddNativeFunction(Context,result,'getIntervalFactor',POCAGarbageCollectorFunctionGETINTERVALFACTOR);
+ POCAAddNativeFunction(Context,result,'getIncrementalCollectionThresholdFactor',POCAGarbageCollectorFunctionGETINCREMENTALCOLLECTIONTHRESHOLDFACTOR);
+ POCAAddNativeFunction(Context,result,'getFullCollectionThresholdFactor',POCAGarbageCollectorFunctionGETFULLCOLLECTIONTHRESHOLDFACTOR);
  POCAAddNativeFunction(Context,result,'getGhostFactor',POCAGarbageCollectorFunctionGETGHOSTFACTOR);
  POCAAddNativeFunction(Context,result,'getSweepFactor',POCAGarbageCollectorFunctionGETSWEEPFACTOR);
  POCAAddNativeFunction(Context,result,'getPersistentInterval',POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL);
@@ -12120,8 +12120,8 @@ begin
  POCAAddNativeFunction(Context,result,'getContextCacheSize',POCAGarbageCollectorFunctionGETCONTEXTCACHESIZE);
  POCAAddNativeFunction(Context,result,'getMinimumBlockSize',POCAGarbageCollectorFunctionGETMINIMUMBLOCKSIZE);
  POCAAddNativeFunction(Context,result,'setStepFactor',POCAGarbageCollectorFunctionSETSTEPFACTOR);
- POCAAddNativeFunction(Context,result,'setFullIntervalFactor',POCAGarbageCollectorFunctionSETFULLINTERVALFACTOR);
- POCAAddNativeFunction(Context,result,'setIntervalFactor',POCAGarbageCollectorFunctionSETINTERVALFACTOR);
+ POCAAddNativeFunction(Context,result,'setIncrementalCollectionThresholdFactor',POCAGarbageCollectorFunctionSETINCREMENTALCOLLECTIONTHRESHOLDFACTOR);
+ POCAAddNativeFunction(Context,result,'setFullCollectionThresholdFactor',POCAGarbageCollectorFunctionSETFULLCOLLECTIONTHRESHOLDFACTOR);
  POCAAddNativeFunction(Context,result,'setGhostFactor',POCAGarbageCollectorFunctionSETGHOSTFACTOR);
  POCAAddNativeFunction(Context,result,'setSweepFactor',POCAGarbageCollectorFunctionSETSWEEPFACTOR);
  POCAAddNativeFunction(Context,result,'setPersistentInterval',POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL);
@@ -18085,13 +18085,13 @@ begin
   result^.Globals.GarbageCollector.PersistentCycleCounter:=0;
   result^.Globals.GarbageCollector.PersistentForceScan:=false;
   result^.Globals.GarbageCollector.StepFactor:=64;
-  result^.Globals.GarbageCollector.FullIntervalFactor:=256;
-  result^.Globals.GarbageCollector.IntervalFactor:=16;
+  result^.Globals.GarbageCollector.FullCollectionThresholdFactor:=240;
+  result^.Globals.GarbageCollector.IncrementalCollectionThresholdFactor:=16;
   result^.Globals.GarbageCollector.GhostFactor:=64;
   result^.Globals.GarbageCollector.SweepFactor:=64;
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
-  result^.Globals.GarbageCollector.ExhaustionCollect:=true;
+  result^.Globals.GarbageCollector.ExhaustionCollect:=false;
   result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold:=0;
   result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleCounter:=0;
   result^.Globals.GarbageCollector.Active:=true;
