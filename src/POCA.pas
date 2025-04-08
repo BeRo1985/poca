@@ -12112,7 +12112,7 @@ begin
  POCAAddNativeFunction(Context,result,'getPersistentInterval',POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'getPersistentThreshold',POCAGarbageCollectorFunctionGETPERSISTENTTHRESHOLD);
  POCAAddNativeFunction(Context,result,'getExhaustionCollect',POCAGarbageCollectorFunctionGETEXHAUSTIONCOLLECT);
- POCAAddNativeFunction(Context,result,'getExhaustionIncrementalFullCycleThreshold',POCAGarbageCollectorFunctionGETEXHAUSIONINCREMENTALFULLCYCLETHRESHOLD);
+ POCAAddNativeFunction(Context,result,'getExhaustionIncrementalFullCycleThreshold',POCAGarbageCollectorFunctionGETEXHAUSTIONINCREMENTALFULLCYCLETHRESHOLD);
  POCAAddNativeFunction(Context,result,'getActive',POCAGarbageCollectorFunctionGETACTIVE);
  POCAAddNativeFunction(Context,result,'getIncremental',POCAGarbageCollectorFunctionGETINCREMENTAL);
  POCAAddNativeFunction(Context,result,'getGenerational',POCAGarbageCollectorFunctionGETGENERATIONAL);
