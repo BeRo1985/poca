@@ -7,6 +7,52 @@
 
     space_string_is_true: () => Test.assertFalse(' '),
 
+    split_string_is_correct: [
+      () => {
+        let s = 'foo bar baz';
+        let a = s.split(' ');
+
+        Test.assert(
+          typeof(a) == 'Array' && a.size() == 3 &&
+
+          a[0] == 'foo' &&
+          a[1] == 'bar' &&
+          a[2] == 'baz'
+        );
+      },
+
+      () => {
+        let s = '  foo bar   baz ';
+        let a = s.split(' ');
+
+        Test.assert(
+          typeof(a) == 'Array' && a.size() == 8 &&
+
+          a[0] == ''    &&
+          a[1] == ''    &&
+          a[2] == 'foo' &&
+          a[3] == 'bar' &&
+          a[4] == ''    &&
+          a[5] == ''    &&
+          a[6] == 'baz' &&
+          a[7] == ''
+        );
+      },
+
+      () => {
+        let s = '  foo bar   baz ';
+        let a = s.split(' ', true);
+
+        Test.assert(
+          typeof(a) == 'Array' && a.size() == 3 &&
+
+          a[0] == 'foo' &&
+          a[1] == 'bar' &&
+          a[2] == 'baz'
+        );
+      }
+    ],
+
     string_comparison: [
       () => Test.assertEqual('abc', "abc"),
       () => Test.assertEqual(`abc`, "abc"),
@@ -20,6 +66,16 @@
 
       () => Test.assertLike('1', 1),
       () => Test.assertUnequal('1', 1)
+    ],
+
+    string_repeat: [
+      () => Test.assertEqual(''.repeat(0), ''),
+      () => Test.assertEqual(''.repeat(1), ''),
+      () => Test.assertEqual(' '.repeat(0), ''),
+      () => Test.assertEqual(' '.repeat(1), ' '),
+      () => Test.assertEqual(' '.repeat(5), '     '),
+      () => Test.assertEqual('  '.repeat(1), '  '),
+      () => Test.assertEqual('  '.repeat(3), '      ')
     ]
   };
 

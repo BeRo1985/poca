@@ -23,6 +23,13 @@
         let a = [ 1, 2, 3 ] ~ [ 4, 5, 6 ];
         Test.assertSize(a, 6);
       }
+    ],
+
+    array_join: [
+      () => Test.assertEqual([ 'a', 'b', 'c' ].join(''), 'abc'),
+      () => Test.assertEqual([ 'a', 'b', 'c' ].join(), 'a,b,c'),
+      () => Test.assertEqual([ 'a', 'b', 'c' ].join(' '), 'a b c'),
+      () => Test.assertEqual([ '"foo"', '"bar"', '"baz"' ].join(', '), '"foo", "bar", "baz"')
     ]
 
   };
