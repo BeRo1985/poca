@@ -14,16 +14,20 @@ let words = {};
 
 let file = IO.open(arguments.pop() ?? __FILE__, 'r');
 
+let i = 0;
 while (!file.eof()) {
   const ws = file.readln().split(' ');
   foreach (let s in ws) {
     if (s == '')          // POCA, like JS, returns multiple empty
       continue;          // strings for repetitive split characters
 
+    s = " " ~ s.trim(); // workaround for to avoid overwriting the API function names, for example "contains" of the hash API itself  
+
     if (words.contains(s))
       words[s] += 1;
     else
       words[s] = 1;
+
   }
 }
 
