@@ -1124,6 +1124,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCAValues=array[0..($7fffffff div sizeof(TPOCAValue))-1] of TPOCAValue;
 
+     TPPOCAValueArray=array of PPOCAValues;
+
      TPPOCAValues=array[0..($7fffffff div sizeof(PPOCAValues))-1] of PPOCAValues;
      PPPOCAValues=^TPPOCAValues;
 
@@ -1213,6 +1215,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Header:TPOCAObjectHeader;
       Name:TPOCARawByteString;
       Level:TPOCAInt32;
+      UseUpValues:TPOCABool32;
       ClassFunction:TPOCABool32;
       FastFunction:TPOCABool32;
       IsEmpty:TPOCABool32;
@@ -1269,8 +1272,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       CountRegisters:TPOCAInt32;
       Arguments:TPOCAValueArray;
       CountArguments:TPOCAInt32;
-      UpValues:PPPOCAValues;
-      CountUpValues:TPOCAInt32;
+      UpValueLevels:TPPOCAValueArray;
+      CountUpValueLevels:TPOCAInt32;
      end;
 
      TPOCANativeFunction=function(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -11779,10 +11782,7 @@ begin
  for i:=0 to POCA_MAX_RECURSION-1 do begin
   Context^.FrameStack[i].Registers:=nil;
   Context^.FrameStack[i].Arguments:=nil;
-  if assigned(Context^.FrameStack[i].UpValues) then begin
-   FreeMem(Context^.FrameStack[i].UpValues);
-   Context^.FrameStack[i].UpValues:=nil;
-  end;
+  Context^.FrameStack[i].UpValueLevels:=nil;
  end;
 {$ifdef POCAMemoryPools}
  for i:=0 to pvtCOUNT-1 do begin
@@ -25140,7 +25140,8 @@ var TokenList:PPOCAToken;
        );
       PPOCACodeGeneratorScopeSymbol=^TPOCACodeGeneratorScopeSymbol;
       TPOCACodeGeneratorScopeSymbol=record
-       Name:TPOCARawByteString;
+       CodeName:TPOCARawByteString;
+       RealName:TPOCARawByteString;
        Kind:TPOCACodeGeneratorScopeSymbolKind;
        Constant:Boolean;
        Freeable:Boolean;
@@ -25182,6 +25183,7 @@ var TokenList:PPOCAToken;
       PPOCACodeGenerator=^TPOCACodeGenerator;
       TPOCACodeGenerator=record
        ParentCodeGenerator:PPOCACodeGenerator;
+       UsedUpValues:TPOCABool32;
        LastLine:TPOCAInt32;
        ByteCode:PPOCAUInt32Array;
        ByteCodeSize:TPOCAInt32;
@@ -25229,6 +25231,10 @@ var TokenList:PPOCAToken;
        UpValueContextID:TPOCAUInt64;
        CountUpValues:TPOCAInt32;
        Level:TPOCAUInt64;
+      end;
+      TScopeState=record
+       CountScopes:TPOCAInt32;
+       CountSymbols:TPOCAInt32;
       end;
   function GenerateCode(var Parser:TPOCAParser;Block:PPOCAToken;ArgumentList:PPOCAToken;CodeToken:TPOCATokenType;const CodeName:TPOCARawByteString;const ParentCodeGenerator:PPOCACodeGenerator):TPOCAValue;
   var CodeGenerator:PPOCACodeGenerator;
@@ -25630,7 +25636,7 @@ var TokenList:PPOCAToken;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
      Symbol:=FindScopeSymbol(t,SearchOnlyParents,MultiLevels,SingleScope);
      if assigned(Symbol) then begin
-      result:=Symbol^.Name;
+      result:=Symbol^.RealName;
      end else begin
       result:=t^.Str;
      end;
@@ -25682,16 +25688,18 @@ var TokenList:PPOCAToken;
       result^.UpValueContextID:=CurrentCodeGenerator^.Scopes[i].UpValueContextID;
       result^.UpValueLevel:=CurrentCodeGenerator^.Level;
       if Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
+       CurrentCodeGenerator^.UsedUpValues:=true;
        result^.UpValueIndex:=CurrentCodeGenerator^.CountUpValues;
        inc(CurrentCodeGenerator^.CountUpValues);
       end else begin
        result^.UpValueIndex:=0;
       end;
       result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
+      result^.CodeName:=t^.Str;
       if aLetConst then begin
-       result^.Name:=t^.Str+'@'+IntToStr(result^.ScopeID);
+       result^.RealName:=t^.Str+'@'+IntToStr(result^.ScopeID);
       end else begin
-       result^.Name:=t^.Str;
+       result^.RealName:=t^.Str;
       end;
       result^.Kind:=Kind;
       result^.Constant:=aConstant;
@@ -25817,6 +25825,61 @@ var TokenList:PPOCAToken;
     Scope^.CountSymbols:=0;
     FreeAndNil(Scope^.SymbolNameHashMap);
    end;
+   procedure ScopePush(out aScopeState:TScopeState); // Save current scope state
+   begin
+    aScopeState.CountScopes:=CodeGenerator^.CountScopes;
+    if CodeGenerator^.CountScopes>0 then begin
+     aScopeState.CountSymbols:=CodeGenerator^.Scopes[CodeGenerator^.CountScopes-1].CountSymbols;
+    end else begin
+     aScopeState.CountSymbols:=0;
+    end;
+   end;
+   procedure ScopePop(var aScopeState:TScopeState); // Restore current scope state
+   var Index,Reg:TPOCAInt32;
+       Scope:PPOCACodeGeneratorScope;
+       Symbol:PPOCACodeGeneratorScopeSymbol;
+       Item:PPOCAStringHashMapItem;
+   begin
+    if (aScopeState.CountScopes>=0) and (aScopeState.CountScopes<CodeGenerator^.CountScopes) then begin
+     for Index:=CodeGenerator^.CountScopes-1 downto aScopeState.CountScopes do begin
+      FreeAndNil(CodeGenerator^.Scopes[Index].SymbolNameHashMap);
+      CodeGenerator^.Scopes[Index].Symbols:=nil;
+      CodeGenerator^.Scopes[Index].CountSymbols:=0;
+     end;
+     SetLength(CodeGenerator^.Scopes,aScopeState.CountScopes);
+     CodeGenerator^.CountScopes:=aScopeState.CountScopes;
+    end;
+    if CodeGenerator^.CountScopes>0 then begin
+     // Delete newer symbols from the symbol hashmap
+     Scope:=@CodeGenerator^.Scopes[CodeGenerator^.CountScopes-1];
+     if (aScopeState.CountSymbols>=0) and (aScopeState.CountSymbols<Scope^.CountSymbols) then begin
+      for Index:=Scope^.CountSymbols-1 downto aScopeState.CountSymbols do begin
+       Symbol:=Scope^.Symbols[Index];
+       Scope^.Symbols[Index]:=nil;
+       if assigned(Symbol) then begin
+        Item:=Scope^.SymbolNameHashMap.GetKey(Symbol^.CodeName);
+        if assigned(Item) then begin
+         Scope^.SymbolNameHashMap.DeleteKey(Item);
+        end;
+        Reg:=Symbol^.Register;
+        if Reg>=0 then begin
+         FreeRegister(Reg,true);
+        end;
+        Finalize(Symbol^);
+        FreeMem(Symbol);
+       end;
+      end;
+      Scope^.CountSymbols:=aScopeState.CountSymbols;
+     end;
+    end;
+    aScopeState.CountScopes:=-1;
+    aScopeState.CountSymbols:=-1;
+   end;
+   procedure ScopeDrop(var aScopeState:TScopeState); // Drop current scope state
+   begin
+    aScopeState.CountScopes:=-1;
+    aScopeState.CountSymbols:=-1;
+   end;
    function GenerateScalarConstant(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
    var v:TPOCAInt32;
        Num:Double;
@@ -25896,7 +25959,8 @@ var TokenList:PPOCAToken;
         SymbolIndex:=Item^.Value;
         Symbol:=CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
         r:=Symbol^.Register;
-        Symbol^.Name:='';
+        Symbol^.CodeName:='';
+        Symbol^.RealName:='';
         Symbol^.Constant:=false;
         Symbol^.Freeable:=false;
         Symbol^.Register:=-1;
@@ -27014,6 +27078,7 @@ var TokenList:PPOCAToken;
          CodeGenerator^.HasLocals:=true;
          Symbol:=DefineScopeSymbol(t,true,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
          if Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
+          CodeGenerator^.UsedUpValues:=true;
           ConstantIndex:=0;
           result:=popSETUPVALUE;
          end else begin
@@ -27173,7 +27238,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETUPVALUE,UpValueLevel,UpValueIndex,result);
+       EmitOpcode(popGETUPVALUE,result,UpValueLevel,UpValueIndex);
        Reg2:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg2);
        FreeRegister(Reg2);
@@ -27372,7 +27437,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETUPVALUE,UpValueLevel,UpValueIndex,result);
+       EmitOpcode(popGETUPVALUE,result,UpValueLevel,UpValueIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        if GetRegisterNumber(result) then begin
         EmitOpcode(popN_JIFTRUE,0,result);
@@ -27551,7 +27616,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg1:=GetRegister(true,false);
-       EmitOpcode(popGETUPVALUE,UpValueLevel,UpValueIndex,Reg1);
+       EmitOpcode(popGETUPVALUE,Reg1,UpValueLevel,UpValueIndex);
        EmitOpcode(Op,Reg1,result);
        EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,Reg1);
        FreeRegister(Reg1);
@@ -27683,7 +27748,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETUPVALUE,UpValueLevel,UpValueIndex,result);
+       EmitOpcode(popGETUPVALUE,result,UpValueLevel,UpValueIndex);
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,result);
       end;
@@ -28229,10 +28294,12 @@ var TokenList:PPOCAToken;
     function GenerateTest(Test:PPOCAToken;IsLoop,DoNegative:boolean;JumpNext:TPOCAInt32):TPOCAInt32;
     var Back,RegLeft,RegRight,RegExpression:TPOCAInt32;
         Optimized:boolean;
+        ScopeState:TScopeState;
     begin
      result:=0;
      Optimized:=false;
      Back:=CodeGenerator^.ByteCodeSize;
+     ScopePush(ScopeState);
      if assigned(Test) and (Test^.Token in [ptLT,ptLTEQ,ptGT,ptGTEQ,ptEQ,ptNEQ,ptCMP]) and Binary(Test) then begin
       RegLeft:=GenerateExpression(Test^.Left);
       RegRight:=GenerateExpression(Test^.Right);
@@ -28377,7 +28444,10 @@ var TokenList:PPOCAToken;
       FreeRegister(RegLeft);
       FreeRegister(RegRight);
      end;
-     if not Optimized then begin
+     if Optimized then begin
+      ScopeDrop(ScopeState);
+     end else begin
+      ScopePop(ScopeState);
       CodeGenerator^.ByteCodeSize:=Back;
       RegExpression:=GenerateExpression(Test,-1,true);
       result:=CodeGenerator^.ByteCodeSize+1;
@@ -28761,7 +28831,6 @@ var TokenList:PPOCAToken;
         Len,JumpNext,JumpOver,BreakPos,ContinuePos,Start:TPOCAInt32;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
-     ScopeStart;
      Registers[0]:=nil;
      Registers[1]:=nil;
      Registers[2]:=nil;
@@ -28785,49 +28854,59 @@ var TokenList:PPOCAToken;
       end;
       Start:=CodeGenerator^.ByteCodeSize;
       begin
-       Registers[0]:=GetRegisters;
-       StartLoop(LabelToken,false);
-       JumpOver:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJMP,0);
-       JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
-       begin
-        ContinuePos:=CodeGenerator^.ByteCodeSize;
-        FixTargetImmediate(JumpOver);
-        Registers[1]:=GetRegisters;
-        Registers[4]:=GetRegisters;
-        GenerateTest(Test,true,false,JumpNext);
-        Registers[2]:=GetRegisters;
-        Registers[3]:=GetRegisters;
+       ScopeStart;
+       try
+        Registers[0]:=GetRegisters;
+        StartLoop(LabelToken,false);
+        JumpOver:=CodeGenerator^.ByteCodeSize+1;
+        EmitOpcode(popJMP,0);
+        JumpNext:=CodeGenerator^.ByteCodeSize;
+        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
+        begin
+         ContinuePos:=CodeGenerator^.ByteCodeSize;
+         FixTargetImmediate(JumpOver);
+         Registers[1]:=GetRegisters;
+         Registers[4]:=GetRegisters;
+         GenerateTest(Test,true,false,JumpNext);
+         Registers[2]:=GetRegisters;
+         Registers[3]:=GetRegisters;
+        end;
+        BreakPos:=CodeGenerator^.ByteCodeSize;
+        EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+       finally
+        ScopeEnd;
        end;
-       BreakPos:=CodeGenerator^.ByteCodeSize;
-       EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
       end;
       if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
               AreRegistersEqual(Registers[4],Registers[1],false,false) and
               AreRegistersEqual(Registers[1],Registers[2],false,false) and
               AreRegistersEqual(Registers[4],Registers[2],false,false)) then begin
-       CodeGenerator^.ByteCodeSize:=Start;
-       SetRegisters(Registers[0]);
-       CombineCurrentRegisters(Registers[1]);
-       CombineCurrentRegisters(Registers[4]);
-       StartLoop(LabelToken,false);
-       JumpOver:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJMP,0);
-       JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
-       begin
-        CombineCurrentRegisters(Registers[0]);
+       ScopeStart;
+       try
+        CodeGenerator^.ByteCodeSize:=Start;
+        SetRegisters(Registers[0]);
         CombineCurrentRegisters(Registers[1]);
         CombineCurrentRegisters(Registers[4]);
-        ContinuePos:=CodeGenerator^.ByteCodeSize;
-        FixTargetImmediate(JumpOver);
-        GenerateTest(Test,true,false,JumpNext);
+        StartLoop(LabelToken,false);
+        JumpOver:=CodeGenerator^.ByteCodeSize+1;
+        EmitOpcode(popJMP,0);
+        JumpNext:=CodeGenerator^.ByteCodeSize;
+        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
+        begin
+         CombineCurrentRegisters(Registers[0]);
+         CombineCurrentRegisters(Registers[1]);
+         CombineCurrentRegisters(Registers[4]);
+         ContinuePos:=CodeGenerator^.ByteCodeSize;
+         FixTargetImmediate(JumpOver);
+         GenerateTest(Test,true,false,JumpNext);
+        end;
+        BreakPos:=CodeGenerator^.ByteCodeSize;
+        CombineCurrentRegisters(Registers[2]);
+        CombineCurrentRegisters(Registers[3]);
+        EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+       finally
+        ScopeEnd;
        end;
-       BreakPos:=CodeGenerator^.ByteCodeSize;
-       CombineCurrentRegisters(Registers[2]);
-       CombineCurrentRegisters(Registers[3]);
-       EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
       end;
      finally
       SetLength(Registers[0],0);
@@ -28836,14 +28915,12 @@ var TokenList:PPOCAToken;
       SetLength(Registers[3],0);
       SetLength(Registers[4],0);
      end;
-     ScopeEnd;
     end;
     function GenerateDoWhile(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Test,Body,LabelToken:PPOCAToken;
         Len,JumpNext,BreakPos,ContinuePos,Start:TPOCAInt32;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
-     ScopeStart;
      Registers[0]:=nil;
      Registers[1]:=nil;
      Registers[2]:=nil;
@@ -28867,39 +28944,49 @@ var TokenList:PPOCAToken;
       end;
       Start:=CodeGenerator^.ByteCodeSize;
       begin
-       Registers[0]:=GetRegisters;
-       StartLoop(LabelToken,false);
-       JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
-       Registers[1]:=GetRegisters;
-       Registers[4]:=GetRegisters;
-       ContinuePos:=CodeGenerator^.ByteCodeSize;
-       GenerateTest(Test,true,false,JumpNext);
-       Registers[2]:=GetRegisters;
-       Registers[3]:=GetRegisters;
-       BreakPos:=CodeGenerator^.ByteCodeSize;
-       EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+       ScopeStart;
+       try
+        Registers[0]:=GetRegisters;
+        StartLoop(LabelToken,false);
+        JumpNext:=CodeGenerator^.ByteCodeSize;
+        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
+        Registers[1]:=GetRegisters;
+        Registers[4]:=GetRegisters;
+        ContinuePos:=CodeGenerator^.ByteCodeSize;
+        GenerateTest(Test,true,false,JumpNext);
+        Registers[2]:=GetRegisters;
+        Registers[3]:=GetRegisters;
+        BreakPos:=CodeGenerator^.ByteCodeSize;
+        EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+       finally
+        ScopeEnd;
+       end;
       end;
       if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
               AreRegistersEqual(Registers[4],Registers[1],false,false) and
               AreRegistersEqual(Registers[1],Registers[2],false,false) and
               AreRegistersEqual(Registers[4],Registers[2],false,false)) then begin
-       CodeGenerator^.ByteCodeSize:=Start;
-       SetRegisters(Registers[0]);
-       CombineCurrentRegisters(Registers[1]);
-       CombineCurrentRegisters(Registers[4]);
-       StartLoop(LabelToken,false);
-       JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
-       CombineCurrentRegisters(Registers[0]);
-       CombineCurrentRegisters(Registers[1]);
-       CombineCurrentRegisters(Registers[4]);
-       ContinuePos:=CodeGenerator^.ByteCodeSize;
-       GenerateTest(Test,true,false,JumpNext);
-       BreakPos:=CodeGenerator^.ByteCodeSize;
-       CombineCurrentRegisters(Registers[2]);
-       CombineCurrentRegisters(Registers[3]);
-       EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+       ScopeStart;
+       try
+        CodeGenerator^.ByteCodeSize:=Start;
+        SetRegisters(Registers[0]);
+        CombineCurrentRegisters(Registers[1]);
+        CombineCurrentRegisters(Registers[4]);
+        StartLoop(LabelToken,false);
+        JumpNext:=CodeGenerator^.ByteCodeSize;
+        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
+        CombineCurrentRegisters(Registers[0]);
+        CombineCurrentRegisters(Registers[1]);
+        CombineCurrentRegisters(Registers[4]);
+        ContinuePos:=CodeGenerator^.ByteCodeSize;
+        GenerateTest(Test,true,false,JumpNext);
+        BreakPos:=CodeGenerator^.ByteCodeSize;
+        CombineCurrentRegisters(Registers[2]);
+        CombineCurrentRegisters(Registers[3]);
+        EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+       finally
+        ScopeEnd;
+       end;
       end;
      finally
       SetLength(Registers[0],0);
@@ -28908,14 +28995,12 @@ var TokenList:PPOCAToken;
       SetLength(Registers[3],0);
       SetLength(Registers[4],0);
      end;
-     ScopeEnd;
     end;
     function GenerateFor(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Init,Test,Body,Update,LabelToken,h:PPOCAToken;
         Len,JumpNext,JumpOver,BreakPos,ContinuePos,Reg,Start:TPOCAInt32;
         Registers:array[0..5] of TPOCACodeGeneratorRegisters;
     begin
-     ScopeStart;
      Registers[0]:=nil;
      Registers[1]:=nil;
      Registers[2]:=nil;
@@ -28943,69 +29028,79 @@ var TokenList:PPOCAToken;
       end;
       Start:=CodeGenerator^.ByteCodeSize;
       begin
-       Registers[0]:=GetRegisters;
-       StartLoop(LabelToken,false);
-       if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
-        Reg:=GenerateCommaBlock(Init,-1,false,false);
-        FreeRegister(Reg);
+       ScopeStart;
+       try
+        Registers[0]:=GetRegisters;
+        StartLoop(LabelToken,false);
+        if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
+         Reg:=GenerateCommaBlock(Init,-1,false,false);
+         FreeRegister(Reg);
+        end;
+        JumpOver:=CodeGenerator^.ByteCodeSize+1;
+        EmitOpcode(popJMP,0);
+        JumpNext:=CodeGenerator^.ByteCodeSize;
+        Registers[1]:=GetRegisters;
+        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
+        Registers[2]:=GetRegisters;
+        Registers[5]:=GetRegisters;
+        ContinuePos:=CodeGenerator^.ByteCodeSize;
+        if assigned(Update) and (Update^.Token<>ptEMPTY) then begin
+         Reg:=GenerateCommaBlock(Update,-1,false,false);
+         FreeRegister(Reg);
+        end;
+        begin
+         FixTargetImmediate(JumpOver);
+         GenerateTest(Test,true,false,JumpNext);
+        end;
+        Registers[3]:=GetRegisters;
+        Registers[4]:=GetRegisters;
+        BreakPos:=CodeGenerator^.ByteCodeSize;
+        EndLoop(BreakPos,ContinuePos,Registers[4],Registers[5]);
+       finally
+        ScopeEnd;
        end;
-       JumpOver:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJMP,0);
-       JumpNext:=CodeGenerator^.ByteCodeSize;
-       Registers[1]:=GetRegisters;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
-       Registers[2]:=GetRegisters;
-       Registers[5]:=GetRegisters;
-       ContinuePos:=CodeGenerator^.ByteCodeSize;
-       if assigned(Update) and (Update^.Token<>ptEMPTY) then begin
-        Reg:=GenerateCommaBlock(Update,-1,false,false);
-        FreeRegister(Reg);
-       end;
-       begin
-        FixTargetImmediate(JumpOver);
-        GenerateTest(Test,true,false,JumpNext);
-       end;
-       Registers[3]:=GetRegisters;
-       Registers[4]:=GetRegisters;
-       BreakPos:=CodeGenerator^.ByteCodeSize;
-       EndLoop(BreakPos,ContinuePos,Registers[4],Registers[5]);
       end;
       if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
               AreRegistersEqual(Registers[1],Registers[2],false,false) and
               AreRegistersEqual(Registers[2],Registers[3],false,false) and
               AreRegistersEqual(Registers[4],Registers[3],false,false) and
               AreRegistersEqual(Registers[5],Registers[2],false,false)) then begin
-       CodeGenerator^.ByteCodeSize:=Start;
-       SetRegisters(Registers[0]);
-       StartLoop(LabelToken,false);
-       if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
-        Reg:=GenerateCommaBlock(Init,-1,false,false);
-        FreeRegister(Reg);
+       ScopeStart;
+       try
+        CodeGenerator^.ByteCodeSize:=Start;
+        SetRegisters(Registers[0]);
+        StartLoop(LabelToken,false);
+        if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
+         Reg:=GenerateCommaBlock(Init,-1,false,false);
+         FreeRegister(Reg);
+        end;
+        JumpOver:=CodeGenerator^.ByteCodeSize+1;
+        EmitOpcode(popJMP,0);
+        JumpNext:=CodeGenerator^.ByteCodeSize;
+        SetRegisters(Registers[1]);
+        CombineCurrentRegisters(Registers[2]);
+        CombineCurrentRegisters(Registers[5]);
+        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
+        CombineCurrentRegisters(Registers[1]);
+        CombineCurrentRegisters(Registers[2]);
+        CombineCurrentRegisters(Registers[5]);
+        ContinuePos:=CodeGenerator^.ByteCodeSize;
+        if assigned(Update) and (Update^.Token<>ptEMPTY) then begin
+         Reg:=GenerateCommaBlock(Update,-1,false,false);
+ //      Reg:=GenerateExpression(Update,-1,false);
+         FreeRegister(Reg);
+        end;
+        begin
+         FixTargetImmediate(JumpOver);
+         GenerateTest(Test,true,false,JumpNext);
+        end;
+        CombineCurrentRegisters(Registers[3]);
+        CombineCurrentRegisters(Registers[4]);
+        BreakPos:=CodeGenerator^.ByteCodeSize;
+        EndLoop(BreakPos,ContinuePos,Registers[4],Registers[5]);
+       finally
+        ScopeEnd;
        end;
-       JumpOver:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJMP,0);
-       JumpNext:=CodeGenerator^.ByteCodeSize;
-       SetRegisters(Registers[1]);
-       CombineCurrentRegisters(Registers[2]);
-       CombineCurrentRegisters(Registers[5]);
-       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
-       CombineCurrentRegisters(Registers[1]);
-       CombineCurrentRegisters(Registers[2]);
-       CombineCurrentRegisters(Registers[5]);
-       ContinuePos:=CodeGenerator^.ByteCodeSize;
-       if assigned(Update) and (Update^.Token<>ptEMPTY) then begin
-        Reg:=GenerateCommaBlock(Update,-1,false,false);
-//      Reg:=GenerateExpression(Update,-1,false);
-        FreeRegister(Reg);
-       end;
-       begin
-        FixTargetImmediate(JumpOver);
-        GenerateTest(Test,true,false,JumpNext);
-       end;
-       CombineCurrentRegisters(Registers[3]);
-       CombineCurrentRegisters(Registers[4]);
-       BreakPos:=CodeGenerator^.ByteCodeSize;
-       EndLoop(BreakPos,ContinuePos,Registers[4],Registers[5]);
       end;
      finally
       SetLength(Registers[0],0);
@@ -29015,12 +29110,12 @@ var TokenList:PPOCAToken;
       SetLength(Registers[4],0);
       SetLength(Registers[5],0);
      end;
-     ScopeEnd;
     end;
     function GenerateForEachForIndexForKey(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var JumpNext,JumpOver,BreakPos,ContinuePos,Reg1,Reg2,Reg3,Reg4,Len,Start:TPOCAInt32;
         Element,Body,ArrayInstance,LabelToken,h:PPOCAToken;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
+        ScopeState:TScopeState;
     begin
      ScopeStart;
      Registers[0]:=nil;
@@ -29081,6 +29176,7 @@ var TokenList:PPOCAToken;
         end;
        end;
        Start:=CodeGenerator^.ByteCodeSize;
+       ScopePush(ScopeState);
        begin
         Registers[0]:=GetRegisters;
         StartLoop(LabelToken,false);
@@ -29109,10 +29205,13 @@ var TokenList:PPOCAToken;
         BreakPos:=CodeGenerator^.ByteCodeSize;
         EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
        end;
-       if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
-               AreRegistersEqual(Registers[4],Registers[1],false,false) and
-               AreRegistersEqual(Registers[1],Registers[2],false,false) and
-               AreRegistersEqual(Registers[4],Registers[2],false,false)) then begin
+       if AreRegistersEqual(Registers[0],Registers[1],false,false) and
+          AreRegistersEqual(Registers[4],Registers[1],false,false) and
+          AreRegistersEqual(Registers[1],Registers[2],false,false) and
+          AreRegistersEqual(Registers[4],Registers[2],false,false) then begin
+        ScopeDrop(ScopeState);
+       end else begin
+        ScopePop(ScopeState);
         CodeGenerator^.ByteCodeSize:=Start;
         StartLoop(LabelToken,false);
         JumpOver:=CodeGenerator^.ByteCodeSize+1;
@@ -29309,6 +29408,7 @@ var TokenList:PPOCAToken;
          else {2,3:}begin
           if ExistScopeSymbol(t,false,false,true) then begin
            SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+           IsVar:=false;
           end else begin
            if CodeGenerator^.HasNestedFunctions then begin
             IsVar:=true;
@@ -29325,6 +29425,7 @@ var TokenList:PPOCAToken;
          CodeGenerator^.HasLocals:=true;
          Symbol:=DefineScopeSymbol(t,true,(Variable=2) or (Variable=3),Variable=3,false,-1);
          if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
+          CodeGenerator^.UsedUpValues:=true;
           EmitOpcode(popSETUPVALUE,Symbol^.UpValueLevel,Symbol^.UpValueIndex,Reg);
          end else if Variable=3 then begin
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
@@ -29860,6 +29961,7 @@ var TokenList:PPOCAToken;
         EndJumpPosition,JumpRetryPos:TPOCAUInt32;
         Registers:array[0..7] of TPOCACodeGeneratorRegisters;
         HasDefault,HasRetry,HasBreak,HasFallthrough:boolean;
+        ScopeState:TScopeState;
      procedure AddCaseExpression(t:PPOCAToken);
      begin
       WhenSwitchCaseExpression:=@WhenSwitchCase^.Expressions[ExpressionIndex];
@@ -29981,6 +30083,7 @@ var TokenList:PPOCAToken;
       end; 
       Registers[0]:=GetRegisters;
       Start:=CodeGenerator^.ByteCodeSize;
+      ScopePush(ScopeState);
       for TryIndex:=0 to 1 do begin
        CodeGenerator^.ByteCodeSize:=Start;
        SetRegisters(Registers[0]);
@@ -29989,6 +30092,7 @@ var TokenList:PPOCAToken;
         begin
          if TryIndex=1 then begin
           ClearRegisters;
+          ScopePop(ScopeState);
          end;
          DefaultWhenSwitchCase:=nil;
          JumpRetryPos:=CodeGenerator^.ByteCodeSize;
@@ -30145,6 +30249,7 @@ var TokenList:PPOCAToken;
         if HasBreak and not AreRegistersEqual(Registers[6],Registers[7],false,false) then begin
          continue;
         end;
+        ScopeDrop(ScopeState);
         break;
        end;
       end;
@@ -30717,7 +30822,8 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
        end else if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
-        EmitOpcode(popGETUPVALUE,Symbol^.UpValueLevel,Symbol^.UpValueIndex,result);
+        CodeGenerator^.UsedUpValues:=true;
+        EmitOpcode(popGETUPVALUE,result,Symbol^.UpValueLevel,Symbol^.UpValueIndex);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
@@ -30752,6 +30858,7 @@ var TokenList:PPOCAToken;
          else {ptLET,ptCONST:}begin
           if ExistScopeSymbol(t^.Right,false,false,true) then begin
            SyntaxError('Symbol already defined',t^.Right^.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
+           IsVar:=false;
           end else begin
            if CodeGenerator^.HasNestedFunctions then begin
             IsVar:=true;
@@ -30775,6 +30882,7 @@ var TokenList:PPOCAToken;
          EmitOpcode(popLOADNULL,result);
          SetRegisterNumber(result,false);
          if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
+          CodeGenerator^.UsedUpValues:=true;
           EmitOpcode(popSETUPVALUE,Symbol^.UpValueLevel,Symbol^.UpValueIndex,result);
          end else if Token=ptCONST then begin
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
@@ -31509,6 +31617,7 @@ var TokenList:PPOCAToken;
      FillChar(CodeGenerator^,sizeof(TPOCACodeGenerator),#0);
      Initialize(CodeGenerator^);
      CodeGenerator^.ParentCodeGenerator:=ParentCodeGenerator;
+     CodeGenerator^.UsedUpValues:=false;
      CodeGenerator^.ByteCodeAllocated:=1024;
      GetMem(CodeGenerator^.ByteCode,CodeGenerator^.ByteCodeAllocated*sizeof(TPOCAUInt32));
      FillChar(CodeGenerator^.ByteCode^,CodeGenerator^.ByteCodeAllocated*sizeof(TPOCAUInt32),#0);
@@ -31588,6 +31697,7 @@ var TokenList:PPOCAToken;
       CodeGenerator^.FastFunction:=(not (CodeToken in [ptCLASSFUNCTION,ptMODULEFUNCTION])) and (CodeGenerator^.FastFunction or not CodeGenerator^.HasLocals);
       Code^.Name:=CodeName;
       Code^.Level:=CodeGenerator^.Level;
+      Code^.UseUpValues:=CodeGenerator^.UsedUpValues;
       Code^.ClassFunction:=CodeToken=ptCLASSFUNCTION;
       Code^.FastFunction:=CodeGenerator^.FastFunction;
       Code^.IsEmpty:=IsEmpty;
@@ -32348,8 +32458,33 @@ begin
 end;
 
 procedure POCASetupUpValues(Frame:PPOCAFrame;Code:PPOCACode);
+var i,Level:TPOCAInt32;
+    Func:PPOCAFunction;
 begin
-// Frame^.CountUpValues:=Code^.CountUpValueLee;
+ if Code^.UseUpValues then begin
+  Frame^.CountUpValueLevels:=Code^.Level+1;
+  if Frame^.CountUpValueLevels>0 then begin
+   if length(Frame^.UpValueLevels)<TPOCAInt32(Frame^.CountUpValueLevels) then begin
+    SetLength(Frame^.UpValueLevels,POCARoundUpToPowerOfTwo(Frame^.CountUpValueLevels+1));
+   end;
+   for i:=Code^.Level+1 to Frame^.CountUpValueLevels-1 do begin
+    Frame^.UpValueLevels[i]:=nil;
+   end;
+   Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
+   Level:=Code^.Level;
+   while assigned(Func) and (Level>=0) do begin
+    Frame^.UpValueLevels[Func^.UpValueLevel]:=Func^.UpValues;
+    if POCAIsValueFunction(Func^.Next) then begin
+     Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
+     dec(Level);
+    end else begin
+     break;
+    end;
+   end;
+  end;
+ end else begin
+  Frame^.CountUpValueLevels:=0;
+ end;
 end;
 
 function POCASetupFunctionCall(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:TPOCAUInt32;Operands:PPOCAUInt32Array;MethodCall,Named:boolean;TheFunc:PPOCAValue=nil):PPOCAFrame;
@@ -32473,8 +32608,7 @@ begin
     end else begin
      result^.Obj:=Obj;
     end;
-    result^.UpValues:=nil;
-    result^.CountUpValues:=0;
+    result^.UpValueLevels:=nil;
 
     if PPOCACode(ObjPtr)^.HasArguments or not PPOCACode(ObjPtr)^.IsEmpty then begin
 
@@ -37273,10 +37407,10 @@ begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
    end;
    popGETUPVALUE:begin
-    Registers^[Operands^[0]]:=Frame^.UpValues[Operands^[1]]^[Operands^[2]];
+    Registers^[Operands^[0]]:=Frame^.UpValueLevels[Operands^[1]]^[Operands^[2]];
    end;
    popSETUPVALUE:begin
-    Frame^.UpValues[Operands^[1]]^[Operands^[2]]:=Registers^[Operands^[0]];
+    Frame^.UpValueLevels[Operands^[0]]^[Operands^[1]]:=Registers^[Operands^[2]];
    end;
    popNEWARRAY:begin
     Registers^[Operands^[0]]:=POCANewArray(Context);
