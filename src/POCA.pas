@@ -1201,7 +1201,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
              pcakUPVALUE=2;
       public
        Kind:TPOCAUInt32;
-       Index:TPOCAUInt32;
+       Level:TPOCAInt32;
+       Index:TPOCAInt32;
      end;
      PPOCACodeArgument=^TPOCACodeArgument;
 
@@ -1211,6 +1212,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCACode=packed record
       Header:TPOCAObjectHeader;
       Name:TPOCARawByteString;
+      Level:TPOCAInt32;
       ClassFunction:TPOCABool32;
       FastFunction:TPOCABool32;
       IsEmpty:TPOCABool32;
@@ -1250,6 +1252,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Namespace:TPOCAValue;
       Obj:TPOCAValue;
       UpValueContextID:TPOCAUInt64; // for future
+      UpValueLevel:TPOCAInt32; // for future
       UpValues:PPOCAValues; // for future
       CountUpValues:TPOCAInt32; // for future
       Next:TPOCAValue;
@@ -1267,6 +1270,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Arguments:TPOCAValueArray;
       CountArguments:TPOCAInt32;
       UpValues:PPPOCAValues;
+      CountUpValues:TPOCAInt32;
      end;
 
      TPOCANativeFunction=function(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -1463,6 +1467,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       StrictMode:TPOCABool32;
 
       ScopeIDCounter:TPOCAUInt64;
+
+      UseUpValues:TPOCABool32;
       UpValueContextIDCounter:TPOCAUInt64;
 
 {$ifdef POCAMemoryPools}
@@ -6454,6 +6460,7 @@ begin
    for j:=0 to Frame^.CountArguments-1 do begin
     MarkValue(Frame^.Arguments[j]);
    end;
+   // UpValues getting marked in the Funcs itself
   end;
   if assigned(PPOCACoroutineData(Context^.CoroutineData)) and (assigned(PPOCACoroutineData(Context^.CoroutineData)^.Coroutine) and (PPOCACoroutineData(Context^.CoroutineData)^.Coroutine^.State<>pcsTERMINATED)) then begin
    POCACoroutineGhostMarkEx(Context^.ThreadData);
@@ -8086,7 +8093,9 @@ end;
 
 function POCANewFunction(Context:PPOCAContext;const Code:TPOCAValue):TPOCAValue;
 var Func:PPOCAFunction;
+    CodePointer:PPOCACode;
 begin
+ CodePointer:=PPOCACode(POCAGetValueReferencePointer(Code));
  result:=POCANew(Context,pvtFUNCTION,PPOCAObject(Func));
  Func^.Code:=Code;
 {Func^.Namespace:=POCAValueNull;
@@ -8094,6 +8103,7 @@ begin
  Func^.Next:=POCAValueNull;}
  Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+ Func^.UpValueLevel:=CodePointer^.Level;
  Func^.UpValueContextID:=0;
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
@@ -18140,7 +18150,12 @@ begin
  result^.IncludeDirectories:=TStringList.Create;
  begin
   result^.Globals.StrictMode:=true;
+ end;
+ begin
   result^.Globals.ScopeIDCounter:=0;
+ end;
+ begin
+  result^.Globals.UseUpValues:=false;
   result^.Globals.UpValueContextIDCounter:=0;
  end;
  begin
@@ -25119,7 +25134,7 @@ var TokenList:PPOCAToken;
       TPOCACodeGeneratorLoops=array of TPOCACodeGeneratorLoop;
       TPOCACodeGeneratorScopeSymbolKind=
        (
-        sskVAR,
+        sskLOCAL,
         sskREG,
         sskUPVALUE
        );
@@ -25131,6 +25146,8 @@ var TokenList:PPOCAToken;
        Freeable:Boolean;
        Register:TPOCAInt32;
        UpValueContextID:TPOCAUInt64;
+       UpValueLevel:TPOCAInt32;
+       UpValueIndex:TPOCAInt32;
        ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopeSymbols=array of PPOCACodeGeneratorScopeSymbol;
@@ -25383,7 +25400,7 @@ var TokenList:PPOCAToken;
       popPOP:begin
        if CodeGenerator^.CountOpcodes>1 then begin
         case CodeGenerator^.ByteCode^[CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-2]] and $ff of
-         popPUSHREG,popGETLOCAL,popPUSHZERO,popPUSHONE,popPUSHCONST,popPUSHEND,popGETMEMBER,popSAFEGETMEMBER:begin
+         popPUSHREG,popGETLOCAL,popGETUPVALUE,popPUSHZERO,popPUSHONE,popPUSHCONST,popPUSHEND,popGETMEMBER,popSAFEGETMEMBER:begin
           dec(CodeGenerator^.CountOpcodes,2);
           CodeGenerator^.ByteCodeSize:=CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes];
           continue;
@@ -25621,12 +25638,28 @@ var TokenList:PPOCAToken;
      result:='';
     end;
    end;
-   function DefineScopeSymbol(t:PPOCAToken;const aKind:TPOCACodeGeneratorScopeSymbolKind;const aLetConst,aConstant,aFreeable:Boolean;const aRegister:TPOCAInt32):PPOCACodeGeneratorScopeSymbol;
+   function DefineScopeSymbol(t:PPOCAToken;const aIsVar,aLetConst,aConstant,aFreeable:Boolean;const aRegister:TPOCAInt32):PPOCACodeGeneratorScopeSymbol;
    var CurrentCodeGenerator:PPOCACodeGenerator;
        i,SymbolIndex:TPOCAInt32;
        HashMap:TPOCAStringHashMap;
        Item:PPOCAStringHashMapItem;
+       Kind:TPOCACodeGeneratorScopeSymbolKind;
    begin
+    if aLetConst then begin
+     if aIsVar then begin
+      if Instance^.Globals.UseUpValues then begin
+       Kind:=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE;
+      end else begin
+       Kind:=TPOCACodeGeneratorScopeSymbolKind.sskLOCAL;
+      end;
+     end else begin
+      Kind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
+     end;
+    end else begin
+     Kind:=TPOCACodeGeneratorScopeSymbolKind.sskLOCAL;
+    end;
+    if Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
+    end;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
      CurrentCodeGenerator:=CodeGenerator;
      i:=CurrentCodeGenerator^.CountScopes-1;
@@ -25647,13 +25680,20 @@ var TokenList:PPOCAToken;
       result:=CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex];
       Initialize(result^);
       result^.UpValueContextID:=CurrentCodeGenerator^.Scopes[i].UpValueContextID;
+      result^.UpValueLevel:=CurrentCodeGenerator^.Level;
+      if Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
+       result^.UpValueIndex:=CurrentCodeGenerator^.CountUpValues;
+       inc(CurrentCodeGenerator^.CountUpValues);
+      end else begin
+       result^.UpValueIndex:=0;
+      end;
       result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
       if aLetConst then begin
        result^.Name:=t^.Str+'@'+IntToStr(result^.ScopeID);
       end else begin
        result^.Name:=t^.Str;
       end;
-      result^.Kind:=aKind;
+      result^.Kind:=Kind;
       result^.Constant:=aConstant;
       result^.Register:=aRegister;
      end;
@@ -26865,7 +26905,7 @@ var TokenList:PPOCAToken;
         end else begin
          Symbol:=FindScopeSymbol(t,false,true,false);
          if not assigned(Symbol) then begin
-          Symbol:=DefineScopeSymbol(t,sskREG,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+          Symbol:=DefineScopeSymbol(t,false,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
          end;
          if assigned(Symbol) then begin
           result:=Symbol^.Register;
@@ -26881,7 +26921,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2:TPOCAInt32):TPOCAUInt32;
+    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex:TPOCAInt32):TPOCAUInt32;
     var Token:TPOCATokenType;
         Symbol:PPOCACodeGeneratorScopeSymbol;
         IsVar:Boolean;
@@ -26894,7 +26934,7 @@ var TokenList:PPOCAToken;
      case Token of
       ptLPAR:begin
        if t^.Rule<>prSUFFIX then begin
-        result:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2);
+        result:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
         exit;
        end;
       end;
@@ -26957,6 +26997,7 @@ var TokenList:PPOCAToken;
          else {ptLET,ptCONST:}begin
           if ExistScopeSymbol(t,false,false,true) then begin
            SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+           IsVar:=true;
           end else begin
            if CodeGenerator^.HasNestedFunctions then begin
             IsVar:=true;
@@ -26971,20 +27012,21 @@ var TokenList:PPOCAToken;
           SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
          end;
          CodeGenerator^.HasLocals:=true;
-         if (Token=ptLET) or (Token=ptCONST) then begin
-          DefineScopeSymbol(t,sskUPVALUE,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         Symbol:=DefineScopeSymbol(t,true,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
+         if Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
+          ConstantIndex:=0;
+          result:=popSETUPVALUE;
          end else begin
-          DefineScopeSymbol(t,sskVAR,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
-         end;
-         ConstantIndex:=FindConstantIndex(t,true);
-         if Token=ptCONST then begin
-          result:=popSETCONSTLOCAL;
-         end else begin
-          result:=popSETLOCAL;
+          ConstantIndex:=FindConstantIndex(t,true);
+          if Token=ptCONST then begin
+           result:=popSETCONSTLOCAL;
+          end else begin
+           result:=popSETLOCAL;
+          end;
          end;
          exit;
         end else begin
-         Symbol:=DefineScopeSymbol(t,sskREG,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         Symbol:=DefineScopeSymbol(t,false,true,Token=ptCONST,false,GetRegister(false,Token=ptCONST));
          if assigned(Symbol) then begin
           Reg1:=Symbol^.Register;
           result:=popCOPY;
@@ -26997,12 +27039,12 @@ var TokenList:PPOCAToken;
      SyntaxError('Bad left value',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
     end;
     procedure GenerateLeftValue(t:PPOCAToken;Reg:TPOCAInt32);
-    var AssignOp,ConstantIndex,Reg1,Reg2:TPOCAInt32;
+    var AssignOp,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex:TPOCAInt32;
     begin
      ConstantIndex:=0;
      Reg1:=0;
      Reg2:=0;
-     AssignOp:=ProcessLeftValue(t,ConstantIndex,Reg1,Reg2);
+     AssignOp:=ProcessLeftValue(t,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
      case AssignOp and $ff of
       popSETMEMBER:begin
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,Reg,$ffffffff);
@@ -27023,6 +27065,9 @@ var TokenList:PPOCAToken;
       popSETLOCAL:begin
        EmitOpcode(popSETLOCAL,ConstantIndex,Reg,$ffffffff);
       end;
+      popSETUPVALUE:begin
+       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,Reg);
+      end;
       popSETCONSTLOCAL:begin
        EmitOpcode(popSETCONSTLOCAL,ConstantIndex,Reg,$ffffffff);
       end;
@@ -27035,14 +27080,14 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GenerateAssignOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,UpValueLevel,UpValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -27122,6 +27167,18 @@ var TokenList:PPOCAToken;
        FreeRegister(Reg2);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
       end;
+      popSETUPVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETUPVALUE,UpValueLevel,UpValueIndex,result);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       EmitOpcode(Op,result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,result);
+      end;
       popSETCONSTLOCAL:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
@@ -27161,7 +27218,7 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GenerateElvisAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue,UpValueLevel,UpValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
         Registers:TPOCACodeGeneratorRegisters;
     begin
@@ -27169,7 +27226,7 @@ var TokenList:PPOCAToken;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -27309,6 +27366,29 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
       end;
+      popSETUPVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETUPVALUE,UpValueLevel,UpValueIndex,result);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       if GetRegisterNumber(result) then begin
+        EmitOpcode(popN_JIFTRUE,0,result);
+       end else begin
+        EmitOpcode(popJIFTRUE,0,result);
+       end;
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,result);
+      end;
       popSETCONSTLOCAL:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
@@ -27381,14 +27461,14 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GeneratePostfixDecIncOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,UpValueLevel,UpValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -27464,6 +27544,18 @@ var TokenList:PPOCAToken;
        EmitOpcode(popSETLOCAL,ConstantIndex,Reg1,$ffffffff);
        FreeRegister(Reg1);
       end;
+      popSETUPVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       Reg1:=GetRegister(true,false);
+       EmitOpcode(popGETUPVALUE,UpValueLevel,UpValueIndex,Reg1);
+       EmitOpcode(Op,Reg1,result);
+       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,Reg1);
+       FreeRegister(Reg1);
+      end;
       popSETCONSTLOCAL:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
@@ -27503,14 +27595,14 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GeneratePrefixDecIncOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,UpValueLevel,UpValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Right,ConstantIndex,Reg1,Reg2);
+     SetOp:=ProcessLeftValue(t^.Right,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -27584,6 +27676,16 @@ var TokenList:PPOCAToken;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
+      end;
+      popSETUPVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETUPVALUE,UpValueLevel,UpValueIndex,result);
+       EmitOpcode(Op,result,result);
+       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,result);
       end;
       popSETCONSTLOCAL:begin
        if OutReg<0 then begin
@@ -29221,19 +29323,17 @@ var TokenList:PPOCAToken;
           SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
          end;
          CodeGenerator^.HasLocals:=true;
-         if (Variable=2) or (Variable=3) then begin
-          DefineScopeSymbol(t,sskUPVALUE,(Variable=2) or (Variable=3),Variable=3,false,-1);
-         end else begin
-          DefineScopeSymbol(t,sskVAR,(Variable=2) or (Variable=3),Variable=3,false,-1);
-         end;
-         if Variable=3 then begin
+         Symbol:=DefineScopeSymbol(t,true,(Variable=2) or (Variable=3),Variable=3,false,-1);
+         if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
+          EmitOpcode(popSETUPVALUE,Symbol^.UpValueLevel,Symbol^.UpValueIndex,Reg);
+         end else if Variable=3 then begin
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
          end else begin
           EmitOpcode(popSETLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
          end;
          exit;
         end else begin
-         Symbol:=DefineScopeSymbol(t,sskREG,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+         Symbol:=DefineScopeSymbol(t,false,true,Variable=3,false,GetRegister(false,Variable=3));
          if assigned(Symbol) then begin
           r:=Symbol^.Register;
           EmitOpcode(popCOPY,r,Reg);
@@ -29308,7 +29408,7 @@ var TokenList:PPOCAToken;
            EmitMultiLeftValue(at^.Left,Variable,Reg);
            FreeRegister(Reg);
           end else begin
-           Symbol:=DefineScopeSymbol(at^.Left,sskREG,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+           Symbol:=DefineScopeSymbol(at^.Left,false,true,Variable=3,false,GetRegister(false,Variable=3));
            if assigned(Symbol) then begin
             Reg2:=Symbol^.Register;
             Reg:=GenerateExpression(pt^.Left,Reg2,true);
@@ -29350,7 +29450,7 @@ var TokenList:PPOCAToken;
            result:=GenerateExpression(pt,OutReg,true);
            EmitMultiLeftValue(at,Variable,result);
           end else begin
-           Symbol:=DefineScopeSymbol(at,sskREG,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+           Symbol:=DefineScopeSymbol(at,false,true,Variable=3,false,GetRegister(false,Variable=3));
            if assigned(Symbol) then begin
             if OutReg<0 then begin
              result:=Symbol^.Register;
@@ -29428,7 +29528,7 @@ var TokenList:PPOCAToken;
            if IsVar then begin
             EmitMultiLeftValue(t,Variable,Reg);
            end else begin
-            Symbol:=DefineScopeSymbol(t,sskREG,(Variable=2) or (Variable=3),Variable=3,false,GetRegister(false,Variable=3));
+            Symbol:=DefineScopeSymbol(t,false,true,Variable=3,false,GetRegister(false,Variable=3));
             if assigned(Symbol) then begin
              if OutReg<0 then begin
               Reg2:=Symbol^.Register;
@@ -30609,13 +30709,15 @@ var TokenList:PPOCAToken;
         CodeGenerator^.HasLocals:=true;
        end;
        Symbol:=FindScopeSymbol(t,false,true,false);
-       if assigned(Symbol) and (Symbol^.Register>=0) then begin
+       if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskREG) and (Symbol^.Register>=0) then begin
         result:=Symbol^.Register;
         if OutReg>=0 then begin
          EmitOpcode(popCOPY,OutReg,result);
          SetRegisterNumber(OutReg,GetRegisterNumber(result));
          result:=OutReg;
         end;
+       end else if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
+        EmitOpcode(popGETUPVALUE,Symbol^.UpValueLevel,Symbol^.UpValueIndex,result);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
@@ -30664,11 +30766,7 @@ var TokenList:PPOCAToken;
           SyntaxError('VAR is not allowed in fastfunctions',t^.Right^.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
          end;
          CodeGenerator^.HasLocals:=true;
-         if (Token=ptLET) or (Token=ptCONST) then begin
-          DefineScopeSymbol(t^.Right,sskUPVALUE,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
-         end else begin
-          DefineScopeSymbol(t^.Right,sskVAR,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
-         end;
+         Symbol:=DefineScopeSymbol(t^.Right,true,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
          if OutReg<0 then begin
           result:=GetRegister(true,false);
          end else begin
@@ -30676,14 +30774,16 @@ var TokenList:PPOCAToken;
          end;
          EmitOpcode(popLOADNULL,result);
          SetRegisterNumber(result,false);
-         if Token=ptCONST then begin
+         if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
+          EmitOpcode(popSETUPVALUE,Symbol^.UpValueLevel,Symbol^.UpValueIndex,result);
+         end else if Token=ptCONST then begin
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
          end else begin
           EmitOpcode(popSETLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
          end;
          exit;
         end else begin
-         Symbol:=DefineScopeSymbol(t^.Right,sskREG,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         Symbol:=DefineScopeSymbol(t^.Right,false,true,Token=ptCONST,false,GetRegister(false,Token=ptCONST));
          if assigned(Symbol) then begin
           if OutReg<0 then begin
            result:=GetRegister(true,false);
@@ -31240,10 +31340,20 @@ var TokenList:PPOCAToken;
        SetLength(CodeGenerator^.LocalArguments,CodeGenerator^.CountLocalArguments*2);
       end;
      end;
-     if IsLocal then begin
+     if IsLocal and Instance^.Globals.UseUpValues and CodeGenerator^.HasNestedFunctions then begin
       ScopeScope:=FindScopeSymbol(Symbol,false,true,false);
       if not assigned(ScopeScope) then begin
-       ScopeScope:=DefineScopeSymbol(Symbol,sskREG,true,IsConst,false,GetRegister(false,IsConst));
+       ScopeScope:=DefineScopeSymbol(Symbol,true,true,IsConst,false,GetRegister(false,IsConst));
+      end;
+      if assigned(ScopeScope) then begin
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Kind:=TPOCACodeArgument.pcakUPVALUE;
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Level:=ScopeScope^.UpValueLevel;
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Index:=ScopeScope^.UpValueIndex;
+      end;
+     end else if IsLocal then begin
+      ScopeScope:=FindScopeSymbol(Symbol,false,true,false);
+      if not assigned(ScopeScope) then begin
+       ScopeScope:=DefineScopeSymbol(Symbol,false,true,IsConst,false,GetRegister(false,IsConst));
       end;
       if assigned(ScopeScope) then begin
        CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Kind:=TPOCACodeArgument.pcakREG;
@@ -31477,6 +31587,7 @@ var TokenList:PPOCAToken;
      begin
       CodeGenerator^.FastFunction:=(not (CodeToken in [ptCLASSFUNCTION,ptMODULEFUNCTION])) and (CodeGenerator^.FastFunction or not CodeGenerator^.HasLocals);
       Code^.Name:=CodeName;
+      Code^.Level:=CodeGenerator^.Level;
       Code^.ClassFunction:=CodeToken=ptCLASSFUNCTION;
       Code^.FastFunction:=CodeGenerator^.FastFunction;
       Code^.IsEmpty:=IsEmpty;
@@ -32236,6 +32347,11 @@ begin
  end;
 end;
 
+procedure POCASetupUpValues(Frame:PPOCAFrame;Code:PPOCACode);
+begin
+// Frame^.CountUpValues:=Code^.CountUpValueLee;
+end;
+
 function POCASetupFunctionCall(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:TPOCAUInt32;Operands:PPOCAUInt32Array;MethodCall,Named:boolean;TheFunc:PPOCAValue=nil):PPOCAFrame;
 var Func,Obj,Code:TPOCAValue;
     i,CountArguments,ArgumentIndex:TPOCAInt32;
@@ -32358,10 +32474,13 @@ begin
      result^.Obj:=Obj;
     end;
     result^.UpValues:=nil;
+    result^.CountUpValues:=0;
 
     if PPOCACode(ObjPtr)^.HasArguments or not PPOCACode(ObjPtr)^.IsEmpty then begin
 
      POCASetupRegisters(result,PPOCACode(ObjPtr));
+
+     POCASetupUpValues(result,PPOCACode(ObjPtr));
 
      if PPOCACode(ObjPtr)^.HasArguments then begin
       if Named then begin
@@ -37925,6 +38044,7 @@ begin
     Frame^.Obj:=Obj;
     Frame^.InstructionPointer:=0;
     POCASetupRegisters(Frame,CodePointer);
+    POCASetupUpValues(Frame,CodePointer);
    end;
    POCASetupArguments(Context,@Context^.FrameStack[0],CodePointer,Arguments,CountArguments);
    result:=POCARun(Context);
