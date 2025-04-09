@@ -32204,23 +32204,17 @@ begin
  end;
 end;
 
-function POCABindClassFunction(Context:PPOCAContext;Frame:PPOCAFrame;const Code:TPOCAValue):TPOCAValue;
+function POCABindFunction(Context:PPOCAContext;Frame:PPOCAFrame;const Code:TPOCAValue;const ClassFunction:Boolean):TPOCAValue;
 var Func:PPOCAFunction;
 begin
  result:=POCANewFunction(Context,Code);
  Func:=PPOCAFunction(POCAGetValueReferencePointer(result));
+ if ClassFunction then begin
 //Func^.Namespace:=POCAValueNull;
- Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
- Func^.Obj:=Frame^.Obj;
- Func^.Next:=Frame^.Func;
-end;
-
-function POCABindFunction(Context:PPOCAContext;Frame:PPOCAFrame;const Code:TPOCAValue):TPOCAValue;
-var Func:PPOCAFunction;
-begin
- result:=POCANewFunction(Context,Code);
- Func:=PPOCAFunction(POCAGetValueReferencePointer(result));
- Func^.Namespace:=Frame^.Locals;
+  Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
+ end else begin
+  Func^.Namespace:=Frame^.Locals;
+ end;
  Func^.Obj:=Frame^.Obj;
  Func^.Next:=Frame^.Func;
 end;
@@ -32262,7 +32256,7 @@ begin
     Value:=Args^[i];
    end;
    if POCAIsValueCode(Value) then begin
-    Value:=POCABindFunction(Context,Frame,Value);
+    Value:=POCABindFunction(Context,Frame,Value,false);
    end;
    case Code^.ArgumentLocals[i].Kind of
     TPOCACodeArgument.pcakVAR:begin
@@ -32299,7 +32293,7 @@ begin
     Value:=Code^.Constants[Code^.OptionalArgumentValues[i]];
    end;
    if POCAIsValueCode(Value) then begin
-    Value:=POCABindFunction(Context,Frame,Value);
+    Value:=POCABindFunction(Context,Frame,Value,false);
    end;
    case Code^.OptionalArgumentLocals[i].Kind of
     TPOCACodeArgument.pcakVAR:begin
@@ -32340,7 +32334,7 @@ begin
       Value:=Args^[i+j];
      end;
      if POCAIsValueCode(Value) then begin
-      Value:=POCABindFunction(Context,Frame,Value);
+      Value:=POCABindFunction(Context,Frame,Value,false);
      end;
      ArrayRecord^.Data[i]:=Value;
     end;
@@ -37386,11 +37380,7 @@ begin
    popLOADCONST:begin
     a:=Code^.Constants^[Operands^[1]];
     if POCAIsValueCode(a) then begin
-     if Code^.ClassFunction then begin
-      a:=POCABindClassFunction(Context,Frame,a);
-     end else begin
-      a:=POCABindFunction(Context,Frame,a);
-     end;
+     a:=POCABindFunction(Context,Frame,a,Code^.ClassFunction);
     end;
     Registers^[Operands^[0]]:=a;
    end;
