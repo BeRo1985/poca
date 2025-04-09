@@ -366,132 +366,133 @@ const POCAVersion='2025-04-06-09-34-0000';
       popFCALL=24;
       popMCALL=25;
       popRETURN=26;
-      popLOADCONST=27;
-      popLOADONE=28;
-      popLOADZERO=29;
-      popLOADINT32=30;
-      popLOADNULL=31;
-      popLOADTHAT=32;
-      popLOADTHIS=33;
-      popLOADSELF=34;
-      popLOADLOCAL=35;
-      popCOPY=36;
-      popINSERT=37;
-      popEXTRACT=38;
-      popGETMEMBER=39;
-      popSETMEMBER=40;
-      popGETLOCAL=41;
-      popSETLOCAL=42;
-      popGETUPVALUE=43;
-      popSETUPVALUE=44;
-      popNEWARRAY=45;
-      popARRAYPUSH=46;
-      popARRAYRANGEPUSH=47;
-      popNEWHASH=48;
-      popHASHAPPEND=49;
-      popSETSYM=50;
-      popINDEX=51;
-      popFCALLH=52;
-      popMCALLH=53;
-      popUNPACK=54;
-      popSLICE=55;
-      popSLICE2=56;
-      popSLICE3=57;
-      popTRY=58;
-      popTRYBLOCKEND=59;
-      popTHROW=60;
-      popDEC=61;
-      popINC=62;
-      popBAND=63;
-      popBXOR=64;
-      popBOR=65;
-      popBNOT=66;
-      popBSHL=67;
-      popBSHR=68;
-      popBUSHR=69;
-      popMOD=70;
-      popPOW=71;
-      popINHERITEDGETMEMBER=72;
-      popKEY=73;
-      popIN=74;
-      popINRANGE=75;
-      popFTAILCALL=76;
-      popMTAILCALL=77;
-      popFTAILCALLH=78;
-      popMTAILCALLH=79;
-      popINSTANCEOF=80;
-      popBREAKPOINT=81;
-      popNUM=82;
-      popN_NOT=83;
-      popN_ADD=84;
-      popN_SUB=85;
-      popN_MUL=86;
-      popN_DIV=87;
-      popN_NEG=88;
-      popN_LT=89;
-      popN_LTEQ=90;
-      popN_GT=91;
-      popN_GTEQ=92;
-      popN_EQ=93;
-      popN_NEQ=94;
-      popN_CMP=95;
-      popN_DEC=96;
-      popN_INC=97;
-      popN_BAND=98;
-      popN_BXOR=99;
-      popN_BOR=100;
-      popN_BNOT=101;
-      popN_BSHL=102;
-      popN_BSHR=103;
-      popN_BUSHR=104;
-      popN_MOD=105;
-      popN_POW=106;
-      popN_INRANGE=107;
-      popN_JIFTRUE=108;
-      popN_JIFFALSE=109;
-      popN_JIFTRUELOOP=110;
-      popN_JIFFALSELOOP=111;
-      popN_JIFLT=112;
-      popN_JIFLTEQ=113;
-      popN_JIFGT=114;
-      popN_JIFGTEQ=115;
-      popN_JIFEQ=116;
-      popN_JIFNEQ=117;
-      popN_JIFLTLOOP=118;
-      popN_JIFLTEQLOOP=119;
-      popN_JIFGTLOOP=120;
-      popN_JIFGTEQLOOP=121;
-      popN_JIFEQLOOP=122;
-      popN_JIFNEQLOOP=123;
-      popUPDATESTRING=124;
-      popREGEXP=125;
-      popREGEXPEQ=126;
-      popREGEXPNEQ=127;
-      popSQRT=128;
-      popN_SQRT=129;
-      popGETPROTOTYPE=130;
-      popSETPROTOTYPE=131;
-      popGETCONSTRUCTOR=132;
-      popSETCONSTRUCTOR=133;
-      popDELETE=134;
-      popDELETEEX=135;
-      popDEFINED=136;
-      popDEFINEDEX=137;
-      popLOADGLOBAL=138;
-      popLOADBASECLASS=139;
-      popGETHASHKIND=140;
-      popSETHASHKIND=141;
-      popTYPEOF=142;
-      popIDOF=143;
-      popGHOSTTYPEOF=144;
-      popELVIS=145;
-      popIS=146;
-      popJIFNULL=147;
-      popJIFNOTNULL=148;
-      popSAFEEXTRACT=149;
-      popSAFEGETMEMBER=150;
-      popSETCONSTLOCAL=151;
-      popCOUNT=152;
+      popLOADCODE=27;
+      popLOADCONST=28;
+      popLOADONE=29;
+      popLOADZERO=30;
+      popLOADINT32=31;
+      popLOADNULL=32;
+      popLOADTHAT=33;
+      popLOADTHIS=34;
+      popLOADSELF=35;
+      popLOADLOCAL=36;
+      popCOPY=37;
+      popINSERT=38;
+      popEXTRACT=39;
+      popGETMEMBER=40;
+      popSETMEMBER=41;
+      popGETLOCAL=42;
+      popSETLOCAL=43;
+      popGETUPVALUE=44;
+      popSETUPVALUE=45;
+      popNEWARRAY=46;
+      popARRAYPUSH=47;
+      popARRAYRANGEPUSH=48;
+      popNEWHASH=49;
+      popHASHAPPEND=50;
+      popSETSYM=51;
+      popINDEX=52;
+      popFCALLH=53;
+      popMCALLH=54;
+      popUNPACK=55;
+      popSLICE=56;
+      popSLICE2=57;
+      popSLICE3=58;
+      popTRY=59;
+      popTRYBLOCKEND=60;
+      popTHROW=61;
+      popDEC=62;
+      popINC=63;
+      popBAND=64;
+      popBXOR=65;
+      popBOR=66;
+      popBNOT=67;
+      popBSHL=68;
+      popBSHR=69;
+      popBUSHR=70;
+      popMOD=71;
+      popPOW=72;
+      popINHERITEDGETMEMBER=73;
+      popKEY=74;
+      popIN=75;
+      popINRANGE=76;
+      popFTAILCALL=77;
+      popMTAILCALL=78;
+      popFTAILCALLH=79;
+      popMTAILCALLH=80;
+      popINSTANCEOF=81;
+      popBREAKPOINT=82;
+      popNUM=83;
+      popN_NOT=84;
+      popN_ADD=85;
+      popN_SUB=86;
+      popN_MUL=87;
+      popN_DIV=88;
+      popN_NEG=89;
+      popN_LT=90;
+      popN_LTEQ=91;
+      popN_GT=92;
+      popN_GTEQ=93;
+      popN_EQ=94;
+      popN_NEQ=95;
+      popN_CMP=96;
+      popN_DEC=97;
+      popN_INC=98;
+      popN_BAND=99;
+      popN_BXOR=100;
+      popN_BOR=101;
+      popN_BNOT=102;
+      popN_BSHL=103;
+      popN_BSHR=104;
+      popN_BUSHR=105;
+      popN_MOD=106;
+      popN_POW=107;
+      popN_INRANGE=108;
+      popN_JIFTRUE=109;
+      popN_JIFFALSE=110;
+      popN_JIFTRUELOOP=111;
+      popN_JIFFALSELOOP=112;
+      popN_JIFLT=113;
+      popN_JIFLTEQ=114;
+      popN_JIFGT=115;
+      popN_JIFGTEQ=116;
+      popN_JIFEQ=117;
+      popN_JIFNEQ=118;
+      popN_JIFLTLOOP=119;
+      popN_JIFLTEQLOOP=120;
+      popN_JIFGTLOOP=121;
+      popN_JIFGTEQLOOP=122;
+      popN_JIFEQLOOP=123;
+      popN_JIFNEQLOOP=124;
+      popUPDATESTRING=125;
+      popREGEXP=126;
+      popREGEXPEQ=127;
+      popREGEXPNEQ=128;
+      popSQRT=129;
+      popN_SQRT=130;
+      popGETPROTOTYPE=131;
+      popSETPROTOTYPE=132;
+      popGETCONSTRUCTOR=133;
+      popSETCONSTRUCTOR=134;
+      popDELETE=135;
+      popDELETEEX=136;
+      popDEFINED=137;
+      popDEFINEDEX=138;
+      popLOADGLOBAL=139;
+      popLOADBASECLASS=140;
+      popGETHASHKIND=141;
+      popSETHASHKIND=142;
+      popTYPEOF=143;
+      popIDOF=144;
+      popGHOSTTYPEOF=145;
+      popELVIS=146;
+      popIS=147;
+      popJIFNULL=148;
+      popJIFNOTNULL=149;
+      popSAFEEXTRACT=150;
+      popSAFEGETMEMBER=151;
+      popSETCONSTLOCAL=152;
+      popCOUNT=153;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -1124,10 +1125,12 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCAValues=array[0..($7fffffff div sizeof(TPOCAValue))-1] of TPOCAValue;
 
+     TPOCAValueArrayArray=array of TPOCAValueArray;
+
      TPPOCAValueArray=array of PPOCAValues;
 
-     TPPOCAValues=array[0..($7fffffff div sizeof(PPOCAValues))-1] of PPOCAValues;
-     PPPOCAValues=^TPPOCAValues;
+//     TPPOCAValues=array[0..($7fffffff div sizeof(PPOCAValues))-1] of PPOCAValues;
+//    PPPOCAValues=^TPPOCAValues;
 
      PPOCAHashEntity=^TPOCAHashEntity;
      TPOCAHashEntity=record
@@ -1257,10 +1260,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Obj:TPOCAValue;
       UpValueContextID:TPOCAUInt64; // for future
       UpValueLevel:TPOCAInt32; // for future
-      UpValues:PPOCAValues; // for future
+      UpValues:TPOCAValueArray; // for future
       CountUpValues:TPOCAInt32; // for future
-      UpValueLevels:PPPOCAValues; // for future
-      CountUpValueLevels:TPOCAInt32; // for future
+      UpValueLevels:TPOCAValueArrayArray; // for future
       Next:TPOCAValue;
      end;
 
@@ -1275,7 +1277,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       CountRegisters:TPOCAInt32;
       Arguments:TPOCAValueArray;
       CountArguments:TPOCAInt32;
-      UpValueLevels:TPPOCAValueArray;
+      UpValueLevels:TPOCAValueArrayArray;
       CountUpValueLevels:TPOCAInt32;
      end;
 
@@ -5498,14 +5500,8 @@ end;
 
 procedure POCAFuncGCClean(Obj:PPOCAFunction);
 begin
- if assigned(Obj^.UpValues) then begin
-  FreeMem(Obj^.UpValues);
-  Obj^.UpValues:=nil;
- end;
- if assigned(Obj^.UpValueLevels) then begin
-  FreeMem(Obj^.UpValueLevels);
-  Obj^.UpValueLevels:=nil;
- end;
+ Obj^.UpValues:=nil;
+ Obj^.UpValueLevels:=nil;
 end;
 
 procedure POCANativeCodeGCClean(Obj:PPOCANativeCode);
@@ -6278,7 +6274,7 @@ begin
 end;
 
 function TPOCAGarbageCollector.MarkFunctionAsGray(Obj:PPOCAFunction):boolean;
-var i:TPOCAInt32;
+var Index,OtherIndex:TPOCAInt32;
 begin
  result:=false;
  if MarkValue(Obj^.Code) then begin
@@ -6290,10 +6286,19 @@ begin
  if MarkValue(Obj^.Obj) then begin
   result:=true;
  end;
- if assigned(Obj^.UpValues) then begin
-  for i:=0 to Obj^.CountUpValues-1 do begin
-   if MarkValue(Obj^.UpValues^[i]) then begin
+ if length(Obj^.UpValues)>0 then begin
+  for Index:=0 to length(Obj^.UpValues)-1 do begin
+   if MarkValue(Obj^.UpValues[Index]) then begin
     result:=true;
+   end;
+  end;
+ end;
+ if length(Obj^.UpValueLevels)>0 then begin
+  for Index:=0 to length(Obj^.UpValueLevels)-1 do begin
+   for OtherIndex:=0 to length(Obj^.UpValueLevels[Index])-1 do begin
+    if MarkValue(Obj^.UpValueLevels[Index][OtherIndex]) then begin
+     result:=true;
+    end;
    end;
   end;
  end;
@@ -8116,18 +8121,19 @@ begin
  Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
 
- if assigned(CodePointer) and (CodePointer^.Header.ValueType=pvtCODE) then begin
+{if assigned(CodePointer) and (CodePointer^.Header.ValueType=pvtCODE) then begin
   Func^.CountUpValueLevels:=0;
   Func^.UpValueLevel:=CodePointer^.Level;
   Func^.UpValueContextID:=0;
   Func^.CountUpValues:=CodePointer^.CountUpValues;
+  Func^.UpValues:=nil;
   if (Func^.CountUpValues>0) and not assigned(Func^.UpValues) then begin
-   GetMem(Func^.UpValues,Func^.CountUpValues*SizeOf(TPOCAValue));
+   SetLength(Func^.UpValues,Func^.CountUpValues);
    for Index:=0 to Func^.CountUpValues-1 do begin
-    Func^.UpValues^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+    Func^.UpValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
    end;
   end;
- end;
+ end;//}
 
 end;
 
@@ -25731,7 +25737,7 @@ var TokenList:PPOCAToken;
      result:=nil;
     end;
    end;
-   function FindConstantIndex(t:PPOCAToken;const ForScope:Boolean):TPOCAInt32;
+   function FindConstantIndex(t:PPOCAToken;const ForScope:Boolean;const Value:PPOCAValue=nil):TPOCAInt32;
    var c:TPOCAValue;
    begin
     case t^.Token of
@@ -25769,6 +25775,9 @@ var TokenList:PPOCAToken;
       c.CastedUInt64:=POCAValueNullCastedUInt64;
       SyntaxError('Invalid constant',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
      end;
+    end;
+    if assigned(Value) then begin
+     Value^:=c;
     end;
     result:=InternConstant(c);
    end;
@@ -25939,8 +25948,9 @@ var TokenList:PPOCAToken;
     aScopeState.CountUpValues:=-1;
    end;
    function GenerateScalarConstant(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-   var v:TPOCAInt32;
+   var v,i:TPOCAInt32;
        Num:Double;
+       Value:TPOCAValue;
    begin
     if OutReg<0 then begin
      OutReg:=GetRegister(true,false);
@@ -25966,9 +25976,18 @@ var TokenList:PPOCAToken;
        end;
       end;
      end;
+     else begin
+     end;
     end;
-    EmitOpcode(popLOADCONST,result,FindConstantIndex(t,true));
-    SetRegisterNumber(result,t^.Token=ptLITERALNUM);
+    Value.CastedUInt64:=POCAValueNullCastedUInt64;
+    i:=FindConstantIndex(t,true,@Value);
+    if POCAIsValueCode(Value) then begin
+     EmitOpcode(popLOADCODE,result,i);
+     SetRegisterNumber(result,false);
+    end else begin
+     EmitOpcode(popLOADCONST,result,i);
+     SetRegisterNumber(result,t^.Token=ptLITERALNUM);
+    end;
    end;
    function GenerateNumberConstant(Num:Double;OutReg:TPOCAInt32):TPOCAInt32;
    var v:TPOCAInt32;
@@ -27862,7 +27881,7 @@ var TokenList:PPOCAToken;
      end else begin
       result:=OutReg;
      end;
-     EmitOpcode(popLOADCONST,result,NewConstant(NewLambda(t)));
+     EmitOpcode(popLOADCODE,result,NewConstant(NewLambda(t)));
     end;
     procedure GenerateArrayItem(t:PPOCAToken;ArrayReg:TPOCAInt32);
     var Reg1,Reg2:TPOCAInt32;
@@ -31747,7 +31766,7 @@ var TokenList:PPOCAToken;
       CodeGenerator^.FastFunction:=(not (CodeToken in [ptCLASSFUNCTION,ptMODULEFUNCTION])) and (CodeGenerator^.FastFunction or not CodeGenerator^.HasLocals);
       Code^.Name:=CodeName;
       Code^.Level:=CodeGenerator^.Level;
-      Code^.UseUpValues:=CodeGenerator^.UsedUpValues;
+      Code^.UseUpValues:=CodeGenerator^.UsedUpValues or CodeGenerator^.HasNestedFunctions;
       Code^.CountUpValues:=CodeGenerator^.CountUpValues;
       Code^.ClassFunction:=CodeToken=ptCLASSFUNCTION;
       Code^.FastFunction:=CodeGenerator^.FastFunction;
@@ -32228,6 +32247,7 @@ end;
 
 function POCABindFunction(Context:PPOCAContext;Frame:PPOCAFrame;const Code:TPOCAValue;const ClassFunction:Boolean):TPOCAValue;
 var Func:PPOCAFunction;
+    Index:TPOCAInt32;
 begin
  result:=POCANewFunction(Context,Code);
  Func:=PPOCAFunction(POCAGetValueReferencePointer(result));
@@ -32238,16 +32258,22 @@ begin
   Func^.Namespace:=Frame^.Locals;
  end;
  Func^.Obj:=Frame^.Obj;
- if (Func^.CountUpValueLevels=0) or not assigned(Func^.UpValueLevels) then begin
-  Func^.CountUpValueLevels:=Frame^.CountUpValueLevels;
-  if Func^.CountUpValueLevels>0 then begin
-   GetMem(Func^.UpValueLevels,Func^.CountUpValueLevels*SizeOf(PPPOCAValues));
-   Move(Frame^.UpValueLevels[0],Func^.UpValueLevels^[0],Func^.CountUpValueLevels*SizeOf(PPPOCAValues));
-  end else begin
-   Func^.UpValueLevels:=nil;
-  end;
- end;
  Func^.Next:=Frame^.Func;
+
+{Func^.UpValues:=nil;
+ if Func^.CountUpValues>0 then begin
+  SetLength(Func^.UpValues,Func^.CountUpValues);
+  for Index:=0 to Func^.CountUpValues-1 do begin
+   Func^.UpValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end;}
+
+ if Frame^.CountUpValueLevels>0 then begin
+  Func^.UpValueLevels:=copy(Frame^.UpValueLevels,0,Frame^.CountUpValueLevels);
+ end else begin
+  Func^.UpValueLevels:=nil;
+ end;
+
 end;
 
 function POCABindToContext(Context:PPOCAContext;Code:TPOCAValue):TPOCAValue;
@@ -32262,6 +32288,37 @@ begin
   Func^.Obj:=Frame^.Obj;
   Func^.Next:=Frame^.Func;
  end;
+end;
+
+procedure POCARunGetUpValue(Context:PPOCAContext;Frame:PPOCAFrame;const UpValueLevel,UpValueIndex:TPOCAUInt32;var OutValue:TPOCAValue);
+//var Func:PPOCAFunction;
+begin
+ OutValue:=Frame^.UpValueLevels[UpValueLevel][UpValueIndex];
+{Func:=POCAGetValueReferencePointer(Frame^.Func);
+ while assigned(Func) do begin
+  if Func^.UpValueLevel=UpValueLevel then begin
+   OutValue:=Func^.UpValues[UpValueIndex];
+   exit;
+  end else begin
+   Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
+  end;
+ end;
+ OutValue.CastedUInt64:=POCAValueNullCastedUInt64;//}
+end;
+
+procedure POCARunSetUpValue(Context:PPOCAContext;Frame:PPOCAFrame;const UpValueLevel,UpValueIndex:TPOCAUInt32;const Value:TPOCAValue);
+//var Func:PPOCAFunction;
+begin
+ Frame^.UpValueLevels[UpValueLevel][UpValueIndex]:=Value;
+{Func:=POCAGetValueReferencePointer(Frame^.Func);
+ while assigned(Func) do begin
+  if Func^.UpValueLevel=UpValueLevel then begin
+   Func^.UpValues[UpValueIndex]:=Value;
+   break;
+  end else begin
+   Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
+  end;
+ end;//}
 end;
 
 procedure POCASetupArgumentsErrorTooFewArguments(Context:PPOCAContext;Code:PPOCACode;CountArguments:TPOCAInt32);
@@ -32305,7 +32362,7 @@ begin
      Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakUPVALUE:begin
-     Frame^.UpValueLevels[Code^.ArgumentLocals[i].Level]^[Code^.ArgumentLocals[i].Index]:=Value;
+     POCARunSetUpValue(Context,Frame,Code^.ArgumentLocals[i].Level,Code^.ArgumentLocals[i].Index,Value);
     end;
     else begin
     end;
@@ -32342,7 +32399,7 @@ begin
      Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakUPVALUE:begin
-     Frame^.UpValueLevels[Code^.OptionalArgumentLocals[i].Level]^[Code^.OptionalArgumentLocals[i].Index]:=Value;
+     POCARunSetUpValue(Context,Frame,Code^.OptionalArgumentLocals[i].Level,Code^.OptionalArgumentLocals[i].Index,Value);
     end;
     else begin
     end;
@@ -32450,7 +32507,7 @@ begin
      Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakUPVALUE:begin
-     Frame^.UpValueLevels[Code^.ArgumentLocals[i].Level]^[Code^.ArgumentLocals[i].Index]:=Value;
+     POCARunSetUpValue(Context,Frame,Code^.ArgumentLocals[i].Level,Code^.ArgumentLocals[i].Index,Value);
     end;
     else begin
     end;
@@ -32477,7 +32534,7 @@ begin
     Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
    end;
    TPOCACodeArgument.pcakUPVALUE:begin
-    Frame^.UpValueLevels[Code^.OptionalArgumentLocals[i].Level]^[Code^.OptionalArgumentLocals[i].Index]:=Value;
+    POCARunSetUpValue(Context,Frame,Code^.OptionalArgumentLocals[i].Level,Code^.OptionalArgumentLocals[i].Index,Value);
    end;
    else begin
    end;
@@ -32515,46 +32572,42 @@ procedure POCASetupUpValues(Frame:PPOCAFrame;Code:PPOCACode);
 var Index,Level,UntilLevel:TPOCAInt32;
     Func:PPOCAFunction;
 begin
+
  if Code^.UseUpValues then begin
+
+  Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
+//writeln(IntToHex(TPOCAPtrUInt(Func),16));
+  Func^.UpValueLevel:=Code^.Level;
+  Func^.CountUpValues:=Code^.CountUpValues;
+
+  Func^.UpValues:=nil;
+  if Func^.CountUpValues>0 then begin
+   SetLength(Func^.UpValues,Func^.CountUpValues);
+   for Index:=0 to Func^.CountUpValues-1 do begin
+    Func^.UpValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
+  end;
+
   Frame^.CountUpValueLevels:=Code^.Level+1;
+
   if Frame^.CountUpValueLevels>0 then begin
+
    if length(Frame^.UpValueLevels)<TPOCAInt32(Frame^.CountUpValueLevels) then begin
     SetLength(Frame^.UpValueLevels,POCARoundUpToPowerOfTwo(Frame^.CountUpValueLevels+1));
    end;
-   for Index:=Code^.Level+1 to Frame^.CountUpValueLevels-1 do begin
-    Frame^.UpValueLevels[Index]:=nil;
+
+   for Index:=0 to length(Func^.UpValueLevels)-1 do begin
+    Frame^.UpValueLevels[Index]:=Func^.UpValueLevels[Index];
    end;
-   Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
-   Func^.CountUpValues:=Code^.CountUpValues;
-   if (Func^.CountUpValues>0) and not assigned(Func^.UpValues) then begin
-    GetMem(Func^.UpValues,Func^.CountUpValues*SizeOf(TPOCAValue));
-    for Index:=0 to Func^.CountUpValues-1 do begin
-     Func^.UpValues^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
-    end;
-   end;
-   if assigned(Func^.UpValueLevels) and (Func^.CountUpValueLevels>0) then begin
-    for Index:=0 to Func^.CountUpValueLevels-1 do begin
-     Frame^.UpValueLevels[Index]:=Func^.UpValueLevels^[Index];
-    end;
-    UntilLevel:=Func^.CountUpValueLevels;
-   end else begin
-    UntilLevel:=0;
-   end;
-   Level:=Code^.Level;
-   while assigned(Func) and (Level>=UntilLevel) and (Func^.UpValueLevel>=UntilLevel) do begin
-    Frame^.UpValueLevels[Func^.UpValueLevel]:=Func^.UpValues;
-    ///break;
-    if POCAIsValueFunction(Func^.Next) then begin
-     Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
-     dec(Level);
-    end else begin
-     break;
-    end;
-   end;
+
+   Frame^.UpValueLevels[Func^.UpValueLevel]:=Func^.UpValues;
+
   end;
+
  end else begin
   Frame^.CountUpValueLevels:=0;
  end;
+
 end;
 
 function POCASetupFunctionCall(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:TPOCAUInt32;Operands:PPOCAUInt32Array;MethodCall,Named:boolean;TheFunc:PPOCAValue=nil):PPOCAFrame;
@@ -32869,7 +32922,7 @@ begin
    if POCAHashTrySetCache(Context,Func^.Namespace,Sym,Value,Constant,CacheIndex) then begin
     exit;
    end;
-   Func:=PPOCAFunction(POCAGetValueReferencePointer(Func.Next));
+   Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
   end;
  end;
 
@@ -34641,6 +34694,9 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
     popRETURN:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popLOADCODE:begin
      DoItByVMOpcodeDispatcher;
     end;
     popLOADCONST:begin
@@ -37417,12 +37473,11 @@ begin
     Registers^[Frame^.ResultRegister]:=a;
     Context^.TemporarySavedObjectCount:=0;
    end;
+   popLOADCODE:begin
+    Registers^[Operands^[0]]:=POCABindFunction(Context,Frame,Code^.Constants^[Operands^[1]],Code^.ClassFunction);
+   end;
    popLOADCONST:begin
-    a:=Code^.Constants^[Operands^[1]];
-    if POCAIsValueCode(a) then begin
-     a:=POCABindFunction(Context,Frame,a,Code^.ClassFunction);
-    end;
-    Registers^[Operands^[0]]:=a;
+    Registers^[Operands^[0]]:=Code^.Constants^[Operands^[1]];
    end;
    popLOADONE:begin
     Registers^[Operands^[0]].Num:=1;
@@ -37473,10 +37528,10 @@ begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
    end;
    popGETUPVALUE:begin
-    Registers^[Operands^[0]]:=Frame^.UpValueLevels[Operands^[1]]^[Operands^[2]];
+    POCARunGetUpValue(Context,Frame,Operands^[1],Operands^[2],Registers^[Operands^[0]]);
    end;
    popSETUPVALUE:begin
-    Frame^.UpValueLevels[Operands^[0]]^[Operands^[1]]:=Registers^[Operands^[2]];
+    POCARunSetUpValue(Context,Frame,Operands^[0],Operands^[1],Registers^[Operands^[2]]);
    end;
    popNEWARRAY:begin
     Registers^[Operands^[0]]:=POCANewArray(Context);
