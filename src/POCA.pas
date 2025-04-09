@@ -25854,6 +25854,7 @@ var TokenList:PPOCAToken;
     Scope^.Symbols:=nil;
     Scope^.CountSymbols:=0;
     CodeGenerator^.CountUpValues:=Scope^.BeginCountUpValues;
+    Scope^.SymbolNameHashMap.Clear;
    end;
    procedure ScopePush(out aScopeState:TScopeState); // Save current scope state
    begin
