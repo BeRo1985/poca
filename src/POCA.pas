@@ -31449,15 +31449,16 @@ var TokenList:PPOCAToken;
         Symbol:=t^.Right;
        end else begin
         IsLocal:=false;
+        Symbol:=t;
        end;
       end;
       ptSYMBOL:begin
        if CodeToken=ptFASTFUNCTION then begin
         IsLocal:=true;
-        Symbol:=t;
        end else begin
         IsLocal:=false;
        end;
+       Symbol:=t;
       end;
       ptCOMMA:begin
        PreprocessArgumentList(t^.Left);
@@ -31479,10 +31480,10 @@ var TokenList:PPOCAToken;
        SetLength(CodeGenerator^.LocalArguments,CodeGenerator^.CountLocalArguments*2);
       end;
      end;
-     if IsLocal and Instance^.Globals.UseUpValues and CodeGenerator^.HasNestedFunctions then begin
-      ScopeScope:=FindScopeSymbol(Symbol,false,true,false);
+     if {(not IsLocal) and}Instance^.Globals.UseUpValues and CodeGenerator^.HasNestedFunctions then begin
+      ScopeScope:=FindScopeSymbol(Symbol,false,false,false);
       if not assigned(ScopeScope) then begin
-       ScopeScope:=DefineScopeSymbol(Symbol,true,true,IsConst,false,GetRegister(false,IsConst));
+       ScopeScope:=DefineScopeSymbol(Symbol,true,true,IsConst,false,-1);
       end;
       if assigned(ScopeScope) then begin
        CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Kind:=TPOCACodeArgument.pcakUPVALUE;
@@ -31490,7 +31491,7 @@ var TokenList:PPOCAToken;
        CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Index:=ScopeScope^.UpValueIndex;
       end;
      end else if IsLocal then begin
-      ScopeScope:=FindScopeSymbol(Symbol,false,true,false);
+      ScopeScope:=FindScopeSymbol(Symbol,false,false,false);
       if not assigned(ScopeScope) then begin
        ScopeScope:=DefineScopeSymbol(Symbol,false,true,IsConst,false,GetRegister(false,IsConst));
       end;
@@ -32277,7 +32278,7 @@ begin
      Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakUPVALUE:begin
-///   Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
+     Frame^.UpValueLevels[Code^.ArgumentLocals[i].Level]^[Code^.ArgumentLocals[i].Index]:=Value;
     end;
     else begin
     end;
@@ -32314,7 +32315,7 @@ begin
      Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakUPVALUE:begin
-///  Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
+     Frame^.UpValueLevels[Code^.OptionalArgumentLocals[i].Level]^[Code^.OptionalArgumentLocals[i].Index]:=Value;
     end;
     else begin
     end;
@@ -32422,7 +32423,7 @@ begin
      Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakUPVALUE:begin
-//   Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
+     Frame^.UpValueLevels[Code^.ArgumentLocals[i].Level]^[Code^.ArgumentLocals[i].Index]:=Value;
     end;
     else begin
     end;
@@ -32449,7 +32450,7 @@ begin
     Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
    end;
    TPOCACodeArgument.pcakUPVALUE:begin
-//   Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
+    Frame^.UpValueLevels[Code^.OptionalArgumentLocals[i].Level]^[Code^.OptionalArgumentLocals[i].Index]:=Value;
    end;
    else begin
    end;
