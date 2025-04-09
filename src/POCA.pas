@@ -32634,13 +32634,8 @@ begin
 
 //writeln(IntToHex(TPOCAPtrUInt(Func),16));
 
+  Frame^.OuterValueLevels:=Func^.ClosureValues;
   Frame^.CountOuterValueLevels:=Code^.Level;
-  if length(Frame^.OuterValueLevels)<TPOCAInt32(Frame^.CountOuterValueLevels) then begin
-   SetLength(Frame^.OuterValueLevels,Frame^.CountOuterValueLevels+((Frame^.CountOuterValueLevels+1) shr 1));
-  end;
-  for Index:=0 to length(Func^.ClosureValues)-1 do begin
-   Frame^.OuterValueLevels[Index]:=Func^.ClosureValues[Index];
-  end;
 
   Frame^.LocalValues:=nil;
   if length(Frame^.LocalValues)<Code^.CountFrameValues then begin
