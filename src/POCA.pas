@@ -8102,21 +8102,33 @@ begin
 end;
 
 function POCANewFunction(Context:PPOCAContext;const Code:TPOCAValue):TPOCAValue;
-var Func:PPOCAFunction;
+var Index:TPOCAInt32;
+    Func:PPOCAFunction;
     CodePointer:PPOCACode;
 begin
+
  CodePointer:=PPOCACode(POCAGetValueReferencePointer(Code));
  result:=POCANew(Context,pvtFUNCTION,PPOCAObject(Func));
+
  Func^.Code:=Code;
-{Func^.Namespace:=POCAValueNull;
- Func^.Obj:=POCAValueNull;
- Func^.Next:=POCAValueNull;}
+
  Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
- Func^.CountUpValueLevels:=0;
- Func^.UpValueLevel:=CodePointer^.Level;
- Func^.UpValueContextID:=0;
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
+
+ if assigned(CodePointer) and (CodePointer^.Header.ValueType=pvtCODE) then begin
+  Func^.CountUpValueLevels:=0;
+  Func^.UpValueLevel:=CodePointer^.Level;
+  Func^.UpValueContextID:=0;
+  Func^.CountUpValues:=CodePointer^.CountUpValues;
+  if (Func^.CountUpValues>0) and not assigned(Func^.UpValues) then begin
+   GetMem(Func^.UpValues,Func^.CountUpValues*SizeOf(TPOCAValue));
+   for Index:=0 to Func^.CountUpValues-1 do begin
+    Func^.UpValues^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
+  end;
+ end;
+
 end;
 
 function POCANewGhost(Context:PPOCAContext;const GhostType:PPOCAGhostType;const Ptr:TPOCAPointer;const Hash:PPOCAHash=nil;const PtrType:TPOCAGhostPtrType=pgptRAW):TPOCAValue;
@@ -32531,6 +32543,7 @@ begin
    Level:=Code^.Level;
    while assigned(Func) and (Level>=UntilLevel) and (Func^.UpValueLevel>=UntilLevel) do begin
     Frame^.UpValueLevels[Func^.UpValueLevel]:=Func^.UpValues;
+    ///break;
     if POCAIsValueFunction(Func^.Next) then begin
      Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
      dec(Level);
