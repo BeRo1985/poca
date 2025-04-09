@@ -25236,6 +25236,7 @@ var TokenList:PPOCAToken;
       TScopeState=record
        CountScopes:TPOCAInt32;
        CountSymbols:TPOCAInt32;
+       CountUpValues:TPOCAInt32;
       end;
   function GenerateCode(var Parser:TPOCAParser;Block:PPOCAToken;ArgumentList:PPOCAToken;CodeToken:TPOCATokenType;const CodeName:TPOCARawByteString;const ParentCodeGenerator:PPOCACodeGenerator):TPOCAValue;
   var CodeGenerator:PPOCACodeGenerator;
@@ -25697,7 +25698,7 @@ var TokenList:PPOCAToken;
       end;
       result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
       result^.CodeName:=t^.Str;
-      if aLetConst then begin
+      if aLetConst and (Kind<>TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
        result^.RealName:=t^.Str+'@'+IntToStr(result^.ScopeID);
       end else begin
        result^.RealName:=t^.Str;
@@ -25834,6 +25835,7 @@ var TokenList:PPOCAToken;
     end else begin
      aScopeState.CountSymbols:=0;
     end;
+    aScopeState.CountUpValues:=CodeGenerator^.CountUpValues;
    end;
    procedure ScopePop(var aScopeState:TScopeState); // Restore current scope state
    var Index,Reg:TPOCAInt32;
@@ -25873,13 +25875,18 @@ var TokenList:PPOCAToken;
       Scope^.CountSymbols:=aScopeState.CountSymbols;
      end;
     end;
+    if aScopeState.CountUpValues>=0 then begin
+     CodeGenerator^.CountUpValues:=aScopeState.CountUpValues;
+    end;
     aScopeState.CountScopes:=-1;
     aScopeState.CountSymbols:=-1;
+    aScopeState.CountUpValues:=-1;
    end;
    procedure ScopeDrop(var aScopeState:TScopeState); // Drop current scope state
    begin
     aScopeState.CountScopes:=-1;
     aScopeState.CountSymbols:=-1;
+    aScopeState.CountUpValues:=-1;
    end;
    function GenerateScalarConstant(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
    var v:TPOCAInt32;
@@ -27005,7 +27012,13 @@ var TokenList:PPOCAToken;
       end;
       ptSYMBOL:begin
        Symbol:=FindScopeSymbol(t,false,true,false);
-       if assigned(Symbol) and (Symbol^.Register>=0) then begin
+       if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
+        CodeGenerator^.UsedUpValues:=true;
+        UpValueLevel:=Symbol^.UpValueLevel;
+        UpValueIndex:=Symbol^.UpValueIndex;
+        ConstantIndex:=0;
+        result:=popSETUPVALUE;
+       end else if assigned(Symbol) and (Symbol^.Register>=0) then begin
         if Symbol^.Constant then begin
          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
@@ -27080,6 +27093,8 @@ var TokenList:PPOCAToken;
          Symbol:=DefineScopeSymbol(t,true,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
          if Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
           CodeGenerator^.UsedUpValues:=true;
+          UpValueLevel:=Symbol^.UpValueLevel;
+          UpValueIndex:=Symbol^.UpValueIndex;
           ConstantIndex:=0;
           result:=popSETUPVALUE;
          end else begin
@@ -27110,6 +27125,8 @@ var TokenList:PPOCAToken;
      ConstantIndex:=0;
      Reg1:=0;
      Reg2:=0;
+     UpValueLevel:=0;
+     UpValueIndex:=0;
      AssignOp:=ProcessLeftValue(t,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
      case AssignOp and $ff of
       popSETMEMBER:begin
@@ -30824,7 +30841,13 @@ var TokenList:PPOCAToken;
         end;
        end else if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
         CodeGenerator^.UsedUpValues:=true;
+        if OutReg<0 then begin
+         result:=GetRegister(true,false);
+        end else begin
+         result:=OutReg;
+        end;
         EmitOpcode(popGETUPVALUE,result,Symbol^.UpValueLevel,Symbol^.UpValueIndex);
+        SetRegisterNumber(result,false);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
