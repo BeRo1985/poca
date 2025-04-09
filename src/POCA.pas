@@ -1122,6 +1122,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      end;
 
      TPOCAValueArray=array of TPOCAValue;
+     PPOCAValueArray=^TPOCAValueArray;
 
      TPOCAValues=array[0..($7fffffff div sizeof(TPOCAValue))-1] of TPOCAValue;
 
@@ -1259,9 +1260,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Namespace:TPOCAValue;
       Obj:TPOCAValue;
       UpValueContextID:TPOCAUInt64; // for future
-      UpValueLevel:TPOCAInt32; // for future
-      UpValues:TPOCAValueArray; // for future
-      CountUpValues:TPOCAInt32; // for future
+      OwnUpValueLevel:TPOCAInt32; // for future
       UpValueLevels:TPOCAValueArrayArray; // for future
       Next:TPOCAValue;
      end;
@@ -1278,7 +1277,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Arguments:TPOCAValueArray;
       CountArguments:TPOCAInt32;
       UpValueLevels:TPOCAValueArrayArray;
-      CountUpValueLevels:TPOCAInt32;
+      CountActiveUpValueLevels:TPOCAInt32;
      end;
 
      TPOCANativeFunction=function(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -5500,7 +5499,6 @@ end;
 
 procedure POCAFuncGCClean(Obj:PPOCAFunction);
 begin
- Obj^.UpValues:=nil;
  Obj^.UpValueLevels:=nil;
 end;
 
@@ -6286,19 +6284,10 @@ begin
  if MarkValue(Obj^.Obj) then begin
   result:=true;
  end;
- if length(Obj^.UpValues)>0 then begin
-  for Index:=0 to length(Obj^.UpValues)-1 do begin
-   if MarkValue(Obj^.UpValues[Index]) then begin
+ for Index:=0 to length(Obj^.UpValueLevels)-1 do begin
+  for OtherIndex:=0 to length(Obj^.UpValueLevels[Index])-1 do begin
+   if MarkValue(Obj^.UpValueLevels[Index][OtherIndex]) then begin
     result:=true;
-   end;
-  end;
- end;
- if length(Obj^.UpValueLevels)>0 then begin
-  for Index:=0 to length(Obj^.UpValueLevels)-1 do begin
-   for OtherIndex:=0 to length(Obj^.UpValueLevels[Index])-1 do begin
-    if MarkValue(Obj^.UpValueLevels[Index][OtherIndex]) then begin
-     result:=true;
-    end;
    end;
   end;
  end;
@@ -6460,7 +6449,7 @@ end;
 function TPOCAGarbageCollector.MarkContexts:boolean;
 var Context:PPOCAContext;
     Frame:PPOCAFrame;
-    i,j:TPOCAInt32;
+    i,j,k:TPOCAInt32;
 begin
  Context:=Instance^.Globals.FirstContext;
  while assigned(Context) do begin
@@ -6475,7 +6464,13 @@ begin
    for j:=0 to Frame^.CountArguments-1 do begin
     MarkValue(Frame^.Arguments[j]);
    end;
-   // UpValues getting marked in the Funcs itself
+   for j:=0 to Min(length(Frame^.UpValueLevels),Frame^.CountActiveUpValueLevels)-1 do begin
+    for k:=0 to length(Frame^.UpValueLevels[j])-1 do begin
+     if MarkValue(Frame^.UpValueLevels[j][k]) then begin
+      result:=true;
+     end;
+    end;
+   end;
   end;
   if assigned(PPOCACoroutineData(Context^.CoroutineData)) and (assigned(PPOCACoroutineData(Context^.CoroutineData)^.Coroutine) and (PPOCACoroutineData(Context^.CoroutineData)^.Coroutine^.State<>pcsTERMINATED)) then begin
    POCACoroutineGhostMarkEx(Context^.ThreadData);
@@ -8107,34 +8102,14 @@ begin
 end;
 
 function POCANewFunction(Context:PPOCAContext;const Code:TPOCAValue):TPOCAValue;
-var Index:TPOCAInt32;
-    Func:PPOCAFunction;
-    CodePointer:PPOCACode;
+var Func:PPOCAFunction;
 begin
-
- CodePointer:=PPOCACode(POCAGetValueReferencePointer(Code));
  result:=POCANew(Context,pvtFUNCTION,PPOCAObject(Func));
-
  Func^.Code:=Code;
-
  Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+ Func^.UpValueLevels:=nil;
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
-
-{if assigned(CodePointer) and (CodePointer^.Header.ValueType=pvtCODE) then begin
-  Func^.CountUpValueLevels:=0;
-  Func^.UpValueLevel:=CodePointer^.Level;
-  Func^.UpValueContextID:=0;
-  Func^.CountUpValues:=CodePointer^.CountUpValues;
-  Func^.UpValues:=nil;
-  if (Func^.CountUpValues>0) and not assigned(Func^.UpValues) then begin
-   SetLength(Func^.UpValues,Func^.CountUpValues);
-   for Index:=0 to Func^.CountUpValues-1 do begin
-    Func^.UpValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
-   end;
-  end;
- end;//}
-
 end;
 
 function POCANewGhost(Context:PPOCAContext;const GhostType:PPOCAGhostType;const Ptr:TPOCAPointer;const Hash:PPOCAHash=nil;const PtrType:TPOCAGhostPtrType=pgptRAW):TPOCAValue;
@@ -18181,7 +18156,7 @@ begin
   result^.Globals.ScopeIDCounter:=0;
  end;
  begin
-  result^.Globals.UseUpValues:=false;//true;
+  result^.Globals.UseUpValues:=true;//true;
   result^.Globals.UpValueContextIDCounter:=0;
  end;
  begin
@@ -32260,16 +32235,8 @@ begin
  Func^.Obj:=Frame^.Obj;
  Func^.Next:=Frame^.Func;
 
-{Func^.UpValues:=nil;
- if Func^.CountUpValues>0 then begin
-  SetLength(Func^.UpValues,Func^.CountUpValues);
-  for Index:=0 to Func^.CountUpValues-1 do begin
-   Func^.UpValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
-  end;
- end;}
-
- if Frame^.CountUpValueLevels>0 then begin
-  Func^.UpValueLevels:=copy(Frame^.UpValueLevels,0,Frame^.CountUpValueLevels);
+ if Frame^.CountActiveUpValueLevels>0 then begin
+  Func^.UpValueLevels:=copy(Frame^.UpValueLevels,0,Frame^.CountActiveUpValueLevels);
  end else begin
   Func^.UpValueLevels:=nil;
  end;
@@ -32290,35 +32257,14 @@ begin
  end;
 end;
 
-procedure POCARunGetUpValue(Context:PPOCAContext;Frame:PPOCAFrame;const UpValueLevel,UpValueIndex:TPOCAUInt32;var OutValue:TPOCAValue);
-//var Func:PPOCAFunction;
+procedure POCARunGetUpValue(Context:PPOCAContext;Frame:PPOCAFrame;const UpValueLevel,UpValueIndex:TPOCAUInt32;var OutValue:TPOCAValue); {$ifdef caninline}inline;{$endif}
 begin
  OutValue:=Frame^.UpValueLevels[UpValueLevel][UpValueIndex];
-{Func:=POCAGetValueReferencePointer(Frame^.Func);
- while assigned(Func) do begin
-  if Func^.UpValueLevel=UpValueLevel then begin
-   OutValue:=Func^.UpValues[UpValueIndex];
-   exit;
-  end else begin
-   Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
-  end;
- end;
- OutValue.CastedUInt64:=POCAValueNullCastedUInt64;//}
 end;
 
-procedure POCARunSetUpValue(Context:PPOCAContext;Frame:PPOCAFrame;const UpValueLevel,UpValueIndex:TPOCAUInt32;const Value:TPOCAValue);
-//var Func:PPOCAFunction;
+procedure POCARunSetUpValue(Context:PPOCAContext;Frame:PPOCAFrame;const UpValueLevel,UpValueIndex:TPOCAUInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
 begin
  Frame^.UpValueLevels[UpValueLevel][UpValueIndex]:=Value;
-{Func:=POCAGetValueReferencePointer(Frame^.Func);
- while assigned(Func) do begin
-  if Func^.UpValueLevel=UpValueLevel then begin
-   Func^.UpValues[UpValueIndex]:=Value;
-   break;
-  end else begin
-   Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
-  end;
- end;//}
 end;
 
 procedure POCASetupArgumentsErrorTooFewArguments(Context:PPOCAContext;Code:PPOCACode;CountArguments:TPOCAInt32);
@@ -32569,43 +32515,39 @@ begin
 end;
 
 procedure POCASetupUpValues(Frame:PPOCAFrame;Code:PPOCACode);
-var Index,Level,UntilLevel:TPOCAInt32;
+var Index:TPOCAInt32;
     Func:PPOCAFunction;
+    UpValues:PPOCAValueArray;
 begin
 
  if Code^.UseUpValues then begin
 
   Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
-//writeln(IntToHex(TPOCAPtrUInt(Func),16));
-  Func^.UpValueLevel:=Code^.Level;
-  Func^.CountUpValues:=Code^.CountUpValues;
 
-  Func^.UpValues:=nil;
-  if Func^.CountUpValues>0 then begin
-   SetLength(Func^.UpValues,Func^.CountUpValues);
-   for Index:=0 to Func^.CountUpValues-1 do begin
-    Func^.UpValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
-   end;
+//writeln(IntToHex(TPOCAPtrUInt(Func),16));
+
+  Func^.OwnUpValueLevel:=Code^.Level;
+
+  Frame^.CountActiveUpValueLevels:=Code^.Level+1;
+
+  if length(Frame^.UpValueLevels)<TPOCAInt32(Frame^.CountActiveUpValueLevels) then begin
+   SetLength(Frame^.UpValueLevels,POCARoundUpToPowerOfTwo(Frame^.CountActiveUpValueLevels+1));
   end;
 
-  Frame^.CountUpValueLevels:=Code^.Level+1;
+  for Index:=0 to length(Func^.UpValueLevels)-1 do begin
+   Frame^.UpValueLevels[Index]:=Func^.UpValueLevels[Index];
+  end;
 
-  if Frame^.CountUpValueLevels>0 then begin
-
-   if length(Frame^.UpValueLevels)<TPOCAInt32(Frame^.CountUpValueLevels) then begin
-    SetLength(Frame^.UpValueLevels,POCARoundUpToPowerOfTwo(Frame^.CountUpValueLevels+1));
-   end;
-
-   for Index:=0 to length(Func^.UpValueLevels)-1 do begin
-    Frame^.UpValueLevels[Index]:=Func^.UpValueLevels[Index];
-   end;
-
-   Frame^.UpValueLevels[Func^.UpValueLevel]:=Func^.UpValues;
-
+  UpValues:=@Frame^.UpValueLevels[Func^.OwnUpValueLevel];
+  SetLength(UpValues^,Code^.CountUpValues);
+  for Index:=0 to Code^.CountUpValues-1 do begin
+   UpValues^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
   end;
 
  end else begin
-  Frame^.CountUpValueLevels:=0;
+
+  Frame^.CountActiveUpValueLevels:=0;
+
  end;
 
 end;
