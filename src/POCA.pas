@@ -25835,26 +25835,28 @@ var TokenList:PPOCAToken;
        Scope:PPOCACodeGeneratorScope;
        Symbol:PPOCACodeGeneratorScopeSymbol;
    begin
-    ScopeIndex:=CodeGenerator^.CountScopes-1;
-    Scope:=@CodeGenerator^.Scopes[ScopeIndex];
-    begin
-     for Index:=0 to Scope^.CountSymbols-1 do begin
-      Symbol:=Scope^.Symbols[Index];
-      Scope^.Symbols[Index]:=nil;
-      if assigned(Symbol) then begin
-       Reg:=Symbol^.Register;
-       if Reg>=0 then begin
-        FreeRegister(Reg,true);
+    if CodeGenerator^.CountScopes>0 then begin
+     ScopeIndex:=CodeGenerator^.CountScopes-1;
+     Scope:=@CodeGenerator^.Scopes[ScopeIndex];
+     begin
+      for Index:=0 to Scope^.CountSymbols-1 do begin
+       Symbol:=Scope^.Symbols[Index];
+       Scope^.Symbols[Index]:=nil;
+       if assigned(Symbol) then begin
+        Reg:=Symbol^.Register;
+        if Reg>=0 then begin
+         FreeRegister(Reg,true);
+        end;
+        Finalize(Symbol^);
+        FreeMem(Symbol);
        end;
-       Finalize(Symbol^);
-       FreeMem(Symbol);
       end;
      end;
+     Scope^.Symbols:=nil;
+     Scope^.CountSymbols:=0;
+     CodeGenerator^.CountUpValues:=Scope^.BeginCountUpValues;
+     Scope^.SymbolNameHashMap.Clear;
     end;
-    Scope^.Symbols:=nil;
-    Scope^.CountSymbols:=0;
-    CodeGenerator^.CountUpValues:=Scope^.BeginCountUpValues;
-    Scope^.SymbolNameHashMap.Clear;
    end;
    procedure ScopePush(out aScopeState:TScopeState); // Save current scope state
    begin
