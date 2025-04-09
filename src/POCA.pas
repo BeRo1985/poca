@@ -383,116 +383,118 @@ const POCAVersion='2025-04-06-09-34-0000';
       popSETMEMBER=41;
       popGETLOCAL=42;
       popSETLOCAL=43;
-      popGETUPVALUE=44;
-      popSETUPVALUE=45;
-      popNEWARRAY=46;
-      popARRAYPUSH=47;
-      popARRAYRANGEPUSH=48;
-      popNEWHASH=49;
-      popHASHAPPEND=50;
-      popSETSYM=51;
-      popINDEX=52;
-      popFCALLH=53;
-      popMCALLH=54;
-      popUNPACK=55;
-      popSLICE=56;
-      popSLICE2=57;
-      popSLICE3=58;
-      popTRY=59;
-      popTRYBLOCKEND=60;
-      popTHROW=61;
-      popDEC=62;
-      popINC=63;
-      popBAND=64;
-      popBXOR=65;
-      popBOR=66;
-      popBNOT=67;
-      popBSHL=68;
-      popBSHR=69;
-      popBUSHR=70;
-      popMOD=71;
-      popPOW=72;
-      popINHERITEDGETMEMBER=73;
-      popKEY=74;
-      popIN=75;
-      popINRANGE=76;
-      popFTAILCALL=77;
-      popMTAILCALL=78;
-      popFTAILCALLH=79;
-      popMTAILCALLH=80;
-      popINSTANCEOF=81;
-      popBREAKPOINT=82;
-      popNUM=83;
-      popN_NOT=84;
-      popN_ADD=85;
-      popN_SUB=86;
-      popN_MUL=87;
-      popN_DIV=88;
-      popN_NEG=89;
-      popN_LT=90;
-      popN_LTEQ=91;
-      popN_GT=92;
-      popN_GTEQ=93;
-      popN_EQ=94;
-      popN_NEQ=95;
-      popN_CMP=96;
-      popN_DEC=97;
-      popN_INC=98;
-      popN_BAND=99;
-      popN_BXOR=100;
-      popN_BOR=101;
-      popN_BNOT=102;
-      popN_BSHL=103;
-      popN_BSHR=104;
-      popN_BUSHR=105;
-      popN_MOD=106;
-      popN_POW=107;
-      popN_INRANGE=108;
-      popN_JIFTRUE=109;
-      popN_JIFFALSE=110;
-      popN_JIFTRUELOOP=111;
-      popN_JIFFALSELOOP=112;
-      popN_JIFLT=113;
-      popN_JIFLTEQ=114;
-      popN_JIFGT=115;
-      popN_JIFGTEQ=116;
-      popN_JIFEQ=117;
-      popN_JIFNEQ=118;
-      popN_JIFLTLOOP=119;
-      popN_JIFLTEQLOOP=120;
-      popN_JIFGTLOOP=121;
-      popN_JIFGTEQLOOP=122;
-      popN_JIFEQLOOP=123;
-      popN_JIFNEQLOOP=124;
-      popUPDATESTRING=125;
-      popREGEXP=126;
-      popREGEXPEQ=127;
-      popREGEXPNEQ=128;
-      popSQRT=129;
-      popN_SQRT=130;
-      popGETPROTOTYPE=131;
-      popSETPROTOTYPE=132;
-      popGETCONSTRUCTOR=133;
-      popSETCONSTRUCTOR=134;
-      popDELETE=135;
-      popDELETEEX=136;
-      popDEFINED=137;
-      popDEFINEDEX=138;
-      popLOADGLOBAL=139;
-      popLOADBASECLASS=140;
-      popGETHASHKIND=141;
-      popSETHASHKIND=142;
-      popTYPEOF=143;
-      popIDOF=144;
-      popGHOSTTYPEOF=145;
-      popELVIS=146;
-      popIS=147;
-      popJIFNULL=148;
-      popJIFNOTNULL=149;
-      popSAFEEXTRACT=150;
-      popSAFEGETMEMBER=151;
-      popSETCONSTLOCAL=152;
-      popCOUNT=153;
+      popGETLOCALVALUE=44;
+      popSETLOCALVALUE=45;
+      popGETOUTERVALUE=46;
+      popSETOUTERVALUE=47;
+      popNEWARRAY=48;
+      popARRAYPUSH=49;
+      popARRAYRANGEPUSH=50;
+      popNEWHASH=51;
+      popHASHAPPEND=52;
+      popSETSYM=53;
+      popINDEX=54;
+      popFCALLH=55;
+      popMCALLH=56;
+      popUNPACK=57;
+      popSLICE=58;
+      popSLICE2=59;
+      popSLICE3=60;
+      popTRY=61;
+      popTRYBLOCKEND=62;
+      popTHROW=63;
+      popDEC=64;
+      popINC=65;
+      popBAND=66;
+      popBXOR=67;
+      popBOR=68;
+      popBNOT=69;
+      popBSHL=70;
+      popBSHR=71;
+      popBUSHR=72;
+      popMOD=73;
+      popPOW=74;
+      popINHERITEDGETMEMBER=75;
+      popKEY=76;
+      popIN=77;
+      popINRANGE=78;
+      popFTAILCALL=79;
+      popMTAILCALL=80;
+      popFTAILCALLH=81;
+      popMTAILCALLH=82;
+      popINSTANCEOF=83;
+      popBREAKPOINT=84;
+      popNUM=85;
+      popN_NOT=86;
+      popN_ADD=87;
+      popN_SUB=88;
+      popN_MUL=89;
+      popN_DIV=90;
+      popN_NEG=91;
+      popN_LT=92;
+      popN_LTEQ=93;
+      popN_GT=94;
+      popN_GTEQ=95;
+      popN_EQ=96;
+      popN_NEQ=97;
+      popN_CMP=98;
+      popN_DEC=99;
+      popN_INC=100;
+      popN_BAND=101;
+      popN_BXOR=102;
+      popN_BOR=103;
+      popN_BNOT=104;
+      popN_BSHL=105;
+      popN_BSHR=106;
+      popN_BUSHR=107;
+      popN_MOD=108;
+      popN_POW=109;
+      popN_INRANGE=110;
+      popN_JIFTRUE=111;
+      popN_JIFFALSE=112;
+      popN_JIFTRUELOOP=113;
+      popN_JIFFALSELOOP=114;
+      popN_JIFLT=115;
+      popN_JIFLTEQ=116;
+      popN_JIFGT=117;
+      popN_JIFGTEQ=118;
+      popN_JIFEQ=119;
+      popN_JIFNEQ=120;
+      popN_JIFLTLOOP=121;
+      popN_JIFLTEQLOOP=122;
+      popN_JIFGTLOOP=123;
+      popN_JIFGTEQLOOP=124;
+      popN_JIFEQLOOP=125;
+      popN_JIFNEQLOOP=126;
+      popUPDATESTRING=127;
+      popREGEXP=128;
+      popREGEXPEQ=129;
+      popREGEXPNEQ=130;
+      popSQRT=131;
+      popN_SQRT=132;
+      popGETPROTOTYPE=133;
+      popSETPROTOTYPE=134;
+      popGETCONSTRUCTOR=135;
+      popSETCONSTRUCTOR=136;
+      popDELETE=137;
+      popDELETEEX=138;
+      popDEFINED=139;
+      popDEFINEDEX=140;
+      popLOADGLOBAL=141;
+      popLOADBASECLASS=142;
+      popGETHASHKIND=143;
+      popSETHASHKIND=144;
+      popTYPEOF=145;
+      popIDOF=146;
+      popGHOSTTYPEOF=147;
+      popELVIS=148;
+      popIS=149;
+      popJIFNULL=150;
+      popJIFNOTNULL=151;
+      popSAFEEXTRACT=152;
+      popSAFEGETMEMBER=153;
+      popSETCONSTLOCAL=154;
+      popCOUNT=155;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -1204,7 +1206,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       public
        const pcakVAR=0;
              pcakREG=1;
-             pcakUPVALUE=2;
+             pcakFRAMEVALUE=2;
       public
        Kind:TPOCAUInt32;
        Level:TPOCAInt32;
@@ -1219,8 +1221,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Header:TPOCAObjectHeader;
       Name:TPOCARawByteString;
       Level:TPOCAInt32;
-      UseUpValues:TPOCABool32;
-      CountUpValues:TPOCAInt32;
+      UseFrameValues:TPOCABool32;
+      CountFrameValues:TPOCAInt32;
       ClassFunction:TPOCABool32;
       FastFunction:TPOCABool32;
       IsEmpty:TPOCABool32;
@@ -1259,9 +1261,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Code:TPOCAValue;
       Namespace:TPOCAValue;
       Obj:TPOCAValue;
-      UpValueContextID:TPOCAUInt64; // for future
-      OwnUpValueLevel:TPOCAInt32; // for future
-      UpValueLevels:TPOCAValueArrayArray; // for future
+      FrameValueContextID:TPOCAUInt64;
+      ClosureValues:TPOCAValueArrayArray;
       Next:TPOCAValue;
      end;
 
@@ -1276,8 +1277,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       CountRegisters:TPOCAInt32;
       Arguments:TPOCAValueArray;
       CountArguments:TPOCAInt32;
-      UpValueLevels:TPOCAValueArrayArray;
-      CountActiveUpValueLevels:TPOCAInt32;
+      LocalValues:TPOCAValueArray;
+      OuterValueLevels:TPOCAValueArrayArray;
+      CountOuterValueLevels:TPOCAInt32;
      end;
 
      TPOCANativeFunction=function(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -1475,8 +1477,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       ScopeIDCounter:TPOCAUInt64;
 
-      UseUpValues:TPOCABool32;
-      UpValueContextIDCounter:TPOCAUInt64;
+      UseFrameValues:TPOCABool32;
+      FrameValueContextIDCounter:TPOCAUInt64;
 
 {$ifdef POCAMemoryPools}
       Pools:TPOCAPools;
@@ -5499,7 +5501,7 @@ end;
 
 procedure POCAFuncGCClean(Obj:PPOCAFunction);
 begin
- Obj^.UpValueLevels:=nil;
+ Obj^.ClosureValues:=nil;
 end;
 
 procedure POCANativeCodeGCClean(Obj:PPOCANativeCode);
@@ -6284,9 +6286,9 @@ begin
  if MarkValue(Obj^.Obj) then begin
   result:=true;
  end;
- for Index:=0 to length(Obj^.UpValueLevels)-1 do begin
-  for OtherIndex:=0 to length(Obj^.UpValueLevels[Index])-1 do begin
-   if MarkValue(Obj^.UpValueLevels[Index][OtherIndex]) then begin
+ for Index:=0 to length(Obj^.ClosureValues)-1 do begin
+  for OtherIndex:=0 to length(Obj^.ClosureValues[Index])-1 do begin
+   if MarkValue(Obj^.ClosureValues[Index][OtherIndex]) then begin
     result:=true;
    end;
   end;
@@ -6464,9 +6466,12 @@ begin
    for j:=0 to Frame^.CountArguments-1 do begin
     MarkValue(Frame^.Arguments[j]);
    end;
-   for j:=0 to Min(length(Frame^.UpValueLevels),Frame^.CountActiveUpValueLevels)-1 do begin
-    for k:=0 to length(Frame^.UpValueLevels[j])-1 do begin
-     if MarkValue(Frame^.UpValueLevels[j][k]) then begin
+   for j:=0 to length(Frame^.LocalValues)-1 do begin
+    MarkValue(Frame^.LocalValues[j]);
+   end;
+   for j:=0 to Min(length(Frame^.OuterValueLevels),Frame^.CountOuterValueLevels)-1 do begin
+    for k:=0 to length(Frame^.OuterValueLevels[j])-1 do begin
+     if MarkValue(Frame^.OuterValueLevels[j][k]) then begin
       result:=true;
      end;
     end;
@@ -8108,7 +8113,7 @@ begin
  Func^.Code:=Code;
  Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
- Func^.UpValueLevels:=nil;
+ Func^.ClosureValues:=nil;
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
@@ -11783,7 +11788,8 @@ begin
  for i:=0 to POCA_MAX_RECURSION-1 do begin
   Context^.FrameStack[i].Registers:=nil;
   Context^.FrameStack[i].Arguments:=nil;
-  Context^.FrameStack[i].UpValueLevels:=nil;
+  Context^.FrameStack[i].LocalValues:=nil;
+  Context^.FrameStack[i].OuterValueLevels:=nil;
  end;
 {$ifdef POCAMemoryPools}
  for i:=0 to pvtCOUNT-1 do begin
@@ -18156,8 +18162,8 @@ begin
   result^.Globals.ScopeIDCounter:=0;
  end;
  begin
-  result^.Globals.UseUpValues:=true;//true;
-  result^.Globals.UpValueContextIDCounter:=0;
+  result^.Globals.UseFrameValues:=true;//true;
+  result^.Globals.FrameValueContextIDCounter:=0;
  end;
  begin
   result^.Globals.GarbageCollector.Instance:=result;
@@ -25137,7 +25143,7 @@ var TokenList:PPOCAToken;
        (
         sskLOCAL,
         sskREG,
-        sskUPVALUE
+        sskFRAMEVALUE
        );
       PPOCACodeGeneratorScopeSymbol=^TPOCACodeGeneratorScopeSymbol;
       TPOCACodeGeneratorScopeSymbol=record
@@ -25147,9 +25153,9 @@ var TokenList:PPOCAToken;
        Constant:Boolean;
        Freeable:Boolean;
        Register:TPOCAInt32;
-       UpValueContextID:TPOCAUInt64;
-       UpValueLevel:TPOCAInt32;
-       UpValueIndex:TPOCAInt32;
+       FrameValueContextID:TPOCAUInt64;
+       FrameValueLevel:TPOCAInt32;
+       FrameValueIndex:TPOCAInt32;
        ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopeSymbols=array of PPOCACodeGeneratorScopeSymbol;
@@ -25158,8 +25164,8 @@ var TokenList:PPOCAToken;
        SymbolNameHashMap:TPOCAStringHashMap;
        Symbols:TPOCACodeGeneratorScopeSymbols;
        CountSymbols:TPOCAInt32;
-       BeginCountUpValues:TPOCAInt32;
-       UpValueContextID:TPOCAUInt64;
+       BeginCountFrameValues:TPOCAInt32;
+       FrameValueContextID:TPOCAUInt64;
        ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopes=array of TPOCACodeGeneratorScope;
@@ -25185,7 +25191,7 @@ var TokenList:PPOCAToken;
       PPOCACodeGenerator=^TPOCACodeGenerator;
       TPOCACodeGenerator=record
        ParentCodeGenerator:PPOCACodeGenerator;
-       UsedUpValues:TPOCABool32;
+       UsedFrameValues:TPOCABool32;
        LastLine:TPOCAInt32;
        ByteCode:PPOCAUInt32Array;
        ByteCodeSize:TPOCAInt32;
@@ -25230,14 +25236,14 @@ var TokenList:PPOCAToken;
        ConstantRegisters:array of TPOCAInt32;
        CountConstants:TPOCAInt32;
        CountRegExps:TPOCAInt32;
-       UpValueContextID:TPOCAUInt64;
-       CountUpValues:TPOCAInt32;
+       FrameValueContextID:TPOCAUInt64;
+       CountFrameValues:TPOCAInt32;
        Level:TPOCAUInt64;
       end;
       TScopeState=record
        CountScopes:TPOCAInt32;
        CountSymbols:TPOCAInt32;
-       CountUpValues:TPOCAInt32;
+       CountFrameValues:TPOCAInt32;
       end;
   function GenerateCode(var Parser:TPOCAParser;Block:PPOCAToken;ArgumentList:PPOCAToken;CodeToken:TPOCATokenType;const CodeName:TPOCARawByteString;const ParentCodeGenerator:PPOCACodeGenerator):TPOCAValue;
   var CodeGenerator:PPOCACodeGenerator;
@@ -25409,7 +25415,7 @@ var TokenList:PPOCAToken;
       popPOP:begin
        if CodeGenerator^.CountOpcodes>1 then begin
         case CodeGenerator^.ByteCode^[CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-2]] and $ff of
-         popPUSHREG,popGETLOCAL,popGETUPVALUE,popPUSHZERO,popPUSHONE,popPUSHCONST,popPUSHEND,popGETMEMBER,popSAFEGETMEMBER:begin
+         popPUSHREG,popGETLOCAL,popGETLOCALVALUE,popGETOUTERVALUE,popPUSHZERO,popPUSHONE,popPUSHCONST,popPUSHEND,popGETMEMBER,popSAFEGETMEMBER:begin
           dec(CodeGenerator^.CountOpcodes,2);
           CodeGenerator^.ByteCodeSize:=CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes];
           continue;
@@ -25656,8 +25662,8 @@ var TokenList:PPOCAToken;
    begin
     if aLetConst then begin
      if aIsVar then begin
-      if Instance^.Globals.UseUpValues then begin
-       Kind:=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE;
+      if Instance^.Globals.UseFrameValues then begin
+       Kind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
       end else begin
        Kind:=TPOCACodeGeneratorScopeSymbolKind.sskLOCAL;
       end;
@@ -25667,7 +25673,7 @@ var TokenList:PPOCAToken;
     end else begin
      Kind:=TPOCACodeGeneratorScopeSymbolKind.sskLOCAL;
     end;
-    if Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
+    if Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE then begin
     end;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
      CurrentCodeGenerator:=CodeGenerator;
@@ -25688,18 +25694,18 @@ var TokenList:PPOCAToken;
       GetMem(CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex],SizeOf(TPOCACodeGeneratorScopeSymbol));
       result:=CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex];
       Initialize(result^);
-      result^.UpValueContextID:=CurrentCodeGenerator^.Scopes[i].UpValueContextID;
-      result^.UpValueLevel:=CurrentCodeGenerator^.Level;
-      if Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
-       CurrentCodeGenerator^.UsedUpValues:=true;
-       result^.UpValueIndex:=CurrentCodeGenerator^.CountUpValues;
-       inc(CurrentCodeGenerator^.CountUpValues);
+      result^.FrameValueContextID:=CurrentCodeGenerator^.Scopes[i].FrameValueContextID;
+      result^.FrameValueLevel:=CurrentCodeGenerator^.Level;
+      if Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE then begin
+       CurrentCodeGenerator^.UsedFrameValues:=true;
+       result^.FrameValueIndex:=CurrentCodeGenerator^.CountFrameValues;
+       inc(CurrentCodeGenerator^.CountFrameValues);
       end else begin
-       result^.UpValueIndex:=0;
+       result^.FrameValueIndex:=0;
       end;
       result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
       result^.CodeName:=t^.Str;
-      if aLetConst{and (Kind<>TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE)}then begin
+      if aLetConst{and (Kind<>TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE)}then begin
        result^.RealName:=t^.Str+'@'+IntToStr(result^.ScopeID);
       end else begin
        result^.RealName:=t^.Str;
@@ -25803,8 +25809,8 @@ var TokenList:PPOCAToken;
     Scope^.CountSymbols:=0;
     inc(Instance^.Globals.ScopeIDCounter);
     Scope^.ScopeID:=Instance^.Globals.ScopeIDCounter;
-    Scope^.UpValueContextID:=CodeGenerator^.UpValueContextID;
-    Scope^.BeginCountUpValues:=CodeGenerator^.CountUpValues;
+    Scope^.FrameValueContextID:=CodeGenerator^.FrameValueContextID;
+    Scope^.BeginCountFrameValues:=CodeGenerator^.CountFrameValues;
    end;
    procedure ScopeEnd;
    var ScopeIndex,Index,Reg:TPOCAInt32;
@@ -25830,7 +25836,7 @@ var TokenList:PPOCAToken;
     end;
     Scope^.Symbols:=nil;
     Scope^.CountSymbols:=0;
-    Scope^.BeginCountUpValues:=0;
+    Scope^.BeginCountFrameValues:=0;
     FreeAndNil(Scope^.SymbolNameHashMap);
    end;
    procedure ScopeReset;
@@ -25857,7 +25863,7 @@ var TokenList:PPOCAToken;
      end;
      Scope^.Symbols:=nil;
      Scope^.CountSymbols:=0;
-     CodeGenerator^.CountUpValues:=Scope^.BeginCountUpValues;
+     CodeGenerator^.CountFrameValues:=Scope^.BeginCountFrameValues;
      Scope^.SymbolNameHashMap.Clear;
     end;
    end;
@@ -25869,7 +25875,7 @@ var TokenList:PPOCAToken;
     end else begin
      aScopeState.CountSymbols:=0;
     end;
-    aScopeState.CountUpValues:=CodeGenerator^.CountUpValues;
+    aScopeState.CountFrameValues:=CodeGenerator^.CountFrameValues;
    end;
    procedure ScopePop(var aScopeState:TScopeState); // Restore current scope state
    var Index,Reg:TPOCAInt32;
@@ -25909,18 +25915,18 @@ var TokenList:PPOCAToken;
       Scope^.CountSymbols:=aScopeState.CountSymbols;
      end;
     end;
-    if aScopeState.CountUpValues>=0 then begin
-     CodeGenerator^.CountUpValues:=aScopeState.CountUpValues;
+    if aScopeState.CountFrameValues>=0 then begin
+     CodeGenerator^.CountFrameValues:=aScopeState.CountFrameValues;
     end;
     aScopeState.CountScopes:=-1;
     aScopeState.CountSymbols:=-1;
-    aScopeState.CountUpValues:=-1;
+    aScopeState.CountFrameValues:=-1;
    end;
    procedure ScopeDrop(var aScopeState:TScopeState); // Drop current scope state
    begin
     aScopeState.CountScopes:=-1;
     aScopeState.CountSymbols:=-1;
-    aScopeState.CountUpValues:=-1;
+    aScopeState.CountFrameValues:=-1;
    end;
    function GenerateScalarConstant(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
    var v,i:TPOCAInt32;
@@ -27037,7 +27043,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex:TPOCAInt32):TPOCAUInt32;
+    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex:TPOCAInt32):TPOCAUInt32;
     var Token:TPOCATokenType;
         Symbol:PPOCACodeGeneratorScopeSymbol;
         IsVar:Boolean;
@@ -27050,18 +27056,22 @@ var TokenList:PPOCAToken;
      case Token of
       ptLPAR:begin
        if t^.Rule<>prSUFFIX then begin
-        result:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
+        result:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex);
         exit;
        end;
       end;
       ptSYMBOL:begin
        Symbol:=FindScopeSymbol(t,false,true,false);
-       if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
-        CodeGenerator^.UsedUpValues:=true;
-        UpValueLevel:=Symbol^.UpValueLevel;
-        UpValueIndex:=Symbol^.UpValueIndex;
+       if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE) then begin
+        CodeGenerator^.UsedFrameValues:=true;
+        FrameValueLevel:=Symbol^.FrameValueLevel;
+        FrameValueIndex:=Symbol^.FrameValueIndex;
         ConstantIndex:=0;
-        result:=popSETUPVALUE;
+        if FrameValueLevel=CodeGenerator^.Level then begin
+         result:=popSETLOCALVALUE;
+        end else begin
+         result:=popSETOUTERVALUE;
+        end;
        end else if assigned(Symbol) and (Symbol^.Register>=0) then begin
         if Symbol^.Constant then begin
          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -27135,12 +27145,16 @@ var TokenList:PPOCAToken;
          end;
          CodeGenerator^.HasLocals:=true;
          Symbol:=DefineScopeSymbol(t,true,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,-1);
-         if Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE then begin
-          CodeGenerator^.UsedUpValues:=true;
-          UpValueLevel:=Symbol^.UpValueLevel;
-          UpValueIndex:=Symbol^.UpValueIndex;
+         if Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE then begin
+          CodeGenerator^.UsedFrameValues:=true;
+          FrameValueLevel:=Symbol^.FrameValueLevel;
+          FrameValueIndex:=Symbol^.FrameValueIndex;
           ConstantIndex:=0;
-          result:=popSETUPVALUE;
+          if FrameValueLevel=CodeGenerator^.Level then begin
+           result:=popSETLOCALVALUE;
+          end else begin
+           result:=popSETOUTERVALUE;
+          end;
          end else begin
           ConstantIndex:=FindConstantIndex(t,true);
           if Token=ptCONST then begin
@@ -27164,14 +27178,14 @@ var TokenList:PPOCAToken;
      SyntaxError('Bad left value',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
     end;
     procedure GenerateLeftValue(t:PPOCAToken;Reg:TPOCAInt32);
-    var AssignOp,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex:TPOCAInt32;
+    var AssignOp,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex:TPOCAInt32;
     begin
      ConstantIndex:=0;
      Reg1:=0;
      Reg2:=0;
-     UpValueLevel:=0;
-     UpValueIndex:=0;
-     AssignOp:=ProcessLeftValue(t,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
+     FrameValueLevel:=0;
+     FrameValueIndex:=0;
+     AssignOp:=ProcessLeftValue(t,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex);
      case AssignOp and $ff of
       popSETMEMBER:begin
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,Reg,$ffffffff);
@@ -27192,8 +27206,11 @@ var TokenList:PPOCAToken;
       popSETLOCAL:begin
        EmitOpcode(popSETLOCAL,ConstantIndex,Reg,$ffffffff);
       end;
-      popSETUPVALUE:begin
-       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,Reg);
+      popSETLOCALVALUE:begin
+       EmitOpcode(popSETLOCALVALUE,FrameValueIndex,Reg);
+      end;
+      popSETOUTERVALUE:begin
+       EmitOpcode(popSETOUTERVALUE,FrameValueLevel,FrameValueIndex,Reg);
       end;
       popSETCONSTLOCAL:begin
        EmitOpcode(popSETCONSTLOCAL,ConstantIndex,Reg,$ffffffff);
@@ -27207,14 +27224,14 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GenerateAssignOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3,UpValueLevel,UpValueIndex:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,FrameValueLevel,FrameValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -27294,17 +27311,29 @@ var TokenList:PPOCAToken;
        FreeRegister(Reg2);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
       end;
-      popSETUPVALUE:begin
+      popSETLOCALVALUE:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETUPVALUE,result,UpValueLevel,UpValueIndex);
+       EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
        Reg2:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg2);
        FreeRegister(Reg2);
-       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,result);
+       EmitOpcode(popSETLOCALVALUE,FrameValueIndex,result);
+      end;
+      popSETOUTERVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETOUTERVALUE,result,FrameValueLevel,FrameValueIndex);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       EmitOpcode(Op,result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(popSETOUTERVALUE,FrameValueLevel,FrameValueIndex,result);
       end;
       popSETCONSTLOCAL:begin
        if OutReg<0 then begin
@@ -27345,7 +27374,7 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GenerateElvisAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue,UpValueLevel,UpValueIndex:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue,FrameValueLevel,FrameValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
         Registers:TPOCACodeGeneratorRegisters;
     begin
@@ -27353,7 +27382,7 @@ var TokenList:PPOCAToken;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -27493,13 +27522,13 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
       end;
-      popSETUPVALUE:begin
+      popSETLOCALVALUE:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETUPVALUE,result,UpValueLevel,UpValueIndex);
+       EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        if GetRegisterNumber(result) then begin
         EmitOpcode(popN_JIFTRUE,0,result);
@@ -27514,7 +27543,30 @@ var TokenList:PPOCAToken;
        end;
        FixTargetImmediate(JumpTrue);
        CombineCurrentRegisters(Registers);
-       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,result);
+       EmitOpcode(popSETLOCALVALUE,FrameValueIndex,result);
+      end;
+      popSETOUTERVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETOUTERVALUE,result,FrameValueLevel,FrameValueIndex);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       if GetRegisterNumber(result) then begin
+        EmitOpcode(popN_JIFTRUE,0,result);
+       end else begin
+        EmitOpcode(popJIFTRUE,0,result);
+       end;
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSETOUTERVALUE,FrameValueLevel,FrameValueIndex,result);
       end;
       popSETCONSTLOCAL:begin
        if OutReg<0 then begin
@@ -27588,14 +27640,14 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GeneratePostfixDecIncOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3,UpValueLevel,UpValueIndex:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,FrameValueLevel,FrameValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -27671,16 +27723,28 @@ var TokenList:PPOCAToken;
        EmitOpcode(popSETLOCAL,ConstantIndex,Reg1,$ffffffff);
        FreeRegister(Reg1);
       end;
-      popSETUPVALUE:begin
+      popSETLOCALVALUE:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
        end else begin
         result:=OutReg;
        end;
        Reg1:=GetRegister(true,false);
-       EmitOpcode(popGETUPVALUE,result,UpValueLevel,UpValueIndex);
+       EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
        EmitOpcode(Op,Reg1,result);
-       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,Reg1);
+       EmitOpcode(popSETLOCALVALUE,FrameValueIndex,Reg1);
+       FreeRegister(Reg1);
+      end;
+      popSETOUTERVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       Reg1:=GetRegister(true,false);
+       EmitOpcode(popGETOUTERVALUE,result,FrameValueLevel,FrameValueIndex);
+       EmitOpcode(Op,Reg1,result);
+       EmitOpcode(popSETOUTERVALUE,FrameValueLevel,FrameValueIndex,Reg1);
        FreeRegister(Reg1);
       end;
       popSETCONSTLOCAL:begin
@@ -27722,14 +27786,14 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GeneratePrefixDecIncOp(Op:TPOCAInt32;t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3,UpValueLevel,UpValueIndex:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,FrameValueLevel,FrameValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
     begin
      ConstantIndex:=0;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Right,ConstantIndex,Reg1,Reg2,UpValueLevel,UpValueIndex);
+     SetOp:=ProcessLeftValue(t^.Right,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -27804,15 +27868,25 @@ var TokenList:PPOCAToken;
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
       end;
-      popSETUPVALUE:begin
+      popSETLOCALVALUE:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETUPVALUE,result,UpValueLevel,UpValueIndex);
+       EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
        EmitOpcode(Op,result,result);
-       EmitOpcode(popSETUPVALUE,UpValueLevel,UpValueIndex,result);
+       EmitOpcode(popSETLOCALVALUE,FrameValueIndex,result);
+      end;
+      popSETOUTERVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETOUTERVALUE,result,FrameValueLevel,FrameValueIndex);
+       EmitOpcode(Op,result,result);
+       EmitOpcode(popSETOUTERVALUE,FrameValueLevel,FrameValueIndex,result);
       end;
       popSETCONSTLOCAL:begin
        if OutReg<0 then begin
@@ -29046,7 +29120,7 @@ var TokenList:PPOCAToken;
     end;
     function GenerateFor(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Init,Test,Body,Update,LabelToken,h:PPOCAToken;
-        Len,JumpNext,JumpOver,BreakPos,ContinuePos,Reg,Start,CountUpValues:TPOCAInt32;
+        Len,JumpNext,JumpOver,BreakPos,ContinuePos,Reg,Start,CountFrameValues:TPOCAInt32;
         Registers:array[0..5] of TPOCACodeGeneratorRegisters;
     begin
      ScopeStart;
@@ -29076,7 +29150,7 @@ var TokenList:PPOCAToken;
        Body:=t^.Right^.Children;
       end;
       Start:=CodeGenerator^.ByteCodeSize;
-      CountUpValues:=CodeGenerator^.CountUpValues;
+      CountFrameValues:=CodeGenerator^.CountFrameValues;
       begin
        Registers[0]:=GetRegisters;
        StartLoop(LabelToken,false);
@@ -29110,7 +29184,7 @@ var TokenList:PPOCAToken;
               AreRegistersEqual(Registers[2],Registers[3],false,false) and
               AreRegistersEqual(Registers[4],Registers[3],false,false) and
               AreRegistersEqual(Registers[5],Registers[2],false,false)) then begin
-       CodeGenerator^.CountUpValues:=CountUpValues;
+       CodeGenerator^.CountFrameValues:=CountFrameValues;
        ScopeReset;
        CodeGenerator^.ByteCodeSize:=Start;
        SetRegisters(Registers[0]);
@@ -29462,9 +29536,13 @@ var TokenList:PPOCAToken;
          end;
          CodeGenerator^.HasLocals:=true;
          Symbol:=DefineScopeSymbol(t,true,(Variable=2) or (Variable=3),Variable=3,false,-1);
-         if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
-          CodeGenerator^.UsedUpValues:=true;
-          EmitOpcode(popSETUPVALUE,Symbol^.UpValueLevel,Symbol^.UpValueIndex,Reg);
+         if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE) then begin
+          CodeGenerator^.UsedFrameValues:=true;
+          if Symbol^.FrameValueLevel=CodeGenerator^.Level then begin
+           EmitOpcode(popSETLOCALVALUE,Symbol^.FrameValueIndex,Reg);
+          end else begin
+           EmitOpcode(popSETOUTERVALUE,Symbol^.FrameValueLevel,Symbol^.FrameValueIndex,Reg);
+          end;
          end else if Variable=3 then begin
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
          end else begin
@@ -30859,14 +30937,18 @@ var TokenList:PPOCAToken;
          SetRegisterNumber(OutReg,GetRegisterNumber(result));
          result:=OutReg;
         end;
-       end else if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
-        CodeGenerator^.UsedUpValues:=true;
+       end else if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE) then begin
+        CodeGenerator^.UsedFrameValues:=true;
         if OutReg<0 then begin
          result:=GetRegister(true,false);
         end else begin
          result:=OutReg;
         end;
-        EmitOpcode(popGETUPVALUE,result,Symbol^.UpValueLevel,Symbol^.UpValueIndex);
+        if Symbol^.FrameValueLevel=CodeGenerator^.Level then begin
+         EmitOpcode(popGETLOCALVALUE,result,Symbol^.FrameValueIndex);
+        end else begin
+         EmitOpcode(popGETOUTERVALUE,result,Symbol^.FrameValueLevel,Symbol^.FrameValueIndex);
+        end;
         SetRegisterNumber(result,false);
        end else begin
         if OutReg<0 then begin
@@ -30925,9 +31007,13 @@ var TokenList:PPOCAToken;
          end;
          EmitOpcode(popLOADNULL,result);
          SetRegisterNumber(result,false);
-         if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskUPVALUE) then begin
-          CodeGenerator^.UsedUpValues:=true;
-          EmitOpcode(popSETUPVALUE,Symbol^.UpValueLevel,Symbol^.UpValueIndex,result);
+         if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE) then begin
+          CodeGenerator^.UsedFrameValues:=true;
+          if Symbol^.FrameValueLevel=CodeGenerator^.Level then begin
+           EmitOpcode(popSETLOCALVALUE,Symbol^.FrameValueIndex,result);
+          end else begin
+           EmitOpcode(popSETOUTERVALUE,Symbol^.FrameValueLevel,Symbol^.FrameValueIndex,result);
+          end;
          end else if Token=ptCONST then begin
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
          end else begin
@@ -31492,15 +31578,15 @@ var TokenList:PPOCAToken;
        SetLength(CodeGenerator^.LocalArguments,CodeGenerator^.CountLocalArguments*2);
       end;
      end;
-     if (not IsVar) and Instance^.Globals.UseUpValues and CodeGenerator^.HasNestedFunctions then begin
+     if (not IsVar) and Instance^.Globals.UseFrameValues and CodeGenerator^.HasNestedFunctions then begin
       ScopeScope:=FindScopeSymbol(Symbol,false,false,false);
       if not assigned(ScopeScope) then begin
        ScopeScope:=DefineScopeSymbol(Symbol,true,true,IsConst,false,-1);
       end;
       if assigned(ScopeScope) then begin
-       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Kind:=TPOCACodeArgument.pcakUPVALUE;
-       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Level:=ScopeScope^.UpValueLevel;
-       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Index:=ScopeScope^.UpValueIndex;
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Kind:=TPOCACodeArgument.pcakFRAMEVALUE;
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Level:=ScopeScope^.FrameValueLevel;
+       CodeGenerator^.LocalArguments[CodeGenerator^.CountLocalArguments].Index:=ScopeScope^.FrameValueIndex;
       end;
      end else if IsLocal then begin
       ScopeScope:=FindScopeSymbol(Symbol,false,false,false);
@@ -31661,7 +31747,7 @@ var TokenList:PPOCAToken;
      FillChar(CodeGenerator^,sizeof(TPOCACodeGenerator),#0);
      Initialize(CodeGenerator^);
      CodeGenerator^.ParentCodeGenerator:=ParentCodeGenerator;
-     CodeGenerator^.UsedUpValues:=false;
+     CodeGenerator^.UsedFrameValues:=false;
      CodeGenerator^.ByteCodeAllocated:=1024;
      GetMem(CodeGenerator^.ByteCode,CodeGenerator^.ByteCodeAllocated*sizeof(TPOCAUInt32));
      FillChar(CodeGenerator^.ByteCode^,CodeGenerator^.ByteCodeAllocated*sizeof(TPOCAUInt32),#0);
@@ -31697,9 +31783,9 @@ var TokenList:PPOCAToken;
      CodeGenerator^.ConstantRegisters:=nil;
      CodeGenerator^.CountConstants:=0;
      CodeGenerator^.CountRegExps:=0;
-     inc(Instance^.Globals.UpValueContextIDCounter);
-     CodeGenerator^.UpValueContextID:=Instance^.Globals.UpValueContextIDCounter;
-     CodeGenerator^.CountUpValues:=0;
+     inc(Instance^.Globals.FrameValueContextIDCounter);
+     CodeGenerator^.FrameValueContextID:=Instance^.Globals.FrameValueContextIDCounter;
+     CodeGenerator^.CountFrameValues:=0;
      if assigned(ParentCodeGenerator) then begin
       CodeGenerator^.Level:=ParentCodeGenerator^.Level+1;
      end else begin
@@ -31741,8 +31827,8 @@ var TokenList:PPOCAToken;
       CodeGenerator^.FastFunction:=(not (CodeToken in [ptCLASSFUNCTION,ptMODULEFUNCTION])) and (CodeGenerator^.FastFunction or not CodeGenerator^.HasLocals);
       Code^.Name:=CodeName;
       Code^.Level:=CodeGenerator^.Level;
-      Code^.UseUpValues:=CodeGenerator^.UsedUpValues or CodeGenerator^.HasNestedFunctions;
-      Code^.CountUpValues:=CodeGenerator^.CountUpValues;
+      Code^.UseFrameValues:=CodeGenerator^.UsedFrameValues or CodeGenerator^.HasNestedFunctions;
+      Code^.CountFrameValues:=CodeGenerator^.CountFrameValues;
       Code^.ClassFunction:=CodeToken=ptCLASSFUNCTION;
       Code^.FastFunction:=CodeGenerator^.FastFunction;
       Code^.IsEmpty:=IsEmpty;
@@ -32222,9 +32308,10 @@ end;
 
 function POCABindFunction(Context:PPOCAContext;Frame:PPOCAFrame;const Code:TPOCAValue;const ClassFunction:Boolean):TPOCAValue;
 var Func:PPOCAFunction;
-    Index:TPOCAInt32;
 begin
+
  result:=POCANewFunction(Context,Code);
+
  Func:=PPOCAFunction(POCAGetValueReferencePointer(result));
  if ClassFunction then begin
 //Func^.Namespace:=POCAValueNull;
@@ -32235,11 +32322,7 @@ begin
  Func^.Obj:=Frame^.Obj;
  Func^.Next:=Frame^.Func;
 
- if Frame^.CountActiveUpValueLevels>0 then begin
-  Func^.UpValueLevels:=copy(Frame^.UpValueLevels,0,Frame^.CountActiveUpValueLevels);
- end else begin
-  Func^.UpValueLevels:=nil;
- end;
+ Func^.ClosureValues:=copy(Frame^.OuterValueLevels,0,Frame^.CountOuterValueLevels)+[Frame^.LocalValues];
 
 end;
 
@@ -32257,14 +32340,24 @@ begin
  end;
 end;
 
-procedure POCARunGetUpValue(Context:PPOCAContext;Frame:PPOCAFrame;const UpValueLevel,UpValueIndex:TPOCAUInt32;var OutValue:TPOCAValue); {$ifdef caninline}inline;{$endif}
+procedure POCARunGetLocalValue(Context:PPOCAContext;Frame:PPOCAFrame;const ValueIndex:TPOCAUInt32;var OutValue:TPOCAValue); {$ifdef caninline}inline;{$endif}
 begin
- OutValue:=Frame^.UpValueLevels[UpValueLevel][UpValueIndex];
+ OutValue:=Frame^.LocalValues[ValueIndex];
 end;
 
-procedure POCARunSetUpValue(Context:PPOCAContext;Frame:PPOCAFrame;const UpValueLevel,UpValueIndex:TPOCAUInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
+procedure POCARunSetLocalValue(Context:PPOCAContext;Frame:PPOCAFrame;const ValueIndex:TPOCAUInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
 begin
- Frame^.UpValueLevels[UpValueLevel][UpValueIndex]:=Value;
+ Frame^.LocalValues[ValueIndex]:=Value;
+end;
+
+procedure POCARunGetOuterValue(Context:PPOCAContext;Frame:PPOCAFrame;const ValueLevel,ValueIndex:TPOCAUInt32;var OutValue:TPOCAValue); {$ifdef caninline}inline;{$endif}
+begin
+ OutValue:=Frame^.OuterValueLevels[ValueLevel][ValueIndex];
+end;
+
+procedure POCARunSetOuterValue(Context:PPOCAContext;Frame:PPOCAFrame;const ValueLevel,ValueIndex:TPOCAUInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
+begin
+ Frame^.OuterValueLevels[ValueLevel][ValueIndex]:=Value;
 end;
 
 procedure POCASetupArgumentsErrorTooFewArguments(Context:PPOCAContext;Code:PPOCACode;CountArguments:TPOCAInt32);
@@ -32307,8 +32400,12 @@ begin
     TPOCACodeArgument.pcakREG:begin
      Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
     end;
-    TPOCACodeArgument.pcakUPVALUE:begin
-     POCARunSetUpValue(Context,Frame,Code^.ArgumentLocals[i].Level,Code^.ArgumentLocals[i].Index,Value);
+    TPOCACodeArgument.pcakFRAMEVALUE:begin
+     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+      POCARunSetLocalValue(Context,Frame,Code^.ArgumentLocals[i].Index,Value);
+     end else begin
+      POCARunSetOuterValue(Context,Frame,Code^.ArgumentLocals[i].Level,Code^.ArgumentLocals[i].Index,Value);
+     end;
     end;
     else begin
     end;
@@ -32344,8 +32441,12 @@ begin
     TPOCACodeArgument.pcakREG:begin
      Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
     end;
-    TPOCACodeArgument.pcakUPVALUE:begin
-     POCARunSetUpValue(Context,Frame,Code^.OptionalArgumentLocals[i].Level,Code^.OptionalArgumentLocals[i].Index,Value);
+    TPOCACodeArgument.pcakFRAMEVALUE:begin
+     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+      POCARunSetLocalValue(Context,Frame,Code^.OptionalArgumentLocals[i].Index,Value);
+     end else begin
+      POCARunSetOuterValue(Context,Frame,Code^.OptionalArgumentLocals[i].Level,Code^.OptionalArgumentLocals[i].Index,Value);
+     end;
     end;
     else begin
     end;
@@ -32452,8 +32553,12 @@ begin
     TPOCACodeArgument.pcakREG:begin
      Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
     end;
-    TPOCACodeArgument.pcakUPVALUE:begin
-     POCARunSetUpValue(Context,Frame,Code^.ArgumentLocals[i].Level,Code^.ArgumentLocals[i].Index,Value);
+    TPOCACodeArgument.pcakFRAMEVALUE:begin
+     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+      POCARunSetLocalValue(Context,Frame,Code^.ArgumentLocals[i].Index,Value);
+     end else begin
+      POCARunSetOuterValue(Context,Frame,Code^.ArgumentLocals[i].Level,Code^.ArgumentLocals[i].Index,Value);
+     end;
     end;
     else begin
     end;
@@ -32479,8 +32584,12 @@ begin
    TPOCACodeArgument.pcakREG:begin
     Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
    end;
-   TPOCACodeArgument.pcakUPVALUE:begin
-    POCARunSetUpValue(Context,Frame,Code^.OptionalArgumentLocals[i].Level,Code^.OptionalArgumentLocals[i].Index,Value);
+   TPOCACodeArgument.pcakFRAMEVALUE:begin
+    if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+     POCARunSetLocalValue(Context,Frame,Code^.OptionalArgumentLocals[i].Index,Value);
+    end else begin
+     POCARunSetOuterValue(Context,Frame,Code^.OptionalArgumentLocals[i].Level,Code^.OptionalArgumentLocals[i].Index,Value);
+    end;
    end;
    else begin
    end;
@@ -32514,43 +32623,38 @@ begin
  end;
 end;
 
-procedure POCASetupUpValues(Frame:PPOCAFrame;Code:PPOCACode);
+procedure POCASetupFrameValues(Frame:PPOCAFrame;Code:PPOCACode);
 var Index:TPOCAInt32;
     Func:PPOCAFunction;
-    UpValues:PPOCAValueArray;
 begin
 
- if Code^.UseUpValues then begin
+ if Code^.UseFrameValues then begin
 
   Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
 
 //writeln(IntToHex(TPOCAPtrUInt(Func),16));
 
-  Func^.OwnUpValueLevel:=Code^.Level;
-
-  Frame^.CountActiveUpValueLevels:=Code^.Level+1;
-
-  if length(Frame^.UpValueLevels)<TPOCAInt32(Frame^.CountActiveUpValueLevels) then begin
-   SetLength(Frame^.UpValueLevels,POCARoundUpToPowerOfTwo(Frame^.CountActiveUpValueLevels+1));
+  Frame^.CountOuterValueLevels:=Code^.Level;
+  if length(Frame^.OuterValueLevels)<TPOCAInt32(Frame^.CountOuterValueLevels) then begin
+   SetLength(Frame^.OuterValueLevels,Frame^.CountOuterValueLevels+((Frame^.CountOuterValueLevels+1) shr 1));
+  end;
+  for Index:=0 to length(Func^.ClosureValues)-1 do begin
+   Frame^.OuterValueLevels[Index]:=Func^.ClosureValues[Index];
   end;
 
-  for Index:=0 to length(Func^.UpValueLevels)-1 do begin
-   Frame^.UpValueLevels[Index]:=Func^.UpValueLevels[Index];
+  Frame^.LocalValues:=nil;
+  if length(Frame^.LocalValues)<Code^.CountFrameValues then begin
+   SetLength(Frame^.LocalValues,POCARoundUpToPowerOfTwo(Code^.CountFrameValues));
   end;
-
-  UpValues:=@Frame^.UpValueLevels[Func^.OwnUpValueLevel];
-  if Code^.CountUpValues>0 then begin
-   if length(UpValues^)<Code^.CountUpValues then begin
-    SetLength(UpValues^,POCARoundUpToPowerOfTwo(Code^.CountUpValues));
-   end;
-   for Index:=0 to Code^.CountUpValues-1 do begin
-    UpValues^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
-   end;
+  for Index:=0 to Code^.CountFrameValues-1 do begin
+   Frame^.LocalValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
   end;
 
  end else begin
 
-  Frame^.CountActiveUpValueLevels:=0;
+  Frame^.CountOuterValueLevels:=0;
+
+  Frame^.LocalValues:=nil;
 
  end;
 
@@ -32677,13 +32781,12 @@ begin
     end else begin
      result^.Obj:=Obj;
     end;
-    result^.UpValueLevels:=nil;
 
     if PPOCACode(ObjPtr)^.HasArguments or not PPOCACode(ObjPtr)^.IsEmpty then begin
 
      POCASetupRegisters(result,PPOCACode(ObjPtr));
 
-     POCASetupUpValues(result,PPOCACode(ObjPtr));
+     POCASetupFrameValues(result,PPOCACode(ObjPtr));
 
      if PPOCACode(ObjPtr)^.HasArguments then begin
       if Named then begin
@@ -34787,10 +34890,16 @@ begin
     popSETLOCAL:begin
      DoItByVMOpcodeDispatcher;
     end;
-    popGETUPVALUE:begin
+    popGETLOCALVALUE:begin
      DoItByVMOpcodeDispatcher;
     end;
-    popSETUPVALUE:begin
+    popSETLOCALVALUE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popGETOUTERVALUE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popSETOUTERVALUE:begin
      DoItByVMOpcodeDispatcher;
     end;
     popNEWARRAY:begin
@@ -37473,11 +37582,17 @@ begin
    popSETLOCAL:begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
    end;
-   popGETUPVALUE:begin
-    POCARunGetUpValue(Context,Frame,Operands^[1],Operands^[2],Registers^[Operands^[0]]);
+   popGETLOCALVALUE:begin
+    POCARunGetLocalValue(Context,Frame,Operands^[1],Registers^[Operands^[0]]);
    end;
-   popSETUPVALUE:begin
-    POCARunSetUpValue(Context,Frame,Operands^[0],Operands^[1],Registers^[Operands^[2]]);
+   popSETLOCALVALUE:begin
+    POCARunSetLocalValue(Context,Frame,Operands^[0],Registers^[Operands^[1]]);
+   end;
+   popGETOUTERVALUE:begin
+    POCARunGetOuterValue(Context,Frame,Operands^[1],Operands^[2],Registers^[Operands^[0]]);
+   end;
+   popSETOUTERVALUE:begin
+    POCARunSetOuterValue(Context,Frame,Operands^[0],Operands^[1],Registers^[Operands^[2]]);
    end;
    popNEWARRAY:begin
     Registers^[Operands^[0]]:=POCANewArray(Context);
@@ -38245,7 +38360,7 @@ begin
     Frame^.Obj:=Obj;
     Frame^.InstructionPointer:=0;
     POCASetupRegisters(Frame,CodePointer);
-    POCASetupUpValues(Frame,CodePointer);
+    POCASetupFrameValues(Frame,CodePointer);
    end;
    POCASetupArguments(Context,@Context^.FrameStack[0],CodePointer,Arguments,CountArguments);
    result:=POCARun(Context);
