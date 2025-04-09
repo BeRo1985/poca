@@ -32539,9 +32539,13 @@ begin
   end;
 
   UpValues:=@Frame^.UpValueLevels[Func^.OwnUpValueLevel];
-  SetLength(UpValues^,Code^.CountUpValues);
-  for Index:=0 to Code^.CountUpValues-1 do begin
-   UpValues^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+  if Code^.CountUpValues>0 then begin
+   if length(UpValues^)<Code^.CountUpValues then begin
+    SetLength(UpValues^,POCARoundUpToPowerOfTwo(Code^.CountUpValues));
+   end;
+   for Index:=0 to Code^.CountUpValues-1 do begin
+    UpValues^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
   end;
 
  end else begin
