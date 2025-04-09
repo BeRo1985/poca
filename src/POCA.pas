@@ -1258,7 +1258,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       UpValueContextID:TPOCAUInt64; // for future
       UpValueLevel:TPOCAInt32; // for future
       UpValues:PPOCAValues; // for future
-     CountUpValues:TPOCAInt32; // for future
+      CountUpValues:TPOCAInt32; // for future
+      UpValueLevels:PPPOCAValues; // for future
+      CountUpValueLevels:TPOCAInt32; // for future
       Next:TPOCAValue;
      end;
 
@@ -5500,6 +5502,10 @@ begin
   FreeMem(Obj^.UpValues);
   Obj^.UpValues:=nil;
  end;
+ if assigned(Obj^.UpValueLevels) then begin
+  FreeMem(Obj^.UpValueLevels);
+  Obj^.UpValueLevels:=nil;
+ end;
 end;
 
 procedure POCANativeCodeGCClean(Obj:PPOCANativeCode);
@@ -6284,7 +6290,7 @@ begin
  if MarkValue(Obj^.Obj) then begin
   result:=true;
  end;
- if (Obj^.UpValueContextID<>0) and assigned(Obj^.UpValues) then begin
+ if assigned(Obj^.UpValues) then begin
   for i:=0 to Obj^.CountUpValues-1 do begin
    if MarkValue(Obj^.UpValues^[i]) then begin
     result:=true;
@@ -8107,6 +8113,7 @@ begin
  Func^.Next:=POCAValueNull;}
  Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+ Func^.CountUpValueLevels:=0;
  Func^.UpValueLevel:=CodePointer^.Level;
  Func^.UpValueContextID:=0;
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -31404,12 +31411,13 @@ var TokenList:PPOCAToken;
     end;
    end;
    procedure PreprocessArgumentList(t:PPOCAToken);
-   var IsLocal,IsConst:boolean;
+   var IsLocal,IsConst,IsVar:boolean;
        Symbol:PPOCAToken;
        ScopeScope:PPOCACodeGeneratorScopeSymbol;
        CodeArgument:PPOCACodeArgument;
    begin
     IsConst:=false;
+    IsVar:=false;
     if assigned(t) and (t^.Token<>ptEMPTY) then begin
      Symbol:=nil;
      case t^.Token of
@@ -31444,6 +31452,7 @@ var TokenList:PPOCAToken;
        end;
       end;
       ptVAR:begin
+       IsVar:=true;
        if CodeToken=ptFASTFUNCTION then begin
         IsLocal:=true;
         Symbol:=t^.Right;
@@ -31470,9 +31479,6 @@ var TokenList:PPOCAToken;
        SyntaxError('Bad function argument expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
       end;
      end;
-     if CodeGenerator^.HasNestedFunctions then begin
-      IsLocal:=false;
-     end;
      if CodeGenerator^.CountLocalArguments>=length(CodeGenerator^.LocalArguments) then begin
       if CodeGenerator^.CountLocalArguments=0 then begin
        SetLength(CodeGenerator^.LocalArguments,128);
@@ -31480,7 +31486,7 @@ var TokenList:PPOCAToken;
        SetLength(CodeGenerator^.LocalArguments,CodeGenerator^.CountLocalArguments*2);
       end;
      end;
-     if {(not IsLocal) and}Instance^.Globals.UseUpValues and CodeGenerator^.HasNestedFunctions then begin
+     if (not IsVar) and Instance^.Globals.UseUpValues and CodeGenerator^.HasNestedFunctions then begin
       ScopeScope:=FindScopeSymbol(Symbol,false,false,false);
       if not assigned(ScopeScope) then begin
        ScopeScope:=DefineScopeSymbol(Symbol,true,true,IsConst,false,-1);
@@ -32220,6 +32226,15 @@ begin
   Func^.Namespace:=Frame^.Locals;
  end;
  Func^.Obj:=Frame^.Obj;
+ if (Func^.CountUpValueLevels=0) or not assigned(Func^.UpValueLevels) then begin
+  Func^.CountUpValueLevels:=Frame^.CountUpValueLevels;
+  if Func^.CountUpValueLevels>0 then begin
+   GetMem(Func^.UpValueLevels,Func^.CountUpValueLevels*SizeOf(PPPOCAValues));
+   Move(Frame^.UpValueLevels[0],Func^.UpValueLevels^[0],Func^.CountUpValueLevels*SizeOf(PPPOCAValues));
+  end else begin
+   Func^.UpValueLevels:=nil;
+  end;
+ end;
  Func^.Next:=Frame^.Func;
 end;
 
@@ -32485,7 +32500,7 @@ begin
 end;
 
 procedure POCASetupUpValues(Frame:PPOCAFrame;Code:PPOCACode);
-var Index,Level:TPOCAInt32;
+var Index,Level,UntilLevel:TPOCAInt32;
     Func:PPOCAFunction;
 begin
  if Code^.UseUpValues then begin
@@ -32505,8 +32520,16 @@ begin
      Func^.UpValues^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
     end;
    end;
+   if assigned(Func^.UpValueLevels) and (Func^.CountUpValueLevels>0) then begin
+    for Index:=0 to Func^.CountUpValueLevels-1 do begin
+     Frame^.UpValueLevels[Index]:=Func^.UpValueLevels^[Index];
+    end;
+    UntilLevel:=Func^.CountUpValueLevels;
+   end else begin
+    UntilLevel:=0;
+   end;
    Level:=Code^.Level;
-   while assigned(Func) and (Level>=0) do begin
+   while assigned(Func) and (Level>=UntilLevel) and (Func^.UpValueLevel>=UntilLevel) do begin
     Frame^.UpValueLevels[Func^.UpValueLevel]:=Func^.UpValues;
     if POCAIsValueFunction(Func^.Next) then begin
      Func:=PPOCAFunction(POCAGetValueReferencePointer(Func^.Next));
