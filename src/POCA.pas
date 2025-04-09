@@ -32340,26 +32340,6 @@ begin
  end;
 end;
 
-procedure POCARunGetLocalValue(Context:PPOCAContext;Frame:PPOCAFrame;const ValueIndex:TPOCAUInt32;var OutValue:TPOCAValue); {$ifdef caninline}inline;{$endif}
-begin
- OutValue:=Frame^.LocalValues[ValueIndex];
-end;
-
-procedure POCARunSetLocalValue(Context:PPOCAContext;Frame:PPOCAFrame;const ValueIndex:TPOCAUInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
-begin
- Frame^.LocalValues[ValueIndex]:=Value;
-end;
-
-procedure POCARunGetOuterValue(Context:PPOCAContext;Frame:PPOCAFrame;const ValueLevel,ValueIndex:TPOCAUInt32;var OutValue:TPOCAValue); {$ifdef caninline}inline;{$endif}
-begin
- OutValue:=Frame^.OuterValueLevels[ValueLevel][ValueIndex];
-end;
-
-procedure POCARunSetOuterValue(Context:PPOCAContext;Frame:PPOCAFrame;const ValueLevel,ValueIndex:TPOCAUInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
-begin
- Frame^.OuterValueLevels[ValueLevel][ValueIndex]:=Value;
-end;
-
 procedure POCASetupArgumentsErrorTooFewArguments(Context:PPOCAContext;Code:PPOCACode;CountArguments:TPOCAInt32);
 begin
  POCARuntimeError(Context,'Too few function arguments (we have '+TPOCARawByteString(IntToStr(CountArguments))+' but we do need '+TPOCARawByteString(IntToStr(Code^.CountArguments))+')');
@@ -32402,9 +32382,9 @@ begin
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
      if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      POCARunSetLocalValue(Context,Frame,Code^.ArgumentLocals[i].Index,Value);
+      Frame^.LocalValues[Code^.ArgumentLocals[i].Index]:=Value;
      end else begin
-      POCARunSetOuterValue(Context,Frame,Code^.ArgumentLocals[i].Level,Code^.ArgumentLocals[i].Index,Value);
+      Frame^.OuterValueLevels[Code^.ArgumentLocals[i].Level][Code^.ArgumentLocals[i].Index]:=Value;
      end;
     end;
     else begin
@@ -32443,9 +32423,9 @@ begin
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
      if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      POCARunSetLocalValue(Context,Frame,Code^.OptionalArgumentLocals[i].Index,Value);
+      Frame^.LocalValues[Code^.OptionalArgumentLocals[i].Index]:=Value;
      end else begin
-      POCARunSetOuterValue(Context,Frame,Code^.OptionalArgumentLocals[i].Level,Code^.OptionalArgumentLocals[i].Index,Value);
+      Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[i].Level][Code^.OptionalArgumentLocals[i].Index]:=Value;
      end;
     end;
     else begin
@@ -32555,9 +32535,9 @@ begin
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
      if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      POCARunSetLocalValue(Context,Frame,Code^.ArgumentLocals[i].Index,Value);
+      Frame^.LocalValues[Code^.ArgumentLocals[i].Index]:=Value;
      end else begin
-      POCARunSetOuterValue(Context,Frame,Code^.ArgumentLocals[i].Level,Code^.ArgumentLocals[i].Index,Value);
+      Frame^.OuterValueLevels[Code^.ArgumentLocals[i].Level][Code^.ArgumentLocals[i].Index]:=Value;
      end;
     end;
     else begin
@@ -32586,9 +32566,9 @@ begin
    end;
    TPOCACodeArgument.pcakFRAMEVALUE:begin
     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-     POCARunSetLocalValue(Context,Frame,Code^.OptionalArgumentLocals[i].Index,Value);
+     Frame^.LocalValues[Code^.OptionalArgumentLocals[i].Index]:=Value;
     end else begin
-     POCARunSetOuterValue(Context,Frame,Code^.OptionalArgumentLocals[i].Level,Code^.OptionalArgumentLocals[i].Index,Value);
+     Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[i].Level][Code^.OptionalArgumentLocals[i].Index]:=Value;
     end;
    end;
    else begin
@@ -37578,16 +37558,16 @@ begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
    end;
    popGETLOCALVALUE:begin
-    POCARunGetLocalValue(Context,Frame,Operands^[1],Registers^[Operands^[0]]);
+    Registers^[Operands^[0]]:=Frame^.LocalValues[Operands^[1]];
    end;
    popSETLOCALVALUE:begin
-    POCARunSetLocalValue(Context,Frame,Operands^[0],Registers^[Operands^[1]]);
+    Frame^.LocalValues[Operands^[0]]:=Registers^[Operands^[1]];
    end;
    popGETOUTERVALUE:begin
-    POCARunGetOuterValue(Context,Frame,Operands^[1],Operands^[2],Registers^[Operands^[0]]);
+    Registers^[Operands^[0]]:=Frame^.OuterValueLevels[Operands^[1]][Operands^[2]];
    end;
    popSETOUTERVALUE:begin
-    POCARunSetOuterValue(Context,Frame,Operands^[0],Operands^[1],Registers^[Operands^[2]]);
+    Frame^.OuterValueLevels[Operands^[0]][Operands^[1]]:=Registers^[Operands^[0]];
    end;
    popNEWARRAY:begin
     Registers^[Operands^[0]]:=POCANewArray(Context);
