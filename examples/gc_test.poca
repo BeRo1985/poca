@@ -24,7 +24,7 @@ function executeTests(tests...){
 
 }
 
-let MaxCountIterations = 1000;
+let MaxCountIterations = 10000;
 
 function TestAppendArray(){
   let r = [];
