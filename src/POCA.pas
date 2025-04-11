@@ -325,6 +325,8 @@
  {$define POCAMemoryPools}
 {$endif}
 
+{$undef POCAClosureArrayValues}
+
 interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
@@ -1262,7 +1264,11 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Namespace:TPOCAValue;
       Obj:TPOCAValue;
       FrameValueContextID:TPOCAUInt64;
+{$ifdef POCAClosureArrayValues}
+      ClosureValues:TPOCAValue;
+{$else}
       ClosureValues:TPOCAValueArrayArray;
+{$endif}
       Next:TPOCAValue;
      end;
 
@@ -1277,8 +1283,13 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       CountRegisters:TPOCAInt32;
       Arguments:TPOCAValueArray;
       CountArguments:TPOCAInt32;
+{$ifdef POCAClosureArrayValues}
+      LocalValues:TPOCAValue;
+      OuterValueLevels:TPOCAValue;
+{$else}
       LocalValues:TPOCAValueArray;
       OuterValueLevels:TPOCAValueArrayArray;
+{$endif}
       CountOuterValueLevels:TPOCAInt32;
      end;
 
@@ -5501,7 +5512,9 @@ end;
 
 procedure POCAFuncGCClean(Obj:PPOCAFunction);
 begin
+{$ifndef POCAClosureArrayValues}
  Obj^.ClosureValues:=nil;
+{$endif}
 end;
 
 procedure POCANativeCodeGCClean(Obj:PPOCANativeCode);
@@ -6286,6 +6299,9 @@ begin
  if MarkValue(Obj^.Obj) then begin
   result:=true;
  end;
+{$ifdef POCAClosureArrayValues}
+ MarkValue(Obj^.ClosureValues);
+{$else}
  for Index:=0 to length(Obj^.ClosureValues)-1 do begin
   for OtherIndex:=0 to length(Obj^.ClosureValues[Index])-1 do begin
    if MarkValue(Obj^.ClosureValues[Index][OtherIndex]) then begin
@@ -6293,6 +6309,7 @@ begin
    end;
   end;
  end;
+{$endif}
  if MarkValue(Obj^.Next) then begin
   result:=true;
  end;
@@ -6466,6 +6483,10 @@ begin
    for j:=0 to Frame^.CountArguments-1 do begin
     MarkValue(Frame^.Arguments[j]);
    end;
+{$ifdef POCAClosureArrayValues}
+   MarkValue(Frame^.LocalValues);
+   MarkValue(Frame^.OuterValueLevels);
+{$else}
    for j:=0 to length(Frame^.LocalValues)-1 do begin
     MarkValue(Frame^.LocalValues[j]);
    end;
@@ -6476,6 +6497,7 @@ begin
      end;
     end;
    end;
+{$endif}
   end;
   if assigned(PPOCACoroutineData(Context^.CoroutineData)) and (assigned(PPOCACoroutineData(Context^.CoroutineData)^.Coroutine) and (PPOCACoroutineData(Context^.CoroutineData)^.Coroutine^.State<>pcsTERMINATED)) then begin
    POCACoroutineGhostMarkEx(Context^.ThreadData);
@@ -8113,7 +8135,11 @@ begin
  Func^.Code:=Code;
  Func^.Namespace.CastedUInt64:=POCAValueNullCastedUInt64;
  Func^.Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+{$ifdef POCAClosureArrayValues}
+ Func^.ClosureValues.CastedUInt64:=POCAValueNullCastedUInt64;
+{$else}
  Func^.ClosureValues:=nil;
+{$endif}
  Func^.Next.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
@@ -8562,6 +8588,16 @@ function POCAArrayResize(ArrayObject:PPOCAArray):PPOCAArrayRecord;
 begin
  result:=POCAArrayNewRecord(ArrayObject^.ArrayRecord);
  POCAGarbageCollectorSwapFree(ArrayObject^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@ArrayObject^.ArrayRecord,result);
+end;
+
+function POCAArrayFastGet(const ArrayObject:TPOCAValue;i:TPOCAInt32):TPOCAValue; {$ifdef caninline}inline;{$endif}
+begin
+ result:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject))^.ArrayRecord^.Data[i];
+end;
+
+procedure POCAArrayFastSet(const ArrayObject:TPOCAValue;i:TPOCAInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
+begin
+ PPOCAArray(POCAGetValueReferencePointer(ArrayObject))^.ArrayRecord^.Data[i]:=Value;
 end;
 
 function POCAArrayGet(const ArrayObject:TPOCAValue;i:TPOCAInt32):TPOCAValue;
@@ -11788,8 +11824,10 @@ begin
  for i:=0 to POCA_MAX_RECURSION-1 do begin
   Context^.FrameStack[i].Registers:=nil;
   Context^.FrameStack[i].Arguments:=nil;
+{$ifndef POCAClosureArrayValues}
   Context^.FrameStack[i].LocalValues:=nil;
   Context^.FrameStack[i].OuterValueLevels:=nil;
+{$endif}
  end;
 {$ifdef POCAMemoryPools}
  for i:=0 to pvtCOUNT-1 do begin
@@ -32308,6 +32346,7 @@ end;
 
 function POCABindFunction(Context:PPOCAContext;Frame:PPOCAFrame;const Code:TPOCAValue;const ClassFunction:Boolean):TPOCAValue;
 var Func:PPOCAFunction;
+    Index:TPOCAInt32;
 begin
 
  result:=POCANewFunction(Context,Code);
@@ -32322,7 +32361,21 @@ begin
  Func^.Obj:=Frame^.Obj;
  Func^.Next:=Frame^.Func;
 
- Func^.ClosureValues:=copy(Frame^.OuterValueLevels,0,Frame^.CountOuterValueLevels)+[Frame^.LocalValues];
+{$ifdef POCAClosureArrayValues}
+ Func^.ClosureValues:=POCANewArray(Context);
+ POCAArraySetSize(Func^.ClosureValues,Frame^.CountOuterValueLevels+1);
+ for Index:=0 to Frame^.CountOuterValueLevels-1 do begin
+  POCAArrayFastSet(Func^.ClosureValues,Index,POCAArrayFastGet(Frame^.OuterValueLevels,Index));
+ end;
+ POCAArrayFastSet(Func^.ClosureValues,Frame^.CountOuterValueLevels,Frame^.LocalValues);
+{$else}
+ Func^.ClosureValues:=nil;
+ SetLength(Func^.ClosureValues,Frame^.CountOuterValueLevels+1);
+ for Index:=0 to Frame^.CountOuterValueLevels-1 do begin
+  Func^.ClosureValues[Index]:=Frame^.OuterValueLevels[Index];
+ end;
+ Func^.ClosureValues[Frame^.CountOuterValueLevels]:=Frame^.LocalValues;
+{$endif}
 
 end;
 
@@ -32381,11 +32434,19 @@ begin
      Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
+{$ifdef POCAClosureArrayValues}
+     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+      POCAArrayFastSet(Frame^.LocalValues,Code^.ArgumentLocals[i].Index,Value);
+     end else begin
+      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[i].Level),Code^.ArgumentLocals[i].Index,Value);
+     end;
+{$else}
      if Code^.ArgumentLocals[i].Level=Code^.Level then begin
       Frame^.LocalValues[Code^.ArgumentLocals[i].Index]:=Value;
      end else begin
       Frame^.OuterValueLevels[Code^.ArgumentLocals[i].Level][Code^.ArgumentLocals[i].Index]:=Value;
      end;
+{$endif}
     end;
     else begin
     end;
@@ -32422,11 +32483,19 @@ begin
      Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
+{$ifdef POCAClosureArrayValues}
+     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+      POCAArrayFastSet(Frame^.LocalValues,Code^.OptionalArgumentLocals[i].Index,Value);
+     end else begin
+      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[i].Level),Code^.OptionalArgumentLocals[i].Index,Value);
+     end;
+{$else}
      if Code^.ArgumentLocals[i].Level=Code^.Level then begin
       Frame^.LocalValues[Code^.OptionalArgumentLocals[i].Index]:=Value;
      end else begin
       Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[i].Level][Code^.OptionalArgumentLocals[i].Index]:=Value;
      end;
+{$endif}
     end;
     else begin
     end;
@@ -32534,11 +32603,19 @@ begin
      Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
+{$ifdef POCAClosureArrayValues}
+     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+      POCAArrayFastSet(Frame^.LocalValues,Code^.ArgumentLocals[i].Index,Value);
+     end else begin
+      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[i].Level),Code^.ArgumentLocals[i].Index,Value);
+     end;
+{$else}
      if Code^.ArgumentLocals[i].Level=Code^.Level then begin
       Frame^.LocalValues[Code^.ArgumentLocals[i].Index]:=Value;
      end else begin
       Frame^.OuterValueLevels[Code^.ArgumentLocals[i].Level][Code^.ArgumentLocals[i].Index]:=Value;
      end;
+{$endif}
     end;
     else begin
     end;
@@ -32565,11 +32642,19 @@ begin
     Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
    end;
    TPOCACodeArgument.pcakFRAMEVALUE:begin
+{$ifdef POCAClosureArrayValues}
+    if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+     POCAArrayFastSet(Frame^.LocalValues,Code^.OptionalArgumentLocals[i].Index,Value);
+    end else begin
+     POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[i].Level),Code^.OptionalArgumentLocals[i].Index,Value);
+    end;
+{$else}
     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
      Frame^.LocalValues[Code^.OptionalArgumentLocals[i].Index]:=Value;
     end else begin
      Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[i].Level][Code^.OptionalArgumentLocals[i].Index]:=Value;
     end;
+{$endif}
    end;
    else begin
    end;
@@ -32603,7 +32688,7 @@ begin
  end;
 end;
 
-procedure POCASetupFrameValues(Frame:PPOCAFrame;Code:PPOCACode);
+procedure POCASetupFrameValues(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode);
 var Index:TPOCAInt32;
     Func:PPOCAFunction;
 begin
@@ -32617,19 +32702,29 @@ begin
   Frame^.OuterValueLevels:=Func^.ClosureValues;
   Frame^.CountOuterValueLevels:=Code^.Level;
 
-  Frame^.LocalValues:=nil;
-  if length(Frame^.LocalValues)<Code^.CountFrameValues then begin
-   SetLength(Frame^.LocalValues,POCARoundUpToPowerOfTwo(Code^.CountFrameValues));
+{$ifdef POCAClosureArrayValues}
+  Frame^.LocalValues:=POCANewArray(Context);
+  POCAArraySetSize(Frame^.LocalValues,Code^.CountFrameValues);
+  for Index:=0 to Code^.CountFrameValues-1 do begin
+   POCAArrayFastSet(Frame^.LocalValues,Index,POCAValueNull);
   end;
+{$else}
+  Frame^.LocalValues:=nil;
+  SetLength(Frame^.LocalValues,Code^.CountFrameValues);
   for Index:=0 to Code^.CountFrameValues-1 do begin
    Frame^.LocalValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
   end;
+{$endif}
 
  end else begin
 
   Frame^.CountOuterValueLevels:=0;
 
-  Frame^.LocalValues:=nil;
+{$ifdef POCAClosureArrayValues}
+  Frame^.LocalValues.CastedUInt64:=POCAValueNullCastedUInt64;
+{$else}
+ Frame^.LocalValues:=nil;
+{$endif}
 
  end;
 
@@ -32761,7 +32856,7 @@ begin
 
      POCASetupRegisters(result,PPOCACode(ObjPtr));
 
-     POCASetupFrameValues(result,PPOCACode(ObjPtr));
+     POCASetupFrameValues(Context,result,PPOCACode(ObjPtr));
 
      if PPOCACode(ObjPtr)^.HasArguments then begin
       if Named then begin
@@ -37558,16 +37653,32 @@ begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
    end;
    popGETLOCALVALUE:begin
+{$ifdef POCAClosureArrayValues}
+    Registers^[Operands^[0]]:=POCAArrayFastGet(Frame^.LocalValues,Operands^[1]);
+{$else}
     Registers^[Operands^[0]]:=Frame^.LocalValues[Operands^[1]];
+{$endif}
    end;
    popSETLOCALVALUE:begin
+{$ifdef POCAClosureArrayValues}
+    POCAArrayFastSet(Frame^.LocalValues,Operands^[0],Registers^[Operands^[1]]);
+{$else}
     Frame^.LocalValues[Operands^[0]]:=Registers^[Operands^[1]];
+{$endif}
    end;
    popGETOUTERVALUE:begin
+{$ifdef POCAClosureArrayValues}
+    Registers^[Operands^[0]]:=POCAArrayFastGet(POCAArrayFastGet(Frame^.OuterValueLevels,Operands^[1]),Operands^[2]);
+{$else}
     Registers^[Operands^[0]]:=Frame^.OuterValueLevels[Operands^[1]][Operands^[2]];
+{$endif}
    end;
    popSETOUTERVALUE:begin
+{$ifdef POCAClosureArrayValues}
+    POCAArrayFastSet(POCAArrayFastGet(Frame^.OuterValueLevels,Operands^[0]),Operands^[1],Registers^[Operands^[2]]);
+{$else}
     Frame^.OuterValueLevels[Operands^[0]][Operands^[1]]:=Registers^[Operands^[2]];
+{$endif}
    end;
    popNEWARRAY:begin
     Registers^[Operands^[0]]:=POCANewArray(Context);
@@ -38335,7 +38446,7 @@ begin
     Frame^.Obj:=Obj;
     Frame^.InstructionPointer:=0;
     POCASetupRegisters(Frame,CodePointer);
-    POCASetupFrameValues(Frame,CodePointer);
+    POCASetupFrameValues(Context,Frame,CodePointer);
    end;
    POCASetupArguments(Context,@Context^.FrameStack[0],CodePointer,Arguments,CountArguments);
    result:=POCARun(Context);
