@@ -35,7 +35,7 @@ GarbageCollector.setIncremental(false);
         // Normalize value from [-3,3] to [0,1].
         let normalized = (value + 3) / 6;
         // Map normalized value to a character index in the palette.
-        let charIndex = (normalized * (palette.length() - 1)) << 0;
+        let charIndex = (normalized * (palette.length - 1)) << 0;
         // Map normalized value to an ANSI 256-color code (from 16 to about 232).
         let colorCode = 16 + ((normalized * 216) << 0);
         let pos = y * canvasWidth + x;

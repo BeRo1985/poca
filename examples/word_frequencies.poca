@@ -6,7 +6,7 @@
 // but instead construct a zero-padded string that is sortable ("frequency word").
 
 function pad(n, l, c = '0') {
-  const cl = n.toString().length();
+  const cl = n.toString().length;
   (cl < l) ? c.toString().repeat(l - cl) ~ n.toString() : n.toString();
 }
 
@@ -40,7 +40,7 @@ for (let i = 0; i < ws.size(); ++i) {
 
   const idx = w.indexOf(' ');
   const cnt = w.substr(0, idx);
-  w = w.substr(idx+1, w.length()-(idx+1));
+  w = w.substr(idx+1, w.length - (idx+1));
 
   puts(`${w} ${words[w]}`);
 }
