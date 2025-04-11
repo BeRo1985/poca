@@ -118,6 +118,29 @@ if (arr.empty()) {
 
 '''''
 
+==== Array.length
+
+*Usage:*
+
+[source,js]
+----
+let length = arr.length;
+----
+
+* *Description:* A pseudo-property that returns the number of elements in the
+array. For the functional API, this is equivalent to `+arr.size()+`.
+* *Parameters:* None.
+* *Return Value:* A numeric value representing the array length.
+* *Example:*
++
+[source,js]
+----
+let n = arr.length;
+puts("Array length: " + n);
+----
+
+'''''
+
 ==== Array.size
 
 *Usage:*
@@ -641,6 +664,7 @@ which is registered for subsequent array operations.
 manipulate arrays:
 ** *empty:* Returns a numeric boolean indicating whether the array is
 empty.
+** *length:* Returns the number of elements in the array.
 ** *size:* Returns the number of elements in the array.
 ** *resize:* Changes the size of the array.
 ** *push:* Appends one or more elements to the end of the array.
@@ -3191,8 +3215,8 @@ meta-events. The array is sorted.
 
 The global namespace contains a variety of utilities that let you: 
 
-1. *Interact with arrays, hashes, and strings* using `+size+`, `+ownKeys+`,
-`+keys+`, etc. 
+1. *Interact with arrays, hashes, and strings* using `+size+`, '+length+', 
+`+ownKeys+`, `+keys+`, etc. 
 2. *Perform console I/O* with `+print+`, `+puts+`, and
 `+readLine+`. 
 3. *Manipulate strings* with `+chr+`, `+ord+` for character operations.
@@ -6884,7 +6908,25 @@ the string.
 
 [source,js]
 ----
-let len = "example".length();
+let len = "example".length;
+----
+
+* *Description:* A pseudo-property that returns the length of the string. For
+UTF‑8 strings, this is the number of Unicode code points; otherwise, it is the raw
+character count. As functional syntax, it is equivalent to calling '+String.size()+',
+`+String.countCodePoints()+` or `+String.countCodeUnits()+`.
+* *Parameters:* None.
+* *Return Value:* A numeric value representing the length.
+
+'''''
+
+==== String.size
+
+*Usage:*
+
+[source,js]
+----
+let len = "example".size();
 ----
 
 * *Description:* Returns the length of the string. For UTF‑8 strings,
@@ -7425,7 +7467,7 @@ text and is available for subsequent operations.
 * *String Methods:* The POCA String API provides a comprehensive suite
 of functions for string manipulation:
 ** *Inspection & Measurement:* `+countCodePoints+`, `+countCodeUnits+`,
-and `+length+` return measurements of the string.
+'+size+' and `+length+` return measurements of the string.
 ** *Conversion:* `+toNumber+` and `+toString+` convert the string
 between different representations.
 ** *Search & Extraction:* `+includes+`, `+indexOf+`, `+lastIndexOf+`,

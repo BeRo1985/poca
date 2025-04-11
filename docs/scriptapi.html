@@ -458,6 +458,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_methods_on_arrays">Methods on Arrays</a>
 <ul class="sectlevel3">
 <li><a href="#_array_empty">Array.empty</a></li>
+<li><a href="#_array_length">Array.length</a></li>
 <li><a href="#_array_size">Array.size</a></li>
 <li><a href="#_array_resize">Array.resize</a></li>
 <li><a href="#_array_push">Array.push</a></li>
@@ -936,6 +937,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_string_countcodepoints">String.countCodePoints</a></li>
 <li><a href="#_string_countcodeunits">String.countCodeUnits</a></li>
 <li><a href="#_string_length">String.length</a></li>
+<li><a href="#_string_size">String.size</a></li>
 <li><a href="#_string_tonumber">String.toNumber</a></li>
 <li><a href="#_string_tostring">String.toString</a></li>
 <li><a href="#_string_includes">String.includes</a></li>
@@ -1137,6 +1139,41 @@ array is empty (1 if empty, 0 otherwise).</p>
 <pre class="highlight"><code class="language-js" data-lang="js">if (arr.empty()) {
   puts("The array is empty.");
 }</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_array_length">Array.length</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let length = arr.length;</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> A pseudo-property that returns the number of elements in the
+array. For the functional API, this is equivalent to <code>arr.size()</code>.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value representing the array length.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let n = arr.length;
+puts("Array length: " + n);</code></pre>
 </div>
 </div>
 </li>
@@ -2042,6 +2079,9 @@ manipulate arrays:</p>
 <li>
 <p><strong>empty:</strong> Returns a numeric boolean indicating whether the array is
 empty.</p>
+</li>
+<li>
+<p><strong>length:</strong> Returns the number of elements in the array.</p>
 </li>
 <li>
 <p><strong>size:</strong> Returns the number of elements in the array.</p>
@@ -6310,8 +6350,8 @@ meta-events. The array is sorted.</p>
 <div class="olist arabic">
 <ol class="arabic">
 <li>
-<p><strong>Interact with arrays, hashes, and strings</strong> using <code>size</code>, <code>ownKeys</code>,
-<code>keys</code>, etc.</p>
+<p><strong>Interact with arrays, hashes, and strings</strong> using <code>size</code>, 'length',
+<code>ownKeys</code>, <code>keys</code>, etc.</p>
 </li>
 <li>
 <p><strong>Perform console I/O</strong> with <code>print</code>, <code>puts</code>, and
@@ -12720,7 +12760,35 @@ the string.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let len = "example".length();</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let len = "example".length;</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> A pseudo-property that returns the length of the string. For
+UTF‑8 strings, this is the number of Unicode code points; otherwise, it is the raw
+character count. As functional syntax, it is equivalent to calling 'String.size()',
+<code>String.countCodePoints()</code> or <code>String.countCodeUnits()</code>.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value representing the length.</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_string_size">String.size</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let len = "example".size();</code></pre>
 </div>
 </div>
 <div class="ulist">
@@ -13664,7 +13732,7 @@ of functions for string manipulation:</p>
 <ul>
 <li>
 <p><strong>Inspection &amp; Measurement:</strong> <code>countCodePoints</code>, <code>countCodeUnits</code>,
-and <code>length</code> return measurements of the string.</p>
+'size' and <code>length</code> return measurements of the string.</p>
 </li>
 <li>
 <p><strong>Conversion:</strong> <code>toNumber</code> and <code>toString</code> convert the string
@@ -14079,7 +14147,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-11 14:04:36 +0200
+Last updated 2025-04-11 20:57:37 +0200
 </div>
 </div>
 </body>

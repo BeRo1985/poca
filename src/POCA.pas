@@ -1535,6 +1535,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       CodeValueReference:TPOCAValue;
       NativeCodeValueReference:TPOCAValue;
       UnknownValueReference:TPOCAValue;
+      LengthStringReference:TPOCAValue;
 
       Symbols:TPOCAValue;
 
@@ -6605,6 +6606,7 @@ begin
  MarkValue(Instance^.Globals.CodeValueReference);
  MarkValue(Instance^.Globals.NativeCodeValueReference);
  MarkValue(Instance^.Globals.UnknownValueReference);
+ MarkValue(Instance^.Globals.LengthStringReference);
  MarkValue(Instance^.Globals.SourceFiles);
  MarkValue(Instance^.Globals.UniqueStringArray);
 end;
@@ -17454,7 +17456,7 @@ begin
  end;
 end;
 
-function POCAStringFunctionLENGTH(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+function POCAStringFunctionSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  case POCAGetValueType(This) of
   pvtSTRING:begin
@@ -17467,7 +17469,7 @@ begin
   else begin
  //result:=POCAValueNull;
    result.CastedUInt64:=POCAValueNullCastedUInt64;
-   POCARuntimeError(Context,'Bad this value to "length"');
+   POCARuntimeError(Context,'Bad this value to "size"');
   end;
  end;
 end;
@@ -18291,7 +18293,7 @@ begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'countCodePoints',POCAStringFunctionCOUNTCODEPOINTS);
  POCAAddNativeFunction(Context,result,'countCodeUnits',POCAStringFunctionCOUNTCODEUNITS);
- POCAAddNativeFunction(Context,result,'length',POCAStringFunctionLENGTH);
+ POCAAddNativeFunction(Context,result,'size',POCAStringFunctionSIZE);
  POCAAddNativeFunction(Context,result,'toNumber',POCAStringFunctionTONUMBER);
  POCAAddNativeFunction(Context,result,'toString',POCAStringFunctionTOSTRING);
  POCAAddNativeFunction(Context,result,'includes',POCAStringFunctionINCLUDES);
@@ -18493,6 +18495,7 @@ begin
      result^.Globals.CodeValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'Code'));
      result^.Globals.NativeCodeValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'NativeCode'));
      result^.Globals.UnknownValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'Unknown'));
+     result^.Globals.LengthStringReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'length'));
     end;
    end;
    result^.Globals.ModuleScopes:=POCANewHash(Context);
@@ -32344,6 +32347,34 @@ begin
  raise EPOCARuntimeError.Create(POCAGetSourceFile(Context,StackDepth),POCAGetSourceLine(Context,StackDepth),-1,Msg);
 end;
 
+function POCAGetArrayProperty(Context:PPOCAContext;const Obj,Field:TPOCAValue;var OutValue:TPOCAValue;CacheIndex:PPOCAUInt32=nil):boolean;
+begin
+ result:=false;
+ if (Field.CastedUInt64=Context^.Instance^.Globals.LengthStringReference.CastedUInt64) or (POCAGetStringValue(Context,Field)='length') then begin
+  OutValue.Num:=POCAArraySize(Obj);
+  result:=true;
+ end;
+end;
+
+function POCAGetStringProperty(Context:PPOCAContext;const Obj,Field:TPOCAValue;var OutValue:TPOCAValue;CacheIndex:PPOCAUInt32=nil):boolean;
+begin
+ result:=false;
+ if (Field.CastedUInt64=Context^.Instance^.Globals.LengthStringReference.CastedUInt64) or (POCAGetStringValue(Context,Field)='length') then begin
+  case POCAGetValueType(Obj) of
+   pvtSTRING:begin
+    if PPOCAString(POCAGetValueReferencePointer(Obj))^.UTF8=suISUTF8 then begin
+     OutValue.Num:=PPOCAString(POCAGetValueReferencePointer(Obj))^.UTF8Length;
+    end else begin
+     OutValue.Num:=length(PPOCAString(POCAGetValueReferencePointer(Obj))^.Data);
+    end;
+    result:=true;
+   end;
+   else begin
+   end;
+  end;
+ end;
+end;
+
 function POCAGetMember(Context:PPOCAContext;const Obj,Field:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited,Throw:boolean):boolean;
 var p:TPOCAValue;
     Ghost:PPOCAGhost;
@@ -32354,6 +32385,9 @@ begin
 
   pvtARRAY:begin
    result:=POCAHashGetCache(Context,Context.Instance^.Globals.ArrayHash,Field,OutValue,CacheIndex);
+   if (not result) and POCAGetArrayProperty(Context,Obj,Field,OutValue,@HashCacheIndex) then begin
+    result:=true;
+   end;
    if (not result) and Throw then begin
     POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
    end;
@@ -32368,6 +32402,9 @@ begin
 
   pvtSTRING:begin
    result:=POCAHashGetCache(Context,Context.Instance^.Globals.StringHash,Field,OutValue,CacheIndex);
+   if (not result) and POCAGetStringProperty(Context,Obj,Field,OutValue,@HashCacheIndex) then begin
+    result:=true;
+   end;
    if (not result) and Throw then begin
     POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
    end;
@@ -33337,7 +33374,9 @@ begin
    pvtARRAY:begin
     if POCAIsValueString(Key) then begin
      if not POCAHashGet(Context,Context.Instance^.Globals.ArrayHash,Key,result) then begin
-      POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+      if not POCAGetArrayProperty(Context,Box,Key,result) then begin
+       POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+      end;
      end;
     end else begin
      Index:=POCARunCheckArray(Context,Box,Key);
@@ -33351,7 +33390,9 @@ begin
    pvtSTRING:begin
     if POCAIsValueString(Key) then begin
      if not POCAHashGet(Context,Context.Instance^.Globals.StringHash,Key,result) then begin
-      POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+      if not POCAGetStringProperty(Context,Box,Key,result) then begin
+       POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+      end;
      end;
     end else begin
      if PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8 then begin
@@ -33403,7 +33444,9 @@ begin
    pvtARRAY:begin
     if POCAIsValueString(Key) then begin
      if not POCAHashGet(Context,Context.Instance^.Globals.ArrayHash,Key,result) then begin
-      result.CastedUInt64:=POCAValueNullCastedUInt64;
+      if not POCAGetArrayProperty(Context,Box,Key,result) then begin
+       result.CastedUInt64:=POCAValueNullCastedUInt64;
+      end;
      end;
     end else begin
      Index:=POCARunSafeCheckArray(Context,Box,Key);
@@ -33417,7 +33460,9 @@ begin
    pvtSTRING:begin
     if POCAIsValueString(Key) then begin
      if not POCAHashGet(Context,Context.Instance^.Globals.StringHash,Key,result) then begin
-      result.CastedUInt64:=POCAValueNullCastedUInt64;
+      if not POCAGetStringProperty(Context,Box,Key,result) then begin
+       result.CastedUInt64:=POCAValueNullCastedUInt64;
+      end;
      end;
     end else begin
      if PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8 then begin
