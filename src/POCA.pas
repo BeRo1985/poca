@@ -16123,12 +16123,39 @@ begin
  end;
 end;
 
+function POCAGlobalFunctionSLEEP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Time:TPOCAInt64;
+begin
+ if CountArguments>0 then begin
+  Time:=Trunc(POCAGetNumberValue(Context,Arguments^[0]));
+ end else begin
+  Time:=0;
+ end;
+ Sleep(Time);
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
+end;
+
 function POCAGlobalFunctionCHR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments<1 then begin
   POCARuntimeError(Context,'Bad arguments to "chr"');
  end;
  result:=POCANewString(Context,PUCUUTF32CharToUTF8(trunc(POCAGetNumberValue(Context,Arguments^[0]))));
+end;
+
+function POCAGlobalFunctionORD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var s:TPOCAUTF8String;
+begin
+ if CountArguments>0 then begin
+  s:=POCAGetStringValue(Context,Arguments^[0]);
+ end else begin
+  s:='';
+ end;
+ if length(s)>0 then begin
+  result.Num:=ord(s[1]);
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
 end;
 
 function POCAGlobalFunctionCONTAINS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -16507,7 +16534,9 @@ begin
  POCAAddNativeFunction(Context,result,'print',POCAGlobalFunctionPRINT);
  POCAAddNativeFunction(Context,result,'puts',POCAGlobalFunctionPUTS);
  POCAAddNativeFunction(Context,result,'readLine',POCAGlobalFunctionREADLINE);
+ POCAAddNativeFunction(Context,result,'sleep',POCAGlobalFunctionSLEEP);
  POCAAddNativeFunction(Context,result,'chr',POCAGlobalFunctionCHR);
+ POCAAddNativeFunction(Context,result,'ord',POCAGlobalFunctionORD);
  POCAAddNativeFunction(Context,result,'contains',POCAGlobalFunctionCONTAINS);
  POCAAddNativeFunction(Context,result,'import',POCAGlobalFunctionIMPORT);
  POCAAddNativeFunction(Context,result,'require',POCAGlobalFunctionREQUIRE);
