@@ -25181,7 +25181,8 @@ var TokenList:PPOCAToken;
        (
         sskLOCAL,
         sskREG,
-        sskFRAMEVALUE
+        sskFRAMEVALUE,
+        sskVAR
        );
       PPOCACodeGeneratorScopeSymbol=^TPOCACodeGeneratorScopeSymbol;
       TPOCACodeGeneratorScopeSymbol=record
@@ -25710,8 +25711,6 @@ var TokenList:PPOCAToken;
      end;
     end else begin
      Kind:=TPOCACodeGeneratorScopeSymbolKind.sskLOCAL;
-    end;
-    if Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE then begin
     end;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
      CurrentCodeGenerator:=CodeGenerator;
@@ -27009,7 +27008,7 @@ var TokenList:PPOCAToken;
     function GetLeftValueLocalRegister(t:PPOCAToken):TPOCAInt32;
     var Token:TPOCATokenType;
         Symbol:PPOCACodeGeneratorScopeSymbol;
-        IsVar:Boolean;
+        SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
     begin
      result:=-1;
      if not assigned(t) then begin
@@ -27045,24 +27044,21 @@ var TokenList:PPOCAToken;
         end;
         case Token of
          ptVAR:begin
-          IsVar:=true;
+          SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
          end;
          else {ptLET,ptCONST:}begin
 {         if ExistScopeSymbol(t,false,false,true) then begin
            SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
           end else}begin
            if CodeGenerator^.HasNestedFunctions then begin
-            IsVar:=true;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
            end else begin
-            IsVar:=false;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
            end;
           end;
          end;
         end;
-        if IsVar then begin
-         result:=-1;
-         exit;
-        end else begin
+        if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
          Symbol:=FindScopeSymbol(t,false,true,false);
          if not assigned(Symbol) then begin
           Symbol:=DefineScopeSymbol(t,false,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
@@ -27072,6 +27068,9 @@ var TokenList:PPOCAToken;
          end else begin
           result:=-1;
          end;
+         exit;
+        end else begin
+         result:=-1;
          exit;
         end;
        end;
@@ -27084,7 +27083,7 @@ var TokenList:PPOCAToken;
     function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex:TPOCAInt32):TPOCAUInt32;
     var Token:TPOCATokenType;
         Symbol:PPOCACodeGeneratorScopeSymbol;
-        IsVar:Boolean;
+        SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
     begin
      result:=0;
      if not assigned(t) then begin
@@ -27162,22 +27161,29 @@ var TokenList:PPOCAToken;
         end;
         case Token of
          ptVAR:begin
-          IsVar:=true;
+          SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
          end;
          else {ptLET,ptCONST:}begin
           if ExistScopeSymbol(t,false,false,true) then begin
            SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-           IsVar:=true;
+           SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
           end else begin
            if CodeGenerator^.HasNestedFunctions then begin
-            IsVar:=true;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
            end else begin
-            IsVar:=false;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
            end;
           end;
          end;
         end;
-        if IsVar then begin
+        if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
+         Symbol:=DefineScopeSymbol(t,false,true,Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         if assigned(Symbol) then begin
+          Reg1:=Symbol^.Register;
+          result:=popCOPY;
+          exit;
+         end;
+        end else begin
          if CodeToken=ptFASTFUNCTION then begin
           SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
          end;
@@ -27202,13 +27208,6 @@ var TokenList:PPOCAToken;
           end;
          end;
          exit;
-        end else begin
-         Symbol:=DefineScopeSymbol(t,false,true,Token=ptCONST,false,GetRegister(false,Token=ptCONST));
-         if assigned(Symbol) then begin
-          Reg1:=Symbol^.Register;
-          result:=popCOPY;
-          exit;
-         end;
         end;
        end;
       end;
@@ -29538,12 +29537,16 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GenerateAssignment(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    const vNONE=0;
+          vVAR=1;
+          vLET=2;
+          vCONST=3;
     var lv,rv:PPOCAToken;
         Len,Variable:TPOCAInt32;
      procedure EmitMultiLeftValue(t:PPOCAToken;Variable,Reg:TPOCAInt32);
      var r:TPOCAInt32;
          Symbol:PPOCACodeGeneratorScopeSymbol;
-         IsVar:Boolean;
+         SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
      begin
       if Variable=0 then begin
        GenerateLeftValue(t,Reg);
@@ -29552,23 +29555,31 @@ var TokenList:PPOCAToken;
         SyntaxError('Bad left value',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end else begin
         case Variable of
-         1:begin
-          IsVar:=true;
+         vVAR:begin
+          SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
          end;
-         else {2,3:}begin
+         else {vLET,vCONST:}begin
           if ExistScopeSymbol(t,false,false,true) then begin
            SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-           IsVar:=false;
+           SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
           end else begin
            if CodeGenerator^.HasNestedFunctions then begin
-            IsVar:=true;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
            end else begin
-            IsVar:=false;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
            end;
           end;
          end;
         end;
-        if IsVar then begin
+        if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
+         Symbol:=DefineScopeSymbol(t,false,true,Variable=vCONST,false,GetRegister(false,Variable=vCONST));
+         if assigned(Symbol) then begin
+          r:=Symbol^.Register;
+          EmitOpcode(popCOPY,r,Reg);
+          SetRegisterNumber(r,GetRegisterNumber(Reg));
+         end;
+         exit;
+        end else begin
          if CodeToken=ptFASTFUNCTION then begin
           SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
          end;
@@ -29587,14 +29598,6 @@ var TokenList:PPOCAToken;
           EmitOpcode(popSETLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
          end;
          exit;
-        end else begin
-         Symbol:=DefineScopeSymbol(t,false,true,Variable=3,false,GetRegister(false,Variable=3));
-         if assigned(Symbol) then begin
-          r:=Symbol^.Register;
-          EmitOpcode(popCOPY,r,Reg);
-          SetRegisterNumber(r,GetRegisterNumber(Reg));
-         end;
-         exit;
         end;
        end;
       end;
@@ -29605,7 +29608,7 @@ var TokenList:PPOCAToken;
          Regs:array of TPOCAInt32;
          LastHasNoLeft,OnlyLiterals:boolean;
          Symbol:PPOCACodeGeneratorScopeSymbol;
-         IsVar:Boolean;
+         SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
      begin
       result:=-1;
       try
@@ -29643,27 +29646,24 @@ var TokenList:PPOCAToken;
           SyntaxError('Bad lvalue',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
          end else begin
           case Variable of
-           1:begin
-            IsVar:=true;
+           vVAR:begin
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
            end;
-           else {2,3:}begin
+           else {vLET,vCONST:}begin
             if ExistScopeSymbol(at^.Left,false,false,true) then begin
              SyntaxError('Symbol already defined',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
+             SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
             end else begin
              if CodeGenerator^.HasNestedFunctions then begin
-              IsVar:=true;
+              SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
              end else begin
-              IsVar:=false;
+              SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
              end;
             end;
            end;
           end;
-          if IsVar then begin
-           Reg:=GenerateExpression(pt^.Left,-1,true);
-           EmitMultiLeftValue(at^.Left,Variable,Reg);
-           FreeRegister(Reg);
-          end else begin
-           Symbol:=DefineScopeSymbol(at^.Left,false,true,Variable=3,false,GetRegister(false,Variable=3));
+          if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
+           Symbol:=DefineScopeSymbol(at^.Left,false,true,Variable=vCONST,false,GetRegister(false,Variable=vCONST));
            if assigned(Symbol) then begin
             Reg2:=Symbol^.Register;
             Reg:=GenerateExpression(pt^.Left,Reg2,true);
@@ -29673,6 +29673,10 @@ var TokenList:PPOCAToken;
              FreeRegister(Reg);
             end;
            end;
+          end else begin
+           Reg:=GenerateExpression(pt^.Left,-1,true);
+           EmitMultiLeftValue(at^.Left,Variable,Reg);
+           FreeRegister(Reg);
           end;
          end;
          at:=at^.Right;
@@ -29687,25 +29691,23 @@ var TokenList:PPOCAToken;
          end else begin
           case Variable of
            1:begin
-            IsVar:=true;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
            end;
            else {2,3:}begin
             if ExistScopeSymbol(at,false,false,true) then begin
              SyntaxError('Symbol already defined',at^.SourceFile,at^.SourceLine,at^.SourceColumn);
+             SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
             end else begin
              if CodeGenerator^.HasNestedFunctions then begin
-              IsVar:=true;
+              SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
              end else begin
-              IsVar:=false;
+              SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
              end;
             end;
            end;
           end;
-          if IsVar then begin
-           result:=GenerateExpression(pt,OutReg,true);
-           EmitMultiLeftValue(at,Variable,result);
-          end else begin
-           Symbol:=DefineScopeSymbol(at,false,true,Variable=3,false,GetRegister(false,Variable=3));
+          if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
+           Symbol:=DefineScopeSymbol(at,false,true,Variable=vCONST,false,GetRegister(false,Variable=vCONST));
            if assigned(Symbol) then begin
             if OutReg<0 then begin
              result:=Symbol^.Register;
@@ -29728,6 +29730,9 @@ var TokenList:PPOCAToken;
              end;
             end;
            end;
+          end else begin
+           result:=GenerateExpression(pt,OutReg,true);
+           EmitMultiLeftValue(at,Variable,result);
           end;
          end;
         end;
@@ -29765,25 +29770,24 @@ var TokenList:PPOCAToken;
            SyntaxError('Bad lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
           end else begin
            case Variable of
-            1:begin
-             IsVar:=true;
+            vVAR:begin
+             SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
             end;
-            else {2,3:}begin
+            else {vLET,vCONST:}begin
              if ExistScopeSymbol(t,false,false,true) then begin
               SyntaxError('Symbol already defined',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+              SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
              end else begin
               if CodeGenerator^.HasNestedFunctions then begin
-               IsVar:=true;
+               SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
               end else begin
-               IsVar:=false;
+               SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
               end;
              end;
             end;
            end;
-           if IsVar then begin
-            EmitMultiLeftValue(t,Variable,Reg);
-           end else begin
-            Symbol:=DefineScopeSymbol(t,false,true,Variable=3,false,GetRegister(false,Variable=3));
+           if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
+            Symbol:=DefineScopeSymbol(t,false,true,Variable=vCONST,false,GetRegister(false,Variable=vCONST));
             if assigned(Symbol) then begin
              if OutReg<0 then begin
               Reg2:=Symbol^.Register;
@@ -29792,6 +29796,8 @@ var TokenList:PPOCAToken;
               FreeRegister(Reg2);
              end;
             end;
+           end else begin
+            EmitMultiLeftValue(t,Variable,Reg);
            end;
           end;
           if Index=(Count-1) then begin
@@ -29878,15 +29884,15 @@ var TokenList:PPOCAToken;
         end;
         CodeGenerator^.HasLocals:=true;
         lv:=lv^.Right;
-        Variable:=1;
+        Variable:=vVAR;
        end;
        ptLET:begin
         lv:=lv^.Right;
-        Variable:=2;
+        Variable:=vLET;
        end;
        ptCONST:begin
         lv:=lv^.Right;
-        Variable:=3;
+        Variable:=vCONST;
        end;
       end;                                   
       if (rv^.Token=ptLPAR) and not (Binary(rv) or not assigned(rv^.Right)) then begin
@@ -30858,8 +30864,8 @@ var TokenList:PPOCAToken;
     end;
    var i:TPOCAInt32;
        Symbol:PPOCACodeGeneratorScopeSymbol;
+       SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
        Token:TPOCATokenType;
-       IsVar:Boolean;
    begin
     result:=-1;
     if not assigned(t) then begin
@@ -31017,22 +31023,37 @@ var TokenList:PPOCAToken;
         end;
         case Token of
          ptVAR:begin
-          IsVar:=true;
+          SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
          end;
          else {ptLET,ptCONST:}begin
           if ExistScopeSymbol(t^.Right,false,false,true) then begin
            SyntaxError('Symbol already defined',t^.Right^.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
-           IsVar:=false;
+           SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
           end else begin
            if CodeGenerator^.HasNestedFunctions then begin
-            IsVar:=true;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
            end else begin
-            IsVar:=false;
+            SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
            end;
           end;
          end;
         end;
-        if IsVar then begin
+        if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
+         Symbol:=DefineScopeSymbol(t^.Right,false,true,Token=ptCONST,false,GetRegister(false,Token=ptCONST));
+         if assigned(Symbol) then begin
+          if OutReg<0 then begin
+           result:=GetRegister(true,false);
+          end else begin
+           result:=OutReg;
+          end;
+          EmitOpcode(popLOADNULL,result);
+          SetRegisterNumber(result,false);
+          i:=Symbol^.Register;
+          EmitOpcode(popCOPY,i,result);
+          SetRegisterNumber(i,GetRegisterNumber(result));
+         end;
+         exit;
+        end else begin
          if CodeToken=ptFASTFUNCTION then begin
           SyntaxError('VAR is not allowed in fastfunctions',t^.Right^.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
          end;
@@ -31056,21 +31077,6 @@ var TokenList:PPOCAToken;
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
          end else begin
           EmitOpcode(popSETLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
-         end;
-         exit;
-        end else begin
-         Symbol:=DefineScopeSymbol(t^.Right,false,true,Token=ptCONST,false,GetRegister(false,Token=ptCONST));
-         if assigned(Symbol) then begin
-          if OutReg<0 then begin
-           result:=GetRegister(true,false);
-          end else begin
-           result:=OutReg;
-          end;
-          EmitOpcode(popLOADNULL,result);
-          SetRegisterNumber(result,false);
-          i:=Symbol^.Register;
-          EmitOpcode(popCOPY,i,result);
-          SetRegisterNumber(i,GetRegisterNumber(result));
          end;
          exit;
         end;
