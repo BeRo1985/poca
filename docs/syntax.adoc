@@ -122,14 +122,40 @@ similar to JavaScript’s function-scoped variables declared with `var`. Such
 variables are stored in a local hash table and can be accessed from the current 
 frame as well as all nested frames.
 
-In contrast, variables declared with `let` and `const` are block-scoped. They are 
-bound to the block in which they are declared (and any nested blocks) and, unlike 
-`var`, are not stored in the local hash table by default. Instead, they reside in 
-the VM's registers. Only when nested functions or closures are created, or when 
-the block is exited and the variables are needed again, are these variables 
-transferred to the local hash table. The POCA byte-code generator converts `let` 
-and `const` variables into a special form of `var` variables on-demand, which are 
-then stored in the local hash table. For example, consider the following code:
+In contrast, variables declared with `let` and `const` are block-scoped. Unlike 
+`var`, they are bound to the block in which they are declared, meaning their 
+visibility and lifetime are limited to that block and any nested blocks. 
+This behavior is similar to JavaScript’s block-scoped variables declared with 
+`let` and `const`. These block-bound variables are 
+**not stored in the function’s normal local variable hash table** (the structure 
+used for `var` variables). Instead, they reside in 
+**specialized fast-access frame variable storages** that are tied to the current 
+execution frame. This design provides quick access to block-scoped variables and 
+keeps them isolated per block. The engine manages these storages using a 
+**display-list mechanism** (a structure that maintains a list of active lexical 
+environments by nesting level), which allows nested blocks or inner functions to 
+efficiently reference variables from their enclosing blocks, even beyond the 
+immediate block context for closures. This is similar to how ECMAScript/JavaScript also
+optimizes variable storage between registers and the stack, except that ECMAScript/JavaScript
+uses environment objects for closures, while POCA uses a display-list mechanism based 
+on a chain of context frames, where every frame can have its own display list.
+
+This frame-based storage is utilized whenever a block-scoped variable needs to 
+exist beyond the immediate block execution or be accessible from an inner scope. 
+For example, if an inner function (closure) is defined inside a block and captures 
+a `let`/`const` variable, that variable will be placed in the frame storage so the 
+inner function can access it later. In such cases (or generally when the function 
+contains any nested scopes), the compiler ensures the variable lives in the frame 
+storage. On the other hand, if a block’s variables are *purely local* (used only 
+within the block and not needed by any outside code or closures), POCA may optimize 
+by keeping them in **registers** instead of in the frame storage. Using registers 
+for strictly local variables avoids the overhead of managing an extra storage 
+structure and yields faster access. In summary, `let` and `const` variables are 
+confined to their block and kept out of the general local table, living either 
+in a dedicated frame storage (when necessary for scope access or lifetime) or 
+directly in registers for maximal performance in self-contained cases.
+
+Example:
 
 [source,javascript]
 ----
@@ -141,13 +167,19 @@ function Func1(){
     let c = 4;
     puts(c);
   }
-  var d = 4;
+  // c is 3 here and not 4
+  // because c is block-scoped
+  // and not function-scoped
+  var d = 4; // d is function-scoped 
   function Func2(){
     let e = 5;
     scope{
       let e = 6;
       puts(e);
     }
+    // e is 5 here and not 6
+    // because e is block-scoped
+    // and not function-scoped
     return a + b + c + d + e;
   }
   Func2();
@@ -155,58 +187,12 @@ function Func1(){
 Func1();
 ----
 
-This code is virtually converted into:
-
-[source,javascript]
-----
-
-// Scope ID 0 begins
-
-var a@0 = 1;
-constvar b@0 = 2; // 'var' with const semantics, internal only
-function Func1@0(){
-  // Scope ID 1 begins
-  var c@1 = 3;
-  scope{
-    // Scope ID 2 begins 
-    var c@2 = 4;
-    puts(c@2);
-    // Scope ID 2 ends
-  }
-  // Scope ID 1 resumes
-  // c@1 is still 3 here, since c@2 is a different variable in a different scope.
-  // c@1 is stored in the local hash table, since it is used in Func2.
-  var d@1 = 4;
-  function Func2@1(){
-    // Scope ID 3 begins, but `let` and `const` variables are stored in
-    // VM registers here, because no nested function or closure is created 
-    // inside Func2.
-    let e = 5;
-    scope{
-      // Scope ID 4 begins, but still in VM registers.
-      let e = 6;  
-      puts(e); // prints 6
-      // Scope ID 4 ends
-    }
-    // e is 5 again here, since never overwritten, e was just a 
-    // different register in the inner scope.
-    return a@0 + b@0 + c@1 + d@1 + e;
-    // Scope ID 3 ends
-  }
-  Func2@1();
-  // Scope ID 1 ends
-}
-// Scope ID 0 resumes
-Func1@0();
-// Scope ID 0 ends
-----
-
-This approach ensures that `let` and `const` variables occupy the local hash table 
-only when necessary, reducing overhead—much like how ECMAScript/JavaScript optimizes 
-variable storage between registers and the stack.
+This approach ensures that `let` and `const` variables occupy the specialized fast-access
+frame variable storages only when necessary, reducing overhead, much like how
+ECMAScript/JavaScript optimizes variable storage between registers and the stack.
 
 POCA also supports closures, allowing functions to capture and remember the 
-environment in which they were created—even if that environment is no longer in scope. 
+environment in which they were created, even if that environment is no longer in scope. 
 This enables powerful programming techniques such as maintaining state or 
 encapsulating private variables. Note that closures in POCA behave slightly differently 
 from those in ECMAScript/JavaScript: in POCA, closures capture variables at the time 
