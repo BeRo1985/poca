@@ -1263,7 +1263,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Code:TPOCAValue;
       Namespace:TPOCAValue;
       Obj:TPOCAValue;
-      FrameValueContextID:TPOCAUInt64;
 {$ifdef POCAClosureArrayValues}
       ClosureValues:TPOCAValue;
 {$else}
@@ -1487,9 +1486,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       StrictMode:TPOCABool32;
 
       ScopeIDCounter:TPOCAUInt64;
-
-      UseFrameValues:TPOCABool32;
-      FrameValueContextIDCounter:TPOCAUInt64;
 
 {$ifdef POCAMemoryPools}
       Pools:TPOCAPools;
@@ -18200,10 +18196,6 @@ begin
   result^.Globals.ScopeIDCounter:=0;
  end;
  begin
-  result^.Globals.UseFrameValues:=true;//true;
-  result^.Globals.FrameValueContextIDCounter:=0;
- end;
- begin
   result^.Globals.GarbageCollector.Instance:=result;
   result^.Globals.GarbageCollector.Lock:=POCALockCreate;
   result^.Globals.GarbageCollector.ProtectList:=TPOCAPointerList.Create;
@@ -25186,13 +25178,12 @@ var TokenList:PPOCAToken;
        );
       PPOCACodeGeneratorScopeSymbol=^TPOCACodeGeneratorScopeSymbol;
       TPOCACodeGeneratorScopeSymbol=record
-       CodeName:TPOCARawByteString;
+       Name:TPOCARawByteString;
        RealName:TPOCARawByteString;
        Kind:TPOCACodeGeneratorScopeSymbolKind;
        Constant:Boolean;
        Freeable:Boolean;
        Register:TPOCAInt32;
-       FrameValueContextID:TPOCAUInt64;
        FrameValueLevel:TPOCAInt32;
        FrameValueIndex:TPOCAInt32;
        ScopeID:TPOCAUInt64;
@@ -25204,7 +25195,6 @@ var TokenList:PPOCAToken;
        Symbols:TPOCACodeGeneratorScopeSymbols;
        CountSymbols:TPOCAInt32;
        BeginCountFrameValues:TPOCAInt32;
-       FrameValueContextID:TPOCAUInt64;
        ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopes=array of TPOCACodeGeneratorScope;
@@ -25275,7 +25265,6 @@ var TokenList:PPOCAToken;
        ConstantRegisters:array of TPOCAInt32;
        CountConstants:TPOCAInt32;
        CountRegExps:TPOCAInt32;
-       FrameValueContextID:TPOCAUInt64;
        CountFrameValues:TPOCAInt32;
        Level:TPOCAUInt64;
       end;
@@ -25692,7 +25681,7 @@ var TokenList:PPOCAToken;
      result:='';
     end;
    end;
-   function DefineScopeSymbol(t:PPOCAToken;const aIsVar,aLetConst,aConstant,aFreeable:Boolean;const aRegister:TPOCAInt32):PPOCACodeGeneratorScopeSymbol;
+   function DefineScopeSymbol(t:PPOCAToken;const aCanBeOuter,aLetConst,aConstant,aFreeable:Boolean;const aRegister:TPOCAInt32):PPOCACodeGeneratorScopeSymbol;
    var CurrentCodeGenerator:PPOCACodeGenerator;
        i,SymbolIndex:TPOCAInt32;
        HashMap:TPOCAStringHashMap;
@@ -25700,12 +25689,8 @@ var TokenList:PPOCAToken;
        Kind:TPOCACodeGeneratorScopeSymbolKind;
    begin
     if aLetConst then begin
-     if aIsVar then begin
-      if Instance^.Globals.UseFrameValues then begin
-       Kind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
-      end else begin
-       Kind:=TPOCACodeGeneratorScopeSymbolKind.sskLOCAL;
-      end;
+     if aCanBeOuter then begin
+      Kind:=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE;
      end else begin
       Kind:=TPOCACodeGeneratorScopeSymbolKind.sskREG;
      end;
@@ -25731,7 +25716,6 @@ var TokenList:PPOCAToken;
       GetMem(CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex],SizeOf(TPOCACodeGeneratorScopeSymbol));
       result:=CurrentCodeGenerator^.Scopes[i].Symbols[SymbolIndex];
       Initialize(result^);
-      result^.FrameValueContextID:=CurrentCodeGenerator^.Scopes[i].FrameValueContextID;
       result^.FrameValueLevel:=CurrentCodeGenerator^.Level;
       if Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE then begin
        CurrentCodeGenerator^.UsedFrameValues:=true;
@@ -25741,12 +25725,7 @@ var TokenList:PPOCAToken;
        result^.FrameValueIndex:=0;
       end;
       result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
-      result^.CodeName:=t^.Str;
-      if aLetConst{and (Kind<>TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE)}then begin
-       result^.RealName:=t^.Str+'@'+IntToStr(result^.ScopeID);
-      end else begin
-       result^.RealName:=t^.Str;
-      end;
+      result^.Name:=t^.Str;
       result^.Kind:=Kind;
       result^.Constant:=aConstant;
       result^.Register:=aRegister;
@@ -25846,7 +25825,6 @@ var TokenList:PPOCAToken;
     Scope^.CountSymbols:=0;
     inc(Instance^.Globals.ScopeIDCounter);
     Scope^.ScopeID:=Instance^.Globals.ScopeIDCounter;
-    Scope^.FrameValueContextID:=CodeGenerator^.FrameValueContextID;
     Scope^.BeginCountFrameValues:=CodeGenerator^.CountFrameValues;
    end;
    procedure ScopeEnd;
@@ -25937,7 +25915,7 @@ var TokenList:PPOCAToken;
        Symbol:=Scope^.Symbols[Index];
        Scope^.Symbols[Index]:=nil;
        if assigned(Symbol) then begin
-        Item:=Scope^.SymbolNameHashMap.GetKey(Symbol^.CodeName);
+        Item:=Scope^.SymbolNameHashMap.GetKey(Symbol^.Name);
         if assigned(Item) then begin
          Scope^.SymbolNameHashMap.DeleteKey(Item);
         end;
@@ -26054,7 +26032,7 @@ var TokenList:PPOCAToken;
         SymbolIndex:=Item^.Value;
         Symbol:=CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
         r:=Symbol^.Register;
-        Symbol^.CodeName:='';
+        Symbol^.Name:='';
         Symbol^.RealName:='';
         Symbol^.Constant:=false;
         Symbol^.Freeable:=false;
@@ -31622,7 +31600,7 @@ var TokenList:PPOCAToken;
        SetLength(CodeGenerator^.LocalArguments,CodeGenerator^.CountLocalArguments*2);
       end;
      end;
-     if (not IsVar) and Instance^.Globals.UseFrameValues and CodeGenerator^.HasNestedFunctions then begin
+     if CodeGenerator^.HasNestedFunctions and not IsVar then begin
       ScopeScope:=FindScopeSymbol(Symbol,false,false,false);
       if not assigned(ScopeScope) then begin
        ScopeScope:=DefineScopeSymbol(Symbol,true,true,IsConst,false,-1);
@@ -31827,8 +31805,6 @@ var TokenList:PPOCAToken;
      CodeGenerator^.ConstantRegisters:=nil;
      CodeGenerator^.CountConstants:=0;
      CodeGenerator^.CountRegExps:=0;
-     inc(Instance^.Globals.FrameValueContextIDCounter);
-     CodeGenerator^.FrameValueContextID:=Instance^.Globals.FrameValueContextIDCounter;
      CodeGenerator^.CountFrameValues:=0;
      if assigned(ParentCodeGenerator) then begin
       CodeGenerator^.Level:=ParentCodeGenerator^.Level+1;
