@@ -28,7 +28,6 @@
 
   let tb = DateTime.now();
 
-  breakpoint;
   puts("        Call count: ", c);
   puts("Maximum call depth: ", d);
   puts("      Elapsed time: ", DateTime.milliseconds(tb - ta), " ms");
