@@ -25174,7 +25174,6 @@ var TokenList:PPOCAToken;
       PPOCACodeGeneratorScopeSymbol=^TPOCACodeGeneratorScopeSymbol;
       TPOCACodeGeneratorScopeSymbol=record
        Name:TPOCARawByteString;
-       RealName:TPOCARawByteString;
        Kind:TPOCACodeGeneratorScopeSymbolKind;
        Constant:Boolean;
        Freeable:Boolean;
@@ -25666,7 +25665,7 @@ var TokenList:PPOCAToken;
     if assigned(t) and (t^.Token=ptSYMBOL) then begin
      Symbol:=FindScopeSymbol(t,SearchOnlyParents,MultiLevels,SingleScope);
      if assigned(Symbol) then begin
-      result:=Symbol^.RealName;
+      result:=Symbol^.Name;
      end else begin
       result:=t^.Str;
      end;
@@ -26023,7 +26022,6 @@ var TokenList:PPOCAToken;
         Symbol:=CodeGenerator^.Scopes[i].Symbols[SymbolIndex];
         r:=Symbol^.Register;
         Symbol^.Name:='';
-        Symbol^.RealName:='';
         Symbol^.Constant:=false;
         Symbol^.Freeable:=false;
         Symbol^.Register:=-1;
