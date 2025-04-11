@@ -1485,8 +1485,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       StrictMode:TPOCABool32;
 
-      ScopeIDCounter:TPOCAUInt64;
-
 {$ifdef POCAMemoryPools}
       Pools:TPOCAPools;
 {$endif}
@@ -18193,9 +18191,6 @@ begin
   result^.Globals.StrictMode:=true;
  end;
  begin
-  result^.Globals.ScopeIDCounter:=0;
- end;
- begin
   result^.Globals.GarbageCollector.Instance:=result;
   result^.Globals.GarbageCollector.Lock:=POCALockCreate;
   result^.Globals.GarbageCollector.ProtectList:=TPOCAPointerList.Create;
@@ -25186,7 +25181,6 @@ var TokenList:PPOCAToken;
        Register:TPOCAInt32;
        FrameValueLevel:TPOCAInt32;
        FrameValueIndex:TPOCAInt32;
-       ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopeSymbols=array of PPOCACodeGeneratorScopeSymbol;
       PPOCACodeGeneratorScope=^TPOCACodeGeneratorScope;
@@ -25195,7 +25189,6 @@ var TokenList:PPOCAToken;
        Symbols:TPOCACodeGeneratorScopeSymbols;
        CountSymbols:TPOCAInt32;
        BeginCountFrameValues:TPOCAInt32;
-       ScopeID:TPOCAUInt64;
       end;
       TPOCACodeGeneratorScopes=array of TPOCACodeGeneratorScope;
       PPOCACodeGeneratorWhenSwitchCaseBlock=^TPOCACodeGeneratorWhenSwitchCaseBlock;
@@ -25724,7 +25717,6 @@ var TokenList:PPOCAToken;
       end else begin
        result^.FrameValueIndex:=0;
       end;
-      result^.ScopeID:=CurrentCodeGenerator^.Scopes[i].ScopeID;
       result^.Name:=t^.Str;
       result^.Kind:=Kind;
       result^.Constant:=aConstant;
@@ -25823,8 +25815,6 @@ var TokenList:PPOCAToken;
     Scope^.SymbolNameHashMap:=TPOCAStringHashMap.Create(true);
     Scope^.Symbols:=nil;
     Scope^.CountSymbols:=0;
-    inc(Instance^.Globals.ScopeIDCounter);
-    Scope^.ScopeID:=Instance^.Globals.ScopeIDCounter;
     Scope^.BeginCountFrameValues:=CodeGenerator^.CountFrameValues;
    end;
    procedure ScopeEnd;
