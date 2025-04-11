@@ -29584,7 +29584,7 @@ var TokenList:PPOCAToken;
           SyntaxError('VAR is not allowed in fastfunctions',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
          end;
          CodeGenerator^.HasLocals:=true;
-         Symbol:=DefineScopeSymbol(t,true,(Variable=2) or (Variable=3),Variable=3,false,-1);
+         Symbol:=DefineScopeSymbol(t,true,(Variable=vLET) or (Variable=vCONST),Variable=vCONST,false,-1);
          if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE) then begin
           CodeGenerator^.UsedFrameValues:=true;
           if Symbol^.FrameValueLevel=CodeGenerator^.Level then begin
@@ -29592,7 +29592,7 @@ var TokenList:PPOCAToken;
           end else begin
            EmitOpcode(popSETOUTERVALUE,Symbol^.FrameValueLevel,Symbol^.FrameValueIndex,Reg);
           end;
-         end else if Variable=3 then begin
+         end else if Variable=vCONST then begin
           EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
          end else begin
           EmitOpcode(popSETLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
