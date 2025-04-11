@@ -2086,6 +2086,24 @@ var LexerKeywordTokens:TPOCALexerKeywordTokens;
     MetaOpNames:TPOCAMetaOpNames;
     MetaOpNamesHashMap:TPOCAStringHashMap;
 
+function ReadKey:AnsiChar;
+{$if defined(fpc) and defined(Unix)}
+var InputFD:pollfd;
+    InputChar:AnsiChar;
+{$ifend}
+begin
+ result:=#0;
+{$if defined(fpc) and defined(Unix)}
+ InputFD.fd:=StdInputHandle;
+ InputFD.events:=POLLIN;
+ if FpPoll(@InputFD,1,1)>0 then begin
+  if fpRead(StdInputHandle,@InputChar,1)<>0 then begin
+   result:=InputChar;
+  end;
+ end;
+{$ifend}
+end;
+
 {$warnings off}
 procedure InitializeLocaleFormatSettings;
 {$ifdef windows}
@@ -15421,11 +15439,17 @@ begin
  end;
 end;
 
+function POCAConsoleFunctionREADKEY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ result.Num:=ord(ReadKey);
+end;
+
 function POCAInitConsoleNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'log',POCAConsoleFunctionLOG);
  POCAAddNativeFunction(Context,result,'readLine',POCAConsoleFunctionREADLINE);
+ POCAAddNativeFunction(Context,result,'readKey',POCAConsoleFunctionREADKEY);
 end;
 
 procedure TPOCANativeObjectDestroy(const Ghost:PPOCAGhost);
