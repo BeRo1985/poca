@@ -732,6 +732,57 @@ input from the console.
 
 '''''
 
+==== Console.initialize
+
+*Usage:*
+[source,js]
+----
+Console.initialize();
+----
+
+* *Description:* Initializes the console for interactive input/output. This
+disables echoing, sets the console mode to raw, and prepares the console for
+realtime non-blocking input.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 for success, 0 for failure).
+* *Example:*
++
+[source,js]
+----
+// Initialize the console for input/output.
+if (Console.initialize()) {
+  Console.log("Console initialized successfully.");
+} else {
+  Console.log("Failed to initialize console.");
+}
+----
+
+'''''
+
+==== Console.finalize
+
+*Usage:*
+[source,js]
+----
+Console.finalize();
+----
+
+* *Description:* Finalizes the console, restoring the original console
+mode and flushing any remaining output. This is typically called at
+the end of a script to clean up the console state.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 for success, 0 for failure).
+* *Example:*
++
+[source,js]
+----
+// Finalize the console before exiting.
+Console.finalize();
+Console.log("Console finalized successfully.");
+----
+
+'''''
+
 ==== Console.log
 
 *Usage:*
@@ -796,15 +847,55 @@ Console.log("Hello, " + userInput + "!");
 
 '''''
 
+==== Console.readKey
+
+*Usage:*
+[source,js]
+----
+let key = Console.readKey();
+----
+
+* *Description:* The `+Console.readKey+` function reads a single key
+press from the console. This is typically used for interactive
+applications where immediate feedback is required. It's non-blocking and
+does not wait for the user to press Enter. The function returns a
+number code representing the key pressed. If no key is pressed, it
+returns 0.
+* *Parameters:* None.
+* *Return Value:* A number code representing the key pressed.
+* *Example:*
++
+[source,js]
+----
+// Read a single key press.
+while (true) {
+  let key = Console.readKey();
+  if (key === 113) { // Q key
+    Console.log("Q key pressed. Exiting...");
+    break;
+  } else if (key != 0) {
+    Console.log("Key pressed: " + key);
+  } else {
+    sleep(100); // Sleep for a short duration to avoid busy waiting
+  }
+}
+----
+
+'''''
+
 === Summary
 
 * *Global Object:* The Console object provides a namespace for basic
 console operations. It offers functions to log messages and read input
 from the console.
 * *Console API Functions:*
+** *initialize:* Initializes the console for interactive input/output.
+** *finalize:* Finalizes the console, restoring the original mode.
 ** *log:* Outputs one or more values to the console. Values are
 converted to strings (with special handling for `+null+`, strings, and
 numbers), followed by a newline and a flush of the output.
+** *readKey:* Reads a single key press from the console, returning a
+number code representing the key. If no key is pressed, it returns 0.
 ** *readLine:* Reads a line of text from the console, optionally
 displaying a prompt.
 * *Usage:* This comprehensive API enables you to output messages and
@@ -2682,6 +2773,57 @@ chr(65); // "A"
 
 '''''
 
+==== ord
+
+*Usage:*
+[source,js]
+----
+let codePoint = ord(charStr);
+----
+
+* *Description:* Converts a single-character string to its numeric
+code point in UTF-8 form.
+* *Parameters:*
+** `+charStr+` (string): The single-character string.
+* *Return Value:* A numeric code point.
+* *Example:*
++
+[source,js]
+----
+ord("A"); // 65
+----
+
+'''''
+
+==== sleep
+
+*Usage:*
+[source,js]
+----
+sleep(milliseconds);
+----
+
+* *Description:* Pauses execution for the specified number of
+milliseconds. This is a blocking call, meaning it halts the 
+current execution until the time has elapsed.
+* *Parameters:*
+** `+milliseconds+` (number): The number of milliseconds to sleep.
+* *Return Value:* No meaningful return; the function returns `+null+`.
+* *Example:*
++
+[source,js]
+----
+puts("Sleeping for 2 seconds...");
+sleep(2000);
+puts("Awake!");
+// Output:
+// Sleeping for 2 seconds...
+// (waits 2 seconds)
+// Awake!
+----
+
+'''''
+
 ==== contains
 
 *Usage:*
@@ -3053,13 +3195,14 @@ The global namespace contains a variety of utilities that let you:
 `+keys+`, etc. 
 2. *Perform console I/O* with `+print+`, `+puts+`, and
 `+readLine+`. 
-3. *Manage or query modules* with `+import+`, `+require+`
+3. *Manipulate strings* with `+chr+`, `+ord+` for character operations.
+4. *Pause execution* with `+sleep+` for pausing execution.
+5. *Manage or query modules* with `+import+`, `+require+`
 (duplicates of ModuleManager’s functions). 
-4. *Evaluate code* with
+6. *Evaluate code* with
 `+eval+` and `+compile+`, manipulate function closures with `+caller+`,
 `+closure+`, `+bind+`, and `+call+`. 
-5. *Control or bypass hash
-meta-events* with `+rawGet+`, `+rawSet+`, etc.
+7. *Control or bypass hash meta-events* with `+rawGet+`, `+rawSet+`, etc.
 
 These functions enable rapid scripting and flexible data handling in
 POCA’s dynamic environment. When combined with the features of

@@ -500,8 +500,11 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_overview_3">Overview</a></li>
 <li><a href="#_global_console_object">Global Console Object</a>
 <ul class="sectlevel3">
+<li><a href="#_console_initialize">Console.initialize</a></li>
+<li><a href="#_console_finalize">Console.finalize</a></li>
 <li><a href="#_console_log">Console.log</a></li>
 <li><a href="#_console_readline">Console.readLine</a></li>
+<li><a href="#_console_readkey">Console.readKey</a></li>
 </ul>
 </li>
 <li><a href="#_summary_3">Summary</a></li>
@@ -639,6 +642,8 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_puts">puts</a></li>
 <li><a href="#_readline">readLine</a></li>
 <li><a href="#_chr">chr</a></li>
+<li><a href="#_ord">ord</a></li>
+<li><a href="#_sleep">sleep</a></li>
 <li><a href="#_contains">contains</a></li>
 <li><a href="#_import">import</a></li>
 <li><a href="#_require">require</a></li>
@@ -2197,6 +2202,83 @@ input from the console.</p>
 </div>
 <hr>
 <div class="sect3">
+<h4 id="_console_initialize">Console.initialize</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">Console.initialize();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Initializes the console for interactive input/output. This
+disables echoing, sets the console mode to raw, and prepares the console for
+realtime non-blocking input.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 for success, 0 for failure).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Initialize the console for input/output.
+if (Console.initialize()) {
+  Console.log("Console initialized successfully.");
+} else {
+  Console.log("Failed to initialize console.");
+}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_console_finalize">Console.finalize</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">Console.finalize();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Finalizes the console, restoring the original console
+mode and flushing any remaining output. This is typically called at
+the end of a script to clean up the console state.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric boolean (1 for success, 0 for failure).</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Finalize the console before exiting.
+Console.finalize();
+Console.log("Console finalized successfully.");</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_console_log">Console.log</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -2307,6 +2389,55 @@ Console.log("Hello, " + userInput + "!");</code></pre>
 </div>
 <hr>
 </div>
+<div class="sect3">
+<h4 id="_console_readkey">Console.readKey</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let key = Console.readKey();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> The <code>Console.readKey</code> function reads a single key
+press from the console. This is typically used for interactive
+applications where immediate feedback is required. It&#8217;s non-blocking and
+does not wait for the user to press Enter. The function returns a
+number code representing the key pressed. If no key is pressed, it
+returns 0.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A number code representing the key pressed.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Read a single key press.
+while (true) {
+  let key = Console.readKey();
+  if (key === 113) { // Q key
+    Console.log("Q key pressed. Exiting...");
+    break;
+  } else if (key != 0) {
+    Console.log("Key pressed: " + key);
+  } else {
+    sleep(100); // Sleep for a short duration to avoid busy waiting
+  }
+}</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_summary_3">Summary</h3>
@@ -2322,9 +2453,19 @@ from the console.</p>
 <div class="ulist">
 <ul>
 <li>
+<p><strong>initialize:</strong> Initializes the console for interactive input/output.</p>
+</li>
+<li>
+<p><strong>finalize:</strong> Finalizes the console, restoring the original mode.</p>
+</li>
+<li>
 <p><strong>log:</strong> Outputs one or more values to the console. Values are
 converted to strings (with special handling for <code>null</code>, strings, and
 numbers), followed by a newline and a flush of the output.</p>
+</li>
+<li>
+<p><strong>readKey:</strong> Reads a single key press from the console, returning a
+number code representing the key. If no key is pressed, it returns 0.</p>
 </li>
 <li>
 <p><strong>readLine:</strong> Reads a line of text from the console, optionally
@@ -5377,6 +5518,95 @@ string in UTF-8 form.</p>
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_ord">ord</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let codePoint = ord(charStr);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Converts a single-character string to its numeric
+code point in UTF-8 form.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>charStr</code> (string): The single-character string.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric code point.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">ord("A"); // 65</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_sleep">sleep</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">sleep(milliseconds);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Pauses execution for the specified number of
+milliseconds. This is a blocking call, meaning it halts the
+current execution until the time has elapsed.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>milliseconds</code> (number): The number of milliseconds to sleep.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> No meaningful return; the function returns <code>null</code>.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">puts("Sleeping for 2 seconds...");
+sleep(2000);
+puts("Awake!");
+// Output:
+// Sleeping for 2 seconds...
+// (waits 2 seconds)
+// Awake!</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_contains">contains</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -6088,6 +6318,12 @@ meta-events. The array is sorted.</p>
 <code>readLine</code>.</p>
 </li>
 <li>
+<p><strong>Manipulate strings</strong> with <code>chr</code>, <code>ord</code> for character operations.</p>
+</li>
+<li>
+<p><strong>Pause execution</strong> with <code>sleep</code> for pausing execution.</p>
+</li>
+<li>
 <p><strong>Manage or query modules</strong> with <code>import</code>, <code>require</code>
 (duplicates of ModuleManager’s functions).</p>
 </li>
@@ -6097,8 +6333,7 @@ meta-events. The array is sorted.</p>
 <code>closure</code>, <code>bind</code>, and <code>call</code>.</p>
 </li>
 <li>
-<p><strong>Control or bypass hash
-meta-events</strong> with <code>rawGet</code>, <code>rawSet</code>, etc.</p>
+<p><strong>Control or bypass hash meta-events</strong> with <code>rawGet</code>, <code>rawSet</code>, etc.</p>
 </li>
 </ol>
 </div>
@@ -13844,7 +14079,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-08 04:35:28 +0200
+Last updated 2025-04-11 14:04:36 +0200
 </div>
 </div>
 </body>
