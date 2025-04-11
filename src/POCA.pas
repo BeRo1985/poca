@@ -331,7 +331,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-11-03-20-0000';
+const POCAVersion='2025-04-11-16-44-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1572,6 +1572,11 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
 {$if defined(fpc) and defined(Unix)}
       OriginalTerm:TTermios;
+{$elseif defined(Windows)}
+      ConsoleInputHandle:Windows.THandle;
+      ConsoleOutputHandle:Windows.THandle;
+      OldConsoleModeIn:DWORD;
+      OldConsoleModeOut:DWORD;
 {$ifend}
 
       FirstContext:PPOCAContext;
@@ -2102,6 +2107,20 @@ begin
  Term.c_lflag:=Term.c_lflag and not (termio.ECHO or termio.ICANON {or termio.ISIG} or termio.IEXTEN);
  Term.c_iflag:=Term.c_iflag and not (termio.IXON or termio.ICRNL);
  TCSetAttr(0,TCSAFLUSH,Term);
+{$elseif defined(Windows)}
+ SetConsoleCP(CP_UTF8);
+ SetConsoleOutputCP(CP_UTF8);
+ Context^.Instance.Globals.ConsoleInputHandle:=GetStdHandle(STD_INPUT_HANDLE);
+ Context^.Instance.Globals.ConsoleOutputHandle:=GetStdHandle(STD_OUTPUT_HANDLE);
+ GetConsoleMode(Context^.Instance.Globals.ConsoleInputHandle,Context^.Instance.Globals.OldConsoleModeIn);
+ SetConsoleMode(Context^.Instance.Globals.ConsoleInputHandle,(ENABLE_VIRTUAL_TERMINAL_INPUT or
+                                                              ENABLE_WINDOW_INPUT or
+                                                              ENABLE_MOUSE_INPUT) and not
+                                                             (//ENABLE_PROCESSED_INPUT or
+                                                              ENABLE_WRAP_AT_EOL_OUTPUT));
+ GetConsoleMode(Context^.Instance.Globals.ConsoleOutputHandle,Context^.Instance.Globals.OldConsoleModeOut);
+ SetConsoleMode(Context^.Instance.Globals.ConsoleOutputHandle,Context^.Instance.Globals.OldConsoleModeOut or (ENABLE_PROCESSED_OUTPUT or
+                                                                                                              ENABLE_VIRTUAL_TERMINAL_PROCESSING));
 {$ifend}
 end;
 
@@ -2109,6 +2128,9 @@ procedure FinalizeConsole(Context:PPOCAContext);
 begin
 {$if defined(fpc) and defined(Unix)}
  TCSetAttr(0,TCSAFLUSH,Context^.Instance.Globals.OriginalTerm);
+{$elseif defined(Windows)}
+ SetConsoleMode(Context^.Instance.Globals.ConsoleInputHandle,Context^.Instance.Globals.OldConsoleModeIn);
+ SetConsoleMode(Context^.Instance.Globals.ConsoleOutputHandle,Context^.Instance.Globals.OldConsoleModeOut);
 {$ifend}
 end;
 
@@ -2198,6 +2220,10 @@ begin
     (InputRecord.EventType=KEY_EVENT) and
     InputRecord.Event.KeyEvent.bKeyDown then begin
   result:=ReadInput;
+ end else begin
+  if ReadCount=1 then begin
+   ReadConsoleInputW(ConsoleInputHandle,InputRecord,1,ReadCount);
+  end;
  end;
 {$elseif defined(fpc) and defined(Unix)}
  InputFD.fd:=StdInputHandle;
