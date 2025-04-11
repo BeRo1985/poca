@@ -33,11 +33,16 @@ var OtherObjTest = {
 
   },
 
-  d: 21
+  d: 21,
+
+  test: function(){
+    print(this.a, " ", this.b, " ", this.c, " ", this.d, "\n");
+  }
 
 };
 
 var otherObj = new OtherObjTest();
 
 print(otherObj.a, " ", otherObj.b, " ", otherObj.c, " ", otherObj.d, "\n");
+otherObj.test();
 
