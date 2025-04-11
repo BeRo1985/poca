@@ -37567,7 +37567,7 @@ begin
     Registers^[Operands^[0]]:=Frame^.OuterValueLevels[Operands^[1]][Operands^[2]];
    end;
    popSETOUTERVALUE:begin
-    Frame^.OuterValueLevels[Operands^[0]][Operands^[1]]:=Registers^[Operands^[0]];
+    Frame^.OuterValueLevels[Operands^[0]][Operands^[1]]:=Registers^[Operands^[2]];
    end;
    popNEWARRAY:begin
     Registers^[Operands^[0]]:=POCANewArray(Context);
