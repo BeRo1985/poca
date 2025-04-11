@@ -155,6 +155,18 @@ confined to their block and kept out of the general local table, living either
 in a dedicated frame storage (when necessary for scope access or lifetime) or 
 directly in registers for maximal performance in self-contained cases.
 
+`let` and `const` have higher priority than `var`. As a result, if a variable is declared 
+with `let` or `const`, it will shadow any variable with the same name declared with `var` 
+in any scope, including the global scope. Consequently, declaring a variable with `let` 
+or `const` inside a block does not affect a `var` variable with the same name in the 
+outer scope. Essentially, bindings declared with `let` and `const` are searched in all 
+scopes first; only if no such binding is found is the `var` variable considered. For 
+optimization reasons, `let` and `const` are resolved at compile time because they 
+reside in fast-access frame variable storages, whereas `var` variables are stored in 
+the normal local variable hash table and are looked up at runtime, as it is not known 
+at compile time whether the variable will be used in the current frame, due to their 
+fully dynamic nature.
+
 Example:
 
 [source,javascript]
