@@ -329,7 +329,7 @@
 
 interface
 
-uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
+uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
 const POCAVersion='2025-04-11-03-20-0000';
 
@@ -1570,6 +1570,10 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ModuleLoaderFunctions:TPOCAModuleLoaderFunctions;
       CountModuleLoaderFunctions:TPOCAInt32;
 
+{$if defined(fpc) and defined(Unix)}
+      OriginalTerm:TTermios;
+{$ifend}
+
       FirstContext:PPOCAContext;
       LastContext:PPOCAContext;
 
@@ -2086,7 +2090,29 @@ var LexerKeywordTokens:TPOCALexerKeywordTokens;
     MetaOpNames:TPOCAMetaOpNames;
     MetaOpNamesHashMap:TPOCAStringHashMap;
 
-function ReadKey:TPOCAUInt32;
+procedure InitializeConsole(Context:PPOCAContext);
+{$if defined(fpc) and defined(Unix)}
+var Term:TTermios;
+{$ifend}
+begin
+{$if defined(fpc) and defined(Unix)}
+ Term.c_line:=#0;
+ TCGetAttr(0,Term);
+ Context^.Instance.Globals.OriginalTerm:=Term;
+ Term.c_lflag:=Term.c_lflag and not (termio.ECHO or termio.ICANON {or termio.ISIG} or termio.IEXTEN);
+ Term.c_iflag:=Term.c_iflag and not (termio.IXON or termio.ICRNL);
+ TCSetAttr(0,TCSAFLUSH,Term);
+{$ifend}
+end;
+
+procedure FinalizeConsole(Context:PPOCAContext);
+begin
+{$if defined(fpc) and defined(Unix)}
+ TCSetAttr(0,TCSAFLUSH,Context^.Instance.Globals.OriginalTerm);
+{$ifend}
+end;
+
+function ReadKey(Context:PPOCAContext):TPOCAUInt32;
 {$if defined(Windows)}
 var ReadCount,Index:DWORD;
     InputRecord:_INPUT_RECORD;
@@ -15519,9 +15545,21 @@ begin
  end;
 end;
 
+function POCAConsoleFunctionINITIALIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ InitializeConsole(Context);
+ result.Num:=1.0;
+end;
+
+function POCAConsoleFunctionFINALIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ FinalizeConsole(Context);
+ result.Num:=1.0;
+end;
+
 function POCAConsoleFunctionREADKEY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
- result.Num:=ReadKey;
+ result.Num:=ReadKey(Context);
 end;
 
 function POCAInitConsoleNamespace(Context:PPOCAContext):TPOCAValue;
@@ -15530,6 +15568,8 @@ begin
  POCAAddNativeFunction(Context,result,'log',POCAConsoleFunctionLOG);
  POCAAddNativeFunction(Context,result,'readLine',POCAConsoleFunctionREADLINE);
  POCAAddNativeFunction(Context,result,'readKey',POCAConsoleFunctionREADKEY);
+ POCAAddNativeFunction(Context,result,'initialize',POCAConsoleFunctionINITIALIZE);
+ POCAAddNativeFunction(Context,result,'finalize',POCAConsoleFunctionFINALIZE);
 end;
 
 procedure TPOCANativeObjectDestroy(const Ghost:PPOCAGhost);
@@ -39032,9 +39072,20 @@ begin
  end;
 end;
 
+{$if defined(fpc) and defined(Unix)}
+var OriginalTerm:TTermios;
+{$ifend}
+
 initialization
+{$if defined(fpc) and defined(Unix)}
+ OriginalTerm.c_line:=#0;
+ TCGetAttr(0,OriginalTerm);
+{$ifend}
  InitializePOCA;
 finalization
  FinalizePOCA;
+{$if defined(fpc) and defined(Unix)}
+ TCSetAttr(0,TCSAFLUSH,OriginalTerm);
+{$ifend}
 end.
 
