@@ -2086,19 +2086,99 @@ var LexerKeywordTokens:TPOCALexerKeywordTokens;
     MetaOpNames:TPOCAMetaOpNames;
     MetaOpNamesHashMap:TPOCAStringHashMap;
 
-function ReadKey:AnsiChar;
-{$if defined(fpc) and defined(Unix)}
+function ReadKey:TPOCAUInt32;
+{$if defined(Windows)}
+var ReadCount,Index:DWORD;
+    InputRecord:_INPUT_RECORD;
+    Data:array[0..7] of AnsiChar;
+    ConsoleInputHandle:THandle;
+ function ReadInput:DWORD;
+ var Surrogate,CharValue:DWORD;
+ begin
+
+  repeat
+
+   if not ReadConsoleInputW(ConsoleInputHandle,InputRecord,1,ReadCount) then begin
+    exit;
+   end;
+
+   if (ReadCount=1) and (InputRecord.EventType=KEY_EVENT) and InputRecord.Event.KeyEvent.bKeyDown then begin
+
+    CharValue:=ord(InputRecord.Event.KeyEvent.UnicodeChar);
+
+    while CharValue=0 do begin
+
+     if not ReadConsoleInputW(ConsoleInputHandle,InputRecord,1,ReadCount) then begin
+      exit;
+     end;
+
+     if (ReadCount=1) and (InputRecord.EventType=KEY_EVENT) then begin
+      CharValue:=ord(InputRecord.Event.KeyEvent.UnicodeChar);
+      if not InputRecord.Event.KeyEvent.bKeyDown then begin
+       break;
+      end;
+     end;
+    end;
+
+    if CharValue>=$80 then begin
+
+     if (CharValue>=$d800) and (CharValue<$e000) then begin
+      if not ReadConsoleInputW(ConsoleInputHandle,InputRecord,1,ReadCount) then begin
+       exit;
+      end;
+      if (ReadCount=1) and (InputRecord.EventType=KEY_EVENT) and InputRecord.Event.KeyEvent.bKeyDown then begin
+       Surrogate:=ord(InputRecord.Event.KeyEvent.UnicodeChar);
+       while Surrogate=0 do begin
+        if not ReadConsoleInputW(ConsoleInputHandle,InputRecord,1,ReadCount) then begin
+         exit;
+        end;
+        if (ReadCount=1) and (InputRecord.EventType=KEY_EVENT) then begin
+         Surrogate:=ord(InputRecord.Event.KeyEvent.UnicodeChar);
+         if not InputRecord.Event.KeyEvent.bKeyDown then begin
+          break;
+         end;
+        end;
+       end;
+       CharValue:=($010000-$dc00)+((CharValue-$d800) shl 10)+Surrogate;
+      end;
+     end;
+
+     result:=CharValue;
+     exit;
+
+    end else begin
+
+     result:=TPOCAUInt8(CharValue);
+
+    end;
+
+    break;
+
+   end;
+
+  until false;
+ end;
+{$elseif defined(fpc) and defined(Unix)}
 var InputFD:pollfd;
     InputChar:AnsiChar;
 {$ifend}
 begin
- result:=#0;
-{$if defined(fpc) and defined(Unix)}
+ result:=0;
+{$if defined(Windows)}
+ ReadCount:=0;
+ ConsoleInputHandle:=GetStdHandle(STD_INPUT_HANDLE);
+ if PeekConsoleInputW(ConsoleInputHandle,InputRecord,1,ReadCount) and
+   (ReadCount=1) and
+    (InputRecord.EventType=KEY_EVENT) and
+    InputRecord.Event.KeyEvent.bKeyDown then begin
+  result:=ReadInput;
+ end;
+{$elseif defined(fpc) and defined(Unix)}
  InputFD.fd:=StdInputHandle;
  InputFD.events:=POLLIN;
  if FpPoll(@InputFD,1,1)>0 then begin
   if fpRead(StdInputHandle,@InputChar,1)<>0 then begin
-   result:=InputChar;
+   result:=ord(InputChar);
   end;
  end;
 {$ifend}
@@ -15441,7 +15521,7 @@ end;
 
 function POCAConsoleFunctionREADKEY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
- result.Num:=ord(ReadKey);
+ result.Num:=ReadKey;
 end;
 
 function POCAInitConsoleNamespace(Context:PPOCAContext):TPOCAValue;
