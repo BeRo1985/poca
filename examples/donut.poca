@@ -47,6 +47,7 @@ GarbageCollector.setIncremental(false);
       }
       print(r, "\n");
     }
+    sleep(10);
   }while(1);
 })();
 

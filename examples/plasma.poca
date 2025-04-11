@@ -57,6 +57,8 @@ GarbageCollector.setIncremental(false);
       output ~= line;
     }
     print(output);
+
+    sleep(10);
     
   } while(1);
 })();
