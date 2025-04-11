@@ -1,4 +1,6 @@
 
+GarbageCollector.setIncremental(false);
+
 function executeTests(tests...){
 
   let timeStart = DateTime.now();
