@@ -13,14 +13,14 @@ const BOARD_HEIGHT = 20;
 
 // FrameBuffer: one object per cell to track what was drawn last time and what to draw now.
 let fb = new Array(BOARD_WIDTH * BOARD_HEIGHT);
-for (let i = 0; i < fb.size(); i++) {
+for (let i = 0; i < fb.length; i++) {
   fb[i] = { old: '-', current: ' ' };
 }
 
 // Board state: each cell holds a character; ' ' means empty,
 // while a letter such as 'I', 'J', etc., represents a locked tetromino block.
 let board = new Array(BOARD_WIDTH * BOARD_HEIGHT);
-for (let i = 0; i < board.size(); i++) {
+for (let i = 0; i < board.length; i++) {
   board[i] = ' ';
 }
 
@@ -87,10 +87,10 @@ function getColorForPiece(piece) {
 
 // Create a new tetromino chosen at random.
 function spawnTetromino() {
-  const idx = Math.floor(Math.random() * TETROMINOS.size());
+  const idx = Math.floor(Math.random() * TETROMINOS.length);
   let tet = TETROMINOS[idx];
   let blocksCopy = [];
-  for (let i = 0; i < tet.blocks.size(); i++) {
+  for (let i = 0; i < tet.blocks.length; i++) {
     let b = tet.blocks[i];
     blocksCopy.push({ x: b.x, y: b.y });
   }
@@ -103,7 +103,7 @@ function spawnTetromino() {
 // Check whether a tetromino in its current (or test) position collides
 // with board boundaries or already locked blocks.
 function collides(tetromino) {
-  for (let i = 0; i < tetromino.blocks.size(); i++) {
+  for (let i = 0; i < tetromino.blocks.length; i++) {
     let bx = tetromino.x + tetromino.blocks[i].x;
     let by = tetromino.y + tetromino.blocks[i].y;
     // Outside horizontal bounds
@@ -123,7 +123,7 @@ function collides(tetromino) {
 // Only applies the rotation if it does not cause a collision.
 function rotateTetromino(tetromino) {
   let newBlocks = [];
-  for (let i = 0; i < tetromino.blocks.size(); i++) {
+  for (let i = 0; i < tetromino.blocks.length; i++) {
     let b = tetromino.blocks[i];
     newBlocks.push({ x: -b.y, y: b.x });
   }
@@ -149,7 +149,7 @@ function moveTetromino(dx, dy) {
 // then check and clear any full lines. Afterwards, spawn a new tetromino.
 // If the new tetromino immediately collides, the game is over.
 function lockTetromino() {
-  for (let i = 0; i < currentTetromino.blocks.size(); i++) {
+  for (let i = 0; i < currentTetromino.blocks.length; i++) {
     let bx = currentTetromino.x + currentTetromino.blocks[i].x;
     let by = currentTetromino.y + currentTetromino.blocks[i].y;
     if (by >= 0 && by < BOARD_HEIGHT && bx >= 0 && bx < BOARD_WIDTH) {
@@ -201,7 +201,7 @@ function updateFrameBuffer() {
     }
   }
   // Overlay the falling tetromino.
-  for (let i = 0; i < currentTetromino.blocks.size(); i++) {
+  for (let i = 0; i < currentTetromino.blocks.length; i++) {
     let bx = currentTetromino.x + currentTetromino.blocks[i].x;
     let by = currentTetromino.y + currentTetromino.blocks[i].y;
     if (by >= 0 && by < BOARD_HEIGHT && bx >= 0 && bx < BOARD_WIDTH) {

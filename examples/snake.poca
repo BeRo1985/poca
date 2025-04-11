@@ -20,7 +20,7 @@ let running = true;
 
 // FrameBuffer: flat array of cells { old, current }
 let fb = new Array(WIDTH * HEIGHT);
-for (let i = 0; i < fb.size(); i++) {
+for (let i = 0; i < fb.length; i++) {
   fb[i] = { old: '-', current: ' ' };
 }
 
