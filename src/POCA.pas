@@ -379,125 +379,127 @@ const POCAVersion='2025-04-11-16-44-0000';
       popLOADSELF=35;
       popLOADLOCAL=36;
       popCOPY=37;
-      popINSERT=38;
-      popEXTRACT=39;
-      popGETLENGTH=40;
-      popGETMEMBER=41;
-      popSETMEMBER=42;
-      popGETLOCAL=43;
-      popSETLOCAL=44;
-      popGETLOCALVALUE=45;
-      popSETLOCALVALUE=46;
-      popGETOUTERVALUE=47;
-      popSETOUTERVALUE=48;
-      popNEWARRAY=49;
-      popARRAYPUSH=50;
-      popARRAYRANGEPUSH=51;
-      popNEWHASH=52;
-      popHASHAPPEND=53;
-      popSETSYM=54;
-      popINDEX=55;
-      popFCALLH=56;
-      popMCALLH=57;
-      popUNPACK=58;
-      popSLICE=59;
-      popSLICE2=60;
-      popSLICE3=61;
-      popTRY=62;
-      popTRYBLOCKEND=63;
-      popTHROW=64;
-      popDEC=65;
-      popINC=66;
-      popBAND=67;
-      popBXOR=68;
-      popBOR=69;
-      popBNOT=70;
-      popBSHL=71;
-      popBSHR=72;
-      popBUSHR=73;
-      popMOD=74;
-      popPOW=75;
-      popINHERITEDGETMEMBER=76;
-      popKEY=77;
-      popIN=78;
-      popINRANGE=79;
-      popFTAILCALL=80;
-      popMTAILCALL=81;
-      popFTAILCALLH=82;
-      popMTAILCALLH=83;
-      popINSTANCEOF=84;
-      popBREAKPOINT=85;
-      popNUM=86;
-      popN_NOT=87;
-      popN_ADD=88;
-      popN_SUB=89;
-      popN_MUL=90;
-      popN_DIV=91;
-      popN_NEG=92;
-      popN_LT=93;
-      popN_LTEQ=94;
-      popN_GT=95;
-      popN_GTEQ=96;
-      popN_EQ=97;
-      popN_NEQ=98;
-      popN_CMP=99;
-      popN_DEC=100;
-      popN_INC=101;
-      popN_BAND=102;
-      popN_BXOR=103;
-      popN_BOR=104;
-      popN_BNOT=105;
-      popN_BSHL=106;
-      popN_BSHR=107;
-      popN_BUSHR=108;
-      popN_MOD=109;
-      popN_POW=110;
-      popN_INRANGE=111;
-      popN_JIFTRUE=112;
-      popN_JIFFALSE=113;
-      popN_JIFTRUELOOP=114;
-      popN_JIFFALSELOOP=115;
-      popN_JIFLT=116;
-      popN_JIFLTEQ=117;
-      popN_JIFGT=118;
-      popN_JIFGTEQ=119;
-      popN_JIFEQ=120;
-      popN_JIFNEQ=121;
-      popN_JIFLTLOOP=122;
-      popN_JIFLTEQLOOP=123;
-      popN_JIFGTLOOP=124;
-      popN_JIFGTEQLOOP=125;
-      popN_JIFEQLOOP=126;
-      popN_JIFNEQLOOP=127;
-      popUPDATESTRING=128;
-      popREGEXP=129;
-      popREGEXPEQ=130;
-      popREGEXPNEQ=131;
-      popSQRT=132;
-      popN_SQRT=133;
-      popGETPROTOTYPE=134;
-      popSETPROTOTYPE=135;
-      popGETCONSTRUCTOR=136;
-      popSETCONSTRUCTOR=137;
-      popDELETE=138;
-      popDELETEEX=139;
-      popDEFINED=140;
-      popDEFINEDEX=141;
-      popLOADGLOBAL=142;
-      popLOADBASECLASS=143;
-      popGETHASHKIND=144;
-      popSETHASHKIND=145;
-      popTYPEOF=146;
-      popIDOF=147;
-      popGHOSTTYPEOF=148;
-      popELVIS=149;
-      popIS=150;
-      popJIFNULL=151;
-      popJIFNOTNULL=152;
-      popSAFEEXTRACT=153;
-      popSAFEGETMEMBER=154;
-      popSETCONSTLOCAL=155;
-      popCOUNT=156;
+      popARRAYINSERT=38;
+      popARRAYEXTRACT=39;
+      popINSERT=40;
+      popEXTRACT=41;
+      popGETLENGTH=42;
+      popGETMEMBER=43;
+      popSETMEMBER=44;
+      popGETLOCAL=45;
+      popSETLOCAL=46;
+      popGETLOCALVALUE=47;
+      popSETLOCALVALUE=48;
+      popGETOUTERVALUE=49;
+      popSETOUTERVALUE=50;
+      popNEWARRAY=51;
+      popARRAYPUSH=52;
+      popARRAYRANGEPUSH=53;
+      popNEWHASH=54;
+      popHASHAPPEND=55;
+      popSETSYM=56;
+      popINDEX=57;
+      popFCALLH=58;
+      popMCALLH=59;
+      popUNPACK=60;
+      popSLICE=61;
+      popSLICE2=62;
+      popSLICE3=63;
+      popTRY=64;
+      popTRYBLOCKEND=65;
+      popTHROW=66;
+      popDEC=67;
+      popINC=68;
+      popBAND=69;
+      popBXOR=70;
+      popBOR=71;
+      popBNOT=72;
+      popBSHL=73;
+      popBSHR=74;
+      popBUSHR=75;
+      popMOD=76;
+      popPOW=77;
+      popINHERITEDGETMEMBER=78;
+      popKEY=79;
+      popIN=80;
+      popINRANGE=81;
+      popFTAILCALL=82;
+      popMTAILCALL=83;
+      popFTAILCALLH=84;
+      popMTAILCALLH=85;
+      popINSTANCEOF=86;
+      popBREAKPOINT=87;
+      popNUM=88;
+      popN_NOT=89;
+      popN_ADD=90;
+      popN_SUB=91;
+      popN_MUL=92;
+      popN_DIV=93;
+      popN_NEG=94;
+      popN_LT=95;
+      popN_LTEQ=96;
+      popN_GT=97;
+      popN_GTEQ=98;
+      popN_EQ=99;
+      popN_NEQ=100;
+      popN_CMP=101;
+      popN_DEC=102;
+      popN_INC=103;
+      popN_BAND=104;
+      popN_BXOR=105;
+      popN_BOR=106;
+      popN_BNOT=107;
+      popN_BSHL=108;
+      popN_BSHR=109;
+      popN_BUSHR=110;
+      popN_MOD=111;
+      popN_POW=112;
+      popN_INRANGE=113;
+      popN_JIFTRUE=114;
+      popN_JIFFALSE=115;
+      popN_JIFTRUELOOP=116;
+      popN_JIFFALSELOOP=117;
+      popN_JIFLT=118;
+      popN_JIFLTEQ=119;
+      popN_JIFGT=120;
+      popN_JIFGTEQ=121;
+      popN_JIFEQ=122;
+      popN_JIFNEQ=123;
+      popN_JIFLTLOOP=124;
+      popN_JIFLTEQLOOP=125;
+      popN_JIFGTLOOP=126;
+      popN_JIFGTEQLOOP=127;
+      popN_JIFEQLOOP=128;
+      popN_JIFNEQLOOP=129;
+      popUPDATESTRING=130;
+      popREGEXP=131;
+      popREGEXPEQ=132;
+      popREGEXPNEQ=133;
+      popSQRT=134;
+      popN_SQRT=135;
+      popGETPROTOTYPE=136;
+      popSETPROTOTYPE=137;
+      popGETCONSTRUCTOR=138;
+      popSETCONSTRUCTOR=139;
+      popDELETE=140;
+      popDELETEEX=141;
+      popDEFINED=142;
+      popDEFINEDEX=143;
+      popLOADGLOBAL=144;
+      popLOADBASECLASS=145;
+      popGETHASHKIND=146;
+      popSETHASHKIND=147;
+      popTYPEOF=148;
+      popIDOF=149;
+      popGHOSTTYPEOF=150;
+      popELVIS=151;
+      popIS=152;
+      popJIFNULL=153;
+      popJIFNOTNULL=154;
+      popSAFEEXTRACT=155;
+      popSAFEGETMEMBER=156;
+      popSETCONSTLOCAL=157;
+      popCOUNT=158;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -27468,7 +27470,14 @@ var TokenList:PPOCAToken;
        EmitOpcode(popSETHASHKIND,Reg1,Reg);
       end;
       popINSERT:begin
-       EmitOpcode(popINSERT,Reg1,Reg2,Reg);
+       case GetRegisterTypeKind(Reg1) of
+        tkARRAY:begin
+         EmitOpcode(popARRAYINSERT,Reg1,Reg2,Reg);
+        end;
+        else begin
+         EmitOpcode(popINSERT,Reg1,Reg2,Reg);
+        end;
+       end;
       end;
       popCOPY:begin
        EmitOpcode(popCOPY,Reg1,Reg);
@@ -27556,12 +27565,24 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popEXTRACT,result,Reg1,Reg2);
-       SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg3:=GenerateExpression(t^.Right,-1,true);
-       EmitOpcode(Op,result,result,Reg3);
-       FreeRegister(Reg3);
-       EmitOpcode(popINSERT,Reg1,Reg2,result);
+       case GetRegisterTypeKind(Reg1) of
+        tkARRAY:begin
+         EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
+         SetRegisterTypeKind(result,tkUNKNOWN);
+         Reg3:=GenerateExpression(t^.Right,-1,true);
+         EmitOpcode(Op,result,result,Reg3);
+         FreeRegister(Reg3);
+         EmitOpcode(popARRAYINSERT,Reg1,Reg2,result);
+        end;
+        else begin
+         EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+         SetRegisterTypeKind(result,tkUNKNOWN);
+         Reg3:=GenerateExpression(t^.Right,-1,true);
+         EmitOpcode(Op,result,result,Reg3);
+         FreeRegister(Reg3);
+         EmitOpcode(popINSERT,Reg1,Reg2,result);
+        end;
+       end;
       end;
       popCOPY:begin
        Reg2:=GenerateExpression(t^.Right,-1,true);
@@ -27759,25 +27780,50 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popEXTRACT,result,Reg1,Reg2);
-       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       case GetRegisterTypeKind(result) of
-        tkNUMBER:begin
-         EmitOpcode(popN_JIFTRUE,0,result);
-        end
+       case GetRegisterTypeKind(Reg1) of
+        tkARRAY:begin
+         EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
+         JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+         case GetRegisterTypeKind(result) of
+          tkNUMBER:begin
+           EmitOpcode(popN_JIFTRUE,0,result);
+          end
+          else begin
+           EmitOpcode(popJIFTRUE,0,result);
+          end;
+         end;
+         Registers:=GetRegisters;
+         Reg3:=GenerateExpression(t^.Right,result,true);
+         if result<>Reg3 then begin
+          EmitOpcode(popCOPY,result,Reg3);
+          FreeRegister(Reg3);
+         end;
+         FixTargetImmediate(JumpTrue);
+         CombineCurrentRegisters(Registers);
+         EmitOpcode(popARRAYINSERT,Reg1,Reg2,result);
+        end;
         else begin
-         EmitOpcode(popJIFTRUE,0,result);
+         EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+         JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+         case GetRegisterTypeKind(result) of
+          tkNUMBER:begin
+           EmitOpcode(popN_JIFTRUE,0,result);
+          end
+          else begin
+           EmitOpcode(popJIFTRUE,0,result);
+          end;
+         end;
+         Registers:=GetRegisters;
+         Reg3:=GenerateExpression(t^.Right,result,true);
+         if result<>Reg3 then begin
+          EmitOpcode(popCOPY,result,Reg3);
+          FreeRegister(Reg3);
+         end;
+         FixTargetImmediate(JumpTrue);
+         CombineCurrentRegisters(Registers);
+         EmitOpcode(popINSERT,Reg1,Reg2,result);
         end;
        end;
-       Registers:=GetRegisters;
-       Reg3:=GenerateExpression(t^.Right,result,true);
-       if result<>Reg3 then begin
-        EmitOpcode(popCOPY,result,Reg3);
-        FreeRegister(Reg3);
-       end;
-       FixTargetImmediate(JumpTrue);
-       CombineCurrentRegisters(Registers);
-       EmitOpcode(popINSERT,Reg1,Reg2,result);
       end;
       popCOPY:begin
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
@@ -28026,11 +28072,22 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg3:=GetRegister(true,false);
-       EmitOpcode(popEXTRACT,result,Reg1,Reg2);
-       SetRegisterTypeKind(result,tkUNKNOWN);
-       EmitOpcode(Op,Reg3,result);
-       EmitOpcode(popINSERT,Reg1,Reg2,Reg3);
-       FreeRegister(Reg3);
+       case GetRegisterTypeKind(Reg1) of
+        tkARRAY:begin
+         EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
+         SetRegisterTypeKind(result,tkUNKNOWN);
+         EmitOpcode(Op,Reg3,result);
+         EmitOpcode(popARRAYINSERT,Reg1,Reg2,Reg3);
+         FreeRegister(Reg3);
+        end;
+        else begin
+         EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+         SetRegisterTypeKind(result,tkUNKNOWN);
+         EmitOpcode(Op,Reg3,result);
+         EmitOpcode(popINSERT,Reg1,Reg2,Reg3);
+         FreeRegister(Reg3);
+        end;
+       end;
       end;
       popCOPY:begin
        if OutReg<0 then begin
@@ -28180,10 +28237,20 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg3:=GetRegister(true,false);
-       EmitOpcode(popEXTRACT,result,Reg1,Reg2);
-       SetRegisterTypeKind(result,tkUNKNOWN);
-       EmitOpcode(Op,result,result);
-       EmitOpcode(popINSERT,Reg1,Reg2,result);
+       case GetRegisterTypeKind(Reg1) of
+        tkARRAY:begin
+         EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
+         SetRegisterTypeKind(result,tkUNKNOWN);
+         EmitOpcode(Op,result,result);
+         EmitOpcode(popARRAYINSERT,Reg1,Reg2,result);
+        end;
+        else begin
+         EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+         SetRegisterTypeKind(result,tkUNKNOWN);
+         EmitOpcode(Op,result,result);
+         EmitOpcode(popINSERT,Reg1,Reg2,result);
+        end;
+       end;
       end;
       popCOPY:begin
        if OutReg<0 then begin
@@ -30291,7 +30358,14 @@ var TokenList:PPOCAToken;
       if Safe then begin
        EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
       end else begin
-       EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+       case GetRegisterTypeKind(Reg1) of
+        tkARRAY:begin
+         EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
+        end;
+        else begin
+         EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+        end;
+       end;
       end;
       FreeRegister(Reg2);
      end else begin
@@ -33542,6 +33616,62 @@ begin
    POCARuntimeError(Context,'String index '+TPOCARawByteString(IntToStr(result))+' is out of bounds with size '+TPOCARawByteString(IntToStr(l)));
   end;
  finally
+ end;
+end;
+
+function POCARunArrayGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
+var ArrayInstance:PPOCAArray;
+    ArrayRecord:PPOCAArrayRecord;
+    Index:TPOCAInt32;
+begin
+ if POCAIsValueScalarType(Key) then begin
+{ if POCAGetValueType(Box)=pvtARRAY then}begin
+   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(Box));
+   ArrayRecord:=ArrayInstance^.ArrayRecord;
+   Index:=trunc(POCAGetNumberValue(Context,Key));
+   if Index<0 then begin
+    inc(Index,ArrayRecord^.Size);
+   end;
+   if (Index>=0) or (Index<ArrayRecord^.Size) then begin
+    result:=ArrayRecord^.Data[Index];
+   end else begin
+    POCARuntimeError(Context,'Out of bounds');
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
+{ end else begin
+   POCARuntimeError(Context,'Not an array');
+   result.CastedUInt64:=POCAValueNullCastedUInt64;}
+  end;
+ end else begin
+  POCARuntimeError(Context,'Container index not scalar');
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+procedure POCARunArraySet(Context:PPOCAContext;const Box,Key,Value:TPOCAValue);
+var ArrayInstance:PPOCAArray;
+    ArrayRecord:PPOCAArrayRecord;
+    Index:TPOCAInt32;
+begin
+ if POCAIsValueScalarType(Key) then begin
+ {if POCAGetValueType(Box)=pvtARRAY then}begin
+   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(Box));
+   ArrayRecord:=ArrayInstance^.ArrayRecord;
+   Index:=trunc(POCAGetNumberValue(Context,Key));
+   if Index<0 then begin
+    inc(Index,ArrayRecord^.Size);
+   end;
+   if (Index>=0) or (Index<ArrayRecord^.Size) then begin
+    ArrayRecord^.Data[Index]:=Value;
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+   end else begin
+    POCARuntimeError(Context,'Out of bounds');
+   end;
+{ end else begin
+   POCARuntimeError(Context,'Not an array');}
+  end;
+ end else begin
+  POCARuntimeError(Context,'Container index not scalar');
  end;
 end;
 
@@ -38043,6 +38173,14 @@ begin
    end;
    popCOPY:begin
     Registers^[Operands^[0]]:=Registers^[Operands^[1]];
+   end;
+   popARRAYINSERT:begin
+    POCARunArraySet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]]);
+    Context^.TemporarySavedObjectCount:=0;
+   end;
+   popARRAYEXTRACT:begin
+    Registers^[Operands^[0]]:=POCARunArrayGet(Context,Registers^[Operands^[1]],Registers^[Operands^[2]]);
+    Context^.TemporarySavedObjectCount:=0;
    end;
    popINSERT:begin
     POCARunContainerSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],false);
