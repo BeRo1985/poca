@@ -381,122 +381,123 @@ const POCAVersion='2025-04-11-16-44-0000';
       popCOPY=37;
       popINSERT=38;
       popEXTRACT=39;
-      popGETMEMBER=40;
-      popSETMEMBER=41;
-      popGETLOCAL=42;
-      popSETLOCAL=43;
-      popGETLOCALVALUE=44;
-      popSETLOCALVALUE=45;
-      popGETOUTERVALUE=46;
-      popSETOUTERVALUE=47;
-      popNEWARRAY=48;
-      popARRAYPUSH=49;
-      popARRAYRANGEPUSH=50;
-      popNEWHASH=51;
-      popHASHAPPEND=52;
-      popSETSYM=53;
-      popINDEX=54;
-      popFCALLH=55;
-      popMCALLH=56;
-      popUNPACK=57;
-      popSLICE=58;
-      popSLICE2=59;
-      popSLICE3=60;
-      popTRY=61;
-      popTRYBLOCKEND=62;
-      popTHROW=63;
-      popDEC=64;
-      popINC=65;
-      popBAND=66;
-      popBXOR=67;
-      popBOR=68;
-      popBNOT=69;
-      popBSHL=70;
-      popBSHR=71;
-      popBUSHR=72;
-      popMOD=73;
-      popPOW=74;
-      popINHERITEDGETMEMBER=75;
-      popKEY=76;
-      popIN=77;
-      popINRANGE=78;
-      popFTAILCALL=79;
-      popMTAILCALL=80;
-      popFTAILCALLH=81;
-      popMTAILCALLH=82;
-      popINSTANCEOF=83;
-      popBREAKPOINT=84;
-      popNUM=85;
-      popN_NOT=86;
-      popN_ADD=87;
-      popN_SUB=88;
-      popN_MUL=89;
-      popN_DIV=90;
-      popN_NEG=91;
-      popN_LT=92;
-      popN_LTEQ=93;
-      popN_GT=94;
-      popN_GTEQ=95;
-      popN_EQ=96;
-      popN_NEQ=97;
-      popN_CMP=98;
-      popN_DEC=99;
-      popN_INC=100;
-      popN_BAND=101;
-      popN_BXOR=102;
-      popN_BOR=103;
-      popN_BNOT=104;
-      popN_BSHL=105;
-      popN_BSHR=106;
-      popN_BUSHR=107;
-      popN_MOD=108;
-      popN_POW=109;
-      popN_INRANGE=110;
-      popN_JIFTRUE=111;
-      popN_JIFFALSE=112;
-      popN_JIFTRUELOOP=113;
-      popN_JIFFALSELOOP=114;
-      popN_JIFLT=115;
-      popN_JIFLTEQ=116;
-      popN_JIFGT=117;
-      popN_JIFGTEQ=118;
-      popN_JIFEQ=119;
-      popN_JIFNEQ=120;
-      popN_JIFLTLOOP=121;
-      popN_JIFLTEQLOOP=122;
-      popN_JIFGTLOOP=123;
-      popN_JIFGTEQLOOP=124;
-      popN_JIFEQLOOP=125;
-      popN_JIFNEQLOOP=126;
-      popUPDATESTRING=127;
-      popREGEXP=128;
-      popREGEXPEQ=129;
-      popREGEXPNEQ=130;
-      popSQRT=131;
-      popN_SQRT=132;
-      popGETPROTOTYPE=133;
-      popSETPROTOTYPE=134;
-      popGETCONSTRUCTOR=135;
-      popSETCONSTRUCTOR=136;
-      popDELETE=137;
-      popDELETEEX=138;
-      popDEFINED=139;
-      popDEFINEDEX=140;
-      popLOADGLOBAL=141;
-      popLOADBASECLASS=142;
-      popGETHASHKIND=143;
-      popSETHASHKIND=144;
-      popTYPEOF=145;
-      popIDOF=146;
-      popGHOSTTYPEOF=147;
-      popELVIS=148;
-      popIS=149;
-      popJIFNULL=150;
-      popJIFNOTNULL=151;
-      popSAFEEXTRACT=152;
-      popSAFEGETMEMBER=153;
-      popSETCONSTLOCAL=154;
-      popCOUNT=155;
+      popGETLENGTH=40;
+      popGETMEMBER=41;
+      popSETMEMBER=42;
+      popGETLOCAL=43;
+      popSETLOCAL=44;
+      popGETLOCALVALUE=45;
+      popSETLOCALVALUE=46;
+      popGETOUTERVALUE=47;
+      popSETOUTERVALUE=48;
+      popNEWARRAY=49;
+      popARRAYPUSH=50;
+      popARRAYRANGEPUSH=51;
+      popNEWHASH=52;
+      popHASHAPPEND=53;
+      popSETSYM=54;
+      popINDEX=55;
+      popFCALLH=56;
+      popMCALLH=57;
+      popUNPACK=58;
+      popSLICE=59;
+      popSLICE2=60;
+      popSLICE3=61;
+      popTRY=62;
+      popTRYBLOCKEND=63;
+      popTHROW=64;
+      popDEC=65;
+      popINC=66;
+      popBAND=67;
+      popBXOR=68;
+      popBOR=69;
+      popBNOT=70;
+      popBSHL=71;
+      popBSHR=72;
+      popBUSHR=73;
+      popMOD=74;
+      popPOW=75;
+      popINHERITEDGETMEMBER=76;
+      popKEY=77;
+      popIN=78;
+      popINRANGE=79;
+      popFTAILCALL=80;
+      popMTAILCALL=81;
+      popFTAILCALLH=82;
+      popMTAILCALLH=83;
+      popINSTANCEOF=84;
+      popBREAKPOINT=85;
+      popNUM=86;
+      popN_NOT=87;
+      popN_ADD=88;
+      popN_SUB=89;
+      popN_MUL=90;
+      popN_DIV=91;
+      popN_NEG=92;
+      popN_LT=93;
+      popN_LTEQ=94;
+      popN_GT=95;
+      popN_GTEQ=96;
+      popN_EQ=97;
+      popN_NEQ=98;
+      popN_CMP=99;
+      popN_DEC=100;
+      popN_INC=101;
+      popN_BAND=102;
+      popN_BXOR=103;
+      popN_BOR=104;
+      popN_BNOT=105;
+      popN_BSHL=106;
+      popN_BSHR=107;
+      popN_BUSHR=108;
+      popN_MOD=109;
+      popN_POW=110;
+      popN_INRANGE=111;
+      popN_JIFTRUE=112;
+      popN_JIFFALSE=113;
+      popN_JIFTRUELOOP=114;
+      popN_JIFFALSELOOP=115;
+      popN_JIFLT=116;
+      popN_JIFLTEQ=117;
+      popN_JIFGT=118;
+      popN_JIFGTEQ=119;
+      popN_JIFEQ=120;
+      popN_JIFNEQ=121;
+      popN_JIFLTLOOP=122;
+      popN_JIFLTEQLOOP=123;
+      popN_JIFGTLOOP=124;
+      popN_JIFGTEQLOOP=125;
+      popN_JIFEQLOOP=126;
+      popN_JIFNEQLOOP=127;
+      popUPDATESTRING=128;
+      popREGEXP=129;
+      popREGEXPEQ=130;
+      popREGEXPNEQ=131;
+      popSQRT=132;
+      popN_SQRT=133;
+      popGETPROTOTYPE=134;
+      popSETPROTOTYPE=135;
+      popGETCONSTRUCTOR=136;
+      popSETCONSTRUCTOR=137;
+      popDELETE=138;
+      popDELETEEX=139;
+      popDEFINED=140;
+      popDEFINEDEX=141;
+      popLOADGLOBAL=142;
+      popLOADBASECLASS=143;
+      popGETHASHKIND=144;
+      popSETHASHKIND=145;
+      popTYPEOF=146;
+      popIDOF=147;
+      popGHOSTTYPEOF=148;
+      popELVIS=149;
+      popIS=150;
+      popJIFNULL=151;
+      popJIFNOTNULL=152;
+      popSAFEEXTRACT=153;
+      popSAFEGETMEMBER=154;
+      popSETCONSTLOCAL=155;
+      popCOUNT=156;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -25637,7 +25638,7 @@ var TokenList:PPOCAToken;
       popPOP:begin
        if CodeGenerator^.CountOpcodes>1 then begin
         case CodeGenerator^.ByteCode^[CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-2]] and $ff of
-         popPUSHREG,popGETLOCAL,popGETLOCALVALUE,popGETOUTERVALUE,popPUSHZERO,popPUSHONE,popPUSHCONST,popPUSHEND,popGETMEMBER,popSAFEGETMEMBER:begin
+         popPUSHREG,popGETLOCAL,popGETLOCALVALUE,popGETOUTERVALUE,popPUSHZERO,popPUSHONE,popPUSHCONST,popPUSHEND,popGETLENGTH,popGETMEMBER,popSAFEGETMEMBER:begin
           dec(CodeGenerator^.CountOpcodes,2);
           CodeGenerator^.ByteCodeSize:=CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes];
           continue;
@@ -25746,6 +25747,20 @@ var TokenList:PPOCAToken;
     Emit(OperandF);
     Emit(OperandG);
     Emit(OperandH);
+   end;
+   procedure EmitGetMember(OperandA,OperandB,OperandC,OperandD,OperandE:TPOCAUInt32);
+   begin
+    if (POCAGetStringValue(Context,POCAArrayGet(CodeGenerator^.Consts,OperandC))='length') or
+       (POCAArrayGet(CodeGenerator^.Consts,OperandC).CastedUInt64=Context^.Instance^.Globals.LengthStringReference.CastedUInt64) then begin
+     EmitImmediate(popGETLENGTH,5);
+    end else begin
+     EmitImmediate(popGETMEMBER,5);
+    end;
+    Emit(OperandA);
+    Emit(OperandB);
+    Emit(OperandC);
+    Emit(OperandD);
+    Emit(OperandE);
    end;
    function NewConstant(c:TPOCAValue):TPOCAInt32;
    begin
@@ -27316,7 +27331,7 @@ var TokenList:PPOCAToken;
        exit;
       end;
       ptSAFELBRA:begin
-       SyntaxError('??[ is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+       SyntaxError('?[ is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
       end;
       ptVAR,ptLET,ptCONST:begin
        t:=t^.Right;
@@ -27444,7 +27459,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETMEMBER,result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        Reg3:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg3);
        FreeRegister(Reg3);
@@ -27595,7 +27610,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETMEMBER,result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        if GetRegisterNumber(result) then begin
         EmitOpcode(popN_JIFTRUE,0,result);
@@ -27861,7 +27876,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg2:=GetRegister(true,false);
-       EmitOpcode(popGETMEMBER,result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        EmitOpcode(Op,Reg2,result);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,Reg2,$ffffffff);
        FreeRegister(Reg2);
@@ -28007,7 +28022,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg2:=GetRegister(true,false);
-       EmitOpcode(popGETMEMBER,result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
       end;
@@ -28334,7 +28349,7 @@ var TokenList:PPOCAToken;
         end else if assigned(t^.Left^.Right) and (t^.Left^.Right^.Token=ptHASHKIND) then begin
          EmitOpcode(popGETHASHKIND,Reg2,Reg3);
         end else begin
-         EmitOpcode(popGETMEMBER,Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+         EmitGetMember(Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
         end;
         FreeRegister(Reg3);
        end else begin
@@ -28347,7 +28362,7 @@ var TokenList:PPOCAToken;
         end else if assigned(t^.Left^.Right) and (t^.Left^.Right^.Token=ptHASHKIND) then begin
          EmitOpcode(popGETHASHKIND,Reg2,Reg1);
         end else begin
-         EmitOpcode(popGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+         EmitGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
         end;
        end;
       end else if assigned(t^.Left) and (t^.Left^.Token=ptATDOT) and assigned(t^.Left^.Left) and (t^.Left^.Left^.Token=ptSUPERTHAT) then begin
@@ -28383,7 +28398,7 @@ var TokenList:PPOCAToken;
        ConstantIndex:=InternConstant(POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,InjectedMember)));
        Reg1:=Reg2;
        Reg2:=GetRegister(true,false);
-       EmitOpcode(popGETMEMBER,Reg2,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(Reg2,Reg1,ConstantIndex,$ffffffff,$ffffffff);
       end;
       if IsHashCall(t^.Right) then begin
        Reg3:=GetRegister(true,false);
@@ -30642,7 +30657,7 @@ var TokenList:PPOCAToken;
         if Safe then begin
          EmitOpcode(popSAFEGETMEMBER,result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
         end else begin
-         EmitOpcode(popGETMEMBER,result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
+         EmitGetMember(result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
         end;
        end;
        else begin
@@ -33267,6 +33282,27 @@ begin
 
 end;
 
+procedure POCARunGetLength(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
+var p:Pointer;
+begin
+ case POCAGetValueType(Obj) of
+  pvtARRAY:begin
+   OutValue.Num:=PPOCAArray(POCAGetValueReferencePointer(Obj))^.ArrayRecord.Size;
+  end;
+  pvtSTRING:begin
+   p:=POCAGetValueReferencePointer(Obj);
+   if PPOCAString(p)^.UTF8=suISUTF8 then begin
+    OutValue.Num:=PPOCAString(p)^.UTF8Length;
+   end else begin
+    OutValue.Num:=PPOCAString(p)^.DataLength;
+   end;
+  end;
+  else begin
+   POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,HashCacheIndex,IsInherited,true);
+  end;
+ end;
+end;
+
 procedure POCARunGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
 begin
  POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,HashCacheIndex,IsInherited,true);
@@ -35160,6 +35196,9 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
     popEXTRACT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popGETLENGTH:begin
      DoItByVMOpcodeDispatcher;
     end;
     popGETMEMBER:begin
@@ -37853,6 +37892,9 @@ begin
    popEXTRACT:begin
     Registers^[Operands^[0]]:=POCARunContainerGet(Context,Registers^[Operands^[1]],Registers^[Operands^[2]]);
     Context^.TemporarySavedObjectCount:=0;
+   end;
+   popGETLENGTH:begin
+    POCARunGetLength(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
    end;
    popGETMEMBER:begin
     POCARunGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
