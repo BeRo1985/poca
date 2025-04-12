@@ -25347,9 +25347,22 @@ var TokenList:PPOCAToken;
   end;
  end;
  function ProcessCodeGenerator(var Parser:TPOCAParser):TPOCAValue;
- type PPOCACodeGeneratorRegister=^TPOCACodeGeneratorRegister;
+ type TRegisterKind=
+       (
+        rkNONE,
+        rkUNKNOWN,
+        rkNULL,
+        rkNUMBER,
+        rkSTRING,
+        rkARRAY,
+        rkHASH,
+        rkCODE
+       );
+      PRegisterKind=^TRegisterKind;
+      PPOCACodeGeneratorRegister=^TPOCACodeGeneratorRegister;
       TPOCACodeGeneratorRegister=packed record
-       InUse,Freeable,IsNumber,IsConst:bytebool;
+       Kind:TRegisterKind;
+       InUse,Freeable,IsConst:bytebool;
       end;
       TPOCACodeGeneratorRegisters=array of TPOCACodeGeneratorRegister;
       PPOCACodeGeneratorSwitch=^TPOCACodeGeneratorSwitch;
@@ -25478,10 +25491,16 @@ var TokenList:PPOCAToken;
    var i:TPOCAInt32;
    begin
     for i:=0 to CodeGenerator^.CountRegisters-1 do begin
-     CodeGenerator^.Registers[i].IsNumber:=false;
+     CodeGenerator^.Registers[i].Kind:=rkUNKNOWN;
     end;
     for i:=0 to CodeGenerator^.CountConstants-1 do begin
-     CodeGenerator^.Registers[CodeGenerator^.ConstantRegisters[i]].IsNumber:=assigned(CodeGenerator^.Constants[i]) and (CodeGenerator^.Constants[i]^.Token=ptLITERALNUM);
+     if assigned(CodeGenerator^.Constants[i]) then begin
+      case CodeGenerator^.Constants[i]^.Token of
+       ptLITERALNUM:begin
+        CodeGenerator^.Registers[CodeGenerator^.ConstantRegisters[i]].Kind:=rkNUMBER;
+       end;
+      end;
+     end;
     end;
    end;
    procedure SetRegisters(const Src:TPOCACodeGeneratorRegisters);
@@ -25489,7 +25508,7 @@ var TokenList:PPOCAToken;
    begin
     for i:=0 to CodeGenerator^.CountRegisters-1 do begin
      if i<length(Src) then begin
-      CodeGenerator^.Registers[i].IsNumber:=Src[i].IsNumber;
+      CodeGenerator^.Registers[i].Kind:=Src[i].Kind;
      end;
     end;
    end;
@@ -25499,7 +25518,7 @@ var TokenList:PPOCAToken;
     if (Exact and (length(r1)=length(r2))) or ((not Exact) and (length(r1)<=length(r2))) then begin
      result:=true;
      for i:=0 to length(r1)-1 do begin
-      if (r1[i].IsNumber<>r2[i].IsNumber) and (Safe or (r1[i].InUse or r2[i].InUse)) then begin
+      if (r1[i].Kind<>r2[i].Kind) and (Safe or (r1[i].InUse or r2[i].InUse)) then begin
        result:=false;
        break;
       end;
@@ -25513,10 +25532,12 @@ var TokenList:PPOCAToken;
    begin
     for i:=0 to length(Dst)-1 do begin
      if i<length(Src) then begin
-      Dst[i].IsNumber:=Dst[i].IsNumber and Src[i].IsNumber;
+      if Dst[i].Kind<>Src[i].Kind then begin
+       Dst[i].Kind:=rkUNKNOWN;
+      end;
      end else begin
       if Safe then begin
-       Dst[i].IsNumber:=false;
+       Dst[i].Kind:=rkUNKNOWN;
       end else begin
        break;
       end;
@@ -25528,22 +25549,24 @@ var TokenList:PPOCAToken;
    begin
     for i:=0 to CodeGenerator^.CountRegisters-1 do begin
      if i<length(Src) then begin
-      CodeGenerator^.Registers[i].IsNumber:=CodeGenerator^.Registers[i].IsNumber and Src[i].IsNumber;
+      if CodeGenerator^.Registers[i].Kind<>Src[i].Kind then begin
+       CodeGenerator^.Registers[i].Kind:=rkUNKNOWN;
+      end;
      end else begin
       if Safe then begin
-       CodeGenerator^.Registers[i].IsNumber:=false;
+       CodeGenerator^.Registers[i].Kind:=rkUNKNOWN;
       end else begin
        break;
       end;
      end;
     end;
    end;
-   function GetRegisterNumber(RegNr:TPOCAInt32):boolean;
+   function GetRegisterKind(RegNr:TPOCAInt32):TRegisterKind;
    begin
     if (RegNr>=0) and (RegNr<TPOCAInt32(CodeGenerator^.CountRegisters)) then begin
-     result:=CodeGenerator^.Registers[RegNr].IsNumber;
+     result:=CodeGenerator^.Registers[RegNr].Kind;
     end else begin
-     result:=false;
+     result:=rkUNKNOWN;
     end;
    end;
    function GetRegisterConstant(RegNr:TPOCAInt32):boolean;
@@ -25554,10 +25577,10 @@ var TokenList:PPOCAToken;
      result:=false;
     end;
    end;
-   procedure SetRegisterNumber(RegNr:TPOCAInt32;IsNumber:boolean);
+   procedure SetRegisterKind(RegNr:TPOCAInt32;Kind:TRegisterKind);
    begin
     if (RegNr>=0) and (RegNr<TPOCAInt32(CodeGenerator^.CountRegisters)) then begin
-     CodeGenerator^.Registers[RegNr].IsNumber:=IsNumber;
+     CodeGenerator^.Registers[RegNr].Kind:=Kind;
     end;
    end;
    function Unary(t:PPOCAToken):boolean; {$ifdef caninline}inline;{$endif}
@@ -25573,9 +25596,9 @@ var TokenList:PPOCAToken;
    begin
     for i:=0 to CodeGenerator^.CountRegisters-1 do begin
      if not CodeGenerator^.Registers[i].InUse then begin
+      CodeGenerator^.Registers[i].Kind:=rkUNKNOWN;
       CodeGenerator^.Registers[i].InUse:=true;
       CodeGenerator^.Registers[i].Freeable:=Freeable;
-      CodeGenerator^.Registers[i].IsNumber:=false;
       CodeGenerator^.Registers[i].IsConst:=IsConst;
       result:=i;
       exit;
@@ -25589,17 +25612,17 @@ var TokenList:PPOCAToken;
      end;
     end;
     result:=CodeGenerator^.CountRegisters;
+    CodeGenerator^.Registers[result].Kind:=rkUNKNOWN;
     CodeGenerator^.Registers[result].InUse:=true;
     CodeGenerator^.Registers[result].Freeable:=Freeable;
-    CodeGenerator^.Registers[result].IsNumber:=false;
     CodeGenerator^.Registers[result].IsConst:=IsConst;
     inc(CodeGenerator^.CountRegisters);
    end;
    procedure FreeRegister(var RegNr:TPOCAInt32;Force:boolean=false);
    begin
     if ((RegNr>=0) and (RegNr<TPOCAInt32(CodeGenerator^.CountRegisters))) and (Force or CodeGenerator^.Registers[RegNr].Freeable) then begin
+     CodeGenerator^.Registers[RegNr].Kind:=rkUNKNOWN;
      CodeGenerator^.Registers[RegNr].InUse:=false;
-     CodeGenerator^.Registers[RegNr].IsNumber:=false;
      CodeGenerator^.Registers[RegNr].IsConst:=false;
      RegNr:=-1;
     end;
@@ -26163,17 +26186,17 @@ var TokenList:PPOCAToken;
       Num:=t^.Num;
       if Num=0 then begin
        EmitOpcode(popLOADZERO,result);
-       SetRegisterNumber(result,true);
+       SetRegisterKind(result,rkNUMBER);
        exit;
       end else if Num=1 then begin
        EmitOpcode(popLOADONE,result);
-       SetRegisterNumber(result,true);
+       SetRegisterKind(result,rkNUMBER);
        exit;
       end else if POCAIsFinite(Num) then begin
        v:=trunc(Num);
        if TPOCAInt32(v)=Num then begin
         EmitOpcode(popLOADINT32,result,TPOCAUInt32(v));
-        SetRegisterNumber(result,true);
+        SetRegisterKind(result,rkNUMBER);
         exit;
        end;
       end;
@@ -26185,10 +26208,20 @@ var TokenList:PPOCAToken;
     i:=FindConstantIndex(t,true,@Value);
     if POCAIsValueCode(Value) then begin
      EmitOpcode(popLOADCODE,result,i);
-     SetRegisterNumber(result,false);
+     SetRegisterKind(result,rkCODE);
     end else begin
      EmitOpcode(popLOADCONST,result,i);
-     SetRegisterNumber(result,t^.Token=ptLITERALNUM);
+     case t^.Token of
+      ptLITERALNUM:begin
+       SetRegisterKind(result,rkNUMBER);
+      end;
+      ptLITERALSTR:begin
+       SetRegisterKind(result,rkSTRING);
+      end;
+      else begin
+       SetRegisterKind(result,rkUNKNOWN);
+      end;
+     end;
     end;
    end;
    function GenerateNumberConstant(Num:Double;OutReg:TPOCAInt32):TPOCAInt32;
@@ -26200,21 +26233,21 @@ var TokenList:PPOCAToken;
     result:=OutReg;
     if Num=0 then begin
      EmitOpcode(popLOADZERO,result);
-     SetRegisterNumber(result,true);
+     SetRegisterKind(result,rkNUMBER);
     end else if Num=1 then begin
      EmitOpcode(popLOADONE,result);
-     SetRegisterNumber(result,true);
+     SetRegisterKind(result,rkNUMBER);
     end else begin
      if POCAIsFinite(Num) then begin
       v:=trunc(Num);
       if TPOCAInt32(v)=Num then begin
        EmitOpcode(popLOADINT32,result,TPOCAUInt32(v));
-       SetRegisterNumber(result,true);
+       SetRegisterKind(result,rkNUMBER);
        exit;
       end;
      end;
      EmitOpcode(popLOADCONST,result,InternConstant(POCANumber(Num)));
-     SetRegisterNumber(result,true);
+     SetRegisterKind(result,rkNUMBER);
     end;
    end;
    function DeleteSymbolRegister(t:PPOCAToken;Depth:TPOCAInt32):boolean;
@@ -26286,7 +26319,17 @@ var TokenList:PPOCAToken;
     r:=GenerateScalarConstant(t,GetRegister(false,false));
     CodeGenerator^.Constants[CodeGenerator^.CountConstants]:=t;
     CodeGenerator^.ConstantRegisters[CodeGenerator^.CountConstants]:=r;
-    SetRegisterNumber(r,t^.Token=ptLITERALNUM);
+    case t^.Token of
+     ptLITERALNUM:begin
+      SetRegisterKind(r,rkNUMBER);
+     end;
+     ptLITERALSTR:begin
+      SetRegisterKind(r,rkSTRING);
+     end;
+     else begin
+      SetRegisterKind(r,rkUNKNOWN);
+     end;
+    end;
     if (r>=0) and (r<TPOCAInt32(CodeGenerator^.CountRegisters)) then begin
      CodeGenerator^.Registers[r].InUse:=true;
      CodeGenerator^.Registers[r].Freeable:=false;
@@ -27152,12 +27195,12 @@ var TokenList:PPOCAToken;
      end;
      r1:=GenerateExpression(t^.Left,-1,true);
      r2:=GenerateExpression(t^.Right,-1,true);
-     if GetRegisterNumber(r1) and GetRegisterNumber(r2) then begin
+     if (GetRegisterKind(r1)=rkNUMBER) and (GetRegisterKind(r2)=rkNUMBER) then begin
       EmitOpcode(GetNumberOp(Op),result,r1,r2);
-      SetRegisterNumber(result,true);
+      SetRegisterKind(result,rkNUMBER);
      end else begin
       EmitOpcode(Op,result,r1,r2);
-      SetRegisterNumber(result,false);
+      SetRegisterKind(result,rkUNKNOWN);
      end;
      FreeRegister(r1);
      FreeRegister(r2);
@@ -27180,7 +27223,7 @@ var TokenList:PPOCAToken;
       Reg2:=GenerateExpression(rt^.Left,-1,true);
       Reg3:=GenerateExpression(rt^.Right,-1,true);
       EmitOpcode(popINRANGE,result,Reg1,Reg2,Reg3);
-      SetRegisterNumber(result,false);
+      SetRegisterKind(result,rkUNKNOWN);
       FreeRegister(Reg3);
       FreeRegister(Reg2);
       FreeRegister(Reg1);
@@ -27421,7 +27464,7 @@ var TokenList:PPOCAToken;
       end;
       popCOPY:begin
        EmitOpcode(popCOPY,Reg1,Reg);
-       SetRegisterNumber(Reg1,GetRegisterNumber(Reg));
+       SetRegisterKind(Reg1,GetRegisterKind(Reg));
       end;
       popSETLOCAL:begin
        EmitOpcode(popSETLOCAL,ConstantIndex,Reg,$ffffffff);
@@ -27503,19 +27546,19 @@ var TokenList:PPOCAToken;
       end;
       popCOPY:begin
        Reg2:=GenerateExpression(t^.Right,-1,true);
-       if GetRegisterNumber(Reg1) and GetRegisterNumber(Reg2) then begin
+       if (GetRegisterKind(Reg1)=rkNUMBER) and (GetRegisterKind(Reg2)=rkNUMBER) then begin
         EmitOpcode(GetNumberOp(Op),Reg1,Reg1,Reg2);
-        SetRegisterNumber(Reg1,true);
+        SetRegisterKind(Reg1,rkNUMBER);
        end else begin
         EmitOpcode(Op,Reg1,Reg1,Reg2);
-        SetRegisterNumber(Reg1,false);
+        SetRegisterKind(Reg1,rkUNKNOWN);
        end;
        FreeRegister(Reg2);
        if OutReg<0 then begin
         result:=Reg1;
        end else begin
         EmitOpcode(popCOPY,OutReg,Reg1);
-        SetRegisterNumber(OutReg,GetRegisterNumber(Reg1));
+        SetRegisterKind(OutReg,GetRegisterKind(Reg1));
         result:=OutReg;
        end;
       end;
@@ -27612,10 +27655,13 @@ var TokenList:PPOCAToken;
        end;
        EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg3:=GenerateExpression(t^.Right,result,true);
@@ -27635,10 +27681,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETPROTOTYPE,result,Reg1);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg3:=GenerateExpression(t^.Right,result,true);
@@ -27658,10 +27707,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETHASHKIND,result,Reg1);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg3:=GenerateExpression(t^.Right,result,true);
@@ -27681,10 +27733,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popEXTRACT,result,Reg1,Reg2);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg3:=GenerateExpression(t^.Right,result,true);
@@ -27698,10 +27753,13 @@ var TokenList:PPOCAToken;
       end;
       popCOPY:begin
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(Reg1) then begin
-        EmitOpcode(popN_JIFTRUE,0,Reg1);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,Reg1);
+       case GetRegisterKind(Reg1) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,Reg1);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,Reg1);
+        end;
        end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,Reg1,true);
@@ -27715,7 +27773,7 @@ var TokenList:PPOCAToken;
         result:=Reg1;
        end else begin
         EmitOpcode(popCOPY,OutReg,Reg1);
-        SetRegisterNumber(OutReg,GetRegisterNumber(Reg1));
+        SetRegisterKind(OutReg,GetRegisterKind(Reg1));
         result:=OutReg;
        end;
       end;
@@ -27727,10 +27785,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
@@ -27750,10 +27811,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
@@ -27773,10 +27837,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETOUTERVALUE,result,FrameValueLevel,FrameValueIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
@@ -27796,10 +27863,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
@@ -27819,10 +27889,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
@@ -27842,10 +27915,13 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       if GetRegisterNumber(result) then begin
-        EmitOpcode(popN_JIFTRUE,0,result);
-       end else begin
-        EmitOpcode(popJIFTRUE,0,result);
+       case GetRegisterKind(result) of
+        rkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
        end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
@@ -27924,8 +28000,8 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popCOPY,result,Reg1);
-       SetRegisterNumber(result,GetRegisterNumber(Reg1));
-       if GetRegisterNumber(Reg1) then begin
+       SetRegisterKind(result,GetRegisterKind(Reg1));
+       if GetRegisterKind(Reg1)=rkNUMBER then begin
         EmitOpcode(GetNumberOp(Op),Reg1,Reg1);
        end else begin
         EmitOpcode(Op,Reg1,Reg1);
@@ -28061,7 +28137,7 @@ var TokenList:PPOCAToken;
       end;
       popCOPY:begin
        if OutReg<0 then begin
-        if GetRegisterNumber(Reg1) then begin
+        if GetRegisterKind(Reg1)=rkNUMBER then begin
          EmitOpcode(GetNumberOp(Op),Reg1,Reg1);
         end else begin
          EmitOpcode(Op,Reg1,Reg1);
@@ -28069,12 +28145,12 @@ var TokenList:PPOCAToken;
         result:=Reg1;
        end else begin
         result:=OutReg;
-        if GetRegisterNumber(Reg1) then begin
+        if GetRegisterKind(Reg1)=rkNUMBER then begin
          EmitOpcode(GetNumberOp(Op),result,Reg1);
-         SetRegisterNumber(result,true);
+         SetRegisterKind(result,rkNUMBER);
         end else begin
          EmitOpcode(Op,result,Reg1);
-         SetRegisterNumber(result,false);
+         SetRegisterKind(result,rkUNKNOWN);
         end;
        end;
       end;
@@ -28370,7 +28446,7 @@ var TokenList:PPOCAToken;
        IsMethod:=true;
        Reg1:=GetRegister(true,false);
        EmitOpcode(popLOADTHAT,Reg1);
-       SetRegisterNumber(Reg1,false);
+       SetRegisterKind(Reg1,rkUNKNOWN);
        Reg2:=GetRegister(true,false);
        EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
        EmitOpcode(popLOADTHIS,Reg1);
@@ -28434,7 +28510,7 @@ var TokenList:PPOCAToken;
        EmitOpcode(popJMP,0);
        FixTargetImmediate(JumpNull);
        EmitOpcode(popLOADNULL,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkNULL);
        CombineCurrentRegisters(Registers);
        FixTargetImmediate(JumpEnd);
       end;     
@@ -28552,9 +28628,9 @@ var TokenList:PPOCAToken;
        r:=GenerateExpression(t^.Left,result,true);
        if result<>r then begin
         EmitOpcode(popCOPY,result,r);
-        SetRegisterNumber(result,GetRegisterNumber(r));
+        SetRegisterKind(result,GetRegisterKind(r));
        end;
-       if GetRegisterNumber(result) then begin
+       if GetRegisterKind(result)=rkNUMBER then begin
         e:=CodeGenerator^.ByteCodeSize+1;
         EmitOpcode(popJMP,0);
        end else begin
@@ -28565,7 +28641,7 @@ var TokenList:PPOCAToken;
        r:=GenerateExpression(t^.Right,result,true);
        if result<>r then begin
         EmitOpcode(popCOPY,result,r);
-        SetRegisterNumber(result,GetRegisterNumber(r));
+        SetRegisterKind(result,GetRegisterKind(r));
        end;
        CombineCurrentRegisters(Registers);
        FixTargetImmediate(e);
@@ -28615,9 +28691,9 @@ var TokenList:PPOCAToken;
        r:=GenerateExpression(t^.Left,result,true);
        if result<>r then begin
         EmitOpcode(popCOPY,result,r);
-        SetRegisterNumber(result,GetRegisterNumber(r));
+        SetRegisterKind(result,GetRegisterKind(r));
        end;
-       if GetRegisterNumber(result) then begin
+       if GetRegisterKind(result)=rkNUMBER then begin
         if t^.Token=ptAND then begin
          e:=CodeGenerator^.ByteCodeSize+1;
          EmitOpcode(popN_JIFFALSE,0,result);
@@ -28638,7 +28714,7 @@ var TokenList:PPOCAToken;
        r:=GenerateExpression(t^.Right,result,true);
        if result<>r then begin
         EmitOpcode(popCOPY,result,r);
-        SetRegisterNumber(result,GetRegisterNumber(r));
+        SetRegisterKind(result,GetRegisterKind(r));
        end;
        CombineCurrentRegisters(Registers);
        FixTargetImmediate(e);
@@ -28659,7 +28735,7 @@ var TokenList:PPOCAToken;
      if assigned(Test) and (Test^.Token in [ptLT,ptLTEQ,ptGT,ptGTEQ,ptEQ,ptNEQ,ptCMP]) and Binary(Test) then begin
       RegLeft:=GenerateExpression(Test^.Left);
       RegRight:=GenerateExpression(Test^.Right);
-      if GetRegisterNumber(RegLeft) and GetRegisterNumber(RegRight) then begin
+      if (GetRegisterKind(RegLeft)=rkNUMBER) and (GetRegisterKind(RegRight)=rkNUMBER) then begin
        case Test^.Token of
         ptLT:begin
          result:=CodeGenerator^.ByteCodeSize+1;
@@ -28807,7 +28883,7 @@ var TokenList:PPOCAToken;
       CodeGenerator^.ByteCodeSize:=Back;
       RegExpression:=GenerateExpression(Test,-1,true);
       result:=CodeGenerator^.ByteCodeSize+1;
-      if GetRegisterNumber(RegExpression) then begin
+      if GetRegisterKind(RegExpression)=rkNUMBER then begin
        if DoNegative then begin
         if IsLoop then begin
          EmitOpcode(popN_JIFFALSELOOP,JumpNext,RegExpression);
@@ -28863,7 +28939,7 @@ var TokenList:PPOCAToken;
       result:=GenerateBlock(tIF^.Children^.Next^.Children,OutReg,DoNeedResult,true);
       if result<>OutReg then begin
        EmitOpcode(popCOPY,OutReg,result);
-       SetRegisterNumber(OutReg,GetRegisterNumber(result));
+       SetRegisterKind(OutReg,GetRegisterKind(result));
        result:=OutReg;
       end;
       if (not (assigned(tELSE) and (tELSE^.Token<>ptEMPTY))) and not DoNeedResult then begin
@@ -28885,12 +28961,13 @@ var TokenList:PPOCAToken;
         end;
         if result<>OutReg then begin
          EmitOpcode(popCOPY,OutReg,result);
-         SetRegisterNumber(OutReg,GetRegisterNumber(result));
+         SetRegisterKind(OutReg,GetRegisterKind(result));
          result:=OutReg;
         end;
        end else begin
         if DoNeedResult then begin
          EmitOpcode(popLOADNULL,result);
+         SetRegisterKind(OutReg,rkNULL);
         end;
        end;
        FixTargetImmediate(JumpEnd);
@@ -28983,7 +29060,7 @@ var TokenList:PPOCAToken;
            Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
            if result<>Reg then begin
             EmitOpcode(popCOPY,result,Reg);
-            SetRegisterNumber(result,GetRegisterNumber(Reg));
+            SetRegisterKind(result,GetRegisterKind(Reg));
             FreeRegister(Reg);
            end;
            EmitOpcode(popTRYBLOCKEND,result);
@@ -28998,7 +29075,7 @@ var TokenList:PPOCAToken;
             Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,false);
             if result<>Reg then begin
              EmitOpcode(popCOPY,result,Reg);
-             SetRegisterNumber(result,GetRegisterNumber(Reg));
+             SetRegisterKind(result,GetRegisterKind(Reg));
              FreeRegister(Reg);
             end;
             ScopeEnd;
@@ -29009,7 +29086,7 @@ var TokenList:PPOCAToken;
             Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
             if result<>Reg then begin
              EmitOpcode(popCOPY,result,Reg);
-             SetRegisterNumber(result,GetRegisterNumber(Reg));
+             SetRegisterKind(result,GetRegisterKind(Reg));
              FreeRegister(Reg);
             end;
            end;
@@ -29021,7 +29098,7 @@ var TokenList:PPOCAToken;
            Reg:=GenerateBlock(FinallyBlock^.Children,result,DoNeedResult,true);
            if result<>Reg then begin
             EmitOpcode(popCOPY,result,Reg);
-            SetRegisterNumber(result,GetRegisterNumber(Reg));
+            SetRegisterKind(result,GetRegisterKind(Reg));
             FreeRegister(Reg);
            end;
            EmitOpcode(popTRYBLOCKEND,result);
@@ -29037,7 +29114,7 @@ var TokenList:PPOCAToken;
           Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
           if result<>Reg then begin
            EmitOpcode(popCOPY,result,Reg);
-           SetRegisterNumber(result,GetRegisterNumber(Reg));
+           SetRegisterKind(result,GetRegisterKind(Reg));
            FreeRegister(Reg);
           end;
           EmitOpcode(popTRYBLOCKEND,result);
@@ -29052,7 +29129,7 @@ var TokenList:PPOCAToken;
            Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,false);
            if result<>Reg then begin
             EmitOpcode(popCOPY,result,Reg);
-            SetRegisterNumber(result,GetRegisterNumber(Reg));
+            SetRegisterKind(result,GetRegisterKind(Reg));
             FreeRegister(Reg);
            end;
            ScopeEnd;
@@ -29063,7 +29140,7 @@ var TokenList:PPOCAToken;
            Reg:=GenerateBlock(CatchBlock^.Children,result,DoNeedResult,true);
            if result<>Reg then begin
             EmitOpcode(popCOPY,result,Reg);
-            SetRegisterNumber(result,GetRegisterNumber(Reg));
+            SetRegisterKind(result,GetRegisterKind(Reg));
             FreeRegister(Reg);
            end;
           end;
@@ -29083,7 +29160,7 @@ var TokenList:PPOCAToken;
          Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
          if result<>Reg then begin
           EmitOpcode(popCOPY,result,Reg);
-          SetRegisterNumber(result,GetRegisterNumber(Reg));
+          SetRegisterKind(result,GetRegisterKind(Reg));
           FreeRegister(Reg);
          end;
          EmitOpcode(popTRYBLOCKEND,result);
@@ -29094,7 +29171,7 @@ var TokenList:PPOCAToken;
          Reg:=GenerateBlock(FinallyBlock^.Children,result,DoNeedResult,true);
          if result<>Reg then begin
           EmitOpcode(popCOPY,result,Reg);
-          SetRegisterNumber(result,GetRegisterNumber(Reg));
+          SetRegisterKind(result,GetRegisterKind(Reg));
           FreeRegister(Reg);
          end;
          EmitOpcode(popTRYBLOCKEND,result);
@@ -29110,7 +29187,7 @@ var TokenList:PPOCAToken;
         Reg:=GenerateBlock(TryBlock^.Children,result,DoNeedResult,true);
         if result<>Reg then begin
          EmitOpcode(popCOPY,result,Reg);
-         SetRegisterNumber(result,GetRegisterNumber(Reg));
+         SetRegisterKind(result,GetRegisterKind(Reg));
          FreeRegister(Reg);
         end;
         EmitOpcode(popTRYBLOCKEND,result);
@@ -29128,7 +29205,7 @@ var TokenList:PPOCAToken;
      end else begin
       SyntaxError('Bad TRY-block expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
      end;
-     SetRegisterNumber(result,false);
+     SetRegisterKind(result,rkUNKNOWN);
     end;
     function GenerateQuestion(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var JumpNext,JumpEnd:TPOCAInt32;
@@ -29155,7 +29232,7 @@ var TokenList:PPOCAToken;
         result:=GenerateExpression(t^.Right^.Left,OutReg,true);
         if result<>OutReg then begin
          EmitOpcode(popCOPY,OutReg,result);
-         SetRegisterNumber(OutReg,GetRegisterNumber(result));
+         SetRegisterKind(OutReg,GetRegisterKind(result));
          result:=OutReg;
         end;
        end;
@@ -29170,7 +29247,7 @@ var TokenList:PPOCAToken;
         result:=GenerateExpression(t^.Right^.Right,OutReg,true);
         if result<>OutReg then begin
          EmitOpcode(popCOPY,OutReg,result);
-         SetRegisterNumber(OutReg,GetRegisterNumber(result));
+         SetRegisterKind(OutReg,GetRegisterKind(result));
          result:=OutReg;
         end;
        end;
@@ -29759,7 +29836,7 @@ var TokenList:PPOCAToken;
          if assigned(Symbol) then begin
           r:=Symbol^.Register;
           EmitOpcode(popCOPY,r,Reg);
-          SetRegisterNumber(r,GetRegisterNumber(Reg));
+          SetRegisterKind(r,GetRegisterKind(Reg));
          end;
          exit;
         end else begin
@@ -29852,7 +29929,7 @@ var TokenList:PPOCAToken;
             Reg:=GenerateExpression(pt^.Left,Reg2,true);
             if Reg<>Reg2 then begin
              EmitOpcode(popCOPY,Reg2,Reg);
-             SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
+             SetRegisterKind(Reg2,GetRegisterKind(Reg));
              FreeRegister(Reg);
             end;
            end;
@@ -29897,7 +29974,7 @@ var TokenList:PPOCAToken;
              Reg:=GenerateExpression(pt,result,true);
              if Reg<>result then begin
               EmitOpcode(popCOPY,result,Reg);
-              SetRegisterNumber(result,GetRegisterNumber(Reg));
+              SetRegisterKind(result,GetRegisterKind(Reg));
               FreeRegister(Reg);
              end;
             end else begin
@@ -29905,10 +29982,10 @@ var TokenList:PPOCAToken;
              Reg2:=Symbol^.Register;
              Reg:=GenerateExpression(pt,Reg2,true);
              EmitOpcode(popCOPY,result,Reg);
-             SetRegisterNumber(result,GetRegisterNumber(Reg));
+             SetRegisterKind(result,GetRegisterKind(Reg));
              if Reg<>Reg2 then begin
               EmitOpcode(popCOPY,Reg2,Reg);
-              SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
+              SetRegisterKind(Reg2,GetRegisterKind(Reg));
               FreeRegister(Reg);
              end;
             end;
@@ -29935,7 +30012,7 @@ var TokenList:PPOCAToken;
           Reg:=GenerateExpression(t,Reg2,true);
           if Reg<>Reg2 then begin
            EmitOpcode(popCOPY,Reg2,Reg);
-           SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
+           SetRegisterKind(Reg2,GetRegisterKind(Reg));
            FreeRegister(Reg);
           end;
           tpt:=tpt^.Right;
@@ -29975,7 +30052,7 @@ var TokenList:PPOCAToken;
              if OutReg<0 then begin
               Reg2:=Symbol^.Register;
               EmitOpcode(popCOPY,Reg2,Reg);
-              SetRegisterNumber(Reg2,GetRegisterNumber(Reg));
+              SetRegisterKind(Reg2,GetRegisterKind(Reg));
               FreeRegister(Reg2);
              end;
             end;
@@ -30134,7 +30211,7 @@ var TokenList:PPOCAToken;
       EmitOpcode(popSLICE,DestArrayReg,SourceArrayReg,Reg1);
       FreeRegister(Reg1);
      end;
-     SetRegisterNumber(result,false);
+     SetRegisterKind(result,rkUNKNOWN);
     end;
     function GenerateExtract(t:PPOCAToken;OutReg:TPOCAInt32;Safe:boolean):TPOCAInt32;
     var Reg1,Reg2,JumpNull,JumpEnd:TPOCAInt32;
@@ -30184,12 +30261,12 @@ var TokenList:PPOCAToken;
        EmitOpcode(popCOPY,result,Reg1);
        FreeRegister(Reg1);
       end;
-      SetRegisterNumber(result,false);
+      SetRegisterKind(result,rkUNKNOWN);
       CombineCurrentRegisters(Registers);
       FixTargetImmediate(JumpEnd);
      end else begin
       FreeRegister(Reg1);
-      SetRegisterNumber(result,false);
+      SetRegisterKind(result,rkUNKNOWN);
      end;
     end;
     procedure StartFallthrough(JumpRetryPos:TPOCAUInt32);
@@ -30451,12 +30528,12 @@ var TokenList:PPOCAToken;
              Reg1:=GenerateExpression(WhenSwitchCaseExpression^.Token^.Left,-1,true);
              Reg2:=GenerateExpression(WhenSwitchCaseExpression^.Token^.Right,-1,true);
              RegComparsion:=GetRegister(true,false);
-             if GetRegisterNumber(RegExpression) and GetRegisterNumber(Reg1) and GetRegisterNumber(Reg2) then begin
+             if (GetRegisterKind(RegExpression)=rkNUMBER) and (GetRegisterKind(Reg1)=rkNUMBER) and (GetRegisterKind(Reg2)=rkNUMBER) then begin
               EmitOpcode(popN_INRANGE,RegComparsion,RegExpression,Reg1,Reg2);
-              SetRegisterNumber(RegComparsion,true);
+              SetRegisterKind(RegComparsion,rkNUMBER);
              end else begin
               EmitOpcode(popINRANGE,RegComparsion,RegExpression,Reg1,Reg2);
-              SetRegisterNumber(RegComparsion,false);
+              SetRegisterKind(RegComparsion,rkUNKNOWN);
              end;
              FreeRegister(Reg1);
              FreeRegister(Reg2);
@@ -30466,7 +30543,7 @@ var TokenList:PPOCAToken;
              if GetRegisterConstant(Reg1) then begin
               RegComparsion:=GetRegister(true,false);
              end;
-             if GetRegisterNumber(RegComparsion) and GetRegisterNumber(RegExpression) then begin
+             if (GetRegisterKind(RegComparsion)=rkNUMBER) and (GetRegisterKind(RegExpression)=rkNUMBER) then begin
               EmitOpcode(popN_EQ,RegComparsion,Reg1,RegExpression);
              end else begin
               EmitOpcode(popEQ,RegComparsion,Reg1,RegExpression);
@@ -30476,7 +30553,7 @@ var TokenList:PPOCAToken;
              end;
             end;
             WhenSwitchCaseExpression^.JumpPosition:=CodeGenerator^.ByteCodeSize+1;
-            if GetRegisterNumber(RegComparsion) then begin
+            if GetRegisterKind(RegComparsion)=rkNUMBER then begin
              EmitOpcode(popN_JIFTRUE,0,RegComparsion);
             end else begin
              EmitOpcode(popJIFTRUE,0,RegComparsion);
@@ -30522,13 +30599,13 @@ var TokenList:PPOCAToken;
             Reg:=GenerateBlock(WhenSwitchCase^.Body,result,DoNeedResult,true);
             if Reg<>result then begin
              EmitOpcode(popCOPY,result,Reg);
-             SetRegisterNumber(result,GetRegisterNumber(Reg));
+             SetRegisterKind(result,GetRegisterKind(Reg));
             end;
             WhenSwitchCase^.EndJumpPosition:=CodeGenerator^.ByteCodeSize+1;
             EmitOpcode(popJMP,0);
             if Reg<>result then begin
              EmitOpcode(popCOPY,result,Reg);
-             SetRegisterNumber(result,GetRegisterNumber(Reg));
+             SetRegisterKind(result,GetRegisterKind(Reg));
              FreeRegister(Reg);
             end;
             if TryIndex=0 then begin
@@ -30607,7 +30684,7 @@ var TokenList:PPOCAToken;
       SetLength(Registers[6],0);
       SetLength(Registers[7],0);
      end;
-     SetRegisterNumber(result,false);
+     SetRegisterKind(result,rkUNKNOWN);
     end;
     function GenerateDot(t:PPOCAToken;OutReg:TPOCAInt32;Safe:boolean):TPOCAInt32;
     var Reg,JumpNull,JumpEnd:TPOCAInt32;
@@ -30673,12 +30750,12 @@ var TokenList:PPOCAToken;
        EmitOpcode(popCOPY,result,Reg);
        FreeRegister(Reg);
       end;
-      SetRegisterNumber(result,false);
+      SetRegisterKind(result,rkUNKNOWN);
       CombineCurrentRegisters(Registers);
       FixTargetImmediate(JumpEnd);
      end else begin
       FreeRegister(Reg);
-      SetRegisterNumber(result,false);
+      SetRegisterKind(result,rkUNKNOWN);
      end;
     end;
     function GenerateDefined(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
@@ -30759,7 +30836,7 @@ var TokenList:PPOCAToken;
        FixTargetImmediate(EndPos);
       end;
      end;
-     SetRegisterNumber(result,true);
+     SetRegisterKind(result,rkNUMBER);
     end;
     function GenerateTypeOf(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Reg1:TPOCAInt32;
@@ -30776,7 +30853,7 @@ var TokenList:PPOCAToken;
       EmitOpcode(popTYPEOF,result,Reg1);
       FreeRegister(Reg1);
      end;
-     SetRegisterNumber(result,false);
+     SetRegisterKind(result,rkUNKNOWN);
     end;
     function GenerateIDOf(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Reg1:TPOCAInt32;
@@ -30793,7 +30870,7 @@ var TokenList:PPOCAToken;
       EmitOpcode(popIDOF,result,Reg1);
       FreeRegister(Reg1);
      end;
-     SetRegisterNumber(result,false);
+     SetRegisterKind(result,rkUNKNOWN);
     end;
     function GenerateGhostTypeOf(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Reg1:TPOCAInt32;
@@ -30810,7 +30887,7 @@ var TokenList:PPOCAToken;
       EmitOpcode(popGHOSTTYPEOF,result,Reg1);
       FreeRegister(Reg1);
      end;
-     SetRegisterNumber(result,false);
+     SetRegisterKind(result,rkUNKNOWN);
     end;
     function GenerateLPAR(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     begin
@@ -30913,7 +30990,7 @@ var TokenList:PPOCAToken;
       exit;
      end;
      EmitOpcode(popRETURN,result);
-     SetRegisterNumber(result,false);
+     SetRegisterKind(result,rkUNKNOWN);
     end;
     function GenerateDelete(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Reg1,Reg2,ConstantIndex:TPOCAInt32;
@@ -31043,7 +31120,7 @@ var TokenList:PPOCAToken;
        SyntaxError('Symbol expected',Parser.SourceFile,t^.Right^.Right^.SourceLine,t^.Right^.Right^.SourceColumn);
       end;
      end;
-     SetRegisterNumber(result,true);
+     SetRegisterKind(result,rkNUMBER);
     end;
    var i:TPOCAInt32;
        Symbol:PPOCACodeGeneratorScopeSymbol;
@@ -31095,7 +31172,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADTHAT,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptTHAT:begin
        if OutReg<0 then begin
@@ -31104,7 +31181,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADTHAT,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptTHIS:begin
        if OutReg<0 then begin
@@ -31113,7 +31190,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADTHIS,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptSELF:begin
        if OutReg<0 then begin
@@ -31122,7 +31199,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADSELF,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptLOCAL:begin
        if OutReg<0 then begin
@@ -31131,7 +31208,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADLOCAL,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptGLOBAL:begin
        if OutReg<0 then begin
@@ -31140,7 +31217,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADGLOBAL,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptBASECLASS:begin
        if OutReg<0 then begin
@@ -31149,7 +31226,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADBASECLASS,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptSYMBOL:begin
        if t^.Str=CodeGenerator^.RestArgSymbolString then begin
@@ -31161,7 +31238,7 @@ var TokenList:PPOCAToken;
         result:=Symbol^.Register;
         if OutReg>=0 then begin
          EmitOpcode(popCOPY,OutReg,result);
-         SetRegisterNumber(OutReg,GetRegisterNumber(result));
+         SetRegisterKind(OutReg,GetRegisterKind(result));
          result:=OutReg;
         end;
        end else if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE) then begin
@@ -31176,7 +31253,7 @@ var TokenList:PPOCAToken;
         end else begin
          EmitOpcode(popGETOUTERVALUE,result,Symbol^.FrameValueLevel,Symbol^.FrameValueIndex);
         end;
-        SetRegisterNumber(result,false);
+        SetRegisterKind(result,rkUNKNOWN);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
@@ -31184,7 +31261,7 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         EmitOpcode(popGETLOCAL,result,FindConstantIndex(t,true),$ffffffff);
-        SetRegisterNumber(result,false);
+        SetRegisterKind(result,rkUNKNOWN);
        end;
       end;
       ptLITERALNUM,ptLITERALSTR:begin
@@ -31196,7 +31273,17 @@ var TokenList:PPOCAToken;
        end else begin
         result:=GenerateScalarConstant(t,OutReg);
        end;
-       SetRegisterNumber(result,t^.Token=ptLITERALNUM);
+       case t^.Token of
+        ptLITERALNUM:begin
+         SetRegisterKind(result,rkNUMBER);
+        end;
+        ptLITERALSTR:begin
+         SetRegisterKind(result,rkSTRING);
+        end;
+        else begin
+         SetRegisterKind(result,rkUNKNOWN);
+        end;
+       end;
       end;
       ptVAR,ptLET,ptCONST:begin
        Token:=t^.Token;
@@ -31230,10 +31317,10 @@ var TokenList:PPOCAToken;
            result:=OutReg;
           end;
           EmitOpcode(popLOADNULL,result);
-          SetRegisterNumber(result,false);
+          SetRegisterKind(result,rkNULL);
           i:=Symbol^.Register;
           EmitOpcode(popCOPY,i,result);
-          SetRegisterNumber(i,GetRegisterNumber(result));
+          SetRegisterKind(i,GetRegisterKind(result));
          end;
          exit;
         end else begin
@@ -31248,7 +31335,7 @@ var TokenList:PPOCAToken;
           result:=OutReg;
          end;
          EmitOpcode(popLOADNULL,result);
-         SetRegisterNumber(result,false);
+         SetRegisterKind(result,rkNULL);
          if assigned(Symbol) and (Symbol^.Kind=TPOCACodeGeneratorScopeSymbolKind.sskFRAMEVALUE) then begin
           CodeGenerator^.UsedFrameValues:=true;
           if Symbol^.FrameValueLevel=CodeGenerator^.Level then begin
@@ -31269,11 +31356,11 @@ var TokenList:PPOCAToken;
       end;
       ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin
        result:=GenerateLambda(t,OutReg);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptTRY:begin
        result:=GenerateTry(t,OutReg);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkUNKNOWN);
       end;
       ptIF:begin
        result:=GenerateIFELSE(t,OutReg);
@@ -31324,7 +31411,7 @@ var TokenList:PPOCAToken;
         end;
         EmitOpcode(popNEWHASH,result);
         GenerateHash(t^.Left,result);
-        SetRegisterNumber(result,false);
+        SetRegisterKind(result,rkUNKNOWN);
        end;
       end;
       ptLBRA:begin
@@ -31336,7 +31423,7 @@ var TokenList:PPOCAToken;
         end;
         EmitOpcode(popNEWARRAY,result);
         GenerateArray(t^.Left,result);
-        SetRegisterNumber(result,false);
+        SetRegisterKind(result,rkARRAY);
        end else if Binary(t) then begin
         result:=GenerateExtract(t,OutReg,false);
        end else begin
@@ -31366,7 +31453,7 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         EmitOpcode(popLOADNULL,result);
-        SetRegisterNumber(result,false);
+        SetRegisterKind(result,rkNULL);
        end;
        EmitOpcode(popTHROW,result);
       end;
@@ -31378,7 +31465,11 @@ var TokenList:PPOCAToken;
        end;
        i:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(popNOT,result,i);
-       SetRegisterNumber(result,GetRegisterNumber(i));
+       if GetRegisterKind(i)=rkNUMBER then begin
+        SetRegisterKind(result,rkNUMBER);
+       end else begin
+        SetRegisterKind(result,rkUNKNOWN);
+       end;
        FreeRegister(i);
       end;
       ptWHEN:begin
@@ -31392,7 +31483,7 @@ var TokenList:PPOCAToken;
         result:=GenerateBinaryOperation(popSUB,t,OutReg);
        end else if assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM) then begin
         result:=GenerateNumberConstant(-t^.Right^.Num,OutReg);
-        SetRegisterNumber(result,true);
+        SetRegisterKind(result,rkNUMBER);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
@@ -31401,7 +31492,11 @@ var TokenList:PPOCAToken;
         end;
         i:=GenerateExpression(t^.Right,-1,true);
         EmitOpcode(popNEG,result,i);
-        SetRegisterNumber(result,GetRegisterNumber(i));
+        if GetRegisterKind(i)=rkNUMBER then begin
+         SetRegisterKind(result,rkNUMBER);
+        end else begin
+         SetRegisterKind(result,rkUNKNOWN);
+        end;
         FreeRegister(i);
        end;
       end;
@@ -31409,7 +31504,7 @@ var TokenList:PPOCAToken;
        if assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM) then begin
         t^.Right^.Num:=-t^.Right^.Num;
         result:=GenerateScalarConstant(t^.Right,OutReg);
-        SetRegisterNumber(result,true);
+        SetRegisterKind(result,rkNUMBER);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
@@ -31418,14 +31513,18 @@ var TokenList:PPOCAToken;
         end;
         i:=GenerateExpression(t^.Right,-1,true);
         EmitOpcode(popNEG,result,i);
-        SetRegisterNumber(result,GetRegisterNumber(i));
+        if GetRegisterKind(i)=rkNUMBER then begin
+         SetRegisterKind(result,rkNUMBER);
+        end else begin
+         SetRegisterKind(result,rkUNKNOWN);
+        end;
         FreeRegister(i);
        end;
       end;
       ptNUM:begin
        if assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM) then begin
         result:=GenerateScalarConstant(t^.Right,OutReg);
-        SetRegisterNumber(result,true);
+        SetRegisterKind(result,rkNUMBER);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
@@ -31434,7 +31533,7 @@ var TokenList:PPOCAToken;
         end;
         i:=GenerateExpression(t^.Right,-1,true);
         EmitOpcode(popNUM,result,i);
-        SetRegisterNumber(result,true);
+        SetRegisterKind(result,rkNUMBER);
         FreeRegister(i);
        end;
       end;
@@ -31449,7 +31548,7 @@ var TokenList:PPOCAToken;
         if DoNeedResult then begin
          result:=GetRegister(true,false);
          EmitOpcode(popLOADNULL,result);
-         SetRegisterNumber(result,false);
+         SetRegisterKind(result,rkNULL);
         end else begin
          result:=OutReg;
          exit;
@@ -31457,7 +31556,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
         EmitOpcode(popLOADNULL,result);
-        SetRegisterNumber(result,false);
+        SetRegisterKind(result,rkNULL);
        end;
       end;
       ptNULL:begin
@@ -31467,7 +31566,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADNULL,result);
-       SetRegisterNumber(result,false);
+       SetRegisterKind(result,rkNULL);
       end;
       ptAND,ptOR,ptELVIS:begin
        result:=GenerateShortCircuit(t,OutReg);
@@ -31487,7 +31586,7 @@ var TokenList:PPOCAToken;
         end;
         i:=GenerateExpression(t^.Right,-1,true);
         EmitOpcode(popNUM,result,i);
-        SetRegisterNumber(result,true);
+        SetRegisterKind(result,rkNUMBER);
         FreeRegister(i);
        end else begin
         result:=GenerateBinaryOperation(popADD,t,OutReg);
@@ -31550,7 +31649,7 @@ var TokenList:PPOCAToken;
        end else if assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM) then begin
         t^.Right^.Num:=not TPOCAInt64(trunc(t^.Right^.Num));
         result:=GenerateScalarConstant(t^.Right,OutReg);
-        SetRegisterNumber(result,true);
+        SetRegisterKind(result,rkNUMBER);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
@@ -31558,12 +31657,13 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         i:=GenerateExpression(t^.Right,-1,true);
-        if GetRegisterNumber(i) then begin
+        if GetRegisterKind(i)=rkNUMBER then begin
          EmitOpcode(popN_BNOT,result,i);
+         SetRegisterKind(result,rkNUMBER);
         end else begin
          EmitOpcode(popBNOT,result,i);
+         SetRegisterKind(result,rkUNKNOWN);
         end;
-        SetRegisterNumber(result,GetRegisterNumber(i));
         FreeRegister(i);
        end;
       end;
@@ -31571,7 +31671,7 @@ var TokenList:PPOCAToken;
        if assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM) then begin
         t^.Right^.Num:=not TPOCAInt64(trunc(t^.Right^.Num));
         result:=GenerateScalarConstant(t^.Right,OutReg);
-        SetRegisterNumber(result,true);
+        SetRegisterKind(result,rkNUMBER);
        end else begin
         if OutReg<0 then begin
          result:=GetRegister(true,false);
@@ -31579,12 +31679,13 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         i:=GenerateExpression(t^.Right,-1,true);
-        if GetRegisterNumber(i) then begin
+        if GetRegisterKind(i)=rkNUMBER then begin
          EmitOpcode(popN_BNOT,result,i);
+         SetRegisterKind(result,rkNUMBER);
         end else begin
          EmitOpcode(popBNOT,result,i);
+         SetRegisterKind(result,rkUNKNOWN);
         end;
-        SetRegisterNumber(result,GetRegisterNumber(i));
         FreeRegister(i);
        end;
       end;
@@ -31617,12 +31718,12 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         i:=GenerateExpression(t^.Left,-1,true);
-        if GetRegisterNumber(i) then begin
+        if GetRegisterKind(i)=rkNUMBER then begin
          EmitOpcode(popN_SQRT,result,i);
-         SetRegisterNumber(result,true);
+         SetRegisterKind(result,rkNUMBER);
         end else begin
          EmitOpcode(popSQRT,result,i);
-         SetRegisterNumber(result,false);
+         SetRegisterKind(result,rkUNKNOWN);
         end;
         FreeRegister(i);
        end else begin
@@ -31658,7 +31759,7 @@ var TokenList:PPOCAToken;
       end;
       ptINSTANCEOF:begin
        result:=GenerateBinaryOperation(popINSTANCEOF,t,OutReg);
-       SetRegisterNumber(result,true);
+       SetRegisterKind(result,rkNUMBER);
       end;
       ptSEQ:begin
        result:=GenerateBinaryOperation(popSEQ,t,OutReg);
@@ -31671,7 +31772,7 @@ var TokenList:PPOCAToken;
       end;
       ptIS:begin
        result:=GenerateBinaryOperation(popIS,t,OutReg);
-       SetRegisterNumber(result,true);
+       SetRegisterKind(result,rkNUMBER);
       end;
       ptTRUE:begin
        if OutReg<0 then begin
@@ -31680,7 +31781,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADONE,result);
-       SetRegisterNumber(result,true);
+       SetRegisterKind(result,rkNUMBER);
       end;
       ptFALSE:begin
        if OutReg<0 then begin
@@ -31689,7 +31790,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popLOADZERO,result);
-       SetRegisterNumber(result,true);
+       SetRegisterKind(result,rkNUMBER);
       end;
       ptREGEXPEQ:begin
        result:=GenerateBinaryOperation(popREGEXPEQ,t,OutReg);
@@ -31705,7 +31806,7 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         EmitOpcode(popLOADNULL,result);
-        SetRegisterNumber(result,false);
+        SetRegisterKind(result,rkNULL);
         EmitOpcode(popBREAKPOINT);
        end else begin
         result:=OutReg;
@@ -31726,6 +31827,7 @@ var TokenList:PPOCAToken;
        result:=OutReg;
       end;
       EmitOpcode(popLOADNULL,result);
+      SetRegisterKind(result,rkNULL);
      end;
     end;
    end;
