@@ -80,20 +80,64 @@ function getColorForPiece(piece) {
   if (piece === 'S') return 2;    // green
   if (piece === 'T') return 5;    // magenta
   if (piece === 'Z') return 1;    // red
-  return 7; // default white for unknown
+  return 8; // default gray for unknown
+}
+
+function getBackgroundColorForPiece(piece) {
+  if (piece === 'I') return 10; // light cyan
+  if (piece === 'J') return 12; // light blue
+  if (piece === 'L') return 214; // light orange
+  if (piece === 'O') return 226; // light yellow
+  if (piece === 'S') return 46; // light green
+  if (piece === 'T') return 13; // light magenta
+  if (piece === 'Z') return 9; // light red
+  return 0; // default black for unknown
 }
 
 // --- Tetromino Management ---
 
+// The bag of tetrominos to be used in the game.
+let bag = [];
+
+// Create a new bag of tetrominos, shuffling them for randomness.
+function createBag() {
+  bag = [];
+  for (let i = 0; i < TETROMINOS.length; i++) {
+    bag.push(i);
+  }
+  // Shuffle the bag
+  for (let i = bag.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    (bag[i], bag[j]) = (bag[j], bag[i]);
+  }
+}
+
+// Get the next tetromino from the bag, or create a new bag if empty.
+function getNextTetromino() {
+  if (bag.length === 0) {
+    createBag();
+  }
+  const idx = bag.pop();
+  return TETROMINOS[idx];
+}
+
 // Create a new tetromino chosen at random.
 function spawnTetromino() {
-  const idx = Math.floor(Math.random() * TETROMINOS.length);
-  let tet = TETROMINOS[idx];
+  
+  // Get a random tetromino from the bag, but avoid repeating the same type.
+  let tet, tries = TETROMINOS.length;
+  do{
+    tet = getNextTetromino();
+  }while((tries-- > 0) && (currentTetromino != null) && (tet.type == currentTetromino.type)); 
+    
+  // Create a copy of the blocks to avoid modifying the original tetromino.
+  // This is important to avoid side effects when rotating or moving.
   let blocksCopy = [];
   for (let i = 0; i < tet.blocks.length; i++) {
     let b = tet.blocks[i];
     blocksCopy.push({ x: b.x, y: b.y });
   }
+
   // Position the new tetromino at the top middle of the board.
   let posX = Math.floor(BOARD_WIDTH / 2);
   let posY = 1; // Starting near the top (parts above y=0 are allowed)
@@ -223,11 +267,13 @@ function drawFrameBuffer() {
         let cell = fb[idx].current;
         if (cell !== ' ') {
           setColor(getColorForPiece(cell));
+          setBackgroundColor(getBackgroundColorForPiece(cell));
         } else {
-          setColor(7);
+          setColor(8);
+          setBackgroundColor(0);
         }
         // For visibility, draw a block character or a dot for empty.
-        print(cell === ' ' ? '.' : cell);
+        print(cell === ' ' ? "\u2591" : cell);
         fb[idx].old = fb[idx].current;
       }
     }
@@ -254,6 +300,9 @@ function keypress(key) {
     }
   } else if (key === 119) {        // 'w' to rotate
     rotateTetromino(currentTetromino);
+  } else if (key === 32) {        // space to hard drop
+    while (moveTetromino(0, 1)) {}
+    lockTetromino();
   }
 }
 
@@ -272,7 +321,7 @@ while (running) {
   updateFrameBuffer();
   drawFrameBuffer();
   setCursorPosition(0, BOARD_HEIGHT + 1);
-  print("WSAD to move/rotate, Q to quit");
+  print("WSAD to move/rotate, SPACE to hard drop, Q to quit");
   
   // Wait for user input or a timeout.
   // The game will automatically move the tetromino down every 10 frames.

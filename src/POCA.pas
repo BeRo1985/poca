@@ -1594,9 +1594,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      PPOCAFrameStack=^TPOCAFrameStack;
      TPOCAFrameStack=array[0..POCA_MAX_RECURSION-1] of TPOCAFrame;
 
-     TPOCAUserIOWrite=procedure(const aContext:PPOCAContext;const aString:String);
-     TPOCAUserIOWriteLn=procedure(const aContext:PPOCAContext;const aString:String);
-     TPOCAUserIOReadLn=procedure(const aContext:PPOCAContext;out aString:String;out aNull:Boolean);
+     TPOCAUserIOWrite=procedure(const aContext:PPOCAContext;const aString:TPOCAUTF8String);
+     TPOCAUserIOWriteLn=procedure(const aContext:PPOCAContext;const aString:TPOCAUTF8String);
+     TPOCAUserIOReadLn=procedure(const aContext:PPOCAContext;out aString:TPOCAUTF8String;out aNull:Boolean);
      TPOCAUserIOFlush=procedure(const aContext:PPOCAContext);
 
      TPOCAContext=record
@@ -3062,8 +3062,8 @@ end;
 
 function ReadLine(const aContext:PPOCAContext;const aPrompt:TPOCAUTF8String;out aNull:Boolean):TPOCAUTF8String;
 {$if defined(fpc) and defined(Linux)}
-var s:TPOCAUTF16String;
-    t:String;
+var s:TPOCAUTF8String;
+    t:TPOCAUTF8String;
     p:PAnsiChar;
 begin
  ReadLine_Initialize;
@@ -3100,12 +3100,12 @@ begin
   end else begin
    System.ReadLn(s);
   end;
-  result:=PUCUUTF16ToUTF8(s);
+  result:=s;
  end;
 end;
 {$else}
-var s:TPOCAUTF16String;
-    t:String;
+var s:TPOCAUTF8String;
+    t:TPOCAUTF8String;
 begin
  aNull:=false;
  s:='';
@@ -3122,7 +3122,7 @@ begin
  end else begin
   System.ReadLn(s);
  end;
- result:=PUCUUTF16ToUTF8(s);
+ result:=s;
 end;
 {$ifend}
 
@@ -15513,7 +15513,7 @@ end;
 function POCAConsoleFunctionLOG(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var i:TPOCAInt32;
     Value:TPOCAValue;
-    s:String;
+    s:TPOCAUTF8String;
 begin
  for i:=0 to CountArguments-1 do begin
   Value:=Arguments^[i];
@@ -15527,7 +15527,7 @@ begin
     end;
    end;
    pvtSTRING:begin
-    s:=PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
+    s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
     if assigned(Context) and assigned(Context^.UserIOWrite) then begin
      Context^.UserIOWrite(Context,s);
     end else begin
@@ -16047,7 +16047,7 @@ end;
 function POCAGlobalFunctionPRINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var i:TPOCAInt32;
     Value:TPOCAValue;
-    s:String;
+    s:TPOCAUTF8String;
 begin
  for i:=0 to CountArguments-1 do begin
   Value:=Arguments^[i];
@@ -16061,7 +16061,7 @@ begin
     end;
    end;
    pvtSTRING:begin
-    s:=TPOCAUTF16String(PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data));
+    s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
     if assigned(Context) and assigned(Context^.UserIOWrite) then begin
      Context^.UserIOWrite(Context,s);
     end else begin
@@ -16091,7 +16091,7 @@ end;
 function POCAGlobalFunctionPUTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var i:TPOCAInt32;
     Value:TPOCAValue;
-    s:String;
+    s:TPOCAUTF8String;
 begin
  for i:=0 to CountArguments-1 do begin
   Value:=Arguments^[i];
@@ -16105,7 +16105,7 @@ begin
     end;
    end;
    pvtSTRING:begin
-    s:=TPOCAUTF16String(PUCUUTF8ToUTF16(PPOCAString(POCAGetValueReferencePointer(Value))^.Data));
+    s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
     if assigned(Context) and assigned(Context^.UserIOWrite) then begin
      Context^.UserIOWrite(Context,s);
     end else begin
@@ -33515,25 +33515,37 @@ begin
 
 end;
 
-procedure POCARunGetLength(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
-var p:Pointer;
+procedure POCARunGetLength(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); //{$ifdef caninline}inline;{$endif}
+var p:PPOCAObject;
+    ArrayRecord:PPOCAArrayRecord;
 begin
- case POCAGetValueType(Obj) of
-  pvtARRAY:begin
-   OutValue.Num:=PPOCAArray(POCAGetValueReferencePointer(Obj))^.ArrayRecord.Size;
-  end;
-  pvtSTRING:begin
-   p:=POCAGetValueReferencePointer(Obj);
-   if PPOCAString(p)^.UTF8=suISUTF8 then begin
-    OutValue.Num:=PPOCAString(p)^.UTF8Length;
-   end else begin
-    OutValue.Num:=PPOCAString(p)^.DataLength;
+ if (Obj.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask then begin
+  p:=TPOCAPointer(TPOCAPtrUInt(Obj.Reference.Obj) and POCAValueReferenceMask);
+  if assigned(p) then begin
+   case p^.Header.ValueType of
+    pvtARRAY:begin
+     ArrayRecord:=PPOCAArray(p)^.ArrayRecord;
+     if assigned(ArrayRecord) then begin
+      OutValue.Num:=ArrayRecord^.Size;
+     end else begin
+      OutValue.Num:=0;
+     end;
+     exit;
+    end;
+    pvtSTRING:begin
+     if PPOCAString(p)^.UTF8=suISUTF8 then begin
+      OutValue.Num:=PPOCAString(p)^.UTF8Length;
+     end else begin
+      OutValue.Num:=PPOCAString(p)^.DataLength;
+     end;
+     exit;
+    end;
+    else begin
+    end;
    end;
   end;
-  else begin
-   POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,HashCacheIndex,IsInherited,true);
-  end;
  end;
+ POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,HashCacheIndex,IsInherited,true);
 end;
 
 procedure POCARunGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
