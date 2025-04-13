@@ -11838,17 +11838,17 @@ begin
  Context^.UserData:=nil;
 end;
 
-procedure POCADefaultUserIOWrite(const aContext:PPOCAContext;const aString:String);
+procedure POCADefaultUserIOWrite(const aContext:PPOCAContext;const aString:TPOCAUTF8String);
 begin
  System.Write(aString);
 end;
 
-procedure POCADefaultUserIOWriteLn(const aContext:PPOCAContext;const aString:String);
+procedure POCADefaultUserIOWriteLn(const aContext:PPOCAContext;const aString:TPOCAUTF8String);
 begin
  System.WriteLn(aString);
 end;
 
-procedure POCADefaultUserIOReadLn(const aContext:PPOCAContext;out aString:String;out aNull:Boolean);
+procedure POCADefaultUserIOReadLn(const aContext:PPOCAContext;out aString:TPOCAUTF8String;out aNull:Boolean);
 begin
  aNull:=false;
  System.ReadLn(aString);
