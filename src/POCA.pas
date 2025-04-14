@@ -2009,6 +2009,7 @@ procedure POCAHashOwnKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
 procedure POCAHashKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
 function POCAHashGetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString):TPOCAValue;
 procedure POCAHashSetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString;const Value:TPOCAValue;const Constant:Boolean=false);
+procedure POCAHashDeleteString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString);
 procedure POCAHashCombine(Context:PPOCAContext;const Hash,Source:TPOCAValue);
 function POCAHashInstanceOf(Context:PPOCAContext;const Hash,OfHash:TPOCAValue):TPOCABool32;
 function POCAHashIs(Context:PPOCAContext;const Hash,OfObject:TPOCAValue):TPOCABool32;
@@ -11658,6 +11659,13 @@ procedure POCAHashSetString(Context:PPOCAContext;const Hash:TPOCAValue;const Key
 begin
  if POCAIsValueHash(Hash) then begin
   POCAHashSet(Context,Hash,POCANewUniqueString(Context,Key),Value,Constant);
+ end;
+end;
+
+procedure POCAHashDeleteString(Context:PPOCAContext;const Hash:TPOCAValue;const Key:TPOCARawByteString);
+begin
+ if POCAIsValueHash(Hash) then begin
+  POCAHashDelete(Context,Hash,POCANewUniqueString(Context,Key));
  end;
 end;
 
