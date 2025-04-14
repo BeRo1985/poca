@@ -1695,7 +1695,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        fHashValue:TPOCAValue;
        fEventsHashValue:TPOCAValue;
       public
-       constructor Create(const pInstance:PPOCAInstance;const pContext:PPOCAContext;const pPrototype,pConstructor:PPOCAValue;const pExpandable:boolean); reintroduce; virtual;
+       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); reintroduce; virtual;
        destructor Destroy; override;
        function Mark:boolean; virtual;
        function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32; virtual;
@@ -15636,7 +15636,7 @@ begin
  end;
 end;
 
-constructor TPOCANativeObject.Create(const pInstance:PPOCAInstance;const pContext:PPOCAContext;const pPrototype,pConstructor:PPOCAValue;const pExpandable:boolean);
+constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
 {$ifdef fpc}
 type PShortString=^ShortString;
 {$endif}
@@ -15670,8 +15670,8 @@ var Index,Count:TPOCAInt32;
 begin
  inherited Create;
 
- fInstance:=pInstance;
- fExpandable:=pExpandable;
+ fInstance:=aInstance;
+ fExpandable:=aExpandable;
 
  fPropList:=nil;
  fPropListLen:=GetPropList(self,fPropList);
@@ -15682,24 +15682,24 @@ begin
  fGhostType.CanDestroy:=TPOCANativeObjectCanDestroy;
  fGhostType.Mark:=TPOCANativeObjectMark;
 
- fHashValue:=POCANewHash(pContext);
- POCAProtect(pContext,fHashValue);
+ fHashValue:=POCANewHash(aContext);
+ POCAProtect(aContext,fHashValue);
  Hash:=POCAGetValueReferencePointer(fHashValue);
 
- fGhostValue:=POCANewGhost(pContext,@fGhostType,self,Hash,pgptOBJECT);
- POCAProtect(pContext,fGhostValue);
+ fGhostValue:=POCANewGhost(aContext,@fGhostType,self,Hash,pgptOBJECT);
+ POCAProtect(aContext,fGhostValue);
  POCAGhostSetHashValue(fGhostValue,fHashValue);
 
- if assigned(pPrototype) and not POCAIsValueNull(pPrototype^) then begin
-  POCAHashSetPrototypeValue(pContext,fHashValue,pPrototype^);
+ if assigned(aPrototype) and not POCAIsValueNull(aPrototype^) then begin
+  POCAHashSetPrototypeValue(aContext,fHashValue,aPrototype^);
  end;
 
- if assigned(pConstructor) and not POCAIsValueNull(pConstructor^) then begin
-  POCAHashSetConstructorValue(pContext,fHashValue,pConstructor^);
+ if assigned(aConstructor) and not POCAIsValueNull(aConstructor^) then begin
+  POCAHashSetConstructorValue(aContext,fHashValue,aConstructor^);
  end;
 
- fEventsHashValue:=POCANewHash(pContext);
- POCAProtect(pContext,fEventsHashValue);
+ fEventsHashValue:=POCANewHash(aContext);
+ POCAProtect(aContext,fEventsHashValue);
  EventsHash:=POCAGetValueReferencePointer(fEventsHashValue);
 
 //EventsHashRec:=POCAHashCreateEvents(Instance,EventsHash);
@@ -15762,9 +15762,9 @@ begin
      PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
      PropertyItem^.PropInfo:=nil;
      PropertyItem^.Method:=NativeFunction;
-     PropertyItem^.Value:=POCANewFunction(pContext,POCANewNativeCode(pContext,TPOCANativeObjectFunctionNativeMethodCall,nil,PropertyItem));
+     PropertyItem^.Value:=POCANewFunction(aContext,POCANewNativeCode(aContext,TPOCANativeObjectFunctionNativeMethodCall,nil,PropertyItem));
      if IsEvent then begin
-      POCAHashSet(pContext,fEventsHashValue,POCANewUniqueString(pContext,TPOCAUTF8String(MethodName)),PropertyItem^.Value,false);
+      POCAHashSet(aContext,fEventsHashValue,POCANewUniqueString(aContext,TPOCAUTF8String(MethodName)),PropertyItem^.Value,false);
      end;
      inc(Count);
     end;
@@ -15778,15 +15778,15 @@ begin
 
   POCAHashLockInvalidate(EventsHash);
 
-  POCAHashSetHashEvents(pContext,fHashValue,fEventsHashValue);
+  POCAHashSetHashEvents(aContext,fHashValue,fEventsHashValue);
 
  finally
 
-  POCAUnprotect(pContext,fGhostValue);
-  POCAUnprotect(pContext,fHashValue);
-  POCAUnprotect(pContext,fEventsHashValue);
+  POCAUnprotect(aContext,fGhostValue);
+  POCAUnprotect(aContext,fHashValue);
+  POCAUnprotect(aContext,fEventsHashValue);
 
-  POCATemporarySave(pContext,fHashValue);
+  POCATemporarySave(aContext,fHashValue);
 
  end;
 
