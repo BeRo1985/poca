@@ -322,7 +322,7 @@
 {$ifdef POCANoMemoryPools}
  {$undef POCAMemoryPools}
 {$else}
- {$define POCAMemoryPools}
+ {-$define POCAMemoryPools}
 {$endif}
 
 {$undef POCAClosureArrayValues}
@@ -7753,7 +7753,7 @@ begin
 end;
 
 {$ifdef POCAMemoryPools}
-procedure POCAReleaseContextObjectPools(Instance:PPOCAInstance); forward;
+procedure POCAReleaseContextObjectPools(Instance:PPOCAInstance;IgnoreContextObjectPool:PPOCAContextObjectPool); forward;
 {$endif}
 
 {$ifdef POCAMemoryPools}
@@ -7820,7 +7820,7 @@ begin
     end;
 
     if Pool^.FreeCount=0 then begin
-     POCAReleaseContextObjectPools(Context^.Instance);
+     POCAReleaseContextObjectPools(Context^.Instance,ContextObjectPool);
      if Pool^.FreeCount=0 then begin
       POCAPoolNewBlock(Pool,Pool^.Size div 8);
      end;
@@ -11916,7 +11916,7 @@ begin
 end;
 
 {$ifdef POCAMemoryPools}
-procedure POCAContextReleaseObjectPool(Context:PPOCAContext);
+procedure POCAContextReleaseObjectPool(Context:PPOCAContext;IgnoreContextObjectPool:PPOCAContextObjectPool);
 var ValueType:TPOCAInt32;
     ContextObjectPool:PPOCAContextObjectPool;
     Pool:PPOCAPool;
@@ -11924,7 +11924,7 @@ begin
  if assigned(Context) then begin
   for ValueType:=0 to pvtCOUNT-1 do begin
    ContextObjectPool:=@Context^.ContextObjectPools[ValueType];
-   if assigned(ContextObjectPool^.Objects) and (ContextObjectPool^.Count>0) then begin
+   if (ContextObjectPool<>IgnoreContextObjectPool) and assigned(ContextObjectPool^.Objects) and (ContextObjectPool^.Count>0) then begin
     POCALockEnter(Context^.Instance^.Globals.Lock);
     try
      Pool:=@Context^.Instance^.Globals.Pools[ValueType];
@@ -11941,12 +11941,12 @@ begin
  end;
 end;
 
-procedure POCAReleaseContextObjectPools(Instance:PPOCAInstance);
+procedure POCAReleaseContextObjectPools(Instance:PPOCAInstance;IgnoreContextObjectPool:PPOCAContextObjectPool);
 var Context:PPOCAContext;
 begin
  Context:=Instance^.Globals.FreeContexts;
  while assigned(Context) do begin
-  POCAContextReleaseObjectPool(Context);
+  POCAContextReleaseObjectPool(Context,IgnoreContextObjectPool);
   Context:=Context^.NextFree;
  end;
 end;
@@ -12033,7 +12033,7 @@ begin
     Context^.Instance^.Globals.FreeContexts:=Context;
    end else begin
 {$ifdef POCAMemoryPools}
-    POCAContextReleaseObjectPool(Context);
+    POCAContextReleaseObjectPool(Context,nil);
 {$endif}
     POCAContextFree(Context);
    end;
