@@ -9769,7 +9769,7 @@ end;
 
 function POCAHashRecordSize(LogSize:TPOCAInt32;Events:boolean):TPOCAUInt32;
 begin
- result:=sizeof(TPOCAHashRecord)+((1 shl LogSize)*((4*sizeof(TPOCAInt32))+sizeof(TPOCAHashEntity)));
+ result:=sizeof(TPOCAHashRecord)+((2 shl LogSize)*((2*sizeof(TPOCAInt32))+sizeof(TPOCAHashEntity)));
  if Events then begin
   inc(result,sizeof(TPOCAHashEvents));
  end;
@@ -10658,7 +10658,7 @@ begin
  result^.EntityToCellIndex:=TPOCAPointer(@result^.CellToEntityIndex^[2 shl LogSize]);
  result^.Entities:=TPOCAPointer(@result^.EntityToCellIndex^[2 shl LogSize]);
  if Events then begin
-  result^.Events:=TPOCAPointer(@result^.Entities^[1 shl LogSize]);
+  result^.Events:=TPOCAPointer(@result^.Entities^[2 shl LogSize]);
   if (assigned(HashRec) and assigned(HashRec^.Events)) then begin
    result^.Events^:=HashRec^.Events^;
   end;

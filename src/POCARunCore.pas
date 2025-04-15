@@ -128,6 +128,30 @@ begin
 end;
 {$endif}
 
+procedure MainProc2;
+var Instance:PPOCAInstance;
+    Context:PPOCAContext;
+    Hash:TPOCAValue;
+    Index:TPOCAPtrInt;
+begin
+ Instance:=POCAInstanceCreate;
+ try
+  Context:=POCAContextCreate(Instance);
+  try
+   Hash:=POCANewHash(Context);
+   POCAHashSet(Context,Instance.Globals.Namespace,POCANewUniqueString(Context,'TestHash'),Hash);
+   for Index:=0 to 16777216 do begin
+    POCAHashSetString(Context,Hash,IntToStr(Index),POCANewNumber(Context,Index));
+   end;
+   POCAHashSetString(Context,Hash,IntToStr(-1),POCANewNumber(Context,-1));
+  finally
+   POCAContextDestroy(Context);
+  end;
+ finally
+  POCAInstanceDestroy(Instance);
+ end;
+end;
+
 procedure MainProc;
 {$ifdef Windows}
 //const CP_UTF16=1200;
