@@ -8,12 +8,12 @@
 GarbageCollector.setIncremental(false); 
 
 (function(){
-  
   const (canvasWidth, canvasHeight) = (80, 24);
   const (canvasSize, xOffset, yOffset, innerRadius, fov, w, tau, u) = (canvasHeight * canvasWidth, 40, 12, 2, 5, 30, Math.PI * 2.0, '.,-~:;=!*#$@');
   const q = (((u.length + 1) * 2) / 3) << 0;      
   let (A, B, b, z) = (0, 0, new Array(canvasSize), new Array(7040));
   do{
+    GarbageCollector.collect();
     let time = Math.frac(DateTime.now()) * 864000000.0;
     A = time * 0.0002;
     B = time * 0.0001;

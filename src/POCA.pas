@@ -18505,8 +18505,8 @@ begin
   result^.Globals.GarbageCollector.SweepFactor:=64;
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
-  result^.Globals.GarbageCollector.ExhaustionCollect:=false;
-  result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold:=0;
+  result^.Globals.GarbageCollector.ExhaustionCollect:=true;
+  result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold:=1;
   result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleCounter:=0;
   result^.Globals.GarbageCollector.Active:=true;
   result^.Globals.GarbageCollector.Incremental:=true;
@@ -29727,7 +29727,7 @@ var TokenList:PPOCAToken;
     end;
     function GenerateForEachForIndexForKey(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var JumpNext,JumpOver,BreakPos,ContinuePos,Reg1,Reg2,Reg3,Reg4,Len,Start:TPOCAInt32;
-        Element,Body,ArrayInstance,LabelToken,h:PPOCAToken;
+        Element,Body,ArrayInstance,LabelToken,h,StartElement:PPOCAToken;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
      ScopeStart;
@@ -29765,31 +29765,33 @@ var TokenList:PPOCAToken;
         end;
        end;
       end;
-      if assigned(Element) and (Element^.Token=ptASSIGN) and assigned(Element^.Left) then begin
-       Reg1:=GenerateExpression(Element,-1,false);
-       FreeRegister(Reg1);
-       Element:=Element^.Left;
-       if (Element^.Token in [ptVAR,ptLET,ptCONST]) and assigned(Element^.Right) then begin
-        Element:=Element^.Right;
-       end;
-      end;
+      StartElement:=Element;
       Body:=t^.Right^.Children;
       begin
-       Reg1:=GenerateExpression(ArrayInstance,-1,true);
-       Reg2:=GetRegister(true,false);
-       EmitOpcode(popLOADZERO,Reg2);
-       Reg3:=GetRegister(true,false);
-       case t.Token of
-        ptFOREACH,ptFORKEY:begin
-         Reg4:=GetRegister(true,false);
-         EmitOpcode(popLOADNULL,Reg4);
-        end;
-        else begin
-         Reg4:=-1;
-        end;
-       end;
        Start:=CodeGenerator^.ByteCodeSize;
        begin
+        Element:=StartElement;
+        if assigned(Element) and (Element^.Token=ptASSIGN) and assigned(Element^.Left) then begin
+         Reg1:=GenerateExpression(Element,-1,false);
+         FreeRegister(Reg1);
+         Element:=Element^.Left;
+         if (Element^.Token in [ptVAR,ptLET,ptCONST]) and assigned(Element^.Right) then begin
+          Element:=Element^.Right;
+         end;
+        end;
+        Reg1:=GenerateExpression(ArrayInstance,-1,true);
+        Reg2:=GetRegister(true,false);
+        EmitOpcode(popLOADZERO,Reg2);
+        Reg3:=GetRegister(true,false);
+        case t.Token of
+         ptFOREACH,ptFORKEY:begin
+          Reg4:=GetRegister(true,false);
+          EmitOpcode(popLOADNULL,Reg4);
+         end;
+         else begin
+          Reg4:=-1;
+         end;
+        end;
         Registers[0]:=GetRegisters;
         StartLoop(LabelToken,false);
         JumpOver:=CodeGenerator^.ByteCodeSize+1;
@@ -29821,8 +29823,34 @@ var TokenList:PPOCAToken;
                AreRegistersEqual(Registers[4],Registers[1],false,false) and
                AreRegistersEqual(Registers[1],Registers[2],false,false) and
                AreRegistersEqual(Registers[4],Registers[2],false,false)) then begin
+        FreeRegister(Reg1);
+        FreeRegister(Reg2);
+        FreeRegister(Reg3);
+        FreeRegister(Reg4);
         ScopeReset;
         CodeGenerator^.ByteCodeSize:=Start;
+        Element:=StartElement;
+        if assigned(Element) and (Element^.Token=ptASSIGN) and assigned(Element^.Left) then begin
+         Reg1:=GenerateExpression(Element,-1,false);
+         FreeRegister(Reg1);
+         Element:=Element^.Left;
+         if (Element^.Token in [ptVAR,ptLET,ptCONST]) and assigned(Element^.Right) then begin
+          Element:=Element^.Right;
+         end;
+        end;
+        Reg1:=GenerateExpression(ArrayInstance,-1,true);
+        Reg2:=GetRegister(true,false);
+        EmitOpcode(popLOADZERO,Reg2);
+        Reg3:=GetRegister(true,false);
+        case t.Token of
+         ptFOREACH,ptFORKEY:begin
+          Reg4:=GetRegister(true,false);
+          EmitOpcode(popLOADNULL,Reg4);
+         end;
+         else begin
+          Reg4:=-1;
+         end;
+        end;
         StartLoop(LabelToken,false);
         JumpOver:=CodeGenerator^.ByteCodeSize+1;
         EmitOpcode(popJMP,0);
