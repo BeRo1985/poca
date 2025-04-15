@@ -322,7 +322,7 @@
 {$ifdef POCANoMemoryPools}
  {$undef POCAMemoryPools}
 {$else}
- {-$define POCAMemoryPools}
+ {$define POCAMemoryPools}
 {$endif}
 
 {$undef POCAClosureArrayValues}
@@ -331,7 +331,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-11-16-44-0000';
+const POCAVersion='2025-04-15-15-11-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -12090,7 +12090,7 @@ var OutputString:TPOCARawByteString;
     OutputString:=OutputString+'{';
     Keys:=POCANewArray(Context);
     POCAHashKeys(Context,Keys,Value);
-//  POCAArraySort(Context,Keys);
+    POCAArraySort(Context,Keys);
     if POCAIsValueArray(Keys) then begin
      for i:=0 to POCAArraySize(Keys)-1 do begin
       if i>0 then begin
@@ -16032,7 +16032,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashOwnKeys(Context,result,Hash);
-//POCAArraySort(Context,result);
+ POCAArraySort(Context,result);
 end;
 
 function POCAGlobalFunctionKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -16049,7 +16049,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashKeys(Context,result,Hash);
-//POCAArraySort(Context,result);
+ POCAArraySort(Context,result);
 end;
 
 function POCAGlobalFunctionPRINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -16545,7 +16545,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashRawKeys(result,Hash);
-//POCAArraySort(Context,result);
+ POCAArraySort(Context,result);
 end;
 
 function POCAInitGlobalNamespace(Context:PPOCAContext):TPOCAValue;
@@ -17282,7 +17282,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashKeys(Context,result,This);
-//POCAArraySort(Context,result);
+ POCAArraySort(Context,result);
 end;
 
 function POCAHashFunctionOWNKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -17292,7 +17292,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashOwnKeys(Context,result,This);
-//POCAArraySort(Context,result);
+ POCAArraySort(Context,result);
 end;
 
 function POCAHashFunctionSETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -17365,7 +17365,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashRawKeys(result,This);
-//POCAArraySort(Context,result);
+ POCAArraySort(Context,result);
 end;
 
 function POCAInitHashHash(Context:PPOCAContext):TPOCAValue;
@@ -33917,7 +33917,7 @@ begin
    if CurrentIndex=0 then begin
     Keys:=POCANewArray(Context);
     POCAHashKeys(Context,Keys,Obj);
-//  POCAArraySort(Context,Keys);
+    POCAArraySort(Context,Keys);
    end;
    if POCAIsValueArray(Keys) then begin
     ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(Keys))^.ArrayRecord;
@@ -33961,7 +33961,7 @@ begin
   if CurrentIndex=0 then begin
    Keys:=POCANewArray(Context);
    POCAHashKeys(Context,Keys,Obj);
-// POCAArraySort(Context,Keys);
+   POCAArraySort(Context,Keys);
   end;
   if POCAIsValueArray(Keys) then begin
    ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(Keys))^.ArrayRecord;
