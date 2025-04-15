@@ -18505,8 +18505,8 @@ begin
   result^.Globals.GarbageCollector.SweepFactor:=64;
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
-  result^.Globals.GarbageCollector.ExhaustionCollect:=true;
-  result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold:=1;
+  result^.Globals.GarbageCollector.ExhaustionCollect:=false;
+  result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold:=0;
   result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleCounter:=0;
   result^.Globals.GarbageCollector.Active:=true;
   result^.Globals.GarbageCollector.Incremental:=true;
