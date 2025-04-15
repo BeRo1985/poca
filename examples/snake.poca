@@ -170,6 +170,7 @@ Console.initialize();
 clearScreen();
 setCursorVisible(false);
 do{
+  GarbageCollector.collect(); // Collect garbage to free memory at the beginning of each frame to avoid unregular pauses
   updateFrameBuffer();
   drawFrameBuffer();
   print("\n");

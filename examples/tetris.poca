@@ -318,6 +318,9 @@ currentTetromino = spawnTetromino();
 
 // Main game loop.
 while (running) {
+
+  GarbageCollector.collect(); // Collect garbage to free memory at the beginning of each frame to avoid unregular pauses
+  
   updateFrameBuffer();
   drawFrameBuffer();
   setCursorPosition(0, BOARD_HEIGHT + 1);

@@ -20,6 +20,9 @@ GarbageCollector.setIncremental(false);
   
   // Infinite loop to render frames.
   do {
+    
+    GarbageCollector.collect(); // Collect garbage to free memory at the beginning of each frame to avoid unregular pauses#
+
     // Use the fractional part of the current time scaled appropriately.
     let time = Math.frac(DateTime.now()) * 864000000.0;
     // Adjust time to control the animation speed.
