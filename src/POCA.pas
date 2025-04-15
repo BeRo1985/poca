@@ -1874,6 +1874,7 @@ procedure POCAGarbageCollectorProcessFullCycle(const Instance:PPOCAInstance);
 procedure POCAGarbageCollectorWriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue);
 
 procedure POCATemporarySave(Context:PPOCAContext;const Value:TPOCAValue); {$ifdef UseRegister}register;{$endif}
+procedure POCAResetTemporarySaves(Context:PPOCAContext); {$ifdef UseRegister}register;{$endif}
 
 procedure POCAProtect(Context:PPOCAContext;const Value:TPOCAValue); {$ifdef UseRegister}register;{$endif}
 procedure POCAUnprotect(Context:PPOCAContext;const Value:TPOCAValue); {$ifdef UseRegister}register;{$endif}
@@ -7196,7 +7197,7 @@ var Obj:PPOCAObject;
 begin
  if POCAIsValueObjectAndGetReferencePointer(Value,Obj) then begin
   if (not assigned(Context^.TemporarySavedObjects)) or ((Context^.TemporarySavedObjectCount+1)>=Context^.TemporarySavedObjectSize) then begin
-   Context^.TemporarySavedObjectSize:=POCARoundUpToPowerOfTwo(Context^.TemporarySavedObjectCount+1);
+   Context^.TemporarySavedObjectSize:=POCARoundUpToPowerOfTwo((Context^.TemporarySavedObjectCount+1) shl 1);
    if Context^.TemporarySavedObjectSize<16 then begin
     Context^.TemporarySavedObjectSize:=16;
    end;
@@ -7205,6 +7206,11 @@ begin
   Context^.TemporarySavedObjects^[Context^.TemporarySavedObjectCount]:=Obj;
   inc(Context^.TemporarySavedObjectCount);
  end;
+end;
+
+procedure POCAResetTemporarySaves(Context:PPOCAContext); {$ifdef UseRegister}register;{$endif}
+begin
+ Context^.TemporarySavedObjectCount:=0;
 end;
 
 procedure POCAProtect(Context:PPOCAContext;const Value:TPOCAValue); {$ifdef UseRegister}register;{$endif}
