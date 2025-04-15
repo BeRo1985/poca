@@ -319,6 +319,13 @@
 {$undef POCAGarbageCollectorPoolBlockReferenceCounting}
 {-$define pocastrictutf8}
 
+{$if defined(cpu386) or defined(cpux86_64) or (defined(fpc) and defined(cpuaarch64))}
+ {$define POCACanUseDCAS}
+ {$undef POCACanUseDCAS}
+{$else}
+ {$undef POCACanUseDCAS}
+{$ifend}
+
 {$ifdef POCANoMemoryPools}
  {$undef POCAMemoryPools}
 {$else}
@@ -1329,6 +1336,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      end;
 
 {$ifdef POCAMemoryPools}
+
      TPOCAPoolBlock=record
 {$ifdef POCAGarbageCollectorPoolBlockReferenceCounting}
       ReferenceCounter:TPOCAInt32;
@@ -1352,7 +1360,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       FreeObjects:PPPOCAObjects;
       FreeSize:TPOCAInt32;
       FreeCount:TPOCAInt32;
-      FreeLock:TPOCAInt32;
+//    FreeLock:TPOCAInt32;
       FirstBlock:PPOCAPoolBlock;
       LastBlock:PPOCAPoolBlock;
      end;
@@ -1369,6 +1377,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      PPOCAContextObjectPools=^TPOCAContextObjectPools;
      TPOCAContextObjectPools=array[0..pvtCOUNT-1] of TPOCAContextObjectPool;
+
 {$endif}
 
      TPOCAGarbageCollectorState=(pgcsRESET,pgcsINIT,pgcsMARKROOTS,pgcsMARKPROTECTED,pgcsMARKGREYS,pgcsSWEEPINIT,pgcsMARKWHITEGHOSTS,pgcsMARKWHITEGHOSTGREYS,pgcsSWEEP,pgcsFLIP,pgcsDONE);
@@ -5784,7 +5793,7 @@ begin
    end;
    TPasMPInterlocked.Add(Pool^.Instance^.Globals.GarbageCollector.Allocated,Size);
    TPasMPInterlocked.Add(Pool^.Instance^.Globals.GarbageCollector.FreeCount,Size);
-   Pool^.FreeLock:=0;
+// Pool^.FreeLock:=0;
   end;
  end;
 end;
@@ -5871,7 +5880,7 @@ begin
  Pool^.FreeObjects:=nil;
  Pool^.FreeSize:=0;
  Pool^.FreeCount:=0;
- Pool^.FreeLock:=0;
+//Pool^.FreeLock:=0;
  Pool^.Size:=0;
  Pool^.FirstBlock:=nil;
  Pool^.LastBlock:=nil;
@@ -7752,48 +7761,109 @@ begin
  end;
 end;
 
-{$ifdef POCAMemoryPools}
-procedure POCAReleaseContextObjectPools(Instance:PPOCAInstance;IgnoreContextObjectPool:PPOCAContextObjectPool); forward;
-{$endif}
-
-{$ifdef POCAMemoryPools}
+{$if defined(POCAMemoryPools)}
 procedure POCAGarbageCollectorContextAllocate(Context:PPOCAContext;ValueType:TPOCAInt32);
-var ContextObjectPool:PPOCAContextObjectPool;
+var Instance:PPOCAInstance;
+    GarbageCollector:PPOCAGarbageCollector;
+    ContextObjectPool:PPOCAContextObjectPool;
     Pool:PPOCAPool;
-    Count:TPOCAInt32;
+    LocalContextPoolSize,Count,Need:TPOCAInt32;
     DoFull:Boolean;
 begin
 
- POCAGarbageCollectorCheckBottleneck(Context^.Instance);
+ Instance:=Context^.Instance;
 
- POCALockEnter(Context^.Instance^.Globals.Lock);
+ GarbageCollector:=@Instance^.Globals.GarbageCollector;
+
+ POCAGarbageCollectorCheckBottleneck(Instance);
+
+ POCALockEnter(Instance^.Globals.Lock);
  try
 
-  Count:=Context^.Instance^.Globals.GarbageCollector.LocalContextPoolSize;
+  LocalContextPoolSize:=GarbageCollector^.LocalContextPoolSize;
 
   ContextObjectPool:=@Context^.ContextObjectPools[ValueType];
 
-  Pool:=@Context^.Instance^.Globals.Pools[ValueType];
-  if ContextObjectPool^.Size<Count then begin
-   ContextObjectPool^.Size:=Count;
+  Pool:=@Instance^.Globals.Pools[ValueType];
+  if ContextObjectPool^.Size<LocalContextPoolSize then begin
+   ContextObjectPool^.Size:=LocalContextPoolSize;
    ReallocMem(ContextObjectPool^.Objects,ContextObjectPool^.Size*SizeOf(PPOCAObject));
   end;
 
-  while ContextObjectPool^.Count<Count do begin
+  Need:=LocalContextPoolSize-ContextObjectPool^.Count;
+  if Need>0 then begin
 
-   while Pool^.FreeCount=0 do begin
+   if GarbageCollector^.IncrementalCollectionThresholdFactor>0 then begin
+    if GarbageCollector^.DynamicThreshold then begin
+     TPasMPInterlocked.Add(GarbageCollector^.AllocationCounter,Need);
+     Count:=(POCAGarbageCollectorUsed(Instance)*GarbageCollector^.IncrementalCollectionThresholdFactor) shr 8;
+     if Count<1024 then begin
+      Count:=1024;
+     end else if Count>=GarbageCollector^.Allocated then begin
+      Count:=GarbageCollector^.Allocated;
+     end;
+     if GarbageCollector^.AllocationCounter>=Count then begin
+      TPasMPInterlocked.Exchange(GarbageCollector^.AllocationCounter,0);
+      Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
+      POCAGarbageCollectorBottleneck(Instance);
+     end;
+    end else begin
+     if TPasMPInterlocked.Sub(GarbageCollector^.AllocationCounter,Need)<=0 then begin
+      Count:=(POCAGarbageCollectorUsed(Instance)*GarbageCollector^.IncrementalCollectionThresholdFactor) shr 8;
+      if Count<1024 then begin
+       Count:=1024;
+      end;
+      TPasMPInterlocked.Exchange(GarbageCollector^.AllocationCounter,Count);
+      Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
+      POCAGarbageCollectorBottleneck(Instance);
+     end;
+    end;
+   end;
 
-    if Context^.Instance^.Globals.GarbageCollector.ExhaustionCollect then begin
+   if GarbageCollector^.FullCollectionThresholdFactor>0 then begin
+    if GarbageCollector^.DynamicThreshold then begin
+     TPasMPInterlocked.Add(GarbageCollector^.FullAllocationCounter,Need);
+     Count:=(POCAGarbageCollectorUsed(Instance)*GarbageCollector^.FullCollectionThresholdFactor) shr 8;
+     if Count<1024 then begin
+      Count:=1024;
+     end else if Count>=GarbageCollector^.Allocated then begin
+      Count:=GarbageCollector^.Allocated;
+     end;
+     if GarbageCollector^.FullAllocationCounter>=Count then begin
+      TPasMPInterlocked.Exchange(GarbageCollector^.FullAllocationCounter,0);
+      Instance^.Globals.RequestGarbageCollection:=prgcFULL;
+      POCAGarbageCollectorBottleneck(Instance);
+     end;
+    end else begin
+     if TPasMPInterlocked.Sub(GarbageCollector^.FullAllocationCounter,Need)<=0 then begin
+      Count:=(POCAGarbageCollectorUsed(Instance)*GarbageCollector^.FullCollectionThresholdFactor) shr 8;
+      if Count<1024 then begin
+       Count:=1024;
+      end;
+      TPasMPInterlocked.Exchange(GarbageCollector^.FullAllocationCounter,Count);
+      Instance^.Globals.RequestGarbageCollection:=prgcFULL;
+      POCAGarbageCollectorBottleneck(Instance);
+     end;
+    end;
+   end;
 
-     if Context^.Instance^.Globals.GarbageCollector.Incremental then begin
+  end;
+
+  while ContextObjectPool^.Count<LocalContextPoolSize do begin
+
+   if Pool^.FreeCount=0 then begin
+
+    if GarbageCollector^.ExhaustionCollect then begin
+
+     if GarbageCollector^.Incremental then begin
       DoFull:=false;
-      if Context^.Instance^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold>0 then begin
-       TPasMPInterlocked.Increment(Context^.Instance^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleCounter);
-       if Context^.Instance^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleCounter>=Context^.Instance^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold then begin
-        TPasMPInterlocked.Write(Context^.Instance^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleCounter,0);
+      if GarbageCollector^.ExhaustionIncrementalFullCycleThreshold>0 then begin
+       TPasMPInterlocked.Increment(GarbageCollector^.ExhaustionIncrementalFullCycleCounter);
+       if GarbageCollector^.ExhaustionIncrementalFullCycleCounter>=GarbageCollector^.ExhaustionIncrementalFullCycleThreshold then begin
+        TPasMPInterlocked.Write(GarbageCollector^.ExhaustionIncrementalFullCycleCounter,0);
         DoFull:=true;
        end;
-      end else if Context^.Instance^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold<0 then begin
+      end else if GarbageCollector^.ExhaustionIncrementalFullCycleThreshold<0 then begin
        DoFull:=true;
       end;
      end else begin
@@ -7801,29 +7871,26 @@ begin
      end;
 
      if DoFull then begin
-      if Context^.Instance^.Globals.GarbageCollector.Generational then begin
-       Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULLEPHEMERAL;
-       POCAGarbageCollectorBottleneck(Context^.Instance);
+      if GarbageCollector^.Generational then begin
+       Instance^.Globals.RequestGarbageCollection:=prgcFULLEPHEMERAL;
+       POCAGarbageCollectorBottleneck(Instance);
        if Pool^.FreeCount=0 then begin
-        Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULL;
-        POCAGarbageCollectorBottleneck(Context^.Instance);
+        Instance^.Globals.RequestGarbageCollection:=prgcFULL;
+        POCAGarbageCollectorBottleneck(Instance);
        end;
       end else begin
-       Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULL;
-       POCAGarbageCollectorBottleneck(Context^.Instance);
+       Instance^.Globals.RequestGarbageCollection:=prgcFULL;
+       POCAGarbageCollectorBottleneck(Instance);
       end;
      end else begin
-      Context^.Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
-      POCAGarbageCollectorBottleneck(Context^.Instance);
+      Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
+      POCAGarbageCollectorBottleneck(Instance);
      end;
 
     end;
 
     if Pool^.FreeCount=0 then begin
-     POCAReleaseContextObjectPools(Context^.Instance,ContextObjectPool);
-     if Pool^.FreeCount=0 then begin
-      POCAPoolNewBlock(Pool,Pool^.Size div 8);
-     end;
+     POCAPoolNewBlock(Pool,Pool^.Size shr 3);
     end;
 
    end;
@@ -7837,75 +7904,25 @@ begin
   end;
 
  finally
-  POCALockLeave(Context^.Instance^.Globals.Lock);
+  POCALockLeave(Instance^.Globals.Lock);
  end;
 
 end;
-{$endif}
+{$ifend}
 
 function POCANew(Context:PPOCAContext;ValueType:TPOCAInt32;var Obj:PPOCAObject):TPOCAValue;
-var GarbageCollector:PPOCAGarbageCollector;
+var Instance:PPOCAInstance;
+    GarbageCollector:PPOCAGarbageCollector;
 {$ifdef POCAMemoryPools}
     ContextObjectPool:PPOCAContextObjectPool;
-{$endif}
+{$else}
     Count:TPOCAInt32;
+{$endif}
 begin
 
- GarbageCollector:=@Context^.Instance^.Globals.GarbageCollector;
+ Instance:=Context^.Instance;
 
- if GarbageCollector^.IncrementalCollectionThresholdFactor>0 then begin
-  if GarbageCollector^.DynamicThreshold then begin
-   TPasMPInterlocked.Increment(GarbageCollector^.AllocationCounter);
-   Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.IncrementalCollectionThresholdFactor) shr 8;
-   if Count<1024 then begin
-    Count:=1024;
-   end else if Count>=GarbageCollector^.Allocated then begin
-    Count:=GarbageCollector^.Allocated;
-   end;
-   if GarbageCollector^.AllocationCounter>=Count then begin
-    TPasMPInterlocked.Exchange(GarbageCollector^.AllocationCounter,0);
-    Context^.Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
-    POCAGarbageCollectorBottleneck(Context^.Instance);
-   end;
-  end else begin 
-   if TPasMPInterlocked.Decrement(GarbageCollector^.AllocationCounter)<=0 then begin
-    Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.IncrementalCollectionThresholdFactor) shr 8;
-    if Count<1024 then begin
-     Count:=1024;
-    end;
-    TPasMPInterlocked.Exchange(GarbageCollector^.AllocationCounter,Count);
-    Context^.Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
-    POCAGarbageCollectorBottleneck(Context^.Instance);
-   end;
-  end; 
- end;
-
- if GarbageCollector^.FullCollectionThresholdFactor>0 then begin
-  if GarbageCollector^.DynamicThreshold then begin
-   TPasMPInterlocked.Increment(GarbageCollector^.FullAllocationCounter);
-   Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.FullCollectionThresholdFactor) shr 8;
-   if Count<1024 then begin
-    Count:=1024;
-   end else if Count>=GarbageCollector^.Allocated then begin
-    Count:=GarbageCollector^.Allocated;
-   end;
-   if GarbageCollector^.FullAllocationCounter>=Count then begin
-    TPasMPInterlocked.Exchange(GarbageCollector^.FullAllocationCounter,0);
-    Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULL;
-    POCAGarbageCollectorBottleneck(Context^.Instance);
-   end;
-  end else begin 
-   if TPasMPInterlocked.Decrement(GarbageCollector^.FullAllocationCounter)<=0 then begin
-    Count:=(POCAGarbageCollectorUsed(Context^.Instance)*GarbageCollector^.FullCollectionThresholdFactor) shr 8;
-    if Count<1024 then begin
-     Count:=1024;
-    end;
-    TPasMPInterlocked.Exchange(GarbageCollector^.FullAllocationCounter,Count);   
-    Context^.Instance^.Globals.RequestGarbageCollection:=prgcFULL;
-    POCAGarbageCollectorBottleneck(Context^.Instance);
-   end;
-  end; 
- end;
+ GarbageCollector:=@Instance^.Globals.GarbageCollector;
 
 {$ifdef POCAMemoryPools}
 
@@ -7920,6 +7937,60 @@ begin
  Obj:=ContextObjectPool^.Objects^[ContextObjectPool^.Count];
 
 {$else}
+
+ if GarbageCollector^.IncrementalCollectionThresholdFactor>0 then begin
+  if GarbageCollector^.DynamicThreshold then begin
+   TPasMPInterlocked.Increment(GarbageCollector^.AllocationCounter);
+   Count:=(POCAGarbageCollectorUsed(Instance)*GarbageCollector^.IncrementalCollectionThresholdFactor) shr 8;
+   if Count<1024 then begin
+    Count:=1024;
+   end else if Count>=GarbageCollector^.Allocated then begin
+    Count:=GarbageCollector^.Allocated;
+   end;
+   if GarbageCollector^.AllocationCounter>=Count then begin
+    TPasMPInterlocked.Exchange(GarbageCollector^.AllocationCounter,0);
+    Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
+    POCAGarbageCollectorBottleneck(Instance);
+   end;
+  end else begin
+   if TPasMPInterlocked.Decrement(GarbageCollector^.AllocationCounter)<=0 then begin
+    Count:=(POCAGarbageCollectorUsed(Instance)*GarbageCollector^.IncrementalCollectionThresholdFactor) shr 8;
+    if Count<1024 then begin
+     Count:=1024;
+    end;
+    TPasMPInterlocked.Exchange(GarbageCollector^.AllocationCounter,Count);
+    Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
+    POCAGarbageCollectorBottleneck(Instance);
+   end;
+  end;
+ end;
+
+ if GarbageCollector^.FullCollectionThresholdFactor>0 then begin
+  if GarbageCollector^.DynamicThreshold then begin
+   TPasMPInterlocked.Increment(GarbageCollector^.FullAllocationCounter);
+   Count:=(POCAGarbageCollectorUsed(Instance)*GarbageCollector^.FullCollectionThresholdFactor) shr 8;
+   if Count<1024 then begin
+    Count:=1024;
+   end else if Count>=GarbageCollector^.Allocated then begin
+    Count:=GarbageCollector^.Allocated;
+   end;
+   if GarbageCollector^.FullAllocationCounter>=Count then begin
+    TPasMPInterlocked.Exchange(GarbageCollector^.FullAllocationCounter,0);
+    Instance^.Globals.RequestGarbageCollection:=prgcFULL;
+    POCAGarbageCollectorBottleneck(Instance);
+   end;
+  end else begin
+   if TPasMPInterlocked.Decrement(GarbageCollector^.FullAllocationCounter)<=0 then begin
+    Count:=(POCAGarbageCollectorUsed(Instance)*GarbageCollector^.FullCollectionThresholdFactor) shr 8;
+    if Count<1024 then begin
+     Count:=1024;
+    end;
+    TPasMPInterlocked.Exchange(GarbageCollector^.FullAllocationCounter,Count);
+    Instance^.Globals.RequestGarbageCollection:=prgcFULL;
+    POCAGarbageCollectorBottleneck(Instance);
+   end;
+  end;
+ end;
 
  GetMem(Obj,POCARoundUpToMask(POCATypeSizes[ValueType],16));
  FillChar(Obj^,POCATypeSizes[ValueType],#0);
@@ -11915,7 +11986,7 @@ begin
  end;
 end;
 
-{$ifdef POCAMemoryPools}
+{$if defined(POCAMemoryPools)}
 procedure POCAContextReleaseObjectPool(Context:PPOCAContext;IgnoreContextObjectPool:PPOCAContextObjectPool);
 var ValueType:TPOCAInt32;
     ContextObjectPool:PPOCAContextObjectPool;
@@ -11950,13 +12021,13 @@ begin
   Context:=Context^.NextFree;
  end;
 end;
-{$endif}
+{$ifend}
 
 procedure POCAContextFree(Context:PPOCAContext);
 var i:TPOCAInt32;
-{$ifdef POCAMemoryPools}
+{$if defined(POCAMemoryPools)}
     ContextObjectPool:PPOCAContextObjectPool;
-{$endif}
+{$ifend}
 begin
  if assigned(Context^.Previous) then begin
   Context^.Previous^.Next:=Context^.Next;
@@ -11986,7 +12057,7 @@ begin
   Context^.FrameStack[i].OuterValueLevels:=nil;
 {$endif}
  end;
-{$ifdef POCAMemoryPools}
+{$if defined(POCAMemoryPools)}
  for i:=0 to pvtCOUNT-1 do begin
   ContextObjectPool:=@Context^.ContextObjectPools[i];
   if assigned(ContextObjectPool^.Objects) then begin
@@ -11994,7 +12065,7 @@ begin
    ContextObjectPool^.Objects:=nil;
   end;
  end;
-{$endif}
+{$ifend}
  Finalize(Context^);
  FreeMem(Context);
 end;
@@ -12032,9 +12103,9 @@ begin
     Context^.NextFree:=Context^.Instance^.Globals.FreeContexts;
     Context^.Instance^.Globals.FreeContexts:=Context;
    end else begin
-{$ifdef POCAMemoryPools}
+{$if defined(POCAMemoryPools)}
     POCAContextReleaseObjectPool(Context,nil);
-{$endif}
+{$ifend}
     POCAContextFree(Context);
    end;
   finally
