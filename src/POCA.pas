@@ -7193,10 +7193,10 @@ function POCAGarbageCollectorProcessIncrementalCycle(const Instance:PPOCAInstanc
 var OldFullCycleCounter:TPOCAUInt64;
 begin
  if Instance^.Globals.GarbageCollector.Incremental then begin
-  OldFullCycleCounter:=Instance^.Globals.GarbageCollector.FullAllocationCounter;
+  OldFullCycleCounter:=Instance^.Globals.GarbageCollector.FullCycleCounter;
   Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
   POCAGarbageCollectorDoBottleneck(Instance);
-  result:=Instance^.Globals.GarbageCollector.FullAllocationCounter=OldFullCycleCounter;
+  result:=Instance^.Globals.GarbageCollector.FullCycleCounter=OldFullCycleCounter;
  end else begin
   Instance^.Globals.RequestGarbageCollection:=prgcFULL;
   POCAGarbageCollectorDoBottleneck(Instance);
