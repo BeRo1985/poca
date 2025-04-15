@@ -1869,6 +1869,7 @@ procedure POCAMRSWLockWriteToRead(MRSWLock:PPOCAMRSWLock); {$ifdef cpu386}regist
 function POCAMRSWLockReaders(MRSWLock:PPOCAMRSWLock):TPOCAInt32; {$ifdef cpu386}register;{$endif}
 function POCAMRSWLockWriters(MRSWLock:PPOCAMRSWLock):TPOCAInt32; {$ifdef cpu386}register;{$endif}
 
+function POCAGarbageCollectorProcessIncrementalCycle(const Instance:PPOCAInstance):Boolean;
 procedure POCAGarbageCollectorProcessFullCycle(const Instance:PPOCAInstance);
 
 procedure POCAGarbageCollectorWriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue);
@@ -7183,6 +7184,19 @@ begin
   end;
  finally
   POCALockLeave(Instance^.Globals.Lock);
+ end;
+end;
+
+function POCAGarbageCollectorProcessIncrementalCycle(const Instance:PPOCAInstance):Boolean;
+begin
+ if Instance^.Globals.GarbageCollector.Incremental then begin
+  Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
+  POCAGarbageCollectorDoBottleneck(Instance);
+  result:=(Instance^.Globals.GarbageCollector.State<>pgcsINIT) and (Instance^.Globals.GarbageCollector.State<>pgcsRESET);
+ end else begin
+  Instance^.Globals.RequestGarbageCollection:=prgcFULL;
+  POCAGarbageCollectorDoBottleneck(Instance);
+  result:=false;
  end;
 end;
 
