@@ -1405,6 +1405,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       // Other stuff
       State:TPOCAGarbageCollectorState;
+      LastFullCycleCounter:TPOCAUInt64;
       FullCycleCounter:TPOCAUInt64;
       Lock:TPOCAPointer;
       ProtectList:TPOCAPointerList;
@@ -7190,17 +7191,18 @@ begin
 end;
 
 function POCAGarbageCollectorProcessIncrementalCycle(const Instance:PPOCAInstance):Boolean;
-var OldFullCycleCounter:TPOCAUInt64;
 begin
  if Instance^.Globals.GarbageCollector.Incremental then begin
-  OldFullCycleCounter:=Instance^.Globals.GarbageCollector.FullCycleCounter;
   Instance^.Globals.RequestGarbageCollection:=prgcCYCLE;
-  POCAGarbageCollectorDoBottleneck(Instance);
-  result:=Instance^.Globals.GarbageCollector.FullCycleCounter=OldFullCycleCounter;
  end else begin
   Instance^.Globals.RequestGarbageCollection:=prgcFULL;
-  POCAGarbageCollectorDoBottleneck(Instance);
+ end;
+ POCAGarbageCollectorDoBottleneck(Instance);
+ if Instance^.Globals.GarbageCollector.LastFullCycleCounter<>Instance^.Globals.GarbageCollector.FullCycleCounter then begin
+  Instance^.Globals.GarbageCollector.LastFullCycleCounter:=Instance^.Globals.GarbageCollector.FullCycleCounter;
   result:=false;
+ end else begin
+  result:=true;
  end;
 end;
 
@@ -18525,6 +18527,7 @@ begin
   result^.Globals.GarbageCollector.GrayList.Initialize('GrayList');
   result^.Globals.GarbageCollector.WhiteGhostList.Initialize('WhiteGhostList');
   result^.Globals.GarbageCollector.State:=pgcsINIT;
+  result^.Globals.GarbageCollector.LastFullCycleCounter:=0;
   result^.Globals.GarbageCollector.FullCycleCounter:=0;
   result^.Globals.GarbageCollector.FullAllocationCounter:=0;
   result^.Globals.GarbageCollector.AllocationCounter:=0;
