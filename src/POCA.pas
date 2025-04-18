@@ -338,7 +338,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-04-15-15-11-0000';
+const POCAVersion='2025-04-18-22-24-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -2116,6 +2116,106 @@ var LexerKeywordTokens:TPOCALexerKeywordTokens;
 
     MetaOpNames:TPOCAMetaOpNames;
     MetaOpNamesHashMap:TPOCAStringHashMap;
+
+function IntLog2(x:TPOCAUInt32):TPOCAUInt32; {$if defined(fpc)} //{$ifdef CAN_INLINE}inline;{$endif}
+begin
+ if x<>0 then begin
+  result:=BSRDWord(x);
+ end else begin
+  result:=0;
+ end;
+end;
+{$elseif defined(cpu386)}
+asm
+ test eax,eax
+ jz @Done
+ bsr eax,eax
+ @Done:
+end;
+{$elseif defined(cpux86_64)}
+asm
+{$ifndef fpc}
+ .NOFRAME
+{$endif}
+{$ifdef Windows}
+ bsr eax,ecx
+{$else}
+ bsr eax,edi
+{$endif}
+ jnz @Done
+ xor eax,eax
+@Done:
+end;
+{$else}
+begin
+ x:=x or (x shr 1);
+ x:=x or (x shr 2);
+ x:=x or (x shr 4);
+ x:=x or (x shr 8);
+ x:=x or (x shr 16);
+ x:=x shr 1;
+ dec(x,(x shr 1) and $55555555);
+ x:=((x shr 2) and $33333333)+(x and $33333333);
+ x:=((x shr 4)+x) and $0f0f0f0f;
+ inc(x,x shr 8);
+ inc(x,x shr 16);
+ result:=x and $3f;
+end;
+{$ifend}
+
+function IntLog264(x:TPOCAUInt64):TPOCAUInt32; {$if defined(fpc)} //{$ifdef CAN_INLINE}inline;{$endif}
+begin
+ if x<>0 then begin
+  result:=BSRQWord(x);
+ end else begin
+  result:=0;
+ end;
+end;
+{$elseif defined(cpu386)}
+asm
+ bsr eax,dword ptr [x+4]
+ jz @LowPart
+ add eax,32
+ jmp @Done
+@LowPart:
+ xor ecx,ecx
+ bsr eax,dword ptr [x+0]
+ jnz @Done
+ xor eax,eax
+@Done:
+end;
+{$elseif defined(cpux86_64)}
+asm
+{$ifndef fpc}
+ .NOFRAME
+{$endif}
+{$ifdef Windows}
+ bsr rax,rcx
+{$else}
+ bsr rax,rdi
+{$endif}
+ jnz @Done
+ xor eax,eax
+@Done:
+end;
+{$else}
+begin
+ x:=x or (x shr 1);
+ x:=x or (x shr 2);
+ x:=x or (x shr 4);
+ x:=x or (x shr 8);
+ x:=x or (x shr 16);
+ x:=x or (x shr 32);
+ x:=x shr 1;
+ dec(x,(x shr 1) and $5555555555555555);
+ x:=((x shr 2) and $3333333333333333)+(x and $3333333333333333);
+ x:=((x shr 4)+x) and $0f0f0f0f0f0f0f0f;
+ inc(x,x shr 8);
+ inc(x,x shr 16);
+ inc(x,x shr 32);
+ result:=x and $7f;
+end;
+{$ifend}
 
 procedure InitializeConsole(Context:PPOCAContext);
 {$if defined(fpc) and defined(Unix)}
@@ -9132,29 +9232,6 @@ type PStackItem=^TStackItem;
      TStackItem=record
       Left,Right,Depth:TPOCAInt32;
      end;
- function IntLog2(x:TPOCAUInt32):TPOCAUInt32; {$ifdef cpu386}assembler; register;
- asm
-  test eax,eax
-  jz @Done
-  bsr eax,eax
-  @Done:
- end;
-{$else}
- begin
-  x:=x or (x shr 1);
-  x:=x or (x shr 2);
-  x:=x or (x shr 4);
-  x:=x or (x shr 8);
-  x:=x or (x shr 16);
-  x:=x shr 1;
-  x:=x-((x shr 1) and $55555555);
-  x:=((x shr 2) and $33333333)+(x and $33333333);
-  x:=((x shr 4)+x) and $0f0f0f0f;
-  x:=x+(x shr 8);
-  x:=x+(x shr 16);
-  result:=x and $3f;
- end;
-{$endif}
 var Left,Right,Depth,i,j,Middle,Size,Parent,Child:TPOCAInt64;
     Pivot,Temp:TPOCAValue;
     ArrayRecord:PPOCAArrayRecord;
@@ -9294,29 +9371,6 @@ type PStackItem=^TStackItem;
      TStackItem=record
       Left,Right,Depth:TPOCAInt32;
      end;
- function IntLog2(x:TPOCAUInt32):TPOCAUInt32; {$ifdef cpu386}assembler; register;
- asm
-  test eax,eax
-  jz @Done
-  bsr eax,eax
-  @Done:
- end;
-{$else}
- begin
-  x:=x or (x shr 1);
-  x:=x or (x shr 2);
-  x:=x or (x shr 4);
-  x:=x or (x shr 8);
-  x:=x or (x shr 16);
-  x:=x shr 1;
-  x:=x-((x shr 1) and $55555555);
-  x:=((x shr 2) and $33333333)+(x and $33333333);
-  x:=((x shr 4)+x) and $0f0f0f0f;
-  x:=x+(x shr 8);
-  x:=x+(x shr 16);
-  result:=x and $3f;
- end;
-{$endif}
  function Compare(const a,b:TPOCAValue):TPOCAInt32;
  var Arguments:array[0..1] of TPOCAValue;
      SubContext:PPOCAContext;
@@ -9469,29 +9523,6 @@ type PStackItem=^TStackItem;
      TStackItem=record
       Left,Right,Depth:TPOCAInt32;
      end;
- function IntLog2(x:TPOCAUInt32):TPOCAUInt32; {$ifdef cpu386}assembler; register;
- asm
-  test eax,eax
-  jz @Done
-  bsr eax,eax
-  @Done:
- end;
-{$else}
- begin
-  x:=x or (x shr 1);
-  x:=x or (x shr 2);
-  x:=x or (x shr 4);
-  x:=x or (x shr 8);
-  x:=x or (x shr 16);
-  x:=x shr 1;
-  x:=x-((x shr 1) and $55555555);
-  x:=((x shr 2) and $33333333)+(x and $33333333);
-  x:=((x shr 4)+x) and $0f0f0f0f;
-  x:=x+(x shr 8);
-  x:=x+(x shr 16);
-  result:=x and $3f;
- end;
-{$endif}
  function Compare(const a,b:TPOCAValue):TPOCAInt32;
  var ArrayRecords:array[0..1] of PPOCAArrayRecord;
  begin
@@ -10736,22 +10767,28 @@ begin
  end;
 end;
 
-procedure POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean);
+function POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean):Boolean;
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
+
  Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
- if Cell<>CELL_INVALID then begin
-  Entity:=HashRec^.CellToEntityIndex^[Cell];
-  if Entity>=0 then begin
-   HashRec^.Entities^[Entity].Value:=Value;
-   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
-   if assigned(HashRec^.Events) then begin
-    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
-   end;
-   exit;
-  end;
+ if Cell=CELL_INVALID then begin
+  result:=false;
+  exit;
  end;
+
+ Entity:=HashRec^.CellToEntityIndex^[Cell];
+ if Entity>=0 then begin
+  HashRec^.Entities^[Entity].Value:=Value;
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+  if assigned(HashRec^.Events) then begin
+   POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+  end;
+  result:=true;
+  exit;
+ end;
+
  Entity:=HashRec^.Size;
  TPasMPInterlocked.Increment(HashRec^.Size);
  if Entity<(2 shl HashRec^.LogSize) then begin
@@ -10767,6 +10804,9 @@ begin
   end;
   POCAHashLockInvalidate(Hash);
  end;
+
+ result:=true;
+
 end;
 
 procedure POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32);
@@ -10821,11 +10861,14 @@ begin
  HashRec:=Hash^.HashRecord;
  LogSize:=0;
  if assigned(HashRec) then begin
-  Size:=HashRec^.RealSize;
+  if HashRec^.RealSize>0 then begin
+   LogSize:=IntLog2(HashRec^.RealSize)+1;
+  end;
+{ Size:=HashRec^.RealSize;
   while Size<>0 do begin
    Size:=Size shr 1;
    inc(LogSize);
-  end;
+  end;}
   if assigned(HashRec^.Events) then begin
    Events:=true;
   end;
@@ -10953,7 +10996,8 @@ begin
 end;
 
 function POCAHashRawSet(const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
-var HashInstance:PPOCAHash;
+var Iteration:TPOCAInt32;
+    HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
 begin
  result:=false;
@@ -10964,8 +11008,14 @@ begin
    HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
   end;
   if assigned(HashRec) then begin
-   POCAHashPut(HashInstance,HashRec,Key,Value,Constant);
-   result:=true;
+   for Iteration:=0 to 1 do begin
+    if POCAHashPut(HashInstance,HashRec,Key,Value,Constant) then begin
+     result:=true;
+     break;
+    end else begin
+     HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+    end;
+   end;
   end;
  end;
 end;
@@ -10991,7 +11041,7 @@ begin
      if assigned(HashRec^.Events) then begin
       POCAHashPutHashEvents(HashInstance,HashRec,Key,POCAValueNull);
      end;
-     if HashRec^.RealSize<=(1 shl (HashRec^.LogSize-1)) then begin
+     if (HashRec^.RealSize>0) and (HashRec^.RealSize<=(1 shl (HashRec^.LogSize-1))) then begin
       POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
      end;
      POCAHashLockInvalidate(HashInstance);
@@ -11704,7 +11754,8 @@ begin
 end;
 
 function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
-var HashInstance:PPOCAHash;
+var Iteration:TPOCAInt32;
+    HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
 begin
  result:=false;
@@ -11718,8 +11769,14 @@ begin
     HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
    end;
    if assigned(HashRec) then begin
-    POCAHashPut(HashInstance,HashRec,Key,Value,Constant);
-    result:=true;
+    for Iteration:=0 to 1 do begin
+     if POCAHashPut(HashInstance,HashRec,Key,Value,Constant) then begin
+      result:=true;
+      break;
+     end else begin
+      HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+     end;
+    end;
    end;
   end;
  end;
@@ -11782,7 +11839,7 @@ begin
       if assigned(HashRec^.Events) then begin
        POCAHashPutHashEvents(HashInstance,HashRec,Key,POCAValueNull);
       end;
-      if HashRec^.RealSize<=(1 shl (HashRec^.LogSize-1)) then begin
+      if (HashRec^.RealSize>0) and (HashRec^.RealSize<=(1 shl (HashRec^.LogSize-1))) then begin
        POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
       end else begin
        POCAHashLockInvalidate(HashInstance);
