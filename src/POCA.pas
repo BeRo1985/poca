@@ -1709,7 +1709,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        fEventsHashValue:TPOCAValue;
       public
        constructor Create; overload; reintroduce; virtual;
+       constructor Create(const aObject:TObject); overload; reintroduce; virtual;
        constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); overload; reintroduce; virtual; // for backward compatibility, which directly calls Register after Create
+       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject); overload; reintroduce; virtual; // Like the previous one but with aObject parameter for self-override of fObject
        destructor Destroy; override;
        procedure Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
        function Mark:boolean; virtual;
@@ -15925,6 +15927,21 @@ begin
  fObject:=self;
 end;
 
+constructor TPOCANativeObject.Create(const aObject:TObject);
+begin
+ inherited Create;
+ fPropHashMap:=nil;
+ fPropList:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
+ if assigned(aObject) then begin
+  fObject:=aObject;
+ end else begin
+  fObject:=self;
+ end;
+end;
+
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
 begin
  inherited Create;  
@@ -15934,6 +15951,22 @@ begin
  fProperties:=nil;
  fCountProperties:=0;
  fObject:=self;
+ Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
+end;
+
+constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject);
+begin
+ inherited Create;  
+ fPropHashMap:=nil;
+ fPropList:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
+ if assigned(aObject) then begin
+  fObject:=aObject;
+ end else begin
+  fObject:=self;
+ end;
  Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
 end;
 
