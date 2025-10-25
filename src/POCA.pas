@@ -1725,6 +1725,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        destructor Destroy; override;
        procedure AddObject(const aObject:TObject); virtual;
        procedure Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); virtual;
+       procedure PostRegister; virtual;
        function Mark:boolean; virtual;
        function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32; virtual;
        function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean; virtual;
@@ -16245,6 +16246,11 @@ begin
 
  end;
 
+end;
+
+procedure TPOCANativeObject.PostRegister;
+begin
+ // Nothing to do
 end;
 
 function TPOCANativeObject.Mark:boolean;
