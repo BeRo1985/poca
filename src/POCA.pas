@@ -1,4 +1,4 @@
-(******************************************************************************
+(****************************************************************************** 
  *                                     POCA                                   *
  ******************************************************************************
  *            for version see POCAVersion constant string here below          *
@@ -1718,16 +1718,17 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        fHashValue:TPOCAValue;
        fEventsHashValue:TPOCAValue;
       public
-       constructor Create; overload; reintroduce; virtual;
-       constructor Create(const aObject:TObject); overload; reintroduce; virtual;
-       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); overload; reintroduce; virtual; // for backward compatibility, which directly calls Register after Create
-       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject); overload; reintroduce; virtual; // Like the previous one but with aObject parameter for self-override of fObject
+       constructor Create; reintroduce; overload; virtual;
+       constructor Create(const aObject:TObject); reintroduce; overload; virtual;
+       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); reintroduce; overload; virtual; // for backward compatibility, which directly calls Register after Create
+       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject); reintroduce; overload; virtual; // Like the previous one but with aObject parameter for self-override of fObject
        destructor Destroy; override;
        procedure AddObject(const aObject:TObject); virtual;
        procedure Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); virtual;
        procedure PostRegister; virtual;
        function Mark:boolean; virtual;
        function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32; virtual;
+       function GetPropertyType(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32):TPOCAInt32; virtual;
        function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean; virtual;
        function SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;const Value:TPOCAValue):boolean; virtual;
       public 
@@ -16299,6 +16300,47 @@ begin
  if assigned(CacheIndex) and (result>=0) and (result<fCountProperties) then begin
   CacheIndex^:=result;
   fProperties[result].Key.CastedInt64:=Key.CastedInt64;
+ end;
+end;
+
+function TPOCANativeObject.GetPropertyType(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32):TPOCAInt32;
+var PropertyItem:PPOCANativeObjectProperty;
+    PropInfo:PPropInfo;
+    CurrentObject:TObject;
+begin
+ result:=pvtNULL;
+ if (PropertyIndex>=0) and (PropertyIndex<fCountProperties) then begin
+  PropertyItem:=@fProperties[PropertyIndex];
+  CurrentObject:=PropertyItem^.PropObject;
+  if assigned(CurrentObject) then begin
+   PropInfo:=PropertyItem^.PropInfo;
+   if assigned(PropInfo) and assigned(PropInfo^.PropType) then begin
+    case PropInfo^.PropType^.Kind of
+     tkLString{$ifdef fpc},tkAString,tkSString{$endif},
+     tkWString{$ifdef fpc},tkUString{$endif}{$ifdef POCAEmbarcaderoNextGen},tkUString{$endif},
+     tkEnumeration,
+     tkSet,
+     tkChar,
+     tkWChar{$ifdef fpc},tkUChar{$endif}:begin
+      result:=pvtSTRING;
+     end;
+     tkInteger,
+     {$ifndef fpc}tkInt64,{$endif}
+     tkFloat{$ifdef fpc},
+     tkInt64,
+     tkQWord,
+     tkBool{$endif}:begin
+      result:=pvtNUMBER;
+     end;
+     tkClass:begin
+      result:=pvtHASH; // Objects are represented as hashes
+     end;
+     tkDynArray:begin
+      result:=pvtARRAY;
+     end;
+    end;
+   end;
+  end;
  end;
 end;
 
