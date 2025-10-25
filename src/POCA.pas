@@ -1693,12 +1693,22 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCANativeObjectProperties=array of TPOCANativeObjectProperty;
 
+     PPOCANativeObjectData=^TPOCANativeObjectData;
+     TPOCANativeObjectData=record
+      Object_:TObject;
+      PropList:PPropList;
+      PropListLen:TPOCAInt32;
+     end;
+
+     TPOCANativeObjectList=array of TPOCANativeObjectData;
+
      TPOCANativeObject=class
       private
        fInstance:PPOCAInstance;
        fExpandable:boolean;
        fObject:TObject;
-       fPropList:PPropList;
+       fObjects:TPOCANativeObjectList;
+       fCountObjects:TPOCAInt32;
        fPropListLen:TPOCAInt32;
        fPropHashMap:TPOCAStringHashMap;
        fProperties:TPOCANativeObjectProperties;
@@ -1713,6 +1723,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); overload; reintroduce; virtual; // for backward compatibility, which directly calls Register after Create
        constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject); overload; reintroduce; virtual; // Like the previous one but with aObject parameter for self-override of fObject
        destructor Destroy; override;
+       procedure AddObject(const aObject:TObject);
        procedure Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
        function Mark:boolean; virtual;
        function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32; virtual;
@@ -15920,67 +15931,111 @@ end;
 constructor TPOCANativeObject.Create;
 begin
  inherited Create;
+ fObject:=self;
+ fObjects:=nil;
+ fCountObjects:=0;
  fPropHashMap:=nil;
- fPropList:=nil;
  fPropListLen:=0;
  fProperties:=nil;
  fCountProperties:=0;
- fObject:=self;
 end;
 
 constructor TPOCANativeObject.Create(const aObject:TObject);
 begin
  inherited Create;
- fPropHashMap:=nil;
- fPropList:=nil;
- fPropListLen:=0;
- fProperties:=nil;
- fCountProperties:=0;
  if assigned(aObject) then begin
   fObject:=aObject;
  end else begin
   fObject:=self;
  end;
+ fObjects:=nil;
+ fCountObjects:=0;
+ fPropHashMap:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
 end;
 
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
 begin
  inherited Create;  
+ fObject:=self;
+ fObjects:=nil;
+ fCountObjects:=0;
  fPropHashMap:=nil;
- fPropList:=nil;
  fPropListLen:=0;
  fProperties:=nil;
  fCountProperties:=0;
- fObject:=self;
  Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
 end;
 
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject);
 begin
  inherited Create;  
- fPropHashMap:=nil;
- fPropList:=nil;
- fPropListLen:=0;
- fProperties:=nil;
- fCountProperties:=0;
  if assigned(aObject) then begin
   fObject:=aObject;
  end else begin
   fObject:=self;
  end;
+ fObjects:=nil;
+ fCountObjects:=0;
+ fPropHashMap:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
  Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
 end;
 
 destructor TPOCANativeObject.Destroy;
+var Index:TPOCANativeInt;
+    ObjectData:PPOCANativeObjectData;
 begin
  FreeAndNil(fPropHashMap);
- SetLength(fProperties,0);
- if assigned(fPropList) then begin
-  FreeMem(fPropList);
-  fPropList:=nil;
-  fPropListLen:=0;
+ fProperties:=nil;
+ for Index:=0 to fCountObjects-1 do begin
+  ObjectData:=@fObjects[Index];
+  if assigned(ObjectData^.PropList) then begin
+   FreeMem(ObjectData^.PropList);
+   ObjectData^.PropList:=nil;
+   ObjectData^.PropListLen:=0;
+  end;
  end;
+ fPropListLen:=0;
+ fObject:=nil;
+ fObjects:=nil;
+ fCountObjects:=0;
  inherited Destroy;
+end;
+
+procedure TPOCANativeObject.AddObject(const aObject:TObject);
+var Index:TPOCANativeInt;
+    ObjectData:PPOCANativeObjectData;
+begin
+ 
+ // Add only if not nil and not self
+ if assigned(aObject) and (aObject<>self) then begin
+
+  // Check if object is already registered, if so, exit
+  for Index:=0 to fCountObjects-1 do begin
+   ObjectData:=@fObjects[Index];
+   if ObjectData^.Object_=aObject then begin
+    exit;
+   end;
+  end;
+  
+  // Otherwise, add object
+  Index:=fCountObjects;
+  inc(fCountObjects);
+  if length(fObjects)<fCountObjects then begin
+   SetLength(fObjects,fCountObjects+((fCountObjects+1) shr 1));
+  end;
+  ObjectData:=@fObjects[Index];
+  ObjectData^.Object_:=aObject;
+  ObjectData^.PropList:=nil;
+  ObjectData^.PropListLen:=0;
+
+ end;
+
 end;
 
 procedure TPOCANativeObject.Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
@@ -16004,7 +16059,7 @@ type PMethodNameRec=^TMethodNameRec;
       Count:{$ifdef fpc}TPOCAUInt32{$else}TPOCAUInt16{$endif};
       Methods:TMethodNameRecs;
      end;
-var Index,Count:TPOCAInt32;
+var ObjectIndex,Index,OtherIndex,Count:TPOCAInt32;
     Hash,EventsHash:PPOCAHash;
 //  HashRec,EventsHashRec:PPOCAHashRecord;
     MethodTable:PMethodNameTable;
@@ -16014,6 +16069,7 @@ var Index,Count:TPOCAInt32;
     NativeFunction:TPOCANativeObjectMethod;
     IsEvent:boolean;
     PropertyItem:PPOCANativeObjectProperty;
+    ObjectData:PPOCANativeObjectData;
 begin
  inherited Create;
 
@@ -16021,11 +16077,30 @@ begin
   raise EPOCAError.Create('TPOCANativeObject.Register: Native object already registered');
  end;
 
+ // Add self to the list of objects at the end, as it is the default main object
+ Index:=fCountObjects;
+ inc(fCountObjects);
+ if length(fObjects)<fCountObjects then begin
+  SetLength(fObjects,fCountObjects+((fCountObjects+1) shr 1));
+ end;
+ ObjectData:=@fObjects[Index];
+ ObjectData^.Object_:=fObject;
+ ObjectData^.PropList:=nil;
+ ObjectData^.PropListLen:=0;
+
+ // Set the final object array length
+ SetLength(fObjects,fCountObjects);
+
  fInstance:=aInstance;
  fExpandable:=aExpandable;
 
- fPropList:=nil;
- fPropListLen:=GetPropList(fObject,fPropList);
+ fPropListLen:=0;
+ for ObjectIndex:=0 to fCountObjects-1 do begin
+  ObjectData:=@fObjects[ObjectIndex];
+  ObjectData^.PropList:=nil;
+  ObjectData^.PropListLen:=GetPropList(ObjectData^.Object_,ObjectData^.PropList);
+  inc(fPropListLen,ObjectData^.PropListLen);
+ end;
 
  FillChar(fGhostType,SizeOf(TPOCAGhostType),#0);
  fGhostType.Name:=TPOCAUTF8String(ClassName);
@@ -16058,18 +16133,21 @@ begin
  try
 
   Count:=fPropListLen;
-  MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(fObject)^)+vmtMethodTable))^);
-  if assigned(MethodTable) then begin
-   MethodNameRec:=@MethodTable^.Methods[0];
-   for Index:=0 to MethodTable^.Count-1 do begin
+  for ObjectIndex:=0 to fCountObjects-1 do begin
+   ObjectData:=@fObjects[ObjectIndex];
+   MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(ObjectData^.Object_)^)+vmtMethodTable))^);
+   if assigned(MethodTable) then begin
+    MethodNameRec:=@MethodTable^.Methods[0];
+    for Index:=0 to MethodTable^.Count-1 do begin
 {$ifdef fpc}
-    MethodName:=String(MethodNameRec^.Name^);
+     MethodName:=String(MethodNameRec^.Name^);
 {$else}
-    MethodName:=String(MethodNameRec^.Name);
+     MethodName:=String(MethodNameRec^.Name);
 {$endif}
-    MethodAddress:=MethodNameRec^.Address;
-    if (length(MethodName)>0) and assigned(MethodAddress) then begin
-     inc(Count);
+     MethodAddress:=MethodNameRec^.Address;
+     if (length(MethodName)>0) and assigned(MethodAddress) then begin
+      inc(Count);
+     end;
     end;
    end;
   end;
@@ -16079,53 +16157,59 @@ begin
   SetLength(fProperties,fCountProperties);
 
   fPropHashMap:=TPOCAStringHashMap.Create(true);
-  for Index:=0 to fPropListLen-1 do begin
-   fPropHashMap.SetValue(fPropList^[Index].Name,Index);
-   PropertyItem:=@fProperties[Index];
-// PropertyItem^.Key:=POCAValueNull;
-   PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
-   PropertyItem^.PropObject:=fObject;
-   PropertyItem^.PropInfo:=fPropList^[Index];
-// PropertyItem^.Value:=POCAValueNull;
-   PropertyItem^.Value.CastedUInt64:=POCAValueNullCastedUInt64;
+  for ObjectIndex:=0 to fCountObjects-1 do begin
+   ObjectData:=@fObjects[ObjectIndex];
+   for Index:=0 to fPropListLen-1 do begin
+    fPropHashMap.SetValue(ObjectData^.PropList^[Index].Name,Index);
+    PropertyItem:=@fProperties[Index];
+ // PropertyItem^.Key:=POCAValueNull;
+    PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
+    PropertyItem^.PropObject:=ObjectData.Object_;
+    PropertyItem^.PropInfo:=ObjectData^.PropList^[Index];
+ // PropertyItem^.Value:=POCAValueNull;
+    PropertyItem^.Value.CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
   end;
 
   Count:=fPropListLen;
-  MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(fObject)^)+vmtMethodTable))^);
-  if assigned(MethodTable) then begin
-   MethodNameRec:=@MethodTable^.Methods[0];
-   for Index:=0 to MethodTable^.Count-1 do begin
+  for ObjectIndex:=0 to fCountObjects-1 do begin
+   ObjectData:=@fObjects[ObjectIndex];
+   MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(ObjectData.Object_)^)+vmtMethodTable))^);
+   if assigned(MethodTable) then begin
+    MethodNameRec:=@MethodTable^.Methods[0];
+    for Index:=0 to MethodTable^.Count-1 do begin
 {$ifdef fpc}
-    MethodName:=String(MethodNameRec^.Name^);
+     MethodName:=String(MethodNameRec^.Name^);
 {$else}
-    MethodName:=String(MethodNameRec^.Name);
+     MethodName:=String(MethodNameRec^.Name);
 {$endif}
-    MethodAddress:=MethodNameRec^.Address;
-    if (length(MethodName)>0) and assigned(MethodAddress) then begin
-     if (length(MethodName)>1) and (MethodName[length(MethodName)]='_') then begin
-      Delete(MethodName,length(MethodName),1);
+     MethodAddress:=MethodNameRec^.Address;
+     if (length(MethodName)>0) and assigned(MethodAddress) then begin
+      if (length(MethodName)>1) and (MethodName[length(MethodName)]='_') then begin
+       Delete(MethodName,length(MethodName),1);
+      end;
+      IsEvent:=(length(MethodName)>2) and (MethodName[1]='_') and (MethodName[2]='_');
+      TMethod(NativeFunction).Code:=MethodAddress;
+      TMethod(NativeFunction).Data:=fObject;
+      fPropHashMap.SetValue(TPOCAUTF8String(MethodName),Count);
+      PropertyItem:=@fProperties[Count];
+ //   PropertyItem^.Key:=POCAValueNull;
+      PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
+      PropertyItem^.PropObject:=fObject;
+      PropertyItem^.PropInfo:=nil;
+      PropertyItem^.Method:=NativeFunction;
+      PropertyItem^.Value:=POCANewFunction(aContext,POCANewNativeCode(aContext,TPOCANativeObjectFunctionNativeMethodCall,nil,PropertyItem));
+      if IsEvent then begin
+       POCAHashSet(aContext,fEventsHashValue,POCANewUniqueString(aContext,TPOCAUTF8String(MethodName)),PropertyItem^.Value,false);
+      end;
+      inc(Count);
      end;
-     IsEvent:=(length(MethodName)>2) and (MethodName[1]='_') and (MethodName[2]='_');
-     TMethod(NativeFunction).Code:=MethodAddress;
-     TMethod(NativeFunction).Data:=fObject;
-     fPropHashMap.SetValue(TPOCAUTF8String(MethodName),Count);
-     PropertyItem:=@fProperties[Count];
-//   PropertyItem^.Key:=POCAValueNull;
-     PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
-     PropertyItem^.PropObject:=fObject;
-     PropertyItem^.PropInfo:=nil;
-     PropertyItem^.Method:=NativeFunction;
-     PropertyItem^.Value:=POCANewFunction(aContext,POCANewNativeCode(aContext,TPOCANativeObjectFunctionNativeMethodCall,nil,PropertyItem));
-     if IsEvent then begin
-      POCAHashSet(aContext,fEventsHashValue,POCANewUniqueString(aContext,TPOCAUTF8String(MethodName)),PropertyItem^.Value,false);
-     end;
-     inc(Count);
+{$ifdef fpc}
+     inc(MethodNameRec);
+{$else}
+     inc(TPOCAPtrUInt(MethodNameRec),MethodNameRec^.Size);
+{$endif}
     end;
-{$ifdef fpc}
-    inc(MethodNameRec);
-{$else}
-    inc(TPOCAPtrUInt(MethodNameRec),MethodNameRec^.Size);
-{$endif}
    end;
   end;
 
