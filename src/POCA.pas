@@ -1719,6 +1719,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean; virtual;
        function SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;const Value:TPOCAValue):boolean; virtual;
        property Instance:PPOCAInstance read fInstance;
+       property Object_:TObject read fObject;
        property Expandable:boolean read fExpandable;
        property GhostValue:TPOCAValue read fGhostValue;
        property HashValue:TPOCAValue read fHashValue;
