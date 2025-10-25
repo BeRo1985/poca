@@ -16246,6 +16246,8 @@ begin
 
  end;
 
+ PostRegister;
+
 end;
 
 procedure TPOCANativeObject.PostRegister;
