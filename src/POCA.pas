@@ -16071,7 +16071,6 @@ var ObjectIndex,Index,OtherIndex,Count:TPOCAInt32;
     PropertyItem:PPOCANativeObjectProperty;
     ObjectData:PPOCANativeObjectData;
 begin
- inherited Create;
 
  if assigned(fPropHashMap) then begin
   raise EPOCAError.Create('TPOCANativeObject.Register: Native object already registered');
