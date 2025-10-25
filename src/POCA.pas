@@ -1723,15 +1723,22 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); overload; reintroduce; virtual; // for backward compatibility, which directly calls Register after Create
        constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject); overload; reintroduce; virtual; // Like the previous one but with aObject parameter for self-override of fObject
        destructor Destroy; override;
-       procedure AddObject(const aObject:TObject);
-       procedure Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
+       procedure AddObject(const aObject:TObject); virtual;
+       procedure Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); virtual;
        function Mark:boolean; virtual;
        function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32; virtual;
        function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean; virtual;
        function SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;const Value:TPOCAValue):boolean; virtual;
+      public 
        property Instance:PPOCAInstance read fInstance;
        property Object_:TObject read fObject;
        property Expandable:boolean read fExpandable;
+       property Objects:TPOCANativeObjectList read fObjects;
+       property CountObjects:TPOCAInt32 read fCountObjects;
+       property PropListLen:TPOCAInt32 read fPropListLen;
+       property PropHashMap:TPOCAStringHashMap read fPropHashMap;
+       property Properties:TPOCANativeObjectProperties read fProperties;
+       property CountProperties:TPOCAInt32 read fCountProperties;
        property GhostValue:TPOCAValue read fGhostValue;
        property HashValue:TPOCAValue read fHashValue;
        property EventsHashValue:TPOCAValue read fEventsHashValue;
@@ -15938,6 +15945,9 @@ begin
  fPropListLen:=0;
  fProperties:=nil;
  fCountProperties:=0;
+ fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 constructor TPOCANativeObject.Create(const aObject:TObject);
@@ -15954,6 +15964,9 @@ begin
  fPropListLen:=0;
  fProperties:=nil;
  fCountProperties:=0;
+ fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
@@ -15966,6 +15979,9 @@ begin
  fPropListLen:=0;
  fProperties:=nil;
  fCountProperties:=0;
+ fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
  Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
 end;
 
@@ -15983,6 +15999,9 @@ begin
  fPropListLen:=0;
  fProperties:=nil;
  fCountProperties:=0;
+ fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
  Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
 end;
 
