@@ -1685,6 +1685,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      PPOCANativeObjectProperty=^TPOCANativeObjectProperty;
      TPOCANativeObjectProperty=record
       Key:TPOCAValue;
+      PropObject:TObject;
       PropInfo:PPropInfo;
       Method:TPOCANativeObjectMethod;
       Value:TPOCAValue;
@@ -1696,6 +1697,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       private
        fInstance:PPOCAInstance;
        fExpandable:boolean;
+       fObject:TObject;
        fPropList:PPropList;
        fPropListLen:TPOCAInt32;
        fPropHashMap:TPOCAStringHashMap;
@@ -1706,8 +1708,10 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        fHashValue:TPOCAValue;
        fEventsHashValue:TPOCAValue;
       public
-       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); reintroduce; virtual;
+       constructor Create; overload; reintroduce; virtual;
+       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); overload; reintroduce; virtual; // for backward compatibility, which directly calls Register after Create
        destructor Destroy; override;
+       procedure Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
        function Mark:boolean; virtual;
        function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32; virtual;
        function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean; virtual;
@@ -15910,7 +15914,42 @@ begin
  end;
 end;
 
+constructor TPOCANativeObject.Create;
+begin
+ inherited Create;
+ fPropHashMap:=nil;
+ fPropList:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
+ fObject:=self;
+end;
+
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
+begin
+ inherited Create;  
+ fPropHashMap:=nil;
+ fPropList:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
+ fObject:=self;
+ Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
+end;
+
+destructor TPOCANativeObject.Destroy;
+begin
+ FreeAndNil(fPropHashMap);
+ SetLength(fProperties,0);
+ if assigned(fPropList) then begin
+  FreeMem(fPropList);
+  fPropList:=nil;
+  fPropListLen:=0;
+ end;
+ inherited Destroy;
+end;
+
+procedure TPOCANativeObject.Register(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
 {$ifdef fpc}
 type PShortString=^ShortString;
 {$endif}
@@ -15944,11 +15983,15 @@ var Index,Count:TPOCAInt32;
 begin
  inherited Create;
 
+ if assigned(fPropHashMap) then begin
+  raise EPOCAError.Create('TPOCANativeObject.Register: Native object already registered');
+ end;
+
  fInstance:=aInstance;
  fExpandable:=aExpandable;
 
  fPropList:=nil;
- fPropListLen:=GetPropList(self,fPropList);
+ fPropListLen:=GetPropList(fObject,fPropList);
 
  FillChar(fGhostType,SizeOf(TPOCAGhostType),#0);
  fGhostType.Name:=TPOCAUTF8String(ClassName);
@@ -15960,7 +16003,7 @@ begin
  POCAProtect(aContext,fHashValue);
  Hash:=POCAGetValueReferencePointer(fHashValue);
 
- fGhostValue:=POCANewGhost(aContext,@fGhostType,self,Hash,pgptOBJECT);
+ fGhostValue:=POCANewGhost(aContext,@fGhostType,fObject,Hash,pgptOBJECT);
  POCAProtect(aContext,fGhostValue);
  POCAGhostSetHashValue(fGhostValue,fHashValue);
 
@@ -15981,7 +16024,7 @@ begin
  try
 
   Count:=fPropListLen;
-  MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(self)^)+vmtMethodTable))^);
+  MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(fObject)^)+vmtMethodTable))^);
   if assigned(MethodTable) then begin
    MethodNameRec:=@MethodTable^.Methods[0];
    for Index:=0 to MethodTable^.Count-1 do begin
@@ -16007,13 +16050,14 @@ begin
    PropertyItem:=@fProperties[Index];
 // PropertyItem^.Key:=POCAValueNull;
    PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
+   PropertyItem^.PropObject:=fObject;
    PropertyItem^.PropInfo:=fPropList^[Index];
 // PropertyItem^.Value:=POCAValueNull;
    PropertyItem^.Value.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
 
   Count:=fPropListLen;
-  MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(self)^)+vmtMethodTable))^);
+  MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(fObject)^)+vmtMethodTable))^);
   if assigned(MethodTable) then begin
    MethodNameRec:=@MethodTable^.Methods[0];
    for Index:=0 to MethodTable^.Count-1 do begin
@@ -16029,11 +16073,12 @@ begin
      end;
      IsEvent:=(length(MethodName)>2) and (MethodName[1]='_') and (MethodName[2]='_');
      TMethod(NativeFunction).Code:=MethodAddress;
-     TMethod(NativeFunction).Data:=self;
+     TMethod(NativeFunction).Data:=fObject;
      fPropHashMap.SetValue(TPOCAUTF8String(MethodName),Count);
      PropertyItem:=@fProperties[Count];
 //   PropertyItem^.Key:=POCAValueNull;
      PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
+     PropertyItem^.PropObject:=fObject;
      PropertyItem^.PropInfo:=nil;
      PropertyItem^.Method:=NativeFunction;
      PropertyItem^.Value:=POCANewFunction(aContext,POCANewNativeCode(aContext,TPOCANativeObjectFunctionNativeMethodCall,nil,PropertyItem));
@@ -16066,36 +16111,27 @@ begin
 
 end;
 
-destructor TPOCANativeObject.Destroy;
-begin
- fPropHashMap.Free;
- SetLength(fProperties,0);
- if assigned(fPropList) then begin
-  FreeMem(fPropList);
-  fPropList:=nil;
-  fPropListLen:=0;
- end;
- inherited Destroy;
-end;
-
 function TPOCANativeObject.Mark:boolean;
 var PropertyIndex:TPOCAInt32;
     PropertyItem:PPOCANativeObjectProperty;
     PropInfo:PPropInfo;
-    AObject:TObject;
+    CurrentObject,ChildObject:TObject;
 begin
  POCAMarkValue(fInstance,fHashValue);
  for PropertyIndex:=0 to fCountProperties-1 do begin
   PropertyItem:=@fProperties[PropertyIndex];
   POCAMarkValue(fInstance,PropertyItem^.Value);
-  PropInfo:=PropertyItem^.PropInfo;
-  if assigned(PropInfo) then begin
-   if assigned(PropInfo^.PropType) then begin
-    case PropInfo^.PropType^.Kind of
-     tkClass:begin
-      AObject:=GetObjectProp(self,PropInfo);
-      if assigned(AObject) and (AObject is TPOCANativeObject) then begin
-       TPOCANativeObject(AObject).Mark;
+  CurrentObject:=PropertyItem^.PropObject;
+  if assigned(CurrentObject) then begin
+   PropInfo:=PropertyItem^.PropInfo;
+   if assigned(PropInfo) then begin
+    if assigned(PropInfo^.PropType) then begin
+     case PropInfo^.PropType^.Kind of
+      tkClass:begin
+       ChildObject:=GetObjectProp(CurrentObject,PropInfo);
+       if assigned(ChildObject) and (ChildObject is TPOCANativeObject) then begin
+        TPOCANativeObject(ChildObject).Mark;
+       end;
       end;
      end;
     end;
@@ -16123,64 +16159,71 @@ begin
 end;
 
 function TPOCANativeObject.GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean;
-var PropInfo:PPropInfo;
-    AObject:TObject;
+var PropertyItem:PPOCANativeObjectProperty;
+    PropInfo:PPropInfo;
+    CurrentObject,ChildObject:TObject;
 begin
  result:=(PropertyIndex>=0) and (PropertyIndex<fCountProperties);
  if result then begin
-  PropInfo:=fProperties[PropertyIndex].PropInfo;
-  if assigned(PropInfo) then begin
-   if assigned(PropInfo^.PropType) and assigned(PropInfo^.GetProc) then begin
-    case PropInfo^.PropType^.Kind of
-     tkLString{$ifdef fpc},tkAString,tkSString{$endif}:begin
-      Value:=POCANewString(Context,TPOCAUTF8String(GetStrProp(self,PropInfo)));
-     end;
-     tkWString{$ifdef fpc},tkUString{$endif}{$ifdef POCAEmbarcaderoNextGen},tkUString{$endif}:begin
-      Value:=POCANewString(Context,PUCUUTF16ToUTF8({$ifdef POCAEmbarcaderoNextGen}GetStrProp{$else}GetWideStrProp{$endif}(self,PropInfo)));
-     end;
-     tkEnumeration:begin
-      Value:=POCANewString(Context,TPOCAUTF8String(GetEnumProp(self,PropInfo)));
-     end;
-     tkSet:begin
-      Value:=POCANewString(Context,TPOCAUTF8String(GetSetProp(self,PropInfo,false)));
-     end;
-     tkInteger:begin
-      Value.Num:=GetOrdProp(self,PropInfo);
-     end;
-     tkChar:begin
-      Value:=POCANewString(Context,PUCUUTF16ToUTF8(WideChar(TPOCAUInt16(GetOrdProp(self,PropInfo)))));
-     end;
-     tkWChar{$ifdef fpc},tkUChar{$endif}:begin
-      Value:=POCANewString(Context,PUCUUTF16ToUTF8(WideChar(TPOCAUInt16(GetOrdProp(self,PropInfo)))));
-     end;
-     tkInt64{$ifdef fpc},tkQWORD{$endif}:begin
-      Value.Num:=GetOrdProp(self,PropInfo);
-     end;
-     tkFloat:begin
-      Value.Num:=GetFloatProp(self,PropInfo);
-     end;
-     tkClass:begin
-      AObject:=GetObjectProp(self,PropInfo);
-      if assigned(AObject) then begin
-       if AObject is TPOCANativeObject then begin
-        Value:=TPOCANativeObject(AObject).fGhostValue;
+  PropertyItem:=@fProperties[PropertyIndex];
+  CurrentObject:=PropertyItem^.PropObject;
+  if assigned(CurrentObject) then begin
+   PropInfo:=PropertyItem^.PropInfo;
+   if assigned(PropInfo) then begin
+    if assigned(PropInfo^.PropType) and assigned(PropInfo^.GetProc) then begin
+     case PropInfo^.PropType^.Kind of
+      tkLString{$ifdef fpc},tkAString,tkSString{$endif}:begin
+       Value:=POCANewString(Context,TPOCAUTF8String(GetStrProp(CurrentObject,PropInfo)));
+      end;
+      tkWString{$ifdef fpc},tkUString{$endif}{$ifdef POCAEmbarcaderoNextGen},tkUString{$endif}:begin
+       Value:=POCANewString(Context,PUCUUTF16ToUTF8({$ifdef POCAEmbarcaderoNextGen}GetStrProp{$else}GetWideStrProp{$endif}(CurrentObject,PropInfo)));
+      end;
+      tkEnumeration:begin
+       Value:=POCANewString(Context,TPOCAUTF8String(GetEnumProp(CurrentObject,PropInfo)));
+      end;
+      tkSet:begin
+       Value:=POCANewString(Context,TPOCAUTF8String(GetSetProp(CurrentObject,PropInfo,false)));
+      end;
+      tkInteger:begin
+       Value.Num:=GetOrdProp(CurrentObject,PropInfo);
+      end;
+      tkChar:begin
+       Value:=POCANewString(Context,PUCUUTF16ToUTF8(WideChar(TPOCAUInt16(GetOrdProp(CurrentObject,PropInfo)))));
+      end;
+      tkWChar{$ifdef fpc},tkUChar{$endif}:begin
+       Value:=POCANewString(Context,PUCUUTF16ToUTF8(WideChar(TPOCAUInt16(GetOrdProp(CurrentObject,PropInfo)))));
+      end;
+      tkInt64{$ifdef fpc},tkQWORD{$endif}:begin
+       Value.Num:=GetOrdProp(CurrentObject,PropInfo);
+      end;
+      tkFloat:begin
+       Value.Num:=GetFloatProp(CurrentObject,PropInfo);
+      end;
+      tkClass:begin
+       ChildObject:=GetObjectProp(CurrentObject,PropInfo);
+       if assigned(ChildObject) then begin
+        if ChildObject is TPOCANativeObject then begin
+         Value:=TPOCANativeObject(ChildObject).fGhostValue;
+        end else begin
+         POCARuntimeError(Context,'Unknown native property data type');
+        end;
        end else begin
         POCARuntimeError(Context,'Unknown native property data type');
        end;
-      end else begin
+      end;
+      tkVariant:begin
+       Value:=POCANewValueFromVariant(Context,GetVariantProp(CurrentObject,PropInfo));
+      end;
+      else begin
        POCARuntimeError(Context,'Unknown native property data type');
+       exit;
       end;
      end;
-     tkVariant:begin
-      Value:=POCANewValueFromVariant(Context,GetVariantProp(self,PropInfo));
-     end;
-     else begin
-      POCARuntimeError(Context,'Unknown native property data type');
-      exit;
-     end;
+    end else begin
+     POCARuntimeError(Context,'Read-access from a non-readable member isn''t allowed');
     end;
    end else begin
-    POCARuntimeError(Context,'Read-access from a non-readable member isn''t allowed');
+    Value:=fProperties[PropertyIndex].Value;
    end;
   end else begin
    Value:=fProperties[PropertyIndex].Value;
@@ -16189,68 +16232,74 @@ begin
 end;
 
 function TPOCANativeObject.SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;const Value:TPOCAValue):boolean;
-var PropInfo:PPropInfo;
-//  AObject:TObject;
+var PropertyItem:PPOCANativeObjectProperty;
+    PropInfo:PPropInfo;
+    CurrentObject,ChildObject:TObject;
     Ghost:PPOCAGhost;
     TypeData:PTypeData;
 begin
  result:=(PropertyIndex>=0) and (PropertyIndex<fPropListLen);
  if result then begin
-  PropInfo:=fProperties[PropertyIndex].PropInfo;
-  if assigned(PropInfo) and assigned(PropInfo^.PropType) and assigned(PropInfo^.SetProc) then begin
-   case PropInfo^.PropType^.Kind of
-    tkLString{$ifdef fpc},tkAString,tkSString{$endif}:begin
-     SetStrProp(self,PropInfo,String(POCAGetStringValue(Context,Value)));
-    end;
-    tkWString{$ifdef fpc},tkUString{$endif}{$ifdef POCAEmbarcaderoNextGen},tkUString{$endif}:begin
-     {$ifdef POCAEmbarcaderoNextGen}SetStrProp{$else}SetWideStrProp{$endif}(self,PropInfo,PUCUUTF8ToUTF16(POCAGetStringValue(Context,Value)));
-    end;
-    tkEnumeration:begin
-     SetEnumProp(self,PropInfo,String(POCAGetStringValue(Context,Value)));
-    end;
-    tkSet:begin
-     SetSetProp(self,PropInfo,String(POCAGetStringValue(Context,Value)));
-    end;
-    tkInteger:begin
-     SetOrdProp(self,PropInfo,trunc(POCAGetNumberValue(Context,Value)));
-    end;
-    tkChar,tkWChar{$ifdef fpc},tkUChar{$endif}:begin
-     case POCAGetValueType(Value) of
-      pvtNUMBER:begin
-       SetOrdProp(self,PropInfo,trunc(POCAGetNumberValue(Context,Value)));
-      end;
-      else begin
-       SetOrdProp(self,PropInfo,PUCUUTF8CodeUnitGetCharFallBack(POCAGetStringValue(Context,Value),0));
-      end;
+  PropertyItem:=@fProperties[PropertyIndex];
+  CurrentObject:=PropertyItem^.PropObject;
+  if assigned(CurrentObject) then begin
+   PropInfo:=PropertyItem^.PropInfo;
+   if assigned(PropInfo) and assigned(PropInfo^.PropType) and assigned(PropInfo^.SetProc) then begin
+    CurrentObject:=fObject;
+    case PropInfo^.PropType^.Kind of
+     tkLString{$ifdef fpc},tkAString,tkSString{$endif}:begin
+      SetStrProp(CurrentObject,PropInfo,String(POCAGetStringValue(Context,Value)));
      end;
-    end;
-    tkInt64{$ifdef fpc},tkQWORD{$endif}:begin
-     SetOrdProp(self,PropInfo,trunc(POCAGetNumberValue(Context,Value)));
-    end;
-    tkFloat:begin
-     SetFloatProp(self,PropInfo,POCAGetNumberValue(Context,Value));
-    end;
-    tkClass:begin
-     case POCAGetValueType(Value) of
-      pvtGHOST:begin
-       Ghost:=POCAHashGetGhost(Value);
-       if assigned(Ghost) and (Ghost^.PtrType=pgptOBJECT) and assigned(Ghost^.Ptr) then begin
-        TypeData:={$ifdef fpc}GetTypeData(PropInfo^.PropType){$else}GetTypeData(PropInfo^.PropType^){$endif};
-        if assigned(TypeData) and (TObject(Ghost^.Ptr) is TypeData^.ClassType) then begin
-         SetObjectProp(self,PropInfo,TObject(Ghost^.Ptr));
-         exit;
-        end;
+     tkWString{$ifdef fpc},tkUString{$endif}{$ifdef POCAEmbarcaderoNextGen},tkUString{$endif}:begin
+      {$ifdef POCAEmbarcaderoNextGen}SetStrProp{$else}SetWideStrProp{$endif}(CurrentObject,PropInfo,PUCUUTF8ToUTF16(POCAGetStringValue(Context,Value)));
+     end;
+     tkEnumeration:begin
+      SetEnumProp(CurrentObject,PropInfo,String(POCAGetStringValue(Context,Value)));
+     end;
+     tkSet:begin
+      SetSetProp(CurrentObject,PropInfo,String(POCAGetStringValue(Context,Value)));
+     end;
+     tkInteger:begin
+      SetOrdProp(CurrentObject,PropInfo,trunc(POCAGetNumberValue(Context,Value)));
+     end;
+     tkChar,tkWChar{$ifdef fpc},tkUChar{$endif}:begin
+      case POCAGetValueType(Value) of
+       pvtNUMBER:begin
+        SetOrdProp(CurrentObject,PropInfo,trunc(POCAGetNumberValue(Context,Value)));
+       end;
+       else begin
+        SetOrdProp(CurrentObject,PropInfo,PUCUUTF8CodeUnitGetCharFallBack(POCAGetStringValue(Context,Value),0));
        end;
       end;
      end;
-     POCARuntimeError(Context,'Unknown native property data type');
-    end;
-    tkVariant:begin
-     SetVariantProp(self,PropInfo,POCAGetVariantValue(Context,Value));
-    end;
-    else begin
-     POCARuntimeError(Context,'Unknown native property data type');
-     exit;
+     tkInt64{$ifdef fpc},tkQWORD{$endif}:begin
+      SetOrdProp(CurrentObject,PropInfo,trunc(POCAGetNumberValue(Context,Value)));
+     end;
+     tkFloat:begin
+      SetFloatProp(CurrentObject,PropInfo,POCAGetNumberValue(Context,Value));
+     end;
+     tkClass:begin
+      case POCAGetValueType(Value) of
+       pvtGHOST:begin
+        Ghost:=POCAHashGetGhost(Value);
+        if assigned(Ghost) and (Ghost^.PtrType=pgptOBJECT) and assigned(Ghost^.Ptr) then begin
+         TypeData:={$ifdef fpc}GetTypeData(PropInfo^.PropType){$else}GetTypeData(PropInfo^.PropType^){$endif};
+         if assigned(TypeData) and (TObject(Ghost^.Ptr) is TypeData^.ClassType) then begin
+          SetObjectProp(CurrentObject,PropInfo,TObject(Ghost^.Ptr));
+          exit;
+         end;
+        end;
+       end;
+      end;
+      POCARuntimeError(Context,'Unknown native property data type');
+     end;
+     tkVariant:begin
+      SetVariantProp(CurrentObject,PropInfo,POCAGetVariantValue(Context,Value));
+     end;
+     else begin
+      POCARuntimeError(Context,'Unknown native property data type');
+      exit;
+     end;
     end;
    end;
   end else begin
