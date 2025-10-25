@@ -1728,6 +1728,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        procedure PostRegister; virtual;
        function Mark:boolean; virtual;
        function FindPropertyIndex(const Context:PPOCAContext;const Key:TPOCAValue;const CacheIndex:PLongword=nil):TPOCAInt32; virtual;
+       function GetPropertyType(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32):TPOCAInt32; virtual;
        function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean; virtual;
        function SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;const Value:TPOCAValue):boolean; virtual;
       public 
@@ -16302,6 +16303,47 @@ begin
  end;
 end;
 
+function TPOCANativeObject.GetPropertyType(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32):TPOCAInt32;
+var PropertyItem:PPOCANativeObjectProperty;
+    PropInfo:PPropInfo;
+    CurrentObject:TObject;
+begin
+ result:=pvtNULL;
+ if (PropertyIndex>=0) and (PropertyIndex<fCountProperties) then begin
+  PropertyItem:=@fProperties[PropertyIndex];
+  CurrentObject:=PropertyItem^.PropObject;
+  if assigned(CurrentObject) then begin
+   PropInfo:=PropertyItem^.PropInfo;
+   if assigned(PropInfo) and assigned(PropInfo^.PropType) then begin
+    case PropInfo^.PropType^.Kind of
+     tkLString{$ifdef fpc},tkAString,tkSString{$endif},
+     tkWString{$ifdef fpc},tkUString{$endif}{$ifdef POCAEmbarcaderoNextGen},tkUString{$endif},
+     tkEnumeration,
+     tkSet,
+     tkChar,
+     tkWChar{$ifdef fpc},tkUChar{$endif}:begin
+      result:=pvtSTRING;
+     end;
+     tkInteger,
+     {$ifndef fpc}tkInt64,{$endif}
+     tkFloat{$ifdef fpc},
+     tkInt64,
+     tkQWord,
+     tkBool{$endif}:begin
+      result:=pvtNUMBER;
+     end;
+     tkClass:begin
+      result:=pvtHASH; // Objects are represented as hashes
+     end;
+     tkDynArray:begin
+      result:=pvtARRAY;
+     end;
+    end;
+   end;
+  end;
+ end;
+end;
+
 function TPOCANativeObject.GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean;
 var PropertyItem:PPOCANativeObjectProperty;
     PropInfo:PPropInfo;
@@ -16310,7 +16352,7 @@ begin
  result:=(PropertyIndex>=0) and (PropertyIndex<fCountProperties);
  if result then begin
   PropertyItem:=@fProperties[PropertyIndex];
-  CurrentObject:=PropertyItem^.PropObject; 
+  CurrentObject:=PropertyItem^.PropObject;
   if assigned(CurrentObject) then begin
    PropInfo:=PropertyItem^.PropInfo;
    if assigned(PropInfo) then begin
