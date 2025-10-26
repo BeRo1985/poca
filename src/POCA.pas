@@ -16179,7 +16179,7 @@ begin
   fPropHashMap:=TPOCAStringHashMap.Create(true);
   for ObjectIndex:=0 to fCountObjects-1 do begin
    ObjectData:=@fObjects[ObjectIndex];
-   for Index:=0 to fPropListLen-1 do begin
+   for Index:=0 to ObjectData^.PropListLen-1 do begin
     fPropHashMap.SetValue(ObjectData^.PropList^[Index].Name,Index);
     PropertyItem:=@fProperties[Index];
  // PropertyItem^.Key:=POCAValueNull;
