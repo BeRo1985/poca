@@ -5133,6 +5133,31 @@ let fractional = Math.frac(2.75); // 0.75
 
 '''''
 
+==== Math.fract
+
+*Usage:*
+
+[source,js]
+----
+let value = Math.fract(x);
+----
+
+* *Description:* Returns the fractional part of `+x+` (i.e.,
+`+x - floor(x)+` if `+x+` is positive, or `+x - ceil(x)+` if `+x+` is
+negative). This is an alias for *Math.frac* for compatibility with other 
+languages, which use `+fract+` as the function name.
+* *Parameters:*
+** `+x+` (number): The input value.
+* *Return Value:* The fractional part of `+x+`.
+* *Example:*
++
+[source,js]
+----
+let fractional = Math.fract(2.75); // 0.75
+----
+
+'''''
+
 === Summary
 
 * *Global Object:* The *Math* object serves as a namespace for

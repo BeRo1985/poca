@@ -801,6 +801,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_math_isinfinite">Math.isInfinite</a></li>
 <li><a href="#_math_isfinite">Math.isFinite</a></li>
 <li><a href="#_math_frac">Math.frac</a></li>
+<li><a href="#_math_fract">Math.fract</a></li>
 </ul>
 </li>
 <li><a href="#_summary_11">Summary</a></li>
@@ -9702,6 +9703,49 @@ negative).</p>
 </div>
 <hr>
 </div>
+<div class="sect3">
+<h4 id="_math_fract">Math.fract</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let value = Math.fract(x);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns the fractional part of <code>x</code> (i.e.,
+<code>x - floor(x)</code> if <code>x</code> is positive, or <code>x - ceil(x)</code> if <code>x</code> is
+negative). This is an alias for <strong>Math.frac</strong> for compatibility with other
+languages, which use <code>fract</code> as the function name.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>x</code> (number): The input value.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The fractional part of <code>x</code>.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let fractional = Math.fract(2.75); // 0.75</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_summary_11">Summary</h3>
@@ -14147,7 +14191,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-11 20:57:37 +0200
+Last updated 2025-10-28 17:25:27 +0100
 </div>
 </div>
 </body>
