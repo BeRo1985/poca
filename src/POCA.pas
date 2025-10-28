@@ -13425,6 +13425,14 @@ begin
  result.Num:=frac(POCAGetNumberValue(Context,Arguments^[0]));
 end;
 
+function POCAMathFunctionFRACT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "Math.fract"');
+ end;
+ result.Num:=frac(POCAGetNumberValue(Context,Arguments^[0]));
+end;
+
 function POCAInitMathNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
@@ -13487,6 +13495,7 @@ begin
  POCAAddNativeFunction(Context,result,'isInfinite',POCAMathFunctionISINFINITE);
  POCAAddNativeFunction(Context,result,'isFinite',POCAMathFunctionISFINITE);
  POCAAddNativeFunction(Context,result,'frac',POCAMathFunctionFRAC);
+ POCAAddNativeFunction(Context,result,'fract',POCAMathFunctionFRACT);
 end;
 
 type PPOCAIOGhostData=^TPOCAIOGhostData;
