@@ -557,6 +557,19 @@ const POCAVersion='2025-10-25-18-26-0000';
 
       pgcbBITS=pgcscONE-1;
 
+      // Value types for serialization
+      pvftUNKNOWN=0;
+      pvftNULL=1;
+      pvftNUMBER=2;
+      pvftSTRING=3;
+      pvftARRAY=4;
+      pvftHASH=5;
+      pvftREFERENCE=6;
+      pvftCODE=7;
+      pvftFUNCTION=8;
+      pvftNATIVECODE=9;
+      pvftGHOST=10;
+
 type PPOCAInt8=^TPOCAInt8;
      TPOCAInt8={$ifdef fpc}Int8{$else}ShortInt{$endif};
 
@@ -1746,8 +1759,26 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        property EventsHashValue:TPOCAValue read fEventsHashValue;
      end;
 
+     TPOCAValueFileHeaderSignature=array[0..3] of AnsiChar;
+     
+     TPOCAValueFileHeader=packed record
+      Signature:TPOCAValueFileHeaderSignature;
+      VersionMajor:TPOCAUInt8;
+      VersionMinor:TPOCAUInt8;
+      VersionRelease:TPOCAUInt8;
+      Reserved:TPOCAUInt8;
+      DataSize:TPOCAUInt64;
+     end;  
+     PPOCAValueFileHeader=^TPOCAValueFileHeader;
+
 const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
       POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAUInt64(POCAValueReferenceTag) shl 32){$endif};
+
+      POCAValueFileHeaderSignatureValue:TPOCAValueFileHeaderSignature=('P','V','F','I'); // Poca Value FIle = 'PVFI' 
+
+      POCAValueFileVersionMajor=1;
+      POCAValueFileVersionMinor=0;
+      POCAValueFileVersionRelease=0;
 
       POCATypeSizes:array[pvtNULL..pvtGHOST] of TPOCAInt32=(-1, // pvtNULL
                                                             -1, // pvtNUMBER
@@ -2099,6 +2130,9 @@ function POCACorrectPathSeparators(const aPath:TPOCARawByteString):TPOCARawByteS
 function POCAExpandRelativePath(const aRelativePath:TPOCARawByteString;const aBasePath:TPOCARawByteString=''):TPOCARawByteString;
 function POCAConvertPathToRelative(aAbsolutePath,aBasePath:TPOCARawByteString):TPOCARawByteString;
 function POCAExtractFilePath(aPath:TPOCARawByteString):TPOCARawByteString;
+
+function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
+procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue);
 
 procedure InitializePOCA;
 procedure FinalizePOCA;
@@ -39847,6 +39881,287 @@ begin
    exit;
   end;
  end;
+end;
+
+function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
+var FileHeader:TPOCAValueFileHeader;
+    EndPosition:TPOCAInt64;
+ function LoadValue:TPOCAValue;
+ var ValueTypeByte:TPOCAUInt8;
+     Index,CountElements:TPOCAUInt64;
+     Key,Value:TPOCAValue;
+     DataString:TPOCARawByteString;
+ begin
+  
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+
+  if aStream.Position>=EndPosition then begin
+   POCARuntimeError(aContext,'Invalid POCA value file format: unexpected end of data');
+  end;
+
+  aStream.ReadBuffer(ValueTypeByte,SizeOf(TPOCAUInt8));
+  case ValueTypeByte of
+   pvftUNKNOWN:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: unknown value type');
+   end;
+   pvftNULL:begin
+    result.CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
+   pvftNUMBER:begin
+    aStream.ReadBuffer(result.Num,SizeOf(Double));
+   end;
+   pvftSTRING:begin
+    aStream.ReadBuffer(CountElements,SizeOf(TPOCAUInt64));
+    SetLength(DataString,CountElements);
+    if CountElements>0 then begin
+     aStream.ReadBuffer(DataString[1],CountElements);
+    end;
+    result:=POCANewString(aContext,DataString);
+   end;
+   pvftARRAY:begin
+    aStream.ReadBuffer(CountElements,SizeOf(TPOCAUInt64));
+    result:=POCANewArray(aContext);
+    POCAArraySetSize(result,CountElements);
+    for Index:=1 to CountElements do begin
+     Value:=LoadValue;
+     POCAArraySet(result,Index,Value);
+    end;
+   end;
+   pvftHASH:begin
+    aStream.ReadBuffer(CountElements,SizeOf(TPOCAUInt64));
+    result:=POCANewHash(aContext);
+    for Index:=1 to CountElements do begin
+     Key:=LoadValue;
+     Value:=LoadValue;
+     POCAHashSet(aContext,result,Key,Value);
+    end;
+   end;
+   pvftREFERENCE:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: reference value type not supported yet');
+   end;
+   pvftCODE:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: code value type not supported yet');
+   end;
+   pvftFUNCTION:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: function value type not supported yet');
+   end;
+   pvftNATIVECODE:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: native code value type not supported yet'); 
+   end;
+   pvftGHOST:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: ghost value type not supported yet'); 
+   end;
+   else begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: unsupported value type');
+   end;
+  end; 
+
+ end;
+
+begin
+
+ aStream.ReadBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
+ if (FileHeader.Signature<>POCAValueFileHeaderSignatureValue) or
+    (FileHeader.VersionMajor<>POCAValueFileVersionMajor) or
+    (FileHeader.VersionMinor<>POCAValueFileVersionMinor) then begin
+  POCARuntimeError(aContext,'Invalid POCA value file format');
+ end;
+
+ EndPosition:=aStream.Position+FileHeader.DataSize;
+
+ result:=LoadValue;
+ 
+ if aStream.Position<>EndPosition then begin
+  POCARuntimeError(aContext,'Invalid POCA value file format');
+ end;
+
+end;
+
+procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue);
+var FileHeader:TPOCAValueFileHeader;
+ procedure SaveValue(const aValue:TPOCAValue);
+ var ValueTypeByte:TPOCAUInt8;
+     Index,CountElements:TPOCAUInt64;
+     DataString:TPOCARawByteString;
+     HashInstance:PPOCAHash;
+     HashRec:PPOCAHashRecord;
+     Keys,Key,Value:TPOCAValue;
+     Entity:TPOCAInt32;
+ begin
+
+  ValueTypeByte:=TPOCAUInt8(POCAGetValueType(aValue));
+ 
+  case POCAGetValueType(aValue) of
+   pvtNULL:begin
+    ValueTypeByte:=pvftNULL;
+   end;
+   pvtNUMBER:begin
+    ValueTypeByte:=pvftNUMBER;
+   end;
+   pvtSTRING:begin
+    ValueTypeByte:=pvftSTRING;
+   end;
+   pvtARRAY:begin
+    ValueTypeByte:=pvftARRAY;
+   end;
+   pvtHASH:begin
+    ValueTypeByte:=pvftHASH;
+   end;
+   pvtREFERENCE:begin
+    ValueTypeByte:=pvftREFERENCE;
+   end;
+   pvtCODE:begin
+    ValueTypeByte:=pvftCODE;
+   end;
+   pvtFUNCTION:begin
+    ValueTypeByte:=pvftFUNCTION;
+   end;
+   pvtNATIVECODE:begin
+    ValueTypeByte:=pvftNATIVECODE;
+   end;
+   pvftGHOST:begin
+    ValueTypeByte:=pvftGHOST;
+   end;
+   else begin
+    ValueTypeByte:=pvftUNKNOWN;
+   end;
+  end;
+
+  aStream.WriteBuffer(ValueTypeByte,SizeOf(TPOCAUInt8));
+
+  case TPOCAUInt8(POCAGetValueType(aValue)) of
+   pvftUNKNOWN:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: unknown value type');
+   end;
+   pvftNULL:begin
+   end;
+   pvftNUMBER:begin
+    aStream.WriteBuffer(aValue.Num,SizeOf(Double));
+   end;
+   pvftSTRING:begin
+    DataString:=POCAGetStringValue(aContext,aValue);
+    CountElements:=length(DataString);
+    aStream.WriteBuffer(CountElements,SizeOf(TPOCAUInt64));
+    if CountElements>0 then begin
+     aStream.WriteBuffer(DataString[1],CountElements);
+    end;
+   end;
+   pvftARRAY:begin
+    CountElements:=POCAArraySize(aValue);
+    aStream.WriteBuffer(CountElements,SizeOf(TPOCAUInt64));
+    for Index:=1 to CountElements-0 do begin
+     SaveValue(POCAArrayGet(aValue,Index-1));
+    end;
+   end;
+   pvftHASH:begin
+
+    HashInstance:=PPOCAHash(POCAGetValueReferencePointer(aValue));  
+   
+    if assigned(HashInstance) then begin
+
+     if assigned(HashInstance^.Events) or assigned(HashInstance^.Prototype) then begin
+
+      Keys:=POCANewArray(aContext);
+      POCAHashKeys(aContext,Keys,aValue);
+      
+      CountElements:=0;
+      for Index:=1 to POCAArraySize(Keys) do begin
+       Key:=POCAArrayGet(Keys,Index-1);
+       if POCAHashGet(aContext,aValue,Key,Value) then begin
+        inc(CountElements);
+       end;
+      end;
+
+      aStream.WriteBuffer(CountElements,SizeOf(TPOCAUInt64));
+
+      for Index:=1 to CountElements do begin
+       Key:=POCAArrayGet(Keys,Index-1);
+       if POCAHashGet(aContext,aValue,Key,Value) then begin
+        SaveValue(Key);
+        SaveValue(Value);
+       end;
+      end;
+
+     end else begin
+
+      HashRec:=HashInstance^.HashRecord;
+      if assigned(HashRec) then begin
+
+       CountElements:=0;       
+       for Index:=1 to 2 shl HashRec^.LogSize do begin
+        Entity:=HashRec^.CellToEntityIndex^[Index-1];
+        if Entity>=0 then begin
+         inc(CountElements);
+        end;
+       end;
+
+       aStream.WriteBuffer(CountElements,SizeOf(TPOCAUInt64));
+
+       for Index:=1 to 2 shl HashRec^.LogSize do begin
+        Entity:=HashRec^.CellToEntityIndex^[Index-1];
+        if Entity>=0 then begin
+         SaveValue(HashRec^.Entities^[Entity].Key);
+         SaveValue(HashRec^.Entities^[Entity].Value);
+        end;
+       end;
+
+      end else begin
+
+       // Invalid hash, save empty hash
+       CountElements:=0;
+       aStream.WriteBuffer(CountElements,SizeOf(TPOCAUInt64));
+
+      end;
+
+     end;
+
+    end else begin
+
+     // Invalid hash, save empty hash
+     CountElements:=0;
+     aStream.WriteBuffer(CountElements,SizeOf(TPOCAUInt64));
+
+    end;
+
+   end;
+   pvftREFERENCE:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: reference value type not supported yet');
+   end;
+   pvftCODE:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: code value type not supported yet');
+   end;
+   pvftFUNCTION:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: function value type not supported yet');
+   end;
+   pvftNATIVECODE:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: native code value type not supported yet');
+   end;
+   pvftGHOST:begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: ghost value type not supported yet');
+   end;
+   else begin
+    POCARuntimeError(aContext,'Invalid POCA value file format: unsupported value type');
+   end;
+  end;
+ end;
+begin
+
+ FillChar(FileHeader,sizeof(TPOCAValueFileHeader),#0);
+ FileHeader.Signature:=POCAValueFileHeaderSignatureValue;
+ FileHeader.VersionMajor:=POCAValueFileVersionMajor;
+ FileHeader.VersionMinor:=POCAValueFileVersionMinor;
+ FileHeader.VersionRelease:=POCAValueFileVersionRelease;
+ 
+ aStream.Position:=aStream.Position+SizeOf(TPOCAValueFileHeader);
+
+ SaveValue(aValue);
+
+ FileHeader.DataSize:=aStream.Position-SizeOf(TPOCAValueFileHeader)-aStream.Position;
+
+ aStream.Position:=aStream.Position-FileHeader.DataSize-SizeOf(TPOCAValueFileHeader);
+ aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
+ aStream.Position:=aStream.Position+FileHeader.DataSize;
+
 end;
 
 procedure InitializePOCA;
