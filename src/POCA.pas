@@ -40020,7 +40020,7 @@ var FileHeader:TPOCAValueFileHeader;
    pvtNATIVECODE:begin
     ValueTypeByte:=pvftNATIVECODE;
    end;
-   pvftGHOST:begin
+   pvtGHOST:begin
     ValueTypeByte:=pvftGHOST;
    end;
    else begin
