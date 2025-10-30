@@ -40076,7 +40076,7 @@ end;
 
 procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue);
 var FileHeader:TPOCAValueFileHeader;
-    StartPosition,EndPosition:TPOCAUInt64;
+    StartPosition,EndPosition:TPOCAInt64;
  procedure SaveValue(const aValue:TPOCAValue);
  var ValueTypeByte:TPOCAUInt8;
      Index,CountElements:TPOCAUInt64;
@@ -40087,8 +40087,6 @@ var FileHeader:TPOCAValueFileHeader;
      Entity:TPOCAInt32;
  begin
 
-  ValueTypeByte:=TPOCAUInt8(POCAGetValueType(aValue));
- 
   case POCAGetValueType(aValue) of
    pvtNULL:begin
     ValueTypeByte:=pvftNULL;
