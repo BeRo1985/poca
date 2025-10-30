@@ -40030,7 +40030,7 @@ var FileHeader:TPOCAValueFileHeader;
 
   aStream.WriteBuffer(ValueTypeByte,SizeOf(TPOCAUInt8));
 
-  case TPOCAUInt8(POCAGetValueType(aValue)) of
+  case ValueTypeByte of
    pvftUNKNOWN:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: unknown value type');
    end;
