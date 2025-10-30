@@ -39934,7 +39934,7 @@ begin
    aStream.Seek(aFromPosition,soBeginning);
    GetMem(Buffer,4096);
    try
-    ToReadBytes:=aToPosition-aFromPosition;
+    ToReadBytes:=(aToPosition-aFromPosition)+1;
     CurrentPosition:=aFromPosition;
     while ToReadBytes>0 do begin
      if ToReadBytes>4096 then begin
