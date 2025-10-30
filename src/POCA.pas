@@ -39918,7 +39918,7 @@ const CRC32Table:array[TPOCAUInt8] of TPOCAUInt32=
         $bdbdf21c,$cabac28a,$53b39330,$24b4a3a6,$bad03605,$cdd70693,$54de5729,$23d967bf,
         $b3667a2e,$c4614ab8,$5d681b02,$2a6f2b94,$b40bbe37,$c30c8ea1,$5a05df1b,$2d02ef8d
        );
-var OldPosition,ReadBytes,ToReadBytes,Index,CurrentPosition:TPOCAInt64;
+var OldPosition,ReadBytes,ToReadBytes,Index,CurrentPosition,Position:TPOCAInt64;
     Buffer:PPOCAUInt8Array;
     ByteValue:TPOCAUInt8;
     IsMemoryStream:Boolean;
@@ -39947,10 +39947,11 @@ begin
       aStream.ReadBuffer(Buffer^,ReadBytes);
      end;
      // Optimized: check if checksum position overlaps with this buffer
-     if (aCheckSumPosition>=0) and (aCheckSumPosition<(CurrentPosition+ReadBytes)) and ((aCheckSumPosition+SizeOf(TPOCAUInt32))>CurrentPosition) then begin
+     if (aCheckSumPosition>=0) and (aCheckSumPosition<(CurrentPosition+ReadBytes)) and (CurrentPosition<(aCheckSumPosition+SizeOf(TPOCAUInt32))) then begin
       // Checksum position overlaps this buffer, handle specially
       for Index:=0 to ReadBytes-1 do begin
-       if ((CurrentPosition+Index)>=aCheckSumPosition) and ((CurrentPosition+Index)<(aCheckSumPosition+SizeOf(TPOCAUInt32))) then begin
+       Position:=CurrentPosition+Index;
+       if (Position>=aCheckSumPosition) and (Position<(aCheckSumPosition+SizeOf(TPOCAUInt32))) then begin
         ByteValue:=0; // Treat checksum bytes as zero
        end else begin
         ByteValue:=Buffer^[Index];
@@ -40280,6 +40281,7 @@ begin
  FileHeader.Signature:=POCAValueDataFileHeaderSignatureValue;
  FileHeader.Version:=POCAValueDataFileVersion;
  FileHeader.CheckSum:=0;
+ FileHeader.DataSize:=0;
  
  StartPosition:=aStream.Position;
  aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueDataFileHeader));
@@ -40289,8 +40291,11 @@ begin
  // End position is current stream size
  EndPosition:=aStream.Size;
 
- // Calculate data size
+ // Calculate data size and write checksum including header with data size
  FileHeader.DataSize:=EndPosition-(StartPosition+SizeOf(TPOCAValueDataFileHeader));
+ aStream.Seek(StartPosition,soBeginning);
+ aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueDataFileHeader));
+ aStream.Seek(0,soEnd);
 
  // Calculate and write checksum including header with zero checksum
  FileHeader.CheckSum:=POCAStreamChecksum(aStream,StartPosition,EndPosition,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueDataFileHeader(nil)^.CheckSum)));
