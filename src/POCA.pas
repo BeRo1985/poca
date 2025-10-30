@@ -39924,7 +39924,7 @@ var FileHeader:TPOCAValueFileHeader;
     POCAArraySetSize(result,CountElements);
     for Index:=1 to CountElements do begin
      Value:=LoadValue;
-     POCAArraySet(result,Index,Value);
+     POCAArraySet(result,Index-1,Value);
     end;
    end;
    pvftHASH:begin
