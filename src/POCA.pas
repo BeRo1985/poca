@@ -2127,6 +2127,8 @@ function POCAExpandRelativePath(const aRelativePath:TPOCARawByteString;const aBa
 function POCAConvertPathToRelative(aAbsolutePath,aBasePath:TPOCARawByteString):TPOCARawByteString;
 function POCAExtractFilePath(aPath:TPOCARawByteString):TPOCARawByteString;
 
+function POCAGetSetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;var aValue:TPOCAValue;const aSetValue:Boolean):Boolean;
+
 function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
 
 function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
@@ -39879,6 +39881,307 @@ begin
    exit;
   end;
  end;
+end;
+
+function POCAGetSetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;var aValue:TPOCAValue;const aSetValue:Boolean):Boolean;
+var CurrentValue,ParentValue,KeyValue,TempValue:TPOCAValue;
+    Index,StartIndex,PathLength,ValueType,ArrayIndex:TPOCAInt32;
+    Ch:AnsiChar;
+    KeyString,StringLiteral:TPOCARawByteString;
+    QuoteChar:AnsiChar;
+    IsLastSegment,IsStringKey,OK:Boolean;
+    NumberValue:Double;
+begin
+
+ result:=false;
+
+ CurrentValue:=aRootValue;
+ ParentValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ KeyValue.CastedUInt64:=POCAValueNullCastedUInt64;
+
+ Index:=1;
+ PathLength:=length(aPath);
+ 
+ while Index<=PathLength do begin
+  Ch:=aPath[Index];
+  
+  // Skip dots
+  if Ch='.' then begin
+   inc(Index);
+   continue;
+  end;
+  
+  // Check if this is the last segment
+  IsLastSegment:=true;
+  for StartIndex:=Index to PathLength do begin
+   if (aPath[StartIndex]='.') or (aPath[StartIndex]='[') then begin
+    IsLastSegment:=false;
+    break;
+   end;
+  end;
+  
+  // Reset key type flags
+  IsStringKey:=false;
+  KeyString:='';
+  
+  // Parse identifier or bracket notation
+  if Ch='[' then begin
+   // Bracket notation: [key]
+   inc(Index);
+   
+   // Skip whitespace
+   while (Index<=PathLength) and (aPath[Index] in [' ',#9]) do begin
+    inc(Index);
+   end;
+   
+   if Index>PathLength then begin
+    break;
+   end;
+   
+   Ch:=aPath[Index];
+   
+   // String literal with quotes
+   if (Ch='"') or (Ch='''') then begin
+    
+    QuoteChar:=Ch;
+    inc(Index);
+    
+    StringLiteral:='';
+    while (Index<=PathLength) and (aPath[Index]<>QuoteChar) do begin
+     if (aPath[Index]='\') and ((Index+1)<=PathLength) then begin
+      inc(Index);
+      case aPath[Index] of
+       'n':begin
+        StringLiteral:=StringLiteral+#10;
+       end;
+       'r':begin
+        StringLiteral:=StringLiteral+#13;
+       end;
+       't':begin
+        StringLiteral:=StringLiteral+#9;
+       end;
+       '\','"','''':begin
+        StringLiteral:=StringLiteral+aPath[Index];
+       end;
+       else begin
+        StringLiteral:=StringLiteral+aPath[Index];
+       end;
+      end;
+     end else begin
+      StringLiteral:=StringLiteral+aPath[Index];
+     end;
+     inc(Index);
+    end;
+
+    if Index<=PathLength then begin
+     inc(Index); // Skip closing quote
+    end;
+    
+    IsStringKey:=true;
+    KeyString:=StringLiteral;
+
+   end else begin // Number or boolean or identifier
+   
+    StartIndex:=Index;
+    while (Index<=PathLength) and not (aPath[Index] in [']',' ',#9]) do begin
+     inc(Index);
+    end;
+
+    KeyString:=Copy(aPath,StartIndex,Index-StartIndex);
+    
+    // Check if it's a valid identifier (starts with letter or underscore)
+    if (length(KeyString)>0) and (KeyString[1] in ['A'..'Z','a'..'z','_']) then begin
+    
+     // Try to parse as boolean
+     if (KeyString='true') or (KeyString='false') then begin
+      KeyValue.Num:=ord(KeyString='true') and 1;
+      IsStringKey:=false;
+     end else begin
+      // Treat as string identifier
+      IsStringKey:=true;
+     end;
+
+    end else begin
+     
+     // Try to parse as number
+     NumberValue:=ConvertStringToDouble(KeyString,rmNearest,@OK);
+     if OK then begin
+      KeyValue.Num:=NumberValue;
+      IsStringKey:=false;
+     end else begin
+      // Not a valid number, treat as string identifier
+      IsStringKey:=true;
+     end;
+
+    end;
+
+   end;
+   
+   // Skip whitespace and closing bracket
+   while (Index<=PathLength) and (aPath[Index] in [' ',#9]) do begin
+    inc(Index);
+   end;
+   if (Index<=PathLength) and (aPath[Index]=']') then begin
+    inc(Index);
+   end;
+   
+  end else begin
+   
+   // Dot notation: identifier
+   
+   StartIndex:=Index;
+   while (Index<=PathLength) and not (aPath[Index] in ['.',  '[']) do begin
+    inc(Index);
+   end;
+   
+   KeyString:=Copy(aPath,StartIndex,Index-StartIndex);   
+   
+   IsStringKey:=true;
+
+  end;
+  
+  // Navigate to the value
+  if IsLastSegment and aSetValue then begin
+   
+   // Set the value at this key
+   ValueType:=POCAGetValueType(CurrentValue);
+   case ValueType of
+    pvtHASH:begin
+     
+     if IsStringKey then begin
+      POCAHashSetString(aContext,CurrentValue,KeyString,aValue,false);
+     end else begin
+      POCAHashSet(aContext,CurrentValue,KeyValue,aValue,false);
+     end;
+
+     result:=true;
+
+    end;
+    pvtARRAY:begin
+     
+     if IsStringKey then begin
+      // Can't use string key on array
+      result:=false;
+     end else if POCAGetValueType(KeyValue)=pvtNUMBER then begin
+      ArrayIndex:=Trunc(KeyValue.Num);
+      POCAArraySet(CurrentValue,ArrayIndex,aValue);
+      result:=true;
+     end else begin
+      result:=false;
+     end;
+
+    end;
+    else begin
+     result:=false;
+    end;
+   end;
+   break;
+
+  end else begin
+   
+   // Get the value at this key
+   ValueType:=POCAGetValueType(CurrentValue);
+   case ValueType of
+    pvtHASH:begin
+   
+     if IsStringKey then begin
+   
+      TempValue:=POCAHashGetString(aContext,CurrentValue,KeyString);
+   
+      if POCAIsValueNull(TempValue) then begin
+   
+       // Key doesn't exist
+   
+       if aSetValue then begin
+        // Create intermediate object/array as needed
+        TempValue:=POCANewHash(aContext);
+        POCAHashSetString(aContext,CurrentValue,KeyString,TempValue,false);
+       end else begin
+        aValue.CastedUInt64:=POCAValueNullCastedUInt64;
+        exit;
+       end;
+
+      end;
+
+     end else begin
+     
+      if not POCAHashGet(aContext,CurrentValue,KeyValue,TempValue) then begin
+     
+       // Key doesn't exist
+       if aSetValue then begin
+     
+        // Create intermediate object/array as needed
+        TempValue:=POCANewHash(aContext);
+        POCAHashSet(aContext,CurrentValue,KeyValue,TempValue,false);
+
+       end else begin
+       
+        aValue.CastedUInt64:=POCAValueNullCastedUInt64;
+        exit;
+
+       end;
+     
+      end;
+    
+     end;
+    
+     ParentValue:=CurrentValue;
+     CurrentValue:=TempValue;
+
+    end;
+    pvtARRAY:begin
+    
+     if IsStringKey then begin
+    
+      // Can't use string key on array
+      aValue.CastedUInt64:=POCAValueNullCastedUInt64;
+      exit;
+   
+     end else if POCAGetValueType(KeyValue)=pvtNUMBER then begin
+   
+      ArrayIndex:=Trunc(KeyValue.Num);
+      if (ArrayIndex>=0) and (ArrayIndex<POCAArraySize(CurrentValue)) then begin
+       ParentValue:=CurrentValue;
+       CurrentValue:=POCAArrayGet(CurrentValue,ArrayIndex);
+      end else begin
+       if aSetValue then begin
+        // Extend array if needed
+        while POCAArraySize(CurrentValue)<=ArrayIndex do begin
+         TempValue.CastedUInt64:=POCAValueNullCastedUInt64;
+         POCAArrayPush(CurrentValue,TempValue);
+        end;
+        TempValue:=POCANewHash(aContext);
+        POCAArraySet(CurrentValue,ArrayIndex,TempValue);
+        ParentValue:=CurrentValue;
+        CurrentValue:=TempValue;
+       end else begin
+        aValue.CastedUInt64:=POCAValueNullCastedUInt64;
+        exit;
+       end;
+      end;
+    
+     end else begin
+      aValue.CastedUInt64:=POCAValueNullCastedUInt64;
+      exit;
+     end;
+   
+    end;
+    else begin
+     // Not a hash or array, can't navigate further
+     aValue.CastedUInt64:=POCAValueNullCastedUInt64;
+     exit;
+    end;
+   end;
+
+  end;
+  
+ end;
+ 
+ if not aSetValue then begin
+  aValue:=CurrentValue;
+  result:=true;
+ end;
+
 end;
 
 function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64):TPOCAUInt32;
