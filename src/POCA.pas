@@ -1759,27 +1759,22 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        property EventsHashValue:TPOCAValue read fEventsHashValue;
      end;
 
-     TPOCAValueFileHeaderSignature=array[0..3] of AnsiChar;
+     TPOCAValueDataFileHeaderSignature=array[0..3] of AnsiChar;
      
-     TPOCAValueFileHeader=packed record
-      Signature:TPOCAValueFileHeaderSignature;
-      VersionMajor:TPOCAUInt8;
-      VersionMinor:TPOCAUInt8;
-      VersionRelease:TPOCAUInt8;
-      Reserved:TPOCAUInt8;
+     TPOCAValueDataFileHeader=packed record
+      Signature:TPOCAValueDataFileHeaderSignature;
+      Version:TPOCAUInt32;
       CheckSum:TPOCAUInt32;
       DataSize:TPOCAUInt64;
      end;  
-     PPOCAValueFileHeader=^TPOCAValueFileHeader;
+     PPOCAValueDataFileHeader=^TPOCAValueDataFileHeader;
 
 const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
       POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAUInt64(POCAValueReferenceTag) shl 32){$endif};
 
-      POCAValueFileHeaderSignatureValue:TPOCAValueFileHeaderSignature=('P','V','F','I'); // Poca Value FIle = 'PVFI' 
+      POCAValueDataFileHeaderSignatureValue:TPOCAValueDataFileHeaderSignature=('P','V','D','F'); // Poca Value Data File = 'PVDF'
 
-      POCAValueFileVersionMajor=1;
-      POCAValueFileVersionMinor=0;
-      POCAValueFileVersionRelease=0;
+      POCAValueDataFileVersion=TPOCAUInt32($00000001);
 
       POCATypeSizes:array[pvtNULL..pvtGHOST] of TPOCAInt32=(-1, // pvtNULL
                                                             -1, // pvtNUMBER
@@ -39987,7 +39982,7 @@ begin
 end;
 
 function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
-var FileHeader:TPOCAValueFileHeader;
+var FileHeader:TPOCAValueDataFileHeader;
     StartPosition,EndPosition:TPOCAInt64;
     Checksum:TPOCAUInt32;
  function LoadValue:TPOCAValue;
@@ -40066,16 +40061,14 @@ begin
 
  StartPosition:=aStream.Position;
 
- aStream.ReadBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
- if (FileHeader.Signature<>POCAValueFileHeaderSignatureValue) or
-    (FileHeader.VersionMajor<>POCAValueFileVersionMajor) or
-    (FileHeader.VersionMinor<>POCAValueFileVersionMinor) then begin
+ aStream.ReadBuffer(FileHeader,sizeof(TPOCAValueDataFileHeader));
+ if (FileHeader.Signature<>POCAValueDataFileHeaderSignatureValue) or (FileHeader.Version<>POCAValueDataFileVersion) then begin
   POCARuntimeError(aContext,'Invalid POCA value file format');
  end;
 
- EndPosition:=StartPosition+SizeOf(TPOCAValueFileHeader)+FileHeader.DataSize;
+ EndPosition:=StartPosition+SizeOf(TPOCAValueDataFileHeader)+FileHeader.DataSize;
 
- Checksum:=POCAStreamChecksum(aStream,StartPosition,EndPosition,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueFileHeader(nil)^.CheckSum)));
+ Checksum:=POCAStreamChecksum(aStream,StartPosition,EndPosition,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueDataFileHeader(nil)^.CheckSum)));
 
  if FileHeader.CheckSum<>Checksum then begin
   POCARuntimeError(aContext,'Invalid POCA value file format: checksum mismatch');
@@ -40090,7 +40083,7 @@ begin
 end;
 
 procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue;const aIgnoreUnsupportedValueTypes:Boolean);
-var FileHeader:TPOCAValueFileHeader;
+var FileHeader:TPOCAValueDataFileHeader;
     StartPosition,EndPosition:TPOCAInt64;
  procedure SaveValue(const aValue:TPOCAValue);
  var ValueTypeByte:TPOCAUInt8;
@@ -40283,15 +40276,13 @@ var FileHeader:TPOCAValueFileHeader;
  end;
 begin
 
- FillChar(FileHeader,sizeof(TPOCAValueFileHeader),#0);
- FileHeader.Signature:=POCAValueFileHeaderSignatureValue;
- FileHeader.VersionMajor:=POCAValueFileVersionMajor;
- FileHeader.VersionMinor:=POCAValueFileVersionMinor;
- FileHeader.VersionRelease:=POCAValueFileVersionRelease;
+ FillChar(FileHeader,sizeof(TPOCAValueDataFileHeader),#0);
+ FileHeader.Signature:=POCAValueDataFileHeaderSignatureValue;
+ FileHeader.Version:=POCAValueDataFileVersion;
  FileHeader.CheckSum:=0;
  
  StartPosition:=aStream.Position;
- aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
+ aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueDataFileHeader));
 
  SaveValue(aValue);
 
@@ -40299,12 +40290,12 @@ begin
  EndPosition:=aStream.Size;
 
  // Calculate data size
- FileHeader.DataSize:=EndPosition-(StartPosition+SizeOf(TPOCAValueFileHeader));
+ FileHeader.DataSize:=EndPosition-(StartPosition+SizeOf(TPOCAValueDataFileHeader));
 
  // Calculate and write checksum including header with zero checksum
- FileHeader.CheckSum:=POCAStreamChecksum(aStream,StartPosition,EndPosition,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueFileHeader(nil)^.CheckSum)));
+ FileHeader.CheckSum:=POCAStreamChecksum(aStream,StartPosition,EndPosition,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueDataFileHeader(nil)^.CheckSum)));
  aStream.Seek(StartPosition,soBeginning);
- aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
+ aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueDataFileHeader));
  aStream.Seek(0,soEnd);
 
 end;
