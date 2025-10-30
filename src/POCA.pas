@@ -2132,7 +2132,7 @@ function POCAExpandRelativePath(const aRelativePath:TPOCARawByteString;const aBa
 function POCAConvertPathToRelative(aAbsolutePath,aBasePath:TPOCARawByteString):TPOCARawByteString;
 function POCAExtractFilePath(aPath:TPOCARawByteString):TPOCARawByteString;
 
-function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aToPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
+function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
 
 function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
 procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue);
@@ -39886,7 +39886,7 @@ begin
  end;
 end;
 
-function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aToPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
+function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
 // CRC32 checksum - IEEE 802.3 polynomial
 const CRC32Table:array[TPOCAUInt8] of TPOCAUInt32=
        (
@@ -39928,13 +39928,13 @@ var OldPosition,ReadBytes,ToReadBytes,Index,CurrentPosition:TPOCAInt64;
     ByteValue:TPOCAUInt8;
 begin
  result:=$ffffffff;
- if (aFromPosition>=0) and (aFromPosition<=aToPosition) then begin
+ if (aFromPosition>=0) and (aFromPosition<aUntilPosition) then begin
   OldPosition:=aStream.Position;
   try
    aStream.Seek(aFromPosition,soBeginning);
    GetMem(Buffer,4096);
    try
-    ToReadBytes:=(aToPosition-aFromPosition)+1;
+    ToReadBytes:=aUntilPosition-aFromPosition;
     CurrentPosition:=aFromPosition;
     while ToReadBytes>0 do begin
      if ToReadBytes>4096 then begin
