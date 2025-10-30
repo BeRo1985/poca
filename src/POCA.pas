@@ -2135,7 +2135,7 @@ function POCAExtractFilePath(aPath:TPOCARawByteString):TPOCARawByteString;
 function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
 
 function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
-procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue);
+procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue;const aIgnoreUnsupportedValueTypes:Boolean=true);
 
 procedure InitializePOCA;
 procedure FinalizePOCA;
@@ -40089,7 +40089,7 @@ begin
 
 end;
 
-procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue);
+procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue;const aIgnoreUnsupportedValueTypes:Boolean);
 var FileHeader:TPOCAValueFileHeader;
     StartPosition,EndPosition:TPOCAInt64;
  procedure SaveValue(const aValue:TPOCAValue);
@@ -40119,22 +40119,47 @@ var FileHeader:TPOCAValueFileHeader;
     ValueTypeByte:=pvftHASH;
    end;
    pvtREFERENCE:begin
-    ValueTypeByte:=pvftREFERENCE;
+    if aIgnoreUnsupportedValueTypes then begin
+     ValueTypeByte:=pvftNULL;
+    end else begin
+     ValueTypeByte:=pvftREFERENCE;
+    end;
    end;
    pvtCODE:begin
-    ValueTypeByte:=pvftCODE;
+    if aIgnoreUnsupportedValueTypes then begin
+     ValueTypeByte:=pvftNULL;
+    end else begin
+     ValueTypeByte:=pvftCODE;
+    end;
    end;
    pvtFUNCTION:begin
-    ValueTypeByte:=pvftFUNCTION;
+    if aIgnoreUnsupportedValueTypes then begin
+     ValueTypeByte:=pvftNULL;
+    end else begin
+     ValueTypeByte:=pvftFUNCTION;
+    end;
    end;
    pvtNATIVECODE:begin
-    ValueTypeByte:=pvftNATIVECODE;
+    if aIgnoreUnsupportedValueTypes then begin
+     ValueTypeByte:=pvftNULL;
+    end else begin
+     ValueTypeByte:=pvftNATIVECODE;
+    end;
    end;
    pvtGHOST:begin
+    if aIgnoreUnsupportedValueTypes then begin
+     ValueTypeByte:=pvftNULL;
+    end else begin
+     ValueTypeByte:=pvftGHOST;
+    end;
     ValueTypeByte:=pvftGHOST;
    end;
    else begin
-    ValueTypeByte:=pvftUNKNOWN;
+    if aIgnoreUnsupportedValueTypes then begin
+     ValueTypeByte:=pvftNULL;
+    end else begin
+     ValueTypeByte:=pvftUNKNOWN;
+    end;
    end;
   end;
 
@@ -40145,6 +40170,7 @@ var FileHeader:TPOCAValueFileHeader;
     POCARuntimeError(aContext,'Invalid POCA value file format: unknown value type');
    end;
    pvftNULL:begin
+    // Nothing to do
    end;
    pvftNUMBER:begin
     aStream.WriteBuffer(aValue.Num,SizeOf(Double));
