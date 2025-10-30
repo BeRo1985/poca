@@ -39926,13 +39926,19 @@ const CRC32Table:array[TPOCAUInt8] of TPOCAUInt32=
 var OldPosition,ReadBytes,ToReadBytes,Index,CurrentPosition:TPOCAInt64;
     Buffer:PPOCAUInt8Array;
     ByteValue:TPOCAUInt8;
+    IsMemoryStream:Boolean;
 begin
  result:=$ffffffff;
  if (aFromPosition>=0) and (aFromPosition<aUntilPosition) then begin
   OldPosition:=aStream.Position;
   try
    aStream.Seek(aFromPosition,soBeginning);
-   GetMem(Buffer,4096);
+   IsMemoryStream:=aStream is TMemoryStream;
+   if IsMemoryStream then begin
+    Buffer:=PPOCAUInt8Array(TMemoryStream(aStream).Memory);
+   end else begin
+    GetMem(Buffer,4096);
+   end;
    try
     ToReadBytes:=aUntilPosition-aFromPosition;
     CurrentPosition:=aFromPosition;
@@ -39942,7 +39948,9 @@ begin
      end else begin
       ReadBytes:=ToReadBytes;
      end;
-     aStream.ReadBuffer(Buffer^,ReadBytes);
+     if not IsMemoryStream then begin
+      aStream.ReadBuffer(Buffer^,ReadBytes);
+     end;
      // Optimized: check if checksum position overlaps with this buffer
      if (aCheckSumPosition>=0) and (aCheckSumPosition<(CurrentPosition+ReadBytes)) and ((aCheckSumPosition+SizeOf(TPOCAUInt32))>CurrentPosition) then begin
       // Checksum position overlaps this buffer, handle specially
@@ -39962,9 +39970,14 @@ begin
      end;
      inc(CurrentPosition,ReadBytes);
      dec(ToReadBytes,ReadBytes);
+     if IsMemoryStream then begin
+      inc(Buffer,ReadBytes);
+     end;
     end;
    finally
-    FreeMem(Buffer);
+    if not IsMemoryStream then begin
+     FreeMem(Buffer);
+    end;
    end;
   finally
    aStream.Seek(OldPosition,soBeginning);
