@@ -2128,6 +2128,8 @@ function POCAConvertPathToRelative(aAbsolutePath,aBasePath:TPOCARawByteString):T
 function POCAExtractFilePath(aPath:TPOCARawByteString):TPOCARawByteString;
 
 function POCAGetSetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;var aValue:TPOCAValue;const aSetValue:Boolean):Boolean;
+function POCAGetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;out aValue:TPOCAValue):Boolean;
+function POCASetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;const aValue:TPOCAValue):Boolean;
 
 function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
 
@@ -40182,6 +40184,21 @@ begin
   result:=true;
  end;
 
+end;
+
+function POCAGetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;out aValue:TPOCAValue):Boolean;
+begin
+ result:=POCAGetSetValue(aContext,aRootValue,aPath,aValue,false);
+ if not result then begin
+  aValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCASetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;const aValue:TPOCAValue):Boolean;
+var Value:TPOCAValue;
+begin
+ Value:=aValue;
+ result:=POCAGetSetValue(aContext,aRootValue,aPath,Value,true);
 end;
 
 function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64):TPOCAUInt32;
