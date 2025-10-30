@@ -39984,7 +39984,7 @@ var FileHeader:TPOCAValueFileHeader;
   
   result.CastedUInt64:=POCAValueNullCastedUInt64;
 
-  if aStream.Position>=EndPosition then begin
+  if aStream.Position>=EndPosition then begin // other out-of-bounds checks are done later at ReadBuffer calls itself. This is just a quick pre-check
    POCARuntimeError(aContext,'Invalid POCA value file format: unexpected end of data');
   end;
 
@@ -40058,9 +40058,9 @@ begin
   POCARuntimeError(aContext,'Invalid POCA value file format');
  end;
 
- EndPosition:=aStream.Position+FileHeader.DataSize;
+ EndPosition:=StartPosition+SizeOf(TPOCAValueFileHeader)+FileHeader.DataSize;
 
- Checksum:=POCAStreamChecksum(aStream,StartPosition+SizeOf(TPOCAValueFileHeader),EndPosition,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueFileHeader(nil)^.CheckSum)));
+ Checksum:=POCAStreamChecksum(aStream,StartPosition,EndPosition,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueFileHeader(nil)^.CheckSum)));
 
  if FileHeader.CheckSum<>Checksum then begin
   POCARuntimeError(aContext,'Invalid POCA value file format: checksum mismatch');
@@ -40254,14 +40254,14 @@ begin
 
  SaveValue(aValue);
 
- FileHeader.DataSize:=aStream.Position-(StartPosition+SizeOf(TPOCAValueFileHeader));
+ // End position is current stream size
+ EndPosition:=aStream.Size;
 
- aStream.Seek(StartPosition,soBeginning);
- aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
- aStream.Seek(0,soEnd);
+ // Calculate data size
+ FileHeader.DataSize:=EndPosition-(StartPosition+SizeOf(TPOCAValueFileHeader));
 
  // Calculate and write checksum including header with zero checksum
- FileHeader.CheckSum:=POCAStreamChecksum(aStream,StartPosition,aStream.Position,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueFileHeader(nil)^.CheckSum)));
+ FileHeader.CheckSum:=POCAStreamChecksum(aStream,StartPosition,EndPosition,StartPosition+TPOCAPtrUInt(Pointer(@PPOCAValueFileHeader(nil)^.CheckSum)));
  aStream.Seek(StartPosition,soBeginning);
  aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
  aStream.Seek(0,soEnd);
