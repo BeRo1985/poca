@@ -39886,7 +39886,7 @@ begin
  end;
 end;
 
-function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
+function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64):TPOCAUInt32;
 // CRC32 checksum - IEEE 802.3 polynomial
 const CRC32Table:array[TPOCAUInt8] of TPOCAUInt32=
        (
