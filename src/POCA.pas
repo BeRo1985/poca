@@ -39928,45 +39928,47 @@ var OldPosition,ReadBytes,ToReadBytes,Index,CurrentPosition:TPOCAInt64;
     ByteValue:TPOCAUInt8;
 begin
  result:=$ffffffff;
- OldPosition:=aStream.Position;
- try
-  aStream.Position:=aFromPosition;
-  GetMem(Buffer,4096);
+ if (aFromPosition>=0) and (aFromPosition<=aToPosition) then begin
+  OldPosition:=aStream.Position;
   try
-   ToReadBytes:=aToPosition-aFromPosition;
-   CurrentPosition:=aFromPosition;
-   while ToReadBytes>0 do begin
-    if ToReadBytes>4096 then begin
-     ReadBytes:=4096;
-    end else begin
-     ReadBytes:=ToReadBytes;
-    end;
-    aStream.ReadBuffer(Buffer^,ReadBytes);
-    // Optimized: check if checksum position overlaps with this buffer
-    if (aCheckSumPosition>=0) and (aCheckSumPosition<(CurrentPosition+ReadBytes)) and ((aCheckSumPosition+SizeOf(TPOCAUInt32))>CurrentPosition) then begin
-     // Checksum position overlaps this buffer, handle specially
-     for Index:=0 to ReadBytes-1 do begin
-      if ((CurrentPosition+Index)>=aCheckSumPosition) and ((CurrentPosition+Index)<(aCheckSumPosition+SizeOf(TPOCAUInt32))) then begin
-       ByteValue:=0; // Treat checksum bytes as zero
-      end else begin
-       ByteValue:=Buffer^[Index];
+   aStream.Seek(aFromPosition,soBeginning);
+   GetMem(Buffer,4096);
+   try
+    ToReadBytes:=aToPosition-aFromPosition;
+    CurrentPosition:=aFromPosition;
+    while ToReadBytes>0 do begin
+     if ToReadBytes>4096 then begin
+      ReadBytes:=4096;
+     end else begin
+      ReadBytes:=ToReadBytes;
+     end;
+     aStream.ReadBuffer(Buffer^,ReadBytes);
+     // Optimized: check if checksum position overlaps with this buffer
+     if (aCheckSumPosition>=0) and (aCheckSumPosition<(CurrentPosition+ReadBytes)) and ((aCheckSumPosition+SizeOf(TPOCAUInt32))>CurrentPosition) then begin
+      // Checksum position overlaps this buffer, handle specially
+      for Index:=0 to ReadBytes-1 do begin
+       if ((CurrentPosition+Index)>=aCheckSumPosition) and ((CurrentPosition+Index)<(aCheckSumPosition+SizeOf(TPOCAUInt32))) then begin
+        ByteValue:=0; // Treat checksum bytes as zero
+       end else begin
+        ByteValue:=Buffer^[Index];
+       end;
+       result:=CRC32Table[TPOCAUInt8(result xor ByteValue)] xor (result shr 8);
       end;
-      result:=CRC32Table[TPOCAUInt8(result xor ByteValue)] xor (result shr 8);
+     end else begin
+      // Fast path: no checksum position or no overlap
+      for Index:=0 to ReadBytes-1 do begin
+       result:=CRC32Table[TPOCAUInt8(result xor Buffer^[Index])] xor (result shr 8);
+      end;
      end;
-    end else begin
-     // Fast path: no checksum position or no overlap
-     for Index:=0 to ReadBytes-1 do begin
-      result:=CRC32Table[TPOCAUInt8(result xor Buffer^[Index])] xor (result shr 8);
-     end;
+     inc(CurrentPosition,ReadBytes);
+     dec(ToReadBytes,ReadBytes);
     end;
-    inc(CurrentPosition,ReadBytes);
-    dec(ToReadBytes,ReadBytes);
+   finally
+    FreeMem(Buffer);
    end;
   finally
-   FreeMem(Buffer);
+   aStream.Seek(OldPosition,soBeginning);
   end;
- finally
-  aStream.Seek(OldPosition,soBeginning);
  end;
  result:=result xor $ffffffff;
 end;
