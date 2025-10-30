@@ -39935,7 +39935,7 @@ begin
    aStream.Seek(aFromPosition,soBeginning);
    IsMemoryStream:=aStream is TMemoryStream;
    if IsMemoryStream then begin
-    Buffer:=PPOCAUInt8Array(TMemoryStream(aStream).Memory);
+    Buffer:=PPOCAUInt8Array(TPOCAPtrUInt(TMemoryStream(aStream).Memory)+TPOCAPtrUInt(aFromPosition));
    end else begin
     GetMem(Buffer,4096);
    end;
