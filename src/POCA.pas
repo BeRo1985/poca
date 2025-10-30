@@ -39979,6 +39979,7 @@ end;
 
 procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue);
 var FileHeader:TPOCAValueFileHeader;
+    StartPosition,EndPosition:TPOCAUInt64;
  procedure SaveValue(const aValue:TPOCAValue);
  var ValueTypeByte:TPOCAUInt8;
      Index,CountElements:TPOCAUInt64;
@@ -40049,7 +40050,7 @@ var FileHeader:TPOCAValueFileHeader;
    pvftARRAY:begin
     CountElements:=POCAArraySize(aValue);
     aStream.WriteBuffer(CountElements,SizeOf(TPOCAUInt64));
-    for Index:=1 to CountElements-0 do begin
+    for Index:=1 to CountElements do begin
      SaveValue(POCAArrayGet(aValue,Index-1));
     end;
    end;
@@ -40152,15 +40153,16 @@ begin
  FileHeader.VersionMinor:=POCAValueFileVersionMinor;
  FileHeader.VersionRelease:=POCAValueFileVersionRelease;
  
- aStream.Position:=aStream.Position+SizeOf(TPOCAValueFileHeader);
+ StartPosition:=aStream.Position;
+ aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
 
  SaveValue(aValue);
 
- FileHeader.DataSize:=aStream.Position-SizeOf(TPOCAValueFileHeader)-aStream.Position;
+ FileHeader.DataSize:=aStream.Position-(StartPosition+SizeOf(TPOCAValueFileHeader));
 
- aStream.Position:=aStream.Position-FileHeader.DataSize-SizeOf(TPOCAValueFileHeader);
+ aStream.Seek(StartPosition,soBeginning);
  aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueFileHeader));
- aStream.Position:=aStream.Position+FileHeader.DataSize;
+ aStream.Seek(0,soEnd);
 
 end;
 
