@@ -69,6 +69,15 @@ begin
  DataBuffer.Len:=0;
  StartTime:=GetTickCount64;
  for Index:=1 to NumIterations do begin
+  AddRawByteStringToDataBuffer(DataBuffer,#$00#$01#$12#$34#$56#$78#$9a#$bc#$de#$f0);
+ end;
+ EndTime:=GetTickCount64;
+ Writeln('Const RawByteString Time (ms): ',EndTime-StartTime);
+
+ DataBuffer.Data:=nil;
+ DataBuffer.Len:=0;
+ StartTime:=GetTickCount64;
+ for Index:=1 to NumIterations do begin
   AddArrayOfByteToDataBuffer(DataBuffer,AOB);
  end;
  EndTime:=GetTickCount64;
