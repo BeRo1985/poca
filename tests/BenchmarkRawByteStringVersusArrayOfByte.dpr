@@ -73,5 +73,14 @@ begin
  end;
  EndTime:=GetTickCount64;
  Writeln('Array of Byte Time (ms): ',EndTime-StartTime);
- 
+
+ DataBuffer.Data:=nil;
+ DataBuffer.Len:=0;
+ StartTime:=GetTickCount64;
+ for Index:=1 to NumIterations do begin
+  AddArrayOfByteToDataBuffer(DataBuffer,[$00,$01,$12,$34,$56,$78,$9a,$bc,$de,$f0]);
+ end;
+ EndTime:=GetTickCount64;
+ Writeln('Open Array of Byte Time (ms): ',EndTime-StartTime);
+
 end.
