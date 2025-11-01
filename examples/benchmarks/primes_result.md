@@ -34,4 +34,9 @@ time: 0.193192386 seconds, primes: 17984
 time: 89.643707621 seconds, primes: 17984
 time: 88.132770525 seconds, primes: 17984
 
+$ ruby --yjit primes.rb 
+time: 0.057746947 seconds, primes: 17984
+time: 58.785204031 seconds, primes: 17984
+time: 58.192754859 seconds, primes: 17984
+
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
