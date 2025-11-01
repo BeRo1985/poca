@@ -38506,13 +38506,13 @@ var Fixups:TFixups;
   AddDWord((Operands^[1]*sizeof(double))+6);
   Add(#$ff#$ff);
 
-  Add(#$74#$09); // je +$09 (if Op1 is reference, jump to fallback)
+  Add(#$74#$0b); // je +$0b (if Op1 is reference, jump to fallback)
 
   Add(#$66#$81#$bb); // cmp word ptr [rbx+Operand2+6],0xFFFF
   AddDWord((Operands^[2]*sizeof(double))+6);
   Add(#$ff#$ff);
 
-  Add(#$75#$09); // jne +$09 (if Op2 is NOT reference, jump to fast path)
+  Add(#$75#$0a); // jne +$0a (if Op2 is NOT reference, jump to fast path)
 
   // Fallback to VM (reached if either operand is a reference)
   Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],LastPC
@@ -38532,7 +38532,7 @@ var Fixups:TFixups;
   AddDWord((Operands^[1]*sizeof(double))+6);
   Add(#$ff#$ff);
 
-  Add(#$75#$09); // jne +$09 (if NOT reference, jump to fast path)
+  Add(#$75#$0a); // jne +$0a (if NOT reference, jump to fast path)
 
   // Fallback to VM (reached if operand is a reference)
   Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],LastPC
