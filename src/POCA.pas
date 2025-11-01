@@ -1024,6 +1024,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       PageSize:TPOCAPtrUInt;
       Alignment:TPOCAPtrUInt;
       First,Last:PPOCANativeCodeMemoryManagerBlockContainer;
+      Lock:TPasMPInt32;
      end;
 {$endif}
 
@@ -3673,6 +3674,7 @@ begin
 {$endif}
  result^.First:=nil;
  result^.Last:=nil;
+ result^.Lock:=0;
 end;
 
 procedure POCANativeCodeMemoryManagerDestroy(var NativeCodeMemoryManager:PPOCANativeCodeMemoryManager);
@@ -3761,44 +3763,55 @@ function POCANativeCodeMemoryManagerGetMemory(NativeCodeMemoryManager:PPOCANativ
 var BlockContainer:PPOCANativeCodeMemoryManagerBlockContainer;
     CurrentBlock,NewBlock:PPOCANativeCodeMemoryManagerBlock;
     DestSize,BlockContainerSize:TPOCAPtrUInt;
+    Done:Boolean;
 begin
  result:=nil;
  if Size>0 then begin
-  DestSize:=Size+sizeof(TPOCANativeCodeMemoryManagerBlock);
-  BlockContainer:=NativeCodeMemoryManager^.First;
-  repeat
-   while assigned(BlockContainer) do begin
-    if (BlockContainer^.Used+DestSize)<=BlockContainer^.Size then begin
-     CurrentBlock:=BlockContainer^.First;
-     while assigned(CurrentBlock) and (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and assigned(CurrentBlock^.Next) do begin
-      NewBlock:=TPOCAPointer(TPOCAPtrUInt(POCARoundUpToMask(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(CurrentBlock)^[(sizeof(TPOCANativeCodeMemoryManagerBlock)*2)+CurrentBlock^.Size])),NativeCodeMemoryManager^.Alignment)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
-      if (TPOCAPtrUInt(CurrentBlock^.Next)-TPOCAPtrUInt(NewBlock))>=DestSize then begin
-       NewBlock^.Signature:=bncmmMemoryBlockSignature;
-       NewBlock^.Previous:=CurrentBlock;
-       NewBlock^.Next:=CurrentBlock^.Next;
-       NewBlock^.Size:=Size;
-       CurrentBlock^.Next^.Previous:=NewBlock;
-       CurrentBlock^.Next:=NewBlock;
-       result:=TPOCAPointer(@PPOCAUInt8Array(NewBlock)^[sizeof(TPOCANativeCodeMemoryManagerBlock)]);
-       inc(BlockContainer^.Used,DestSize);
-       exit;
-      end else begin
-       CurrentBlock:=CurrentBlock^.Next;
+  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(NativeCodeMemoryManager^.Lock);
+  try
+   DestSize:=Size+sizeof(TPOCANativeCodeMemoryManagerBlock);
+   BlockContainer:=NativeCodeMemoryManager^.First;
+   Done:=false;
+   repeat
+    while assigned(BlockContainer) do begin
+     if (BlockContainer^.Used+DestSize)<=BlockContainer^.Size then begin
+      CurrentBlock:=BlockContainer^.First;
+      while assigned(CurrentBlock) and (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and assigned(CurrentBlock^.Next) do begin
+       NewBlock:=TPOCAPointer(TPOCAPtrUInt(POCARoundUpToMask(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(CurrentBlock)^[(sizeof(TPOCANativeCodeMemoryManagerBlock)*2)+CurrentBlock^.Size])),NativeCodeMemoryManager^.Alignment)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
+       if (TPOCAPtrUInt(CurrentBlock^.Next)-TPOCAPtrUInt(NewBlock))>=DestSize then begin
+        NewBlock^.Signature:=bncmmMemoryBlockSignature;
+        NewBlock^.Previous:=CurrentBlock;
+        NewBlock^.Next:=CurrentBlock^.Next;
+        NewBlock^.Size:=Size;
+        CurrentBlock^.Next^.Previous:=NewBlock;
+        CurrentBlock^.Next:=NewBlock;
+        result:=TPOCAPointer(@PPOCAUInt8Array(NewBlock)^[sizeof(TPOCANativeCodeMemoryManagerBlock)]);
+        inc(BlockContainer^.Used,DestSize);
+        Done:=true;
+        break;
+       end else begin
+        CurrentBlock:=CurrentBlock^.Next;
+       end;
       end;
      end;
+     BlockContainer:=BlockContainer^.Next;
     end;
-    BlockContainer:=BlockContainer^.Next;
-   end;
-   if DestSize<=bncmmMINBLOCKCONTAINERSIZE then begin
-    BlockContainerSize:=bncmmMINBLOCKCONTAINERSIZE;
-   end else begin
-    BlockContainerSize:=POCARoundUpToPowerOfTwo(DestSize);
-   end;
-   BlockContainer:=POCANativeCodeMemoryManagerAllocateBlockContainer(NativeCodeMemoryManager,BlockContainerSize);
-   if not assigned(BlockContainer) then begin
-    break;
-   end;
-  until false;
+    if Done then begin
+     break;
+    end;
+    if DestSize<=bncmmMINBLOCKCONTAINERSIZE then begin
+     BlockContainerSize:=bncmmMINBLOCKCONTAINERSIZE;
+    end else begin
+     BlockContainerSize:=POCARoundUpToPowerOfTwo(DestSize);
+    end;
+    BlockContainer:=POCANativeCodeMemoryManagerAllocateBlockContainer(NativeCodeMemoryManager,BlockContainerSize);
+    if not assigned(BlockContainer) then begin
+     break;
+    end;
+   until false;
+  finally
+   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(NativeCodeMemoryManager^.Lock);
+  end;
  end;
 end;
 
@@ -3806,22 +3819,27 @@ procedure POCANativeCodeMemoryManagerFreeMemory(NativeCodeMemoryManager:PPOCANat
 var BlockContainer:PPOCANativeCodeMemoryManagerBlockContainer;
     CurrentBlock:PPOCANativeCodeMemoryManagerBlock;
 begin
- BlockContainer:=NativeCodeMemoryManager^.First;
- while assigned(BlockContainer) do begin
-  if ((TPOCAPtrUInt(BlockContainer^.Base)+sizeof(TPOCANativeCodeMemoryManagerBlock))<=TPOCAPtrUInt(p)) and ((TPOCAPtrUInt(p)+sizeof(TPOCANativeCodeMemoryManagerBlock))<(TPOCAPtrUInt(BlockContainer^.Base)+BlockContainer^.Size)) then begin
-   CurrentBlock:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(p)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
-   if (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and (CurrentBlock<>BlockContainer^.First) and (CurrentBlock<>BlockContainer^.Last) then begin
-    dec(BlockContainer^.Used,CurrentBlock^.Size+sizeof(TPOCANativeCodeMemoryManagerBlock));
-    CurrentBlock^.Signature:=0;
-    CurrentBlock^.Previous^.Next:=CurrentBlock^.Next;
-    CurrentBlock^.Next^.Previous:=CurrentBlock^.Previous;
-    if (assigned(BlockContainer^.First) and (BlockContainer^.First^.Next=BlockContainer^.Last)) or not assigned(BlockContainer^.First) then begin
-     POCANativeCodeMemoryManagerFreeBlockContainer(NativeCodeMemoryManager,BlockContainer);
+ TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(NativeCodeMemoryManager^.Lock);
+ try
+  BlockContainer:=NativeCodeMemoryManager^.First;
+  while assigned(BlockContainer) do begin
+   if ((TPOCAPtrUInt(BlockContainer^.Base)+sizeof(TPOCANativeCodeMemoryManagerBlock))<=TPOCAPtrUInt(p)) and ((TPOCAPtrUInt(p)+sizeof(TPOCANativeCodeMemoryManagerBlock))<(TPOCAPtrUInt(BlockContainer^.Base)+BlockContainer^.Size)) then begin
+    CurrentBlock:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(p)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
+    if (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and (CurrentBlock<>BlockContainer^.First) and (CurrentBlock<>BlockContainer^.Last) then begin
+     dec(BlockContainer^.Used,CurrentBlock^.Size+sizeof(TPOCANativeCodeMemoryManagerBlock));
+     CurrentBlock^.Signature:=0;
+     CurrentBlock^.Previous^.Next:=CurrentBlock^.Next;
+     CurrentBlock^.Next^.Previous:=CurrentBlock^.Previous;
+     if (assigned(BlockContainer^.First) and (BlockContainer^.First^.Next=BlockContainer^.Last)) or not assigned(BlockContainer^.First) then begin
+      POCANativeCodeMemoryManagerFreeBlockContainer(NativeCodeMemoryManager,BlockContainer);
+     end;
+     break;
     end;
-    exit;
    end;
+   BlockContainer:=BlockContainer^.Next;
   end;
-  BlockContainer:=BlockContainer^.Next;
+ finally
+  TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(NativeCodeMemoryManager^.Lock);
  end;
 end;
 
@@ -3829,40 +3847,54 @@ function POCANativeCodeMemoryManagerReallocateMemory(NativeCodeMemoryManager:PPO
 var BlockContainer:PPOCANativeCodeMemoryManagerBlockContainer;
     CurrentBlock:PPOCANativeCodeMemoryManagerBlock;
     DestSize:TPOCAPtrUInt;
+    Done:Boolean;
 begin
  result:=nil;
  if assigned(p) then begin
   if Size=0 then begin
    POCANativeCodeMemoryManagerFreeMemory(NativeCodeMemoryManager,p);
   end else begin
-   DestSize:=Size+sizeof(TPOCANativeCodeMemoryManagerBlock);
-   BlockContainer:=NativeCodeMemoryManager^.First;
-   while assigned(BlockContainer) do begin
-    if ((TPOCAPtrUInt(BlockContainer^.Base)+sizeof(TPOCANativeCodeMemoryManagerBlock))<=TPOCAPtrUInt(p)) and ((TPOCAPtrUInt(p)+sizeof(TPOCANativeCodeMemoryManagerBlock))<(TPOCAPtrUInt(BlockContainer^.Base)+BlockContainer^.Size)) then begin
-     CurrentBlock:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(p)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
-     if (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and (CurrentBlock<>BlockContainer^.First) and (CurrentBlock<>BlockContainer^.Last) then begin
-      if (TPOCAPtrUInt(CurrentBlock^.Next)-TPOCAPtrUInt(CurrentBlock))>=DestSize then begin
-       CurrentBlock^.Size:=Size;
-       result:=p;
-       exit;
-      end else begin
-       result:=POCANativeCodeMemoryManagerGetMemory(NativeCodeMemoryManager,Size);
-       if assigned(result) then begin
-        if CurrentBlock^.Size<Size then begin
-         Move(p^,result^,CurrentBlock^.Size);
-        end else begin
-         Move(p^,result^,Size);
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(NativeCodeMemoryManager^.Lock);
+   try
+    Done:=false;
+    DestSize:=Size+sizeof(TPOCANativeCodeMemoryManagerBlock);
+    BlockContainer:=NativeCodeMemoryManager^.First;
+    while assigned(BlockContainer) do begin
+     if ((TPOCAPtrUInt(BlockContainer^.Base)+sizeof(TPOCANativeCodeMemoryManagerBlock))<=TPOCAPtrUInt(p)) and ((TPOCAPtrUInt(p)+sizeof(TPOCANativeCodeMemoryManagerBlock))<(TPOCAPtrUInt(BlockContainer^.Base)+BlockContainer^.Size)) then begin
+      CurrentBlock:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(p)-sizeof(TPOCANativeCodeMemoryManagerBlock)));
+      if (CurrentBlock^.Signature=bncmmMemoryBlockSignature) and (CurrentBlock<>BlockContainer^.First) and (CurrentBlock<>BlockContainer^.Last) then begin
+       if (TPOCAPtrUInt(CurrentBlock^.Next)-TPOCAPtrUInt(CurrentBlock))>=DestSize then begin
+        CurrentBlock^.Size:=Size;
+        result:=p;
+        Done:=true;
+        break;
+       end else begin
+        result:=POCANativeCodeMemoryManagerGetMemory(NativeCodeMemoryManager,Size);
+        if assigned(result) then begin
+         if CurrentBlock^.Size<Size then begin
+          Move(p^,result^,CurrentBlock^.Size);
+         end else begin
+          Move(p^,result^,Size);
+         end;
         end;
+        POCANativeCodeMemoryManagerFreeMemory(NativeCodeMemoryManager,p);
+        Done:=true;
+        break;
        end;
-       POCANativeCodeMemoryManagerFreeMemory(NativeCodeMemoryManager,p);
-       exit;
       end;
      end;
+     if Done then begin
+      break;
+     end;
+     BlockContainer:=BlockContainer^.Next;
     end;
-    BlockContainer:=BlockContainer^.Next;
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(NativeCodeMemoryManager^.Lock);
+   end;
+   if not Done then begin
+    POCANativeCodeMemoryManagerFreeMemory(NativeCodeMemoryManager,p);
    end;
   end;
-  POCANativeCodeMemoryManagerFreeMemory(NativeCodeMemoryManager,p);
  end else if Size<>0 then begin
   result:=POCANativeCodeMemoryManagerGetMemory(NativeCodeMemoryManager,Size);
  end;
