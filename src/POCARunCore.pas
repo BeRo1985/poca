@@ -72,11 +72,10 @@ type TRandomNumberGenerator=class(TPOCANativeObject)
      end;
 
      TRandomNumberGeneratorInstance=class(TPOCANativeObject)
-      private
-       function GetRandomNumber:double;
       public
        constructor Create(const pInstance:PPOCAInstance;const pContext:PPOCAContext;const pPrototype,pConstructor:PPOCAValue;const pExpandable:boolean); override;
        destructor Destroy; override;
+       function GetRandomNumber:double;
       published
        function get(const Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:longint):TPOCAValue;
        property randomnumber:double read GetRandomNumber;
@@ -99,7 +98,7 @@ end;
 
 constructor TRandomNumberGeneratorInstance.Create(const pInstance:PPOCAInstance;const pContext:PPOCAContext;const pPrototype,pConstructor:PPOCAValue;const pExpandable:boolean);
 begin
- inherited Create(pInstance,pContext,pPrototype,pConstructor,pExpandable);
+ inherited Create(pInstance,pContext,pPrototype,pConstructor,pExpandable,true);
 end;
 
 destructor TRandomNumberGeneratorInstance.Destroy;

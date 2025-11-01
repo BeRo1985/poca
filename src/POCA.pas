@@ -87,6 +87,10 @@
  {$else}
   {$undef HAS_TYPE_SINGLE}
  {$endif}
+ {$if defined(FPC_FULLVERSION) and (FPC_FULLVERSION >= 30200)}
+  {$define POCA_HAS_EXTENDED_RTTI}
+  {$modeswitch advancedrecords}
+ {$ifend}
 {$else}
  {$realcompatibility off}
  {$localsymbols on}
@@ -184,6 +188,7 @@
     {$define DelphiXE}
    {$ifend}
    {$define DelphiXEAndUp}
+   {$define POCA_HAS_EXTENDED_RTTI}
   {$ifend}
   {$if CompilerVersion>=23.0}
    {$if CompilerVersion=23.0}
@@ -346,7 +351,7 @@
 
 interface
 
-uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
+uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
 const POCAVersion='2025-11-01-21-44-0000';
 
@@ -1711,6 +1716,12 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Key:TPOCAValue;
       PropObject:TObject;
       PropInfo:PPropInfo;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+      RttiProperty:TRttiProperty;
+      RttiMethod:TRttiMethod;
+      RttiMethodParameters:TArray<TRttiParameter>;
+      UseExtendedRTTI:Boolean;
+{$endif}
       Method:TPOCANativeObjectMethod;
       Value:TPOCAValue;
      end;
@@ -1722,6 +1733,11 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Object_:TObject;
       PropList:PPropList;
       PropListLen:TPOCAInt32;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+      RttiType:TRttiType;
+      RttiProperties:TArray<TRttiProperty>;
+      RttiMethods:TArray<TRttiMethod>;
+{$endif}
      end;
 
      TPOCANativeObjectList=array of TPOCANativeObjectData;
@@ -1741,7 +1757,15 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        fGhostValue:TPOCAValue;
        fHashValue:TPOCAValue;
        fEventsHashValue:TPOCAValue;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+       fRttiContext:TRttiContext;
+{$endif}
+       fExtendedRTTI:Boolean;
       public
+       constructor Create(const aExtendedRTTI:Boolean); reintroduce; overload; virtual;
+       constructor Create(const aObject:TObject;const aExtendedRTTI:Boolean); reintroduce; overload; virtual;
+       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aExtendedRTTI:Boolean); reintroduce; overload; virtual;
+       constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject;const aExtendedRTTI:Boolean); reintroduce; overload; virtual;
        constructor Create; reintroduce; overload; virtual;
        constructor Create(const aObject:TObject); reintroduce; overload; virtual;
        constructor Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean); reintroduce; overload; virtual; // for backward compatibility, which directly calls Register after Create
@@ -1768,6 +1792,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        property GhostValue:TPOCAValue read fGhostValue;
        property HashValue:TPOCAValue read fHashValue;
        property EventsHashValue:TPOCAValue read fEventsHashValue;
+       property ExtendedRTTI:Boolean read fExtendedRTTI;
      end;
 
      TPOCAValueDataFileHeaderSignature=array[0..3] of AnsiChar;
@@ -16040,6 +16065,74 @@ begin
  POCAAddNativeFunction(Context,result,'finalize',POCAConsoleFunctionFINALIZE);
 end;
 
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+function POCAValueToTValue(Context:PPOCAContext;const Value:TPOCAValue;const TypeHandle:TRttiType):TValue;
+begin
+ case POCAGetValueType(Value) of
+  pvtNULL:begin
+   result:=TValue.Empty;
+  end;
+  pvtNUMBER:begin
+   if assigned(TypeHandle) then begin
+    case TypeHandle.TypeKind of
+     tkInteger,tkInt64,tkEnumeration,tkSet:begin
+      result:=TValue.From<TPOCAInt64>(trunc(Value.Num));
+     end;
+{$ifdef fpc}
+     tkQWord:begin
+      result:=TValue.From<TPOCAUInt64>(trunc(Value.Num));
+     end;
+     tkBool:begin
+      result:=TValue.From<Boolean>(Value.Num<>0.0);
+     end;
+{$endif}
+     tkFloat:begin
+      result:=TValue.From<Double>(Value.Num);
+     end;
+     else begin
+      result:=TValue.Empty;
+     end;
+    end;
+   end else begin
+    result:=TValue.From<Double>(Value.Num);
+   end;
+  end;
+  pvtSTRING:begin
+   result:=TValue.From<string>(TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data));
+  end;
+  else begin
+   result:=TValue.Empty;
+  end;
+ end;
+end;
+
+function POCAValueFromTValue(Context:PPOCAContext;const Value:TValue):TPOCAValue;
+begin
+ case Value.Kind of
+  tkInteger,tkInt64,tkEnumeration,tkSet:begin
+   result.Num:=Value.AsInt64;
+  end;
+{$ifdef fpc}
+  tkQWord:begin
+   result.Num:=Value.AsUInt64;
+  end;
+  tkBool:begin
+   result.Num:=ord(Value.AsBoolean) and 1;
+  end;
+{$endif}
+  tkFloat:begin
+   result.Num:=Value.AsExtended;
+  end;
+  tkUString,tkString,tkLString,tkWString:begin
+   result:=POCANewString(Context,TPOCAUTF8String(Value.AsString));
+  end;
+  else begin
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
+  end;
+ end;
+end;
+{$endif}
+
 procedure TPOCANativeObjectDestroy(const Ghost:PPOCAGhost);
 begin
  if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
@@ -16052,13 +16145,40 @@ begin
  result:=assigned(Ghost) and assigned(Ghost^.Ptr);
 end;
 
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+function TPOCANativeObjectFunctionNativeExtendedMethodCall(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var PropertyItem:PPOCANativeObjectProperty;
+    Args:array of TValue;
+    ReturnValue:TValue;
+    Index:TPOCAInt32;
+begin
+ PropertyItem:=UserData;
+ if assigned(PropertyItem) and assigned(PropertyItem^.RttiMethod) then begin
+  Args:=nil;
+  try
+   SetLength(Args,Min(CountArguments,Length(PropertyItem^.RttiMethodParameters)));
+   for Index:=0 to length(Args)-1 do begin
+    Args[Index]:=POCAValueToTValue(Context,Arguments^[Index],PropertyItem^.RttiMethodParameters[Index].ParamType);
+   end;
+   ReturnValue:=PropertyItem^.RttiMethod.Invoke(PropertyItem^.PropObject,Args);
+   result:=POCAValueFromTValue(Context,ReturnValue);
+  finally
+   Args:=nil;
+  end;
+ end else begin
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+{$endif}
+
 function TPOCANativeObjectFunctionNativeMethodCall(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var PropertyItem:PPOCANativeObjectProperty;
 begin
  PropertyItem:=UserData;
  if assigned(PropertyItem) then begin
   result:=PropertyItem^.Method(Context,This,Arguments,CountArguments);
- end else begin 
+ end else begin
 //result:=POCAValueNull;
   result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
@@ -16073,7 +16193,7 @@ begin
  end;
 end;
 
-constructor TPOCANativeObject.Create;
+constructor TPOCANativeObject.Create(const aExtendedRTTI:Boolean);
 begin
  inherited Create;
  fObject:=self;
@@ -16086,61 +16206,117 @@ begin
  fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
  fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
  fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+ fExtendedRTTI:=aExtendedRTTI;
+ if fExtendedRTTI then begin
+  // Initialize extended RTTI context if enabled
+  fRttiContext:=TRttiContext.Create;
+ end;
+{$else}
+ fExtendedRTTI:=false;
+{$endif}
+end;
+
+constructor TPOCANativeObject.Create(const aObject:TObject;const aExtendedRTTI:Boolean);
+begin
+ inherited Create;
+ if assigned(aObject) then begin
+  fObject:=aObject;
+ end else begin
+  fObject:=self;
+ end;
+ fObjects:=nil;
+ fCountObjects:=0;
+ fPropHashMap:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
+ fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+ fExtendedRTTI:=aExtendedRTTI;
+ if fExtendedRTTI then begin
+  // Initialize extended RTTI context if enabled
+  fRttiContext:=TRttiContext.Create;
+ end;
+{$else}
+ fExtendedRTTI:=false;
+{$endif}
+end;
+
+constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aExtendedRTTI:Boolean);
+begin
+ inherited Create;  
+ fObject:=self;
+ fObjects:=nil;
+ fCountObjects:=0;
+ fPropHashMap:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
+ fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+ fExtendedRTTI:=aExtendedRTTI;
+ if fExtendedRTTI then begin
+  // Initialize extended RTTI context if enabled
+  fRttiContext:=TRttiContext.Create;
+ end;
+{$else}
+ fExtendedRTTI:=false;
+{$endif}
+ Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
+end;
+
+constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject;const aExtendedRTTI:Boolean);
+begin
+ inherited Create;  
+ if assigned(aObject) then begin
+  fObject:=aObject;
+ end else begin
+  fObject:=self;
+ end;
+ fObjects:=nil;
+ fCountObjects:=0;
+ fPropHashMap:=nil;
+ fPropListLen:=0;
+ fProperties:=nil;
+ fCountProperties:=0;
+ fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+ fExtendedRTTI:=aExtendedRTTI;
+ if fExtendedRTTI then begin
+  // Initialize extended RTTI context if enabled
+  fRttiContext:=TRttiContext.Create;
+ end;
+{$else}
+ fExtendedRTTI:=false;
+{$endif}
+ Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
+end;
+
+constructor TPOCANativeObject.Create;
+begin
+ Create(false);
 end;
 
 constructor TPOCANativeObject.Create(const aObject:TObject);
 begin
- inherited Create;
- if assigned(aObject) then begin
-  fObject:=aObject;
- end else begin
-  fObject:=self;
- end;
- fObjects:=nil;
- fCountObjects:=0;
- fPropHashMap:=nil;
- fPropListLen:=0;
- fProperties:=nil;
- fCountProperties:=0;
- fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
- fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
- fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ Create(aObject,false);
 end;
 
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean);
 begin
- inherited Create;  
- fObject:=self;
- fObjects:=nil;
- fCountObjects:=0;
- fPropHashMap:=nil;
- fPropListLen:=0;
- fProperties:=nil;
- fCountProperties:=0;
- fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
- fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
- fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
- Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
+ Create(aInstance,aContext,aPrototype,aConstructor,aExpandable,false);
 end;
 
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject);
 begin
- inherited Create;  
- if assigned(aObject) then begin
-  fObject:=aObject;
- end else begin
-  fObject:=self;
- end;
- fObjects:=nil;
- fCountObjects:=0;
- fPropHashMap:=nil;
- fPropListLen:=0;
- fProperties:=nil;
- fCountProperties:=0;
- fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
- fHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
- fEventsHashValue.CastedUInt64:=POCAValueNullCastedUInt64;
- Register(aInstance,aContext,aPrototype,aConstructor,aExpandable);
+ Create(aInstance,aContext,aPrototype,aConstructor,aExpandable,aObject,false);
 end;
 
 destructor TPOCANativeObject.Destroy;
@@ -16156,7 +16332,17 @@ begin
    ObjectData^.PropList:=nil;
    ObjectData^.PropListLen:=0;
   end;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+  ObjectData^.RttiType:=nil;
+  ObjectData^.RttiProperties:=nil;
+  ObjectData^.RttiMethods:=nil;
+{$endif}
  end;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+ if fExtendedRTTI then begin
+  fRttiContext.Free;
+ end;
+{$endif}
  fPropListLen:=0;
  fObject:=nil;
  fObjects:=nil;
@@ -16190,6 +16376,11 @@ begin
   ObjectData^.Object_:=aObject;
   ObjectData^.PropList:=nil;
   ObjectData^.PropListLen:=0;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+  ObjectData^.RttiType:=nil;
+  ObjectData^.RttiProperties:=nil;
+  ObjectData^.RttiMethods:=nil;
+{$endif}
 
  end;
 
@@ -16216,7 +16407,7 @@ type PMethodNameRec=^TMethodNameRec;
       Count:{$ifdef fpc}TPOCAUInt32{$else}TPOCAUInt16{$endif};
       Methods:TMethodNameRecs;
      end;
-var ObjectIndex,Index,OtherIndex,Count:TPOCAInt32;
+var ObjectIndex,Index,Count:TPOCAInt32;
     Hash,EventsHash:PPOCAHash;
 //  HashRec,EventsHashRec:PPOCAHashRecord;
     MethodTable:PMethodNameTable;
@@ -16227,6 +16418,9 @@ var ObjectIndex,Index,OtherIndex,Count:TPOCAInt32;
     IsEvent:boolean;
     PropertyItem:PPOCANativeObjectProperty;
     ObjectData:PPOCANativeObjectData;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+    RttiMethod:TRttiMethod;
+{$endif}
 begin
 
  if assigned(fPropHashMap) then begin
@@ -16243,6 +16437,11 @@ begin
  ObjectData^.Object_:=fObject;
  ObjectData^.PropList:=nil;
  ObjectData^.PropListLen:=0;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+ ObjectData^.RttiType:=nil;
+ ObjectData^.RttiProperties:=nil;
+ ObjectData^.RttiMethods:=nil;
+{$endif}
 
  // Set the final object array length
  SetLength(fObjects,fCountObjects);
@@ -16256,6 +16455,19 @@ begin
   ObjectData^.PropList:=nil;
   ObjectData^.PropListLen:=GetPropList(ObjectData^.Object_,ObjectData^.PropList);
   inc(fPropListLen,ObjectData^.PropListLen);
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+  // Populate extended RTTI data for each object if enabled
+  if fExtendedRTTI then begin
+   ObjectData^.RttiType:=fRttiContext.GetType(ObjectData^.Object_.ClassType);
+   if assigned(ObjectData^.RttiType) then begin
+    ObjectData^.RttiProperties:=ObjectData^.RttiType.GetProperties;
+    ObjectData^.RttiMethods:=ObjectData^.RttiType.GetMethods;
+   end else begin
+    ObjectData^.RttiProperties:=nil;
+    ObjectData^.RttiMethods:=nil;
+   end;
+  end;
+{$endif}
  end;
 
  FillChar(fGhostType,SizeOf(TPOCAGhostType),#0);
@@ -16289,6 +16501,25 @@ begin
  try
 
   Count:=fPropListLen;
+
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+  if fExtendedRTTI then begin
+   // Count methods using extended RTTI
+   for ObjectIndex:=0 to fCountObjects-1 do begin
+    ObjectData:=@fObjects[ObjectIndex];
+    if assigned(ObjectData^.RttiMethods) then begin
+     for Index:=0 to Length(ObjectData^.RttiMethods)-1 do begin
+      RttiMethod:=ObjectData^.RttiMethods[Index];
+      if RttiMethod.Visibility=TMemberVisibility.mvPublic then begin
+       inc(Count);
+      end;
+     end;
+    end;
+   end;
+  end;
+{$endif}
+
+  // Count methods using classic VMT-based approach
   for ObjectIndex:=0 to fCountObjects-1 do begin
    ObjectData:=@fObjects[ObjectIndex];
    MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(ObjectData^.Object_)^)+vmtMethodTable))^);
@@ -16328,6 +16559,46 @@ begin
   end;
 
   Count:=fPropListLen;
+
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+  if fExtendedRTTI then begin
+   // Register methods using extended RTTI
+   for ObjectIndex:=0 to fCountObjects-1 do begin
+    ObjectData:=@fObjects[ObjectIndex];
+    if assigned(ObjectData^.RttiMethods) then begin
+     for Index:=0 to Length(ObjectData^.RttiMethods)-1 do begin
+      RttiMethod:=ObjectData^.RttiMethods[Index];
+      if RttiMethod.Visibility=TMemberVisibility.mvPublic then begin
+       MethodName:=String(RttiMethod.Name);
+       if length(MethodName)>0 then begin
+        if (length(MethodName)>1) and (MethodName[length(MethodName)]='_') then begin
+         Delete(MethodName,length(MethodName),1);
+        end;
+        IsEvent:=(length(MethodName)>2) and (MethodName[1]='_') and (MethodName[2]='_');
+        fPropHashMap.SetValue(TPOCAUTF8String(MethodName),Count);
+        PropertyItem:=@fProperties[Count];
+        PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
+        PropertyItem^.PropObject:=ObjectData^.Object_;
+        PropertyItem^.PropInfo:=nil;
+        PropertyItem^.RttiProperty:=nil;
+        PropertyItem^.RttiMethod:=RttiMethod;
+        PropertyItem^.RttiMethodParameters:=RttiMethod.GetParameters;
+        PropertyItem^.UseExtendedRTTI:=true;
+        PropertyItem^.Method:=nil;
+        PropertyItem^.Value:=POCANewFunction(aContext,POCANewNativeCode(aContext,TPOCANativeObjectFunctionNativeExtendedMethodCall,nil,PropertyItem));
+        if IsEvent then begin
+         POCAHashSet(aContext,fEventsHashValue,POCANewUniqueString(aContext,TPOCAUTF8String(MethodName)),PropertyItem^.Value,false);
+        end;
+        inc(Count);
+       end;
+      end;
+     end;
+    end;
+   end;
+  end;
+{$endif}
+
+  // Register methods using classic VMT-based approach
   for ObjectIndex:=0 to fCountObjects-1 do begin
    ObjectData:=@fObjects[ObjectIndex];
    MethodTable:=TPOCAPointer(TPOCAPointer(TPOCAPtrInt(TPOCAPtrInt(TPOCAPointer(ObjectData.Object_)^)+vmtMethodTable))^);
@@ -16349,10 +16620,15 @@ begin
       TMethod(NativeFunction).Data:=fObject;
       fPropHashMap.SetValue(TPOCAUTF8String(MethodName),Count);
       PropertyItem:=@fProperties[Count];
- //   PropertyItem^.Key:=POCAValueNull;
       PropertyItem^.Key.CastedUInt64:=POCAValueNullCastedUInt64;
       PropertyItem^.PropObject:=fObject;
       PropertyItem^.PropInfo:=nil;
+{$ifdef POCA_HAS_EXTENDED_RTTI}
+      PropertyItem^.RttiProperty:=nil;
+      PropertyItem^.RttiMethod:=nil;
+      PropertyItem^.RttiMethodParameters:=nil;
+      PropertyItem^.UseExtendedRTTI:=false;
+{$endif}
       PropertyItem^.Method:=NativeFunction;
       PropertyItem^.Value:=POCANewFunction(aContext,POCANewNativeCode(aContext,TPOCANativeObjectFunctionNativeMethodCall,nil,PropertyItem));
       if IsEvent then begin
@@ -16414,6 +16690,8 @@ begin
         TPOCANativeObject(ChildObject).Mark;
        end;
       end;
+      else begin
+      end;
      end;
     end;
    end;
@@ -16461,9 +16739,8 @@ begin
       result:=pvtSTRING;
      end;
      tkInteger,
-     {$ifndef fpc}tkInt64,{$endif}
-     tkFloat{$ifdef fpc},
      tkInt64,
+     tkFloat{$ifdef fpc},
      tkQWord,
      tkBool{$endif}:begin
       result:=pvtNUMBER;
@@ -16473,6 +16750,8 @@ begin
      end;
      tkDynArray:begin
       result:=pvtARRAY;
+     end;
+     else begin
      end;
     end;
    end;
