@@ -40488,7 +40488,7 @@ asm
  push r13
  push r14
  push r15
- sub rsp, 32  // Shadow space
+ sub rsp, 40  // Shadow space (32) + alignment (8) = 40 bytes
  
  mov r12, rcx  // R12 = Context
  mov r13, rdx  // R13 = Frame
@@ -40506,7 +40506,7 @@ asm
  call rax
  not eax
  
- add rsp, 32
+ add rsp, 40
  pop r15
  pop r14
  pop r13
@@ -40523,6 +40523,7 @@ asm
  push r13
  push r14
  push r15
+ sub rsp, 8  // Align stack to 16 bytes (6 pushes = 48 bytes, +8 = 56 bytes → aligned)
  
  mov r12, rdi  // R12 = Context
  mov r13, rsi  // R13 = Frame
@@ -40540,6 +40541,7 @@ asm
  call rax
  not eax
  
+ add rsp, 8
  pop r15
  pop r14
  pop r13
