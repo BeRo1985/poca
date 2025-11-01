@@ -40132,7 +40132,7 @@ begin
     popIS:begin
      DoItByVMOpcodeDispatcher;
     end;
-
+    //*)
     else begin
      // For now, all other opcodes fall back to VM interpreter
      DoItByVMOpcodeDispatcher;
