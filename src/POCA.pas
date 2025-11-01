@@ -39414,7 +39414,30 @@ begin
     end;
     
     popMOD:begin
-{$ifdef POCAX8664UseX87}
+
+     AddBinaryOpTypeCheck;
+
+     // XMM0 = a (Operand1), XMM1 = b (Operand2)
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,[rbx+Operand1]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,[rbx+Operand2]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     // XMM2 = a (copy), then q = trunc(a/b) (toward zero, immediate control)
+     Add(#$66#$0f#$28#$d0); // movapd xmm2,xmm0
+     Add(#$f2#$0f#$5e#$d1); // divsd xmm2,xmm1      ; xmm2 = a/b
+     Add(#$66#$0f#$3a#$0b#$d2#$0b); // roundsd xmm2,xmm2,0x0B ; toward zero, imm control
+
+     // q*b into XMM2, then r = a - q*b into XMM0
+     Add(#$f2#$0f#$59#$d1); // mulsd xmm2,xmm1        ; q*b
+     Add(#$f2#$0f#$5c#$c2); // subsd xmm0,xmm2        ; a - q*b
+
+     // Write result back
+     Add(#$f2#$0f#$11#$83); // movsd [rbx+Operand0],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+
+(*{$ifdef POCAX8664UseX87}
      // Type check both operands
      AddBinaryOpTypeCheck;
      
@@ -39440,7 +39463,7 @@ begin
      AddDWord(Operands^[0]*sizeof(double));
 {$else}
      DoItByVMOpcodeDispatcher;  // MOD is complex, keep VM for now
-{$endif}
+{$endif}*)
     end;
     
     popPOW:begin
@@ -39856,6 +39879,28 @@ begin
     end;
     
     popN_MOD:begin
+
+     // XMM0 = a (Operand1), XMM1 = b (Operand2)
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,[rbx+Operand1]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,[rbx+Operand2]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     // XMM2 = a (copy), then q = trunc(a/b) (toward zero, immediate control)
+     Add(#$66#$0f#$28#$d0); // movapd xmm2,xmm0
+     Add(#$f2#$0f#$5e#$d1); // divsd xmm2,xmm1      ; xmm2 = a/b
+     Add(#$66#$0f#$3a#$0b#$d2#$0b); // roundsd xmm2,xmm2,0x0B ; toward zero, imm control
+
+     // q*b into XMM2, then r = a - q*b into XMM0
+     Add(#$f2#$0f#$59#$d1); // mulsd xmm2,xmm1        ; q*b
+     Add(#$f2#$0f#$5c#$c2); // subsd xmm0,xmm2        ; a - q*b
+
+     // Write result back
+     Add(#$f2#$0f#$11#$83); // movsd [rbx+Operand0],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+
+(*
 {$ifdef POCAX8664UseX87}
      // Use x87 FPU for MOD operation (fprem)
      // Load operand2 (divisor) onto FPU stack
@@ -39879,7 +39924,8 @@ begin
      AddDWord(Operands^[0]*sizeof(double));
 {$else}
      DoItByVMOpcodeDispatcher; // Complex, keep VM for now
-{$endif}
+{$endif}*)
+
     end;
     
     popN_POW:begin
