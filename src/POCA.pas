@@ -38521,6 +38521,8 @@ var Fixups:TFixups;
   Add(#$31#$c0); // xor eax,eax
 
   Add(#$c3); // ret
+
+  // Fast path continues here
  end;
  procedure AddUnaryOpTypeCheck;
  begin
@@ -38539,6 +38541,9 @@ var Fixups:TFixups;
   Add(#$31#$c0); // xor eax,eax
 
   Add(#$c3); // ret
+
+  // Fast path continues here
+
  end;
  procedure DoItByVMOpcodeDispatcher;
  begin
