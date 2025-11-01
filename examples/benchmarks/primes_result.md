@@ -1,10 +1,15 @@
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-$ pocarun primes.poca
+$ pocarun primes.poca # With JIT (POCAHasJIT enabled)
 time: 0.017 seconds, primes: 17984
 time: 6.829 seconds, primes: 17984
 time: 6.776 seconds, primes: 17984
+
+$ pocarun primes.poca # Without JIT (no POCAHasJIT)
+time: 0.09 seconds, primes: 17984
+time: 45.034 seconds, primes: 17984
+time: 44.807 seconds, primes: 17984
 
 $ lua primes.lua 
 time: 0.05735200 seconds, primes: 17984.000000
