@@ -348,7 +348,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-11-01-19-02-0000';
+const POCAVersion='2025-11-01-21-44-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -34341,21 +34341,25 @@ var ArrayInstance:PPOCAArray;
     Index:TPOCAInt32;
 begin
  if POCAIsValueScalarType(Key) then begin
- {if POCAGetValueType(Box)=pvtARRAY then}begin
+  if POCAGetValueType(Box)=pvtARRAY then begin
    ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(Box));
    ArrayRecord:=ArrayInstance^.ArrayRecord;
-   Index:=trunc(POCAGetNumberValue(Context,Key));
-   if Index<0 then begin
-    inc(Index,ArrayRecord^.Size);
-   end;
-   if (Index>=0) or (Index<ArrayRecord^.Size) then begin
-    ArrayRecord^.Data[Index]:=Value;
-    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+   if assigned(ArrayRecord) then begin
+    Index:=trunc(POCAGetNumberValue(Context,Key));
+    if Index<0 then begin
+     inc(Index,ArrayRecord^.Size);
+    end;
+    if (Index>=0) or (Index<ArrayRecord^.Size) then begin
+     ArrayRecord^.Data[Index]:=Value;
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+    end else begin
+     POCARuntimeError(Context,'Out of bounds');
+    end;
    end else begin
     POCARuntimeError(Context,'Out of bounds');
    end;
-{ end else begin
-   POCARuntimeError(Context,'Not an array');}
+  end else begin
+   POCARuntimeError(Context,'Not an array');
   end;
  end else begin
   POCARuntimeError(Context,'Container index not scalar');
