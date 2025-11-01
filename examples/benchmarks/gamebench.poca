@@ -13,7 +13,6 @@ let r  = new Array(N);
 
 let i = 0;
 while (i < N) {
-  // simple PRNG substitute if needed: assume Math.random() exists in POCA runtime; otherwise seed your own
   x[i]  = Math.random() * W;
   y[i]  = Math.random() * H;
   vx[i] = (Math.random() * 2.0 - 1.0) * 100.0;
