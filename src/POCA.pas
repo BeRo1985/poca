@@ -306,13 +306,21 @@
 {$ifdef cpu386}
  {$undef POCAGarbageCollectorListsDoNeedFallbackLocking}
  {$define POCAGarbageCollectorListsUsePlainAssemblerCode}
- {$define POCAHasJIT}
+ {$ifdef POCANoJIT}
+  {$undef POCAHasJIT}
+ {$else}
+  {$define POCAHasJIT}
+ {$endif}
  {$define UseRegister}
 {$endif}
 {$ifdef cpuamd64}
  {$undef POCAGarbageCollectorListsDoNeedFallbackLocking}
  {$define POCAGarbageCollectorListsUsePlainAssemblerCode}
- {$define POCAHasJIT}
+ {$ifdef POCANoJIT}
+  {$undef POCAHasJIT}
+ {$else}
+  {$define POCAHasJIT}
+ {$endif}
  {$define UseRegister}
  {$undef x8664JITUseRIP} // Use RIP-relative addressing (disable if code allocated beyond ±2GB)
  {$define POCAX8664UseX87} // Use x87 FPU for MOD and POW operations
@@ -340,7 +348,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-11-01-06-46-0000';
+const POCAVersion='2025-11-01-19-02-0000';
 
       POCA_MAX_RECURSION=1024;
 
