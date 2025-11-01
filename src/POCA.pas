@@ -1,4 +1,4 @@
-(****************************************************************************** 
+﻿(****************************************************************************** 
  *                                     POCA                                   *
  ******************************************************************************
  *            for version see POCAVersion constant string here below          *
@@ -40845,8 +40845,11 @@ begin
  end;
 end;
 
-function POCARunNativeCode(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode):TPOCABool32; assembler; nostackframe;
+function POCARunNativeCode(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode):TPOCABool32; assembler; {$ifdef fpc}nostackframe;{$endif}
 asm
+{$ifndef fpc}
+ .noframe
+{$endif}
 {$ifdef windows}
  // Win64 ABI: RCX=Context, RDX=Frame, R8=Code
  push rbx
