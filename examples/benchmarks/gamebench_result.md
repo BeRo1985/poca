@@ -2,7 +2,7 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 $ pocarun gamebench.poca
-poca: steps=10, N=1000, elapsed=0.6759996525943279 ms
+poca: steps=10, N=1000, elapsed=0.6759996525943279s
 
 $ lua gamebench.lua
 lua: steps=10, N=1000, elapsed=0.225s

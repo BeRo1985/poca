@@ -74,4 +74,4 @@ let steps = 10;
 let k = 0;
 while (k < steps) { step(); k = k + 1; }
 let t1 = DateTime.now();
-print("poca: steps=", steps, ", N=", N, ", elapsed=", DateTime.milliseconds(t1 - t0) * 0.001, " ms\n");
+print("poca: steps=", steps, ", N=", N, ", elapsed=", DateTime.milliseconds(t1 - t0) * 0.001, "s\n");
