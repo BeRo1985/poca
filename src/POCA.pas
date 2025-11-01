@@ -312,8 +312,9 @@
 {$ifdef cpuamd64}
  {$undef POCAGarbageCollectorListsDoNeedFallbackLocking}
  {$define POCAGarbageCollectorListsUsePlainAssemblerCode}
- {-$define POCAHasJIT}
+ {$define POCAHasJIT}
  {$define UseRegister}
+ {$undef x8664JITUseRIP} // Use RIP-relative addressing (disable if code allocated beyond ±2GB)
 {$endif}
 {$undef POCAGarbageCollectorPoolBlockInstance}
 {$undef POCAGarbageCollectorPoolBlockReferenceCounting}
@@ -338,7 +339,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-10-25-18-26-0000';
+const POCAVersion='2025-11-01-06-46-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1276,7 +1277,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 {$ifdef POCAHasJIT}
       NativeCode:TPOCAPointer;
       NativeCodeSize:TPOCAUInt32;
-      ByteCodeToNativeCodeMap:array of TPOCAUInt32;
+      ByteCodeToNativeCodeMap:array of {$ifdef cpu64}TPOCAUInt64{$else}TPOCAUInt32{$endif};
       InterpretByteCodeMap:array of bytebool;
 {$endif}
      end;
@@ -35176,7 +35177,7 @@ begin
 end;
 
 {$ifdef POCAHasJIT}
-{$ifdef cpu386}
+{$if defined(cpu386) and defined(POCAHasJIT)}
 {$warnings off}
 function POCAGenerateNativeCode(Context:PPOCAContext;Code:PPOCACode):boolean;
 type TFixupKind=(fkPTR,fkRET,fkOFS);
@@ -36830,9 +36831,6 @@ begin
     popPOW:begin
      DoItByVMOpcodeDispatcher;
     end;
-    popINHERITEDMETHOD:begin
-     DoItByVMOpcodeDispatcher;
-    end;
     popKEY:begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -38357,13 +38355,13 @@ begin
   for i:=0 to CountFixups-1 do begin
    case FixUps[i].Kind of
     fkPTR:begin
-     TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
     end;
     fkRET:begin
-     TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
     end;
     fkOFS:begin
-     TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
     end;
    end;
   end;
@@ -38397,7 +38395,1864 @@ asm
  pop esi
  pop ebx
 end;
+{$elseif (defined(cpuamd64) or defined(cpux86_64)) and defined(POCAHasJIT)}
+{$warnings off}
+
+// x86-64 JIT Compiler for POCA
+// Supports both SysV AMD64 ABI (Linux/BSD/macOS) and Win64 ABI (Windows)
+
+function POCAGenerateNativeCode(Context:PPOCAContext;Code:PPOCACode):boolean;
+type TFixupKind=(fkPTR,fkRET,fkOFS,fkRIPREL);
+     TFixup=record
+      Kind:TFixupKind;
+      Ofs:TPOCAInt64;
+      Dest:TPOCAPointer;
+      ToOfs:TPOCAInt64;
+     end;
+     TFixups=array of TFixup;
+var Fixups:TFixups;
+    CountFixups,i:TPOCAInt32;
+    Offsets:array of TPOCAUInt64;
+    Opcode,Instruction:TPOCAUInt32;
+    CodeBuffer:array of TPOCAUInt8;
+    CodeBufferLen,OldCodeBufferLen:TPOCAInt32;
+    CurrentPC,LastPC,Temp,RetOfs,Literal:TPOCAUInt32;
+    CodeBegin,CodeEnd:TPOCAPointer;
+    CodeVars:array[0..8] of TPOCAPointer;
+    Operands:PPOCAInt32Array;
+    v:TPOCAValue;
+ procedure Add(const s:TPUCURawByteString);
+ begin
+  if length(s)>0 then begin
+   if (CodeBufferLen+length(s))>=length(CodeBuffer) then begin
+    SetLength(CodeBuffer,(CodeBufferLen+length(s)+4096) and not 4095);
+   end;
+   move(s[1],CodeBuffer[CodeBufferLen],length(s));
+   inc(CodeBufferLen,length(s));
+  end;
+ end;
+ procedure AddCode(CodeBegin,CodeEnd:TPOCAPointer);
+ var CodeLen:TPOCAPtrInt;
+{$ifdef windows}
+     OldProtect,OldProtectDummy:TPOCAUInt32;
+     OK:boolean;
 {$endif}
+ begin
+  CodeLen:=TPOCAPtrInt(TPOCAPtrUInt(CodeEnd)-TPOCAPtrUInt(CodeBegin));
+  if CodeLen>0 then begin
+{$ifdef windows}
+   OK:=VirtualProtect(CodeBegin,CodeLen,PAGE_EXECUTE_READWRITE,OldProtect);
+{$endif}
+{$ifdef unix}
+   fpmprotect(CodeBegin,CodeLen,PROT_READ or PROT_WRITE or PROT_EXEC);
+{$endif}
+   if (CodeBufferLen+CodeLen)>=length(CodeBuffer) then begin
+    SetLength(CodeBuffer,(CodeBufferLen+CodeLen+4096) and not 4095);
+   end;
+   move(CodeBegin^,CodeBuffer[CodeBufferLen],CodeLen);
+   inc(CodeBufferLen,CodeLen);
+{$ifdef windows}
+   if OK then begin
+    VirtualProtect(CodeBegin,CodeLen,OldProtect,OldProtectDummy);
+   end;
+{$endif}
+  end;
+ end;
+ procedure AddDWord(const v:TPOCAUInt32);
+ begin
+  if (CodeBufferLen+sizeof(TPOCAUInt32))>=length(CodeBuffer) then begin
+   SetLength(CodeBuffer,(CodeBufferLen+sizeof(TPOCAUInt32)+4096) and not 4095);
+  end;
+  move(v,CodeBuffer[CodeBufferLen],sizeof(TPOCAUInt32));
+  inc(CodeBufferLen,sizeof(TPOCAUInt32));
+ end;
+ procedure AddQWord(const v:TPOCAUInt64);
+ begin
+  if (CodeBufferLen+sizeof(TPOCAUInt64))>=length(CodeBuffer) then begin
+   SetLength(CodeBuffer,(CodeBufferLen+sizeof(TPOCAUInt64)+4096) and not 4095);
+  end;
+  move(v,CodeBuffer[CodeBufferLen],sizeof(TPOCAUInt64));
+  inc(CodeBufferLen,sizeof(TPOCAUInt64));
+ end;
+ procedure AddQWordPointer(const p:Pointer);
+ begin
+  AddQWord(TPOCAPtrUInt(p));
+ end;
+ procedure AddGarbageCollectorBottleneckCheck;
+ begin
+  // Generate GC bottleneck check code for loop opcodes
+  // Both ABIs: R12=Context, R13=Frame, R14=Code, RBX=Registers, RBP=&InstructionPointer
+  Add(#$49#$8b#$84#$24); // mov rax,qword ptr [r12+TPOCAContext.Instance]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.Instance)));
+  Add(#$8b#$80); // mov eax,dword ptr [rax+TPOCAInstance.Globals+TPOCAGlobals.Bottleneck]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInstance(nil)^.Globals))+TPOCAPtrUInt(Pointer(@PPOCAGlobals(nil)^.Bottleneck)));
+  Add(#$85#$c0); // test eax,eax
+  Add(#$74#$14); // jz +$14 (skip call sequence)
+{$ifdef windows}
+  Add(#$49#$8d#$8c#$24); // lea rcx,[r12+TPOCAContext.Instance]
+{$else}
+  Add(#$49#$8d#$bc#$24); // lea rdi,[r12+TPOCAContext.Instance]
+{$endif}
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.Instance)));
+  Add(#$48#$b8); // mov rax,POCAGarbageCollectorDoBottleneck
+  AddQWordPointer(@POCAGarbageCollectorDoBottleneck);
+  Add(#$ff#$d0); // call rax
+ end;
+ procedure AddBinaryOpTypeCheck;
+ begin
+  // Type check: ensure both operands are numbers (not references)
+  // References have upper 16 bits = 0xFFFF (POCAValueReferenceSignalMask)
+  Add(#$66#$81#$bb); // cmp word ptr [rbx+Operand1+6],0xFFFF
+  AddDWord((Operands^[1]*sizeof(double))+6);
+  Add(#$ff#$ff);
+
+  Add(#$74#$0b); // je +$0b (if Op1 is reference, jump to fallback)
+
+  Add(#$66#$81#$bb); // cmp word ptr [rbx+Operand2+6],0xFFFF
+  AddDWord((Operands^[2]*sizeof(double))+6);
+  Add(#$ff#$ff);
+
+  Add(#$75#$0a); // jne +$0a (if Op2 is NOT reference, jump to fast path)
+
+  // Fallback to VM (reached if either operand is a reference)
+  Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],LastPC
+  AddDWord(LastPC);
+
+  Add(#$31#$c0); // xor eax,eax
+
+  Add(#$c3); // ret
+ end;
+ procedure AddUnaryOpTypeCheck;
+ begin
+  // Type check: ensure operand is a number (not reference)
+  // References have upper 16 bits = 0xFFFF (POCAValueReferenceSignalMask)
+  Add(#$66#$81#$bb); // cmp word ptr [rbx+Operand1+6],0xFFFF
+  AddDWord((Operands^[1]*sizeof(double))+6);
+  Add(#$ff#$ff);
+
+  Add(#$75#$0a); // jne +$0a (if NOT reference, jump to fast path)
+
+  // Fallback to VM (reached if operand is a reference)
+  Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],LastPC
+  AddDWord(LastPC);
+
+  Add(#$31#$c0); // xor eax,eax
+
+  Add(#$c3); // ret
+ end;
+ procedure DoItByVMOpcodeDispatcher;
+ begin
+  Code^.InterpretByteCodeMap[LastPC]:=true;
+  
+  Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],LastPC
+  AddDWord(LastPC);
+
+  Add(#$31#$c0); // xor eax,eax
+
+  Add(#$c3); // ret
+ end;
+begin
+ try
+  if assigned(Code^.NativeCode) then begin
+   POCANativeCodeMemoryManagerFreeMemory(Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.NativeCodeMemoryManager,Code^.NativeCode);
+   Code^.NativeCode:=nil;
+   Code^.NativeCodeSize:=0;
+  end;
+  CodeBuffer:=nil;
+  CodeBufferLen:=0;
+  Fixups:=nil;
+  CountFixups:=0;
+  Offsets:=nil;
+  SetLength(Offsets,Code^.ByteCodeSize);
+  if length(Code^.InterpretByteCodeMap)<>Code^.ByteCodeSize then begin
+   SetLength(Code^.InterpretByteCodeMap,Code^.ByteCodeSize);
+  end;
+  CurrentPC:=0;
+  
+  // Main bytecode processing loop
+  while CurrentPC<Code^.ByteCodeSize do begin
+   LastPC:=CurrentPC;
+   Code^.InterpretByteCodeMap[LastPC]:=false;
+   Offsets[CurrentPC]:=CodeBufferLen;
+   Instruction:=Code^.ByteCode^[CurrentPC];
+   Operands:=@Code^.ByteCode^[CurrentPC+1];
+   inc(CurrentPC,1+(Instruction shr 8));
+   Opcode:=Instruction and $ff;
+   
+   case Opcode of
+    popNOP:begin
+    end;
+
+    // Arithmetic operations with SSE2
+    popADD:begin
+     AddBinaryOpTypeCheck;
+
+     // Fast path: SSE2 addition
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$58#$83); // addsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popSUB:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$5c#$83); // subsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popMUL:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$59#$83); // mulsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popDIV:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$5e#$83); // divsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popNEG:begin
+     AddUnaryOpTypeCheck;
+
+     Add(#$66#$0f#$ef#$c0); // pxor xmm0,xmm0
+
+     Add(#$f2#$0f#$5c#$83); // subsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popNOT:begin
+     AddUnaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+     
+     Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$94#$c0); // setz al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popCAT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    popLT:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$92#$c0); // setb al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popLTEQ:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$96#$c0); // setbe al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popGT:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$97#$c0); // seta al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popGTEQ:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$93#$c0); // setae al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popEQ:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$94#$c0); // setz al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popNEQ:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$95#$c0); // setnz al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popCMP:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSEQ:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSNEQ:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popEACH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popJMP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$e9); // jmp Arg
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popJMPLOOP:begin
+     // Check for GC bottleneck
+     AddGarbageCollectorBottleneckCheck;
+     
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$e9); // jmp Arg
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popJIFTRUE:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      AddUnaryOpTypeCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$85); // jnz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popJIFFALSE:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      AddUnaryOpTypeCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$84); // jz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popJIFTRUELOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      // Check for GC bottleneck
+      AddGarbageCollectorBottleneckCheck;
+
+      AddUnaryOpTypeCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$85); // jnz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popJIFFALSELOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      // Check for GC bottleneck
+      AddGarbageCollectorBottleneckCheck;
+
+      AddUnaryOpTypeCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$84); // jz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popFCALL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popMCALL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popRETURN:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popLOADCODE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popLOADCONST:begin
+     v:=Code^.Constants^[Operands^[1]];
+     if POCAIsValueCode(v) then begin
+      DoItByVMOpcodeDispatcher;
+     end else begin
+      Add(#$48#$b8); // mov rax,immediate64
+      AddQWord(v.CastedUInt64);
+      Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
+      AddDWord(Operands^[0]*sizeof(double));
+     end;
+    end;
+    
+    popLOADONE:begin
+     Add(#$48#$b8); // mov rax,POCADoubleOne
+     AddQWord(TPOCAUInt64(TPOCAPointer(@POCADoubleOne)^));
+     Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popLOADZERO:begin
+     Add(#$48#$31#$c0); // xor rax,rax
+     Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popLOADINT32:begin
+     v.Num:=Operands^[1];
+     Add(#$48#$b8); // mov rax,immediate64
+     AddQWord(TPOCAUInt64(TPOCAPointer(@v)^));
+     Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popLOADNULL:begin
+     Add(#$48#$b8); // mov rax,POCAValueNull
+     AddQWord(TPOCAUInt64(TPOCAPointer(@POCAValueNull)^));
+     Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popLOADTHAT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    popLOADTHIS:begin
+     // Load Frame.Obj into register
+     Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Obj]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Obj)));
+     
+     Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popLOADSELF:begin
+     // Load Frame.Func into register
+     Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Func]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Func)));
+     
+     Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popLOADLOCAL:begin
+     // Load Frame.Locals into register
+     Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Locals]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Locals)));
+     
+     Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popCOPY:begin
+     if Operands^[0]<>Operands^[1] then begin
+      Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+
+      Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
+      AddDWord(Operands^[0]*sizeof(double));
+     end;
+    end;
+    
+    popINSERT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popEXTRACT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popGETLENGTH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popGETMEMBER:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSETMEMBER:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popGETLOCAL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSETLOCAL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popGETLOCALVALUE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSETLOCALVALUE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popGETOUTERVALUE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSETOUTERVALUE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popNEWARRAY:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popARRAYPUSH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popARRAYRANGEPUSH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popNEWHASH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popHASHAPPEND:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSETSYM:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popINDEX:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popFCALLH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popMCALLH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popUNPACK:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSLICE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSLICE2:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSLICE3:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popTRY:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popTRYBLOCKEND:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popTHROW:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popDEC:begin
+     AddUnaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+{$ifdef x8664JITUseRIP}
+     Add(#$f2#$0f#$10#$0d); // movsd xmm1,qword ptr [rip+POCADoubleOne]
+     if CountFixups>=length(Fixups) then begin
+      SetLength(Fixups,CountFixups+4096);
+     end;
+     Fixups[CountFixups].Kind:=fkRIPREL;
+     Fixups[CountFixups].Ofs:=CodeBufferLen;
+     Fixups[CountFixups].Dest:=@POCADoubleOne;
+     inc(CountFixups);
+     Add(#$00#$00#$00#$00); // Placeholder for RIP-relative offset (needs fixup)
+{$else}
+     Add(#$48#$b8); // mov rax,POCADoubleOne
+     AddQWordPointer(@POCADoubleOne);
+     Add(#$f2#$0f#$10#$08); // movsd xmm1,qword ptr [rax]
+{$endif}
+
+     Add(#$f2#$0f#$5c#$c1); // subsd xmm0,xmm1
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popINC:begin
+     AddUnaryOpTypeCheck;
+
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+{$ifdef x8664JITUseRIP}
+     Add(#$f2#$0f#$10#$0d); // movsd xmm1,qword ptr [rip+POCADoubleOne]
+     if CountFixups>=length(Fixups) then begin
+      SetLength(Fixups,CountFixups+4096);
+     end;
+     Fixups[CountFixups].Kind:=fkRIPREL;
+     Fixups[CountFixups].Ofs:=CodeBufferLen;
+     Fixups[CountFixups].Dest:=@POCADoubleOne;
+     inc(CountFixups);
+     Add(#$00#$00#$00#$00); // Placeholder for RIP-relative offset (needs fixup)
+{$else}
+     Add(#$48#$b8); // mov rax,POCADoubleOne
+     AddQWordPointer(@POCADoubleOne);
+     Add(#$f2#$0f#$10#$08); // movsd xmm1,qword ptr [rax]
+{$endif}
+
+     Add(#$f2#$0f#$58#$c1); // addsd xmm0,xmm1
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popBAND:begin
+     AddBinaryOpTypeCheck;
+
+     // Convert doubles to int64, AND them, convert back
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$21#$d0); // and rax,rdx
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popBXOR:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$31#$d0); // xor rax,rdx
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popBOR:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$09#$d0); // or rax,rdx
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popBNOT:begin
+     AddUnaryOpTypeCheck;
+
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$48#$f7#$d0); // not rax
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popBSHL:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$d3#$e0); // shl rax,cl
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popBSHR:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$d3#$f8); // sar rax,cl (arithmetic right shift)
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popBUSHR:begin
+     AddBinaryOpTypeCheck;
+
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$d3#$e8); // shr rax,cl (logical right shift)
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popMOD:begin
+     DoItByVMOpcodeDispatcher;  // MOD is complex, keep VM for now
+    end;
+    
+    popPOW:begin
+     DoItByVMOpcodeDispatcher;  // POW needs runtime function, keep VM for now
+    end;
+    
+    popKEY:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popIN:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popINRANGE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popFTAILCALL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popMTAILCALL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popFTAILCALLH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popMTAILCALLH:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popINSTANCEOF:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popBREAKPOINT:begin
+     Add(#$cc); // int3
+    end;
+    
+    popNUM:begin
+     AddUnaryOpTypeCheck;
+
+     if Operands^[0]<>Operands^[1] then begin
+      Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+
+      Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
+      AddDWord(Operands^[0]*sizeof(double));
+     end;
+    end;
+    
+    popN_NOT:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+     
+     Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$94#$c0); // setz al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_ADD:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$58#$83); // addsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_SUB:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$5c#$83); // subsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_MUL:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$59#$83); // mulsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_DIV:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$5e#$83); // divsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_NEG:begin
+     Add(#$66#$0f#$ef#$c0); // pxor xmm0,xmm0
+
+     Add(#$f2#$0f#$5c#$83); // subsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_LT:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$92#$c0); // setb al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_LTEQ:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$96#$c0); // setbe al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_GT:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$97#$c0); // seta al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_GTEQ:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$93#$c0); // setae al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_EQ:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$94#$c0); // setz al
+     Add(#$0f#$b6#$c0); // movzx eax,al
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_NEQ:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+     Add(#$0f#$95#$c0); // setnz al
+     Add(#$0f#$b6#$c0); // movzx eax,al 
+     Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_CMP:begin
+     DoItByVMOpcodeDispatcher; // Complex, keep VM for now
+    end;
+    
+    popN_DEC:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+{$ifdef x8664JITUseRIP}
+     Add(#$f2#$0f#$10#$0d); // movsd xmm1,qword ptr [rip+POCADoubleOne]
+     if CountFixups>=length(Fixups) then begin
+      SetLength(Fixups,CountFixups+4096);
+     end;
+     Fixups[CountFixups].Kind:=fkRIPREL;
+     Fixups[CountFixups].Ofs:=CodeBufferLen;
+     Fixups[CountFixups].Dest:=@POCADoubleOne;
+     inc(CountFixups);
+     Add(#$00#$00#$00#$00); // Placeholder for RIP-relative offset (needs fixup)
+{$else}
+     Add(#$48#$b8); // mov rax,POCADoubleOne
+     AddQWordPointer(@POCADoubleOne);
+     Add(#$f2#$0f#$10#$08); // movsd xmm1,qword ptr [rax]
+{$endif}
+
+     Add(#$f2#$0f#$5c#$c1); // subsd xmm0,xmm1
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_INC:begin
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+{$ifdef x8664JITUseRIP}
+     Add(#$f2#$0f#$10#$0d); // movsd xmm1,qword ptr [rip+POCADoubleOne]
+     if CountFixups>=length(Fixups) then begin
+      SetLength(Fixups,CountFixups+4096);
+     end;
+     Fixups[CountFixups].Kind:=fkRIPREL;
+     Fixups[CountFixups].Ofs:=CodeBufferLen;
+     Fixups[CountFixups].Dest:=@POCADoubleOne;
+     inc(CountFixups);
+     Add(#$00#$00#$00#$00); // Placeholder for RIP-relative offset (needs fixup)
+{$else}
+     Add(#$48#$b8); // mov rax,POCADoubleOne
+     AddQWordPointer(@POCADoubleOne);
+     Add(#$f2#$0f#$10#$08); // movsd xmm1,qword ptr [rax]
+{$endif}
+
+     Add(#$f2#$0f#$58#$c1); // addsd xmm0,xmm1
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_BAND:begin
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$21#$d0); // and rax,rdx
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_BXOR:begin
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$31#$d0); // xor rax,rdx
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_BOR:begin
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$09#$d0); // or rax,rdx
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_BNOT:begin
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$48#$f7#$d0); // not rax
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_BSHL:begin
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$d3#$e0); // shl rax,cl
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_BSHR:begin
+     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$d3#$f8); // sar rax,cl
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_BUSHR:begin
+     Add(#$f2#$0f#$2c#$81); // cvttsd2si rax,qword ptr [rcx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$2c#$89); // cvttsd2si rcx,qword ptr [rcx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     Add(#$48#$d3#$e8); // shr rax,cl
+
+     Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
+
+     Add(#$f2#$0f#$11#$81); // movsd qword ptr [rcx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_MOD:begin
+     DoItByVMOpcodeDispatcher; // Complex, keep VM for now
+    end;
+    
+    popN_POW:begin
+     DoItByVMOpcodeDispatcher; // Complex, keep VM for now
+    end;
+    
+    popN_INRANGE:begin
+     DoItByVMOpcodeDispatcher; // Complex, keep VM for now
+    end;
+    
+    popN_JIFTRUE:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$85); // jnz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFFALSE:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$84); // jz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFTRUELOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      // GC bottleneck check
+      AddGarbageCollectorBottleneckCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$85); // jnz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFFALSELOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      // GC bottleneck check
+      AddGarbageCollectorBottleneckCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$84); // jz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFLT:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$82); // jb (less than for unsigned)
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFLTEQ:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$86); // jbe
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFGT:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$87); // ja
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFGTEQ:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$83); // jae
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFEQ:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$84); // jz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFNEQ:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$85); // jnz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFLTLOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      
+      // GC bottleneck check
+      AddGarbageCollectorBottleneckCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$82); // jb
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFLTEQLOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      
+      // GC bottleneck check
+      AddGarbageCollectorBottleneckCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$86); // jbe
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFGTLOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+//      Add(#$cc);
+
+      // GC bottleneck check
+      AddGarbageCollectorBottleneckCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$87); // ja
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFGTEQLOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+
+      // GC bottleneck check
+      AddGarbageCollectorBottleneckCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$83); // jae
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFEQLOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+
+      // GC bottleneck check
+      AddGarbageCollectorBottleneckCheck;
+
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$84); // jz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popN_JIFNEQLOOP:begin
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      AddGarbageCollectorBottleneckCheck;
+      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[1]*sizeof(double));
+      Add(#$f2#$0f#$10#$8b); // movsd xmm1,qword ptr [rbx+RegisterOfs]
+      AddDWord(Operands^[2]*sizeof(double));
+      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
+      Add(#$0f#$85); // jnz
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00);
+     end;
+    end;
+    
+    popUPDATESTRING:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popREGEXP:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popREGEXPEQ:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popREGEXPNEQ:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSQRT:begin
+     AddUnaryOpTypeCheck;
+
+     Add(#$f2#$0f#$51#$83); // sqrtsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popN_SQRT:begin
+     Add(#$f2#$0f#$51#$83); // sqrtsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+    end;
+    
+    popGETPROTOTYPE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSETPROTOTYPE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popGETCONSTRUCTOR:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSETCONSTRUCTOR:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popDELETE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popDELETEEX:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popDEFINED:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popDEFINEDEX:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popLOADGLOBAL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popLOADBASECLASS:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popGETHASHKIND:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popSETHASHKIND:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popTYPEOF:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popIDOF:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popGHOSTTYPEOF:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popELVIS:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    
+    popIS:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    else begin
+     // For now, all other opcodes fall back to VM interpreter
+     DoItByVMOpcodeDispatcher;
+    end;
+   end;
+  end;
+  
+  // Add return epilogue for final bytecode position
+  RetOfs:=CodeBufferLen;
+  begin
+   Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],CurrentPC
+   AddDWord(CurrentPC);
+
+   Add(#$31#$c0); // xor eax,eax
+
+   Add(#$f7#$d0); // not eax
+
+   Add(#$c3); // ret
+  end;
+  
+  SetLength(CodeBuffer,CodeBufferLen);
+  Code.NativeCodeSize:=CodeBufferLen;
+  Code.NativeCode:=POCANativeCodeMemoryManagerGetMemory(Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.NativeCodeMemoryManager,Code.NativeCodeSize);
+  Move(CodeBuffer[0],Code.NativeCode^,Code.NativeCodeSize);
+  SetLength(Code.ByteCodeToNativeCodeMap,Code.ByteCodeSize);
+  for i:=0 to Code.ByteCodeSize-1 do begin
+   Code.ByteCodeToNativeCodeMap[i]:=Offsets[i];
+  end;
+  for i:=0 to CountFixups-1 do begin
+   case FixUps[i].Kind of
+    fkPTR:begin
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+    end;
+    fkRET:begin
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+    end;
+    fkOFS:begin
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+    end;
+    fkRIPREL:begin
+     // RIP-relative addressing: offset = target - (RIP + 4)
+     // RIP points to the next instruction after the 4-byte offset
+     TPOCAInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=TPOCAInt32(TPOCAPtrInt(TPOCAPtrUInt(FixUps[i].Dest)-TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs+4]))));
+    end;
+   end;
+  end;
+  result:=true;
+ finally
+  SetLength(Fixups,0);
+  SetLength(Offsets,0);
+  SetLength(CodeBuffer,0);
+ end;
+end;
+
+function POCARunNativeCode(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode):TPOCABool32; assembler; nostackframe;
+asm
+{$ifdef windows}
+ // Win64 ABI: RCX=Context, RDX=Frame, R8=Code
+ push rbx
+ push rsi
+ push rdi
+ push r12
+ push r13
+ push r14
+ push r15
+ sub rsp, 32  // Shadow space
+ 
+ mov r12, rcx  // R12 = Context
+ mov r13, rdx  // R13 = Frame
+ mov r14, r8   // R14 = Code
+ 
+ mov rax, qword ptr [r14+TPOCACode.NativeCode]
+ mov rbx, qword ptr [r13+TPOCAFrame.Registers]
+ lea rbp, [r13+TPOCAFrame.InstructionPointer]
+ mov r10, qword ptr [r14+TPOCACode.ByteCodeToNativeCodeMap]
+ mov r11d, dword ptr [rbp]
+ add rax, qword ptr [r10+r11*8]
+ 
+ // R12 = Context, R13 = Frame, R14 = Code, RBX = Registers, RBP = &InstructionPointer
+ 
+ call rax
+ not eax
+ 
+ add rsp, 32
+ pop r15
+ pop r14
+ pop r13
+ pop r12
+ pop rdi
+ pop rsi
+ pop rbx
+{$else}
+ // SysV ABI: RDI=Context, RSI=Frame, RDX=Code
+ push rbx
+ push r12
+ push r13
+ push r14
+ push r15
+ 
+ mov r12, rdi  // R12 = Context
+ mov r13, rsi  // R13 = Frame
+ mov r14, rdx  // R14 = Code
+ 
+ mov rax, qword ptr [r14+TPOCACode.NativeCode]
+ mov rbx, qword ptr [r13+TPOCAFrame.Registers]
+ lea rbp, [r13+TPOCAFrame.InstructionPointer]
+ mov r8, qword ptr [r14+TPOCACode.ByteCodeToNativeCodeMap]
+ mov r9d, dword ptr [rbp]
+ add rax, qword ptr [r8+r9*8]
+ 
+ // R12 = Context, R13 = Frame, R14 = Code, RBX = Registers, RBP = &InstructionPointer
+ 
+ call rax
+ not eax
+ 
+ pop r15
+ pop r14
+ pop r13
+ pop r12
+ pop rbx
+{$endif}
+end;
+
+{$warnings on}
+{$ifend}
 {$endif}
 
 function POCARunByteCode(Context:PPOCAContext):TPOCAValue;
