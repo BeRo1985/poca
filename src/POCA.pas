@@ -312,7 +312,7 @@
 {$ifdef cpuamd64}
  {$undef POCAGarbageCollectorListsDoNeedFallbackLocking}
  {$define POCAGarbageCollectorListsUsePlainAssemblerCode}
- {-$define POCAHasJIT}
+ {$define POCAHasJIT}
  {$define UseRegister}
  {$undef x8664JITUseRIP} // Use RIP-relative addressing (disable if code allocated beyond ±2GB)
 {$endif}
@@ -40192,6 +40192,7 @@ asm
 {$ifdef windows}
  // Win64 ABI: RCX=Context, RDX=Frame, R8=Code
  push rbx
+ push rbp
  push rsi
  push rdi
  push r12
@@ -40223,10 +40224,12 @@ asm
  pop r12
  pop rdi
  pop rsi
+ pop rbp
  pop rbx
 {$else}
  // SysV ABI: RDI=Context, RSI=Frame, RDX=Code
  push rbx
+ push rbp
  push r12
  push r13
  push r14
@@ -40252,6 +40255,7 @@ asm
  pop r14
  pop r13
  pop r12
+ pop rbp
  pop rbx
 {$endif}
 end;
