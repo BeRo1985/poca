@@ -315,6 +315,7 @@
  {$define POCAHasJIT}
  {$define UseRegister}
  {$undef x8664JITUseRIP} // Use RIP-relative addressing (disable if code allocated beyond ±2GB)
+ {$define POCAX8664UseX87} // Use x87 FPU for MOD and POW operations
 {$endif}
 {$undef POCAGarbageCollectorPoolBlockInstance}
 {$undef POCAGarbageCollectorPoolBlockReferenceCounting}
@@ -38314,10 +38315,93 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
     popJIFNULL:begin
-     DoItByVMOpcodeDispatcher;
+     // Jump if value is null
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      // x86: Check if ReferenceTag == 0x7fff6789 and Reference.Ptr == 0
+      // Check ReferenceTag (upper 4 bytes, offset +4)
+      Add(#$81#$bb); // cmp dword ptr [ebx+Operand1+4], 0x7fff6789
+      AddDWord((Operands^[1]*sizeof(double))+4);
+      AddDWord($7fff6789);
+      
+      Add(#$75#$0d); // jne +13 (skip pointer check)
+      
+      // Check if pointer is NULL (lower 4 bytes, offset +0)
+      Add(#$83#$bb); // cmp dword ptr [ebx+Operand1], 0
+      AddDWord(Operands^[1]*sizeof(double));
+      Add(#$00);
+      
+      Add(#$0f#$84); // jz (jump if null)
+      asm
+       jmp @Skip
+        @CodeBegin:
+         db $00,$00,$00,$00
+        @CodeEnd:
+       @Skip:
+       mov dword ptr CodeBegin,offset @CodeBegin
+       mov dword ptr CodeEnd,offset @CodeEnd
+      end;
+      AddCode(CodeBegin,CodeEnd);
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen-4;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+     end;
     end;
     popJIFNOTNULL:begin
-     DoItByVMOpcodeDispatcher;
+     // Jump if value is NOT null
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      // x86: Check if ReferenceTag != 0x7fff6789 OR Reference.Ptr != 0
+      // Check ReferenceTag
+      Add(#$81#$bb); // cmp dword ptr [ebx+Operand1+4], 0x7fff6789
+      AddDWord((Operands^[1]*sizeof(double))+4);
+      AddDWord($7fff6789);
+      
+      Add(#$0f#$85); // jne (jump if not null - tag differs)
+      asm
+       jmp @Skip
+        @CodeBegin:
+         db $00,$00,$00,$00
+        @CodeEnd:
+       @Skip:
+       mov dword ptr CodeBegin,offset @CodeBegin
+       mov dword ptr CodeEnd,offset @CodeEnd
+      end;
+      AddCode(CodeBegin,CodeEnd);
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen-4;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      
+      // Check if pointer is not NULL
+      Add(#$83#$bb); // cmp dword ptr [ebx+Operand1], 0
+      AddDWord(Operands^[1]*sizeof(double));
+      Add(#$00);
+      
+      Add(#$0f#$85); // jnz (jump if not null - pointer not zero)
+      asm
+       jmp @Skip
+        @CodeBegin:
+         db $00,$00,$00,$00
+        @CodeEnd:
+       @Skip:
+       mov dword ptr CodeBegin,offset @CodeBegin
+       mov dword ptr CodeEnd,offset @CodeEnd
+      end;
+      AddCode(CodeBegin,CodeEnd);
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen-4;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+     end;
     end;
     popSAFEEXTRACT:begin
      DoItByVMOpcodeDispatcher;
@@ -39298,11 +39382,75 @@ begin
     end;
     
     popMOD:begin
+{$ifdef POCAX8664UseX87}
+     // Type check both operands
+     AddBinaryOpTypeCheck;
+     
+     // Use x87 FPU for MOD operation (fprem)
+     // Load operand2 (divisor) onto FPU stack
+     Add(#$dd#$83); // fld qword ptr [rbx+Operand2]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     // Load operand1 (dividend) onto FPU stack
+     Add(#$dd#$83); // fld qword ptr [rbx+Operand1]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     // Perform partial remainder in a loop until complete
+     // @Repeat:
+     Add(#$d9#$f8); // fprem - ST(0) = ST(0) mod ST(1)
+     Add(#$df#$e0); // fstsw ax - Store FPU status word to AX
+     Add(#$9e); // sahf - Load AH into flags
+     Add(#$7a#$f9); // jp @Repeat (-7 bytes) - Jump if parity flag set (C2=1, incomplete)
+     Add(#$dd#$d9); // fstp st(1) - Pop ST(1), leaving result in ST(0)
+
+     // Store result back to operand0
+     Add(#$dd#$9b); // fstp qword ptr [rbx+Operand0]
+     AddDWord(Operands^[0]*sizeof(double));
+{$else}
      DoItByVMOpcodeDispatcher;  // MOD is complex, keep VM for now
+{$endif}
     end;
     
     popPOW:begin
+{$ifdef POCAX8664UseX87}
+     // Type check both operands
+     AddBinaryOpTypeCheck;
+     
+     // Use x87 FPU for POW operation (base^exponent using fyl2x, f2xm1, fscale)
+     // Algorithm: base^exp = 2^(exp * log2(base))
+     
+     // Load exponent onto FPU stack
+     Add(#$dd#$83); // fld qword ptr [rbx+Operand2]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     // Load base onto FPU stack  
+     Add(#$dd#$83); // fld qword ptr [rbx+Operand1]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     // Calculate base^exponent using x87 instructions
+     Add(#$d9#$f1); // fyl2x - ST(0) = ST(1) * log2(ST(0)), result = exp * log2(base)
+     
+     // Split into integer and fractional parts
+     Add(#$d9#$c0); // fld st(0) - Duplicate ST(0)
+     Add(#$d9#$fc); // frndint - ST(0) = integer part
+     Add(#$d9#$c9); // fxch st(1) - Exchange ST(0) and ST(1)
+     Add(#$d8#$e1); // fsub st(0), st(1) - ST(0) = fractional part
+     
+     // Calculate 2^(fractional part) using f2xm1
+     Add(#$d9#$f0); // f2xm1 - ST(0) = 2^ST(0) - 1
+     Add(#$d9#$e8); // fld1 - Load 1.0
+     Add(#$de#$c1); // faddp - ST(0) = 2^(fractional part)
+     
+     // Scale by integer part
+     Add(#$d9#$fd); // fscale - ST(0) = ST(0) * 2^ST(1)
+     Add(#$dd#$d9); // fstp st(1) - Pop ST(1), leaving result in ST(0)
+
+     // Store result back to operand0
+     Add(#$dd#$9b); // fstp qword ptr [rbx+Operand0]
+     AddDWord(Operands^[0]*sizeof(double));
+{$else}
      DoItByVMOpcodeDispatcher;  // POW needs runtime function, keep VM for now
+{$endif}
     end;
     
     popKEY:begin
@@ -39676,11 +39824,69 @@ begin
     end;
     
     popN_MOD:begin
+{$ifdef POCAX8664UseX87}
+     // Use x87 FPU for MOD operation (fprem)
+     // Load operand2 (divisor) onto FPU stack
+     Add(#$dd#$83); // fld qword ptr [rbx+Operand2]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     // Load operand1 (dividend) onto FPU stack
+     Add(#$dd#$83); // fld qword ptr [rbx+Operand1]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     // Perform partial remainder in a loop until complete
+     // @Repeat:
+     Add(#$d9#$f8); // fprem - ST(0) = ST(0) mod ST(1)
+     Add(#$df#$e0); // fstsw ax - Store FPU status word to AX
+     Add(#$9e); // sahf - Load AH into flags
+     Add(#$7a#$f9); // jp @Repeat (-7 bytes) - Jump if parity flag set (C2=1, incomplete)
+     Add(#$dd#$d9); // fstp st(1) - Pop ST(1), leaving result in ST(0)
+
+     // Store result back to operand0
+     Add(#$dd#$9b); // fstp qword ptr [rbx+Operand0]
+     AddDWord(Operands^[0]*sizeof(double));
+{$else}
      DoItByVMOpcodeDispatcher; // Complex, keep VM for now
+{$endif}
     end;
     
     popN_POW:begin
+{$ifdef POCAX8664UseX87}
+     // Use x87 FPU for POW operation (base^exponent using fyl2x, f2xm1, fscale)
+     // Algorithm: base^exp = 2^(exp * log2(base))
+     
+     // Load exponent onto FPU stack
+     Add(#$dd#$83); // fld qword ptr [rbx+Operand2]
+     AddDWord(Operands^[2]*sizeof(double));
+
+     // Load base onto FPU stack  
+     Add(#$dd#$83); // fld qword ptr [rbx+Operand1]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     // Calculate base^exponent using x87 instructions
+     Add(#$d9#$f1); // fyl2x - ST(0) = ST(1) * log2(ST(0)), result = exp * log2(base)
+     
+     // Split into integer and fractional parts
+     Add(#$d9#$c0); // fld st(0) - Duplicate ST(0)
+     Add(#$d9#$fc); // frndint - ST(0) = integer part
+     Add(#$d9#$c9); // fxch st(1) - Exchange ST(0) and ST(1)
+     Add(#$d8#$e1); // fsub st(0), st(1) - ST(0) = fractional part
+     
+     // Calculate 2^(fractional part) using f2xm1
+     Add(#$d9#$f0); // f2xm1 - ST(0) = 2^ST(0) - 1
+     Add(#$d9#$e8); // fld1 - Load 1.0
+     Add(#$de#$c1); // faddp - ST(0) = 2^(fractional part)
+     
+     // Scale by integer part
+     Add(#$d9#$fd); // fscale - ST(0) = ST(0) * 2^ST(1)
+     Add(#$dd#$d9); // fstp st(1) - Pop ST(1), leaving result in ST(0)
+
+     // Store result back to operand0
+     Add(#$dd#$9b); // fstp qword ptr [rbx+Operand0]
+     AddDWord(Operands^[0]*sizeof(double));
+{$else}
      DoItByVMOpcodeDispatcher; // Complex, keep VM for now
+{$endif}
     end;
     
     popN_INRANGE:begin
@@ -39943,7 +40149,6 @@ begin
     
     popN_JIFGTLOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
-//      Add(#$cc);
 
       // GC bottleneck check
       AddGarbageCollectorBottleneckCheck;
@@ -40132,7 +40337,91 @@ begin
     popIS:begin
      DoItByVMOpcodeDispatcher;
     end;
+
+    popJIFNULL:begin
+     // Jump if value is null (0xFFFF000000000000)
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      // Check if upper 16 bits are 0xFFFF
+      Add(#$66#$81#$bb); // cmp word ptr [rbx+Operand1+6],0xFFFF
+      AddDWord((Operands^[1]*sizeof(double))+6);
+      Add(#$ff#$ff);
+      
+      // If not 0xFFFF, skip the null check (it's not null)
+      Add(#$75#$17); // jne +23 (skip lower 48-bit check)
+      
+      // Check if lower 48 bits are 0 (compare qword with mask)
+      Add(#$48#$b8); // movabs rax, 0x0000FFFFFFFFFFFF
+      AddQWord($0000FFFFFFFFFFFF);
+      
+      Add(#$48#$23#$83); // and rax, qword ptr [rbx+Operand1]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      // Jump if lower 48 bits are 0 (i.e., it's null)
+      Add(#$0f#$84); // jz (near jump to target)
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00); // Placeholder for jump offset
+     end;
+    end;
+   
+    popJIFNOTNULL:begin
+     // Jump if value is NOT null (not 0xFFFF000000000000)
+     if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
+      // Check if upper 16 bits are 0xFFFF
+      Add(#$66#$81#$bb); // cmp word ptr [rbx+Operand1+6],0xFFFF
+      AddDWord((Operands^[1]*sizeof(double))+6);
+      Add(#$ff#$ff);
+      
+      // If not 0xFFFF, it's not null, so jump
+      Add(#$0f#$85); // jne (near jump to target)
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00); // Placeholder for jump offset
+      
+      // Check if lower 48 bits are 0
+      Add(#$48#$b8); // movabs rax, 0x0000FFFFFFFFFFFF
+      AddQWord($0000FFFFFFFFFFFF);
+      
+      Add(#$48#$23#$83); // and rax, qword ptr [rbx+Operand1]
+      AddDWord(Operands^[1]*sizeof(double));
+      
+      // Jump if lower 48 bits are NOT 0 (i.e., it's not null)
+      Add(#$0f#$85); // jnz (near jump to target)
+      if CountFixups>=length(Fixups) then begin
+       SetLength(Fixups,CountFixups+4096);
+      end;
+      Fixups[CountFixups].Kind:=fkOFS;
+      Fixups[CountFixups].Ofs:=CodeBufferLen;
+      Fixups[CountFixups].ToOfs:=Operands^[0];
+      inc(CountFixups);
+      Add(#$00#$00#$00#$00); // Placeholder for jump offset
+     end;
+    end;
+
+    popSAFEEXTRACT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    popSAFEGETMEMBER:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    popSETCONSTLOCAL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
     //*)
+
     else begin
      // For now, all other opcodes fall back to VM interpreter
      DoItByVMOpcodeDispatcher;
