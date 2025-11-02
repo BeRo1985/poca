@@ -39557,10 +39557,10 @@ begin
      AddBinaryOpTypeCheck;
 
      // Convert doubles to int64, AND them, convert back
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$21#$d0); // and rax,rdx
@@ -39574,10 +39574,10 @@ begin
     popBXOR:begin
      AddBinaryOpTypeCheck;
 
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$31#$d0); // xor rax,rdx
@@ -39591,10 +39591,10 @@ begin
     popBOR:begin
      AddBinaryOpTypeCheck;
 
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$09#$d0); // or rax,rdx
@@ -39608,7 +39608,7 @@ begin
     popBNOT:begin
      AddUnaryOpTypeCheck;
 
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
      Add(#$48#$f7#$d0); // not rax
@@ -39622,10 +39622,10 @@ begin
     popBSHL:begin
      AddBinaryOpTypeCheck;
 
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$d3#$e0); // shl rax,cl
@@ -39639,10 +39639,10 @@ begin
     popBSHR:begin
      AddBinaryOpTypeCheck;
 
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$d3#$f8); // sar rax,cl (arithmetic right shift)
@@ -39656,10 +39656,10 @@ begin
     popBUSHR:begin
      AddBinaryOpTypeCheck;
 
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$d3#$e8); // shr rax,cl (logical right shift)
@@ -40034,10 +40034,10 @@ begin
     end;
     
     popN_BAND:begin
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$21#$d0); // and rax,rdx
@@ -40049,10 +40049,10 @@ begin
     end;
     
     popN_BXOR:begin
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$31#$d0); // xor rax,rdx
@@ -40064,10 +40064,10 @@ begin
     end;
     
     popN_BOR:begin
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$93); // cvttsd2si rdx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$09#$d0); // or rax,rdx
@@ -40079,7 +40079,7 @@ begin
     end;
     
     popN_BNOT:begin
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
      Add(#$48#$f7#$d0); // not rax
@@ -40091,10 +40091,10 @@ begin
     end;
     
     popN_BSHL:begin
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$d3#$e0); // shl rax,cl
@@ -40106,10 +40106,10 @@ begin
     end;
     
     popN_BSHR:begin
-     Add(#$f2#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$d3#$f8); // sar rax,cl
@@ -40121,17 +40121,17 @@ begin
     end;
     
     popN_BUSHR:begin
-     Add(#$f2#$0f#$2c#$81); // cvttsd2si rax,qword ptr [rcx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
 
-     Add(#$f2#$0f#$2c#$89); // cvttsd2si rcx,qword ptr [rcx+RegisterOfs]
+     Add(#$f2#$48#$0f#$2c#$8b); // cvttsd2si rcx,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(double));
 
      Add(#$48#$d3#$e8); // shr rax,cl
 
      Add(#$f2#$48#$0f#$2a#$c0); // cvtsi2sd xmm0,rax
 
-     Add(#$f2#$0f#$11#$81); // movsd qword ptr [rcx+RegisterOfs],xmm0
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
     
