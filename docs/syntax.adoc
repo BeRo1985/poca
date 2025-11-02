@@ -462,6 +462,91 @@ For example, `"John" ~ " " ~ "Doe"`, evaluates to `"John Doe"`, since `~` is usi
 "John" ~ " " ~ "Doe"
 ----
 
+=== Nullish Coalescing Operator
+
+POCA provides the nullish coalescing operator `??` to provide default values when dealing with `null` or `undefined`.
+
+The `??` operator returns its left operand if it's not `null` or `undefined`, otherwise it returns the right operand:
+
+[source,javascript]
+----
+let name = userName ?? "Guest";        // Use userName if defined, else "Guest"
+let port = config.port ?? 8080;        // Use config.port if set, else 8080
+let value = input ?? fallback ?? 0;   // Chain multiple defaults (left-to-right)
+----
+
+==== Important: Nullish vs Falsy
+
+Unlike the logical OR operator (`||`), which treats all falsy values (`0`, `""`, `false`, `null`, `undefined`) as triggers for the default, `??` **only** triggers on `null` or `undefined`:
+
+[source,javascript]
+----
+let count = 0;
+let x = count || 10;    // x = 10 (because 0 is falsy)
+let y = count ?? 10;    // y = 0  (because 0 is not nullish)
+
+let name = "";
+let a = name || "Anonymous";   // a = "Anonymous" (because "" is falsy)
+let b = name ?? "Anonymous";   // b = ""  (because "" is not nullish)
+----
+
+==== Precedence and Mixing Rules
+
+The `??` operator has **very low precedence**. It's lower than `||` and `&&`, but higher than the ternary `?:`, so it evaluates **after** most other operators.
+
+**When mixing `??` with `&&` or `||`, the evaluation order may be surprising** because those operators bind more tightly, as `??` has lower precedence:
+
+[source,javascript]
+----
+// ⚠️ These parse in ways that may surprise you:
+result = a || b ?? c;        // Parsed as: (a || b) ?? c
+result = a ?? b && c;        // Parsed as: a ?? (b && c)
+
+// ✅ Always use explicit parentheses to show intent clearly:
+result = a || (b ?? c);      // OR first, then coalesce
+result = (a || b) ?? c;      // Coalesce the OR result
+result = a ?? (b && c);      // Coalesce with AND result
+result = (a ?? b) && c;      // AND after coalescing
+----
+
+Because the low precedence can lead to unexpected grouping, **always add parentheses when mixing `??` with logical operators**, even though it's not a syntax error. This makes your intent explicit and prevents subtle logic errors.
+
+==== Common Patterns
+
+[source,javascript]
+----
+// Providing default values
+let timeout = options.timeout ?? 5000;
+
+// Chaining fallbacks (evaluates left-to-right)
+let port = args.port ?? env.PORT ?? config.port ?? 3000;
+
+// With arithmetic - always use parentheses for clarity
+let total = (price ?? 0) + (tax ?? 0);
+let scaled = (value ?? 1) * multiplier;
+
+// With conditionals
+let message = isError ? errorMsg : (userMsg ?? "No message");
+
+// Safe property access
+let displayName = user?.profile?.name ?? "Anonymous";
+----
+
+==== Why Not Forbid Mixing Like JavaScript?
+
+JavaScript/ECMAScript forbids mixing `??` with `&&` or `||` without parentheses as a syntax error. POCA takes a different approach: it allows mixing but with clear precedence rules where `??` has lower precedence than `&&` and `||`, and encourages developers to use parentheses for clarity. Parentheses are always recommended when combining these operators to avoid ambiguity, even when some people might find it tedious and/or too verbose.
+
+The rationale is that POCA developers should understand operator precedence, just as they do for arithmetic operators like `+` and `*`. Forbidding certain combinations adds language complexity without solving the real issue. Instead, POCA relies on documentation and linter warnings to guide developers toward using parentheses for clarity.
+
+This keeps the language simpler while still encouraging readable code through best practices rather than hard restrictions.
+
+==== Best Practices
+
+* Use `??` when you specifically want to handle `null`/`undefined` but preserve other falsy values like `0`, `""`, or `false`
+* Use `||` when you want to default on any falsy value
+* Always add parentheses when combining `??` with other logical operators for readability
+* Prefer clear, explicit grouping in complex expressions over relying on precedence rules
+
 === Keywords
 
 POCA keywords are used to identify actions to be performed.

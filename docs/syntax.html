@@ -467,6 +467,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_variables">Variables</a></li>
 <li><a href="#_operators">Operators</a></li>
 <li><a href="#_expressions">Expressions</a></li>
+<li><a href="#_nullish_coalescing_operator">Nullish Coalescing Operator</a></li>
 <li><a href="#_keywords">Keywords</a></li>
 <li><a href="#_comments">Comments</a></li>
 <li><a href="#_identifiers_names">Identifiers / Names</a></li>
@@ -1021,6 +1022,117 @@ y = 6;</code></pre>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-javascript" data-lang="javascript">"John" ~ " " ~ "Doe"</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_nullish_coalescing_operator">Nullish Coalescing Operator</h3>
+<div class="paragraph">
+<p>POCA provides the nullish coalescing operator <code>??</code> to provide default values when dealing with <code>null</code> or <code>undefined</code>.</p>
+</div>
+<div class="paragraph">
+<p>The <code>??</code> operator returns its left operand if it&#8217;s not <code>null</code> or <code>undefined</code>, otherwise it returns the right operand:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">let name = userName ?? "Guest";        // Use userName if defined, else "Guest"
+let port = config.port ?? 8080;        // Use config.port if set, else 8080
+let value = input ?? fallback ?? 0;   // Chain multiple defaults (left-to-right)</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_important_nullish_vs_falsy">Important: Nullish vs Falsy</h4>
+<div class="paragraph">
+<p>Unlike the logical OR operator (<code>||</code>), which treats all falsy values (<code>0</code>, <code>""</code>, <code>false</code>, <code>null</code>, <code>undefined</code>) as triggers for the default, <code>??</code> <strong>only</strong> triggers on <code>null</code> or <code>undefined</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">let count = 0;
+let x = count || 10;    // x = 10 (because 0 is falsy)
+let y = count ?? 10;    // y = 0  (because 0 is not nullish)
+
+let name = "";
+let a = name || "Anonymous";   // a = "Anonymous" (because "" is falsy)
+let b = name ?? "Anonymous";   // b = ""  (because "" is not nullish)</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_precedence_and_mixing_rules">Precedence and Mixing Rules</h4>
+<div class="paragraph">
+<p>The <code>??</code> operator has <strong>very low precedence</strong>. It&#8217;s lower than <code>||</code> and <code>&amp;&amp;</code>, but higher than the ternary <code>?:</code>, so it evaluates <strong>after</strong> most other operators.</p>
+</div>
+<div class="paragraph">
+<p><strong>When mixing <code>??</code> with <code>&amp;&amp;</code> or <code>||</code>, the evaluation order may be surprising</strong> because those operators bind more tightly, as <code>??</code> has lower precedence:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">// ⚠️ These parse in ways that may surprise you:
+result = a || b ?? c;        // Parsed as: (a || b) ?? c
+result = a ?? b &amp;&amp; c;        // Parsed as: a ?? (b &amp;&amp; c)
+
+// ✅ Always use explicit parentheses to show intent clearly:
+result = a || (b ?? c);      // OR first, then coalesce
+result = (a || b) ?? c;      // Coalesce the OR result
+result = a ?? (b &amp;&amp; c);      // Coalesce with AND result
+result = (a ?? b) &amp;&amp; c;      // AND after coalescing</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Because the low precedence can lead to unexpected grouping, <strong>always add parentheses when mixing <code>??</code> with logical operators</strong>, even though it&#8217;s not a syntax error. This makes your intent explicit and prevents subtle logic errors.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_common_patterns">Common Patterns</h4>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">// Providing default values
+let timeout = options.timeout ?? 5000;
+
+// Chaining fallbacks (evaluates left-to-right)
+let port = args.port ?? env.PORT ?? config.port ?? 3000;
+
+// With arithmetic - always use parentheses for clarity
+let total = (price ?? 0) + (tax ?? 0);
+let scaled = (value ?? 1) * multiplier;
+
+// With conditionals
+let message = isError ? errorMsg : (userMsg ?? "No message");
+
+// Safe property access
+let displayName = user?.profile?.name ?? "Anonymous";</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_why_not_forbid_mixing_like_javascript">Why Not Forbid Mixing Like JavaScript?</h4>
+<div class="paragraph">
+<p>JavaScript/ECMAScript forbids mixing <code>??</code> with <code>&amp;&amp;</code> or <code>||</code> without parentheses as a syntax error. POCA takes a different approach: it allows mixing but with clear precedence rules where <code>??</code> has lower precedence than <code>&amp;&amp;</code> and <code>||</code>, and encourages developers to use parentheses for clarity. Parentheses are always recommended when combining these operators to avoid ambiguity, even when some people might find it tedious and/or too verbose.</p>
+</div>
+<div class="paragraph">
+<p>The rationale is that POCA developers should understand operator precedence, just as they do for arithmetic operators like <code>+</code> and <code>*</code>. Forbidding certain combinations adds language complexity without solving the real issue. Instead, POCA relies on documentation and linter warnings to guide developers toward using parentheses for clarity.</p>
+</div>
+<div class="paragraph">
+<p>This keeps the language simpler while still encouraging readable code through best practices rather than hard restrictions.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_best_practices">Best Practices</h4>
+<div class="ulist">
+<ul>
+<li>
+<p>Use <code>??</code> when you specifically want to handle <code>null</code>/<code>undefined</code> but preserve other falsy values like <code>0</code>, <code>""</code>, or <code>false</code></p>
+</li>
+<li>
+<p>Use <code>||</code> when you want to default on any falsy value</p>
+</li>
+<li>
+<p>Always add parentheses when combining <code>??</code> with other logical operators for readability</p>
+</li>
+<li>
+<p>Prefer clear, explicit grouping in complex expressions over relying on precedence rules</p>
+</li>
+</ul>
 </div>
 </div>
 </div>
@@ -1787,7 +1899,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-04-11 21:30:38 +0200
+Last updated 2025-11-02 19:25:25 +0100
 </div>
 </div>
 </body>
