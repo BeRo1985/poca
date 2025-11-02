@@ -29,7 +29,7 @@ function clearScreen() {
   print("\u001b[2J");
 }
 
-function setCursorPosition(x, y) {
+function setCursorPosition(let x, let y) {
   print(`\u001b[${y + 1};${x + 1}H`);
 }
 
@@ -45,7 +45,7 @@ function resetColor() {
   print("\u001b[0m");
 }
 
-function setBackgroundColor(color) {
+function setBackgroundColor(let color) {
   print(`\u001b[48;5;${color}m`);
 }
 
@@ -118,7 +118,7 @@ function drawFrameBuffer() {
   setCursorVisible(false);
 }
 
-function keypress(key) {
+function keypress(let key) {
   if (key === 3 || key === 113) { // ctrl-c or 'q'
     running = false;
   } else if (key === 97 && dx === 0) {
