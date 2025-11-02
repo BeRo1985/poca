@@ -2132,7 +2132,6 @@ function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCA
 
 procedure POCASetupRegisters(Frame:PPOCAFrame;Code:PPOCACode); {$ifdef caninline}inline;{$endif}
 procedure POCASetupFrameValues(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode); {$ifdef caninline}inline;{$endif}
-function POCASetupCallGetFuncObjPtr(var Func,Obj:TPOCAValue;const MethodCall:Boolean):PPOCAObject; {$ifdef caninline}inline;{$endif}
 
 function POCAInstanceCreate:PPOCAInstance;
 procedure POCAInstanceDestroy(var Instance:PPOCAInstance);
@@ -34140,43 +34139,6 @@ begin
 
  end;
 
-end;
-
-function POCASetupCallGetFuncObjPtr(var Func,Obj:TPOCAValue;const MethodCall:Boolean):PPOCAObject;
-begin
- if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
-  result:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
-  case result^.Header.ValueType of
-   pvtFUNCTION:begin
-    if not MethodCall then begin
-     Obj:=PPOCAFunction(result)^.Obj;
-    end;
-   end;
-   pvtHASH:begin
-    if assigned(PPOCAHash(result)^.Events) and assigned(PPOCAHash(result)^.Events^.HashRecord^.Events) then begin
-     if POCAIsValueNull(Obj) then begin
-      Obj:=Func;
-     end;
-     Func:=PPOCAHash(result)^.Events^.HashRecord^.Events^[pmoCALL];
-     if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
-      result:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
-      if result^.Header.ValueType<>pvtFUNCTION then begin
-       result:=nil;
-      end;
-     end else begin
-      result:=nil;
-     end;
-    end else begin
-     result:=nil;
-    end;
-   end;
-   else begin
-    result:=nil;
-   end;
-  end;
- end else begin
-  result:=nil;
- end;
 end;
 
 function POCASetupFunctionOpCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array;Func:TPOCAValue):PPOCAFrame;

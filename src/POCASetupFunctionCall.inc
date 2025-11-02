@@ -36,7 +36,39 @@ begin
 {$ifend}
 {$ifend}
 
- ObjPtr:=POCASetupCallGetFuncObjPtr(Func,Obj,{$ifdef POCASETUPFUNCTIONCALLMETHOD}true{$else}false{$endif});
+ if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
+  ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
+  case ObjPtr^.Header.ValueType of
+   pvtFUNCTION:begin
+{$ifndef POCASETUPFUNCTIONCALLMETHOD}
+    Obj:=PPOCAFunction(ObjPtr)^.Obj;
+{$endif}
+   end;
+   pvtHASH:begin
+    if assigned(PPOCAHash(ObjPtr)^.Events) and assigned(PPOCAHash(ObjPtr)^.Events^.HashRecord^.Events) then begin
+     if POCAIsValueNull(Obj) then begin
+      Obj:=Func;
+     end;
+     Func:=PPOCAHash(ObjPtr)^.Events^.HashRecord^.Events^[pmoCALL];
+     if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
+      ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
+      if ObjPtr^.Header.ValueType<>pvtFUNCTION then begin
+       ObjPtr:=nil;
+      end;
+     end else begin
+      ObjPtr:=nil;
+     end;
+    end else begin
+     ObjPtr:=nil;
+    end;
+   end;
+   else begin
+    ObjPtr:=nil;
+   end;
+  end;
+ end else begin
+  ObjPtr:=nil;
+ end;
 
  if assigned(ObjPtr) then begin
 
