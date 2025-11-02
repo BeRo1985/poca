@@ -32978,12 +32978,12 @@ var TokenList:PPOCAToken;
        end;
       end;
       ptSYMBOL:begin
-       if CodeToken=ptFASTFUNCTION then begin
+{      if CodeToken=ptFASTFUNCTION then begin
         IsLocal:=true;
        end else begin
         IsLocal:=false;
-       end;
-//     IsLocal:=true;
+       end;}
+       IsLocal:=true;
        Symbol:=t;
       end;
       ptCOMMA:begin
