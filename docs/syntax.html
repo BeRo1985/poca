@@ -1435,15 +1435,22 @@ readLine();</code></pre>
 <h3 id="_functionslambdas">Functions/Lambdas</h3>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-javascript" data-lang="javascript">function Test1(a, b){
-  return (a + b) * 2;
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">// Function parameters default to 'let'
+function Test1(a, b){
+  return (a + b) * 2;  // a and b are treated as 'let' by default
 }
 
+// Explicit 'let' (same as default)
 function Test2(let a, let b){
   return (a + b) * 2;
 }
 
-fastfunction Test2(let a, let b){
+// Explicit 'var' when needed for hash table storage
+function Test3(var a, var b){
+  return (a + b) * 2;  // a and b stored in local hash table
+}
+
+fastfunction Test4(let a, let b){
   return (a + b) * 2;
 }
 
@@ -1498,6 +1505,19 @@ function searchPrimes(let from, let to){
   }
   return primes;
 }</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_function_parameter_scoping">Function Parameter Scoping</h4>
+<div class="paragraph">
+<p>Function parameters default to <code>let</code> scope unless explicitly declared with <code>var</code>.
+This provides better performance by storing parameters directly in the function&#8217;s
+register set or frame storage for faster access, depending on the scoping, avoiding
+the hash table lookup overhead of <code>var</code>.</p>
+</div>
+<div class="paragraph">
+<p>When you need dynamic variable lookup or metaprogramming features, you can
+explicitly declare parameters as <code>var</code> to store them in the local hash table.</p>
 </div>
 </div>
 <div class="sect3">
@@ -1976,7 +1996,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-03 00:19:25 +0100
+Last updated 2025-11-03 00:39:25 +0100
 </div>
 </div>
 </body>

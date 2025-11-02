@@ -802,15 +802,22 @@ readLine();
 
 [source,javascript]
 ----
+// Function parameters default to 'let'
 function Test1(a, b){
-  return (a + b) * 2;
+  return (a + b) * 2;  // a and b are treated as 'let' by default
 }
 
+// Explicit 'let' (same as default)
 function Test2(let a, let b){
   return (a + b) * 2;
 }
 
-fastfunction Test2(let a, let b){
+// Explicit 'var' when needed for hash table storage
+function Test3(var a, var b){
+  return (a + b) * 2;  // a and b stored in local hash table
+}
+
+fastfunction Test4(let a, let b){
   return (a + b) * 2;
 }
 
@@ -866,6 +873,16 @@ function searchPrimes(let from, let to){
   return primes;
 }
 ----
+
+==== Function Parameter Scoping
+
+Function parameters default to `let` scope unless explicitly declared with `var`. 
+This provides better performance by storing parameters directly in the function's 
+register set or frame storage for faster access, depending on the scoping, avoiding 
+the hash table lookup overhead of `var`.
+
+When you need dynamic variable lookup or metaprogramming features, you can 
+explicitly declare parameters as `var` to store them in the local hash table.
 
 ==== Fast Functions
 
