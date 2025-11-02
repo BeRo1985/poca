@@ -158,12 +158,13 @@ directly in registers for maximal performance in self-contained cases.
 `let` and `const` have higher priority than `var` in variable resolution. When 
 the same identifier is used for both a `let`/`const` variable and a `var` variable, 
 the `let`/`const` binding takes precedence within its scope, effectively shadowing 
-the `var` variable. This shadowing only affects visibility within the block where 
-`let`/`const` is declared; the `var` variable in the outer scope remains unchanged. 
-The compiler resolves `let` and `const` bindings at compile time through static 
-analysis of the lexical scope, providing fast access through registers or frame 
-storage. In contrast, `var` variables are stored in a hash table and resolved at 
-runtime, allowing for dynamic behavior but with the overhead of hash table lookups.
+the `var` variable. Variables in inner scopes shadow variables in outer scopes 
+following standard lexical scoping rules - the most local binding wins regardless 
+of whether it's declared with `var`, `let`, or `const`. The compiler resolves `let` 
+and `const` bindings at compile time through static analysis of the lexical scope, 
+providing fast access through registers or frame storage. In contrast, `var` 
+variables are stored in a hash table and resolved at runtime, allowing for dynamic 
+behavior but with the overhead of hash table lookups.
 
 Example:
 

@@ -678,12 +678,13 @@ directly in registers for maximal performance in self-contained cases.</p>
 <p><code>let</code> and <code>const</code> have higher priority than <code>var</code> in variable resolution. When
 the same identifier is used for both a <code>let</code>/<code>const</code> variable and a <code>var</code> variable,
 the <code>let</code>/<code>const</code> binding takes precedence within its scope, effectively shadowing
-the <code>var</code> variable. This shadowing only affects visibility within the block where
-<code>let</code>/<code>const</code> is declared; the <code>var</code> variable in the outer scope remains unchanged.
-The compiler resolves <code>let</code> and <code>const</code> bindings at compile time through static
-analysis of the lexical scope, providing fast access through registers or frame
-storage. In contrast, <code>var</code> variables are stored in a hash table and resolved at
-runtime, allowing for dynamic behavior but with the overhead of hash table lookups.</p>
+the <code>var</code> variable. Variables in inner scopes shadow variables in outer scopes
+following standard lexical scoping rules - the most local binding wins regardless
+of whether it&#8217;s declared with <code>var</code>, <code>let</code>, or <code>const</code>. The compiler resolves <code>let</code>
+and <code>const</code> bindings at compile time through static analysis of the lexical scope,
+providing fast access through registers or frame storage. In contrast, <code>var</code>
+variables are stored in a hash table and resolved at runtime, allowing for dynamic
+behavior but with the overhead of hash table lookups.</p>
 </div>
 <div class="paragraph">
 <p>Example:</p>
@@ -1994,7 +1995,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-03 00:53:52 +0100
+Last updated 2025-11-03 00:59:07 +0100
 </div>
 </div>
 </body>
