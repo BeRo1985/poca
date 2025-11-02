@@ -1,6 +1,6 @@
 
 var Vector = {
-  create: function(reg vx=0, reg vy=0, reg vz=0){
+  create: function(let vx=0, let vy=0, let vz=0){
     return setHashEvents({
                            prototype: this, 
                            x: vx,
@@ -8,7 +8,7 @@ var Vector = {
                            z: vz
                          }, this);
   },
-  __add: fastfunction(reg a, reg b){
+  __add: fastfunction(let a, let b){
     // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
     if((a instanceof Vector) && (b instanceof Vector)){
       return new Vector(a.x + b.x, a.y + b.y, a.z + b.z);
@@ -16,7 +16,7 @@ var Vector = {
       throw "No vector?";
     }
   },
-  __sub: fastfunction(reg a, reg b){
+  __sub: fastfunction(let a, let b){
     // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
     if((a instanceof Vector) && (b instanceof Vector)){
       return new Vector(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -24,7 +24,7 @@ var Vector = {
       throw "No vector?";
     }
   },
-  __mul:fastfunction(reg a, reg b){
+  __mul:fastfunction(let a, let b){
     // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
     if((a instanceof Vector) && (b instanceof Vector)){
       return new Vector(a.x * b.x, a.y * b.y, a.z * b.z);
@@ -32,7 +32,7 @@ var Vector = {
       throw "No vector?";
     }
   },
-  __div: fastfunction(reg a, reg b){
+  __div: fastfunction(let a, let b){
     // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
     if((a instanceof Vector) && (b instanceof Vector)){
       return new Vector(a.x / b.x, a.y / b.y, a.z / b.z);

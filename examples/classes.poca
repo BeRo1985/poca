@@ -5,11 +5,11 @@ class Test extends BaseClass {
 
   var a = 0;
 
-  constructor(reg v){
+  constructor(let v){
     this.a = v + 1;
   }
 
-  function init(reg v){
+  function init(let v){
     this.a = v + 1;
   }
 
@@ -23,7 +23,7 @@ class TestB extends Test {
 
   var x = 0;
 
-  constructor(reg v){
+  constructor(let v){
     super(v * 2);
     this.x = v + 1;
   }

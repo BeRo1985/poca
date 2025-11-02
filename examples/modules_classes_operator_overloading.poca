@@ -23,7 +23,7 @@ module ExtendedMath {
       }
     }
 
-    function __add(reg a, reg b){
+    function __add(let a, let b){
       if((a instanceof Vector) && (b instanceof Vector)){
         return new Vector(a.x + b.x, a.y + b.y, a.z + b.z);
       }else{
@@ -31,7 +31,7 @@ module ExtendedMath {
       }
     }
     
-    function __sub(reg a, reg b){
+    function __sub(let a, let b){
       if((a instanceof Vector) && (b instanceof Vector)){
         return new Vector(a.x - b.x, a.y - b.y, a.z - b.z);
       }else{
@@ -39,7 +39,7 @@ module ExtendedMath {
       }
     }
     
-    function __mul(reg a, reg b){
+    function __mul(let a, let b){
       if((a instanceof Vector) && (b instanceof Vector)){
         return new Vector(a.x * b.x, a.y * b.y, a.z * b.z);
       }else{
@@ -47,7 +47,7 @@ module ExtendedMath {
       }
     }
     
-    function __div(reg a, reg b){
+    function __div(let a, let b){
       if((a instanceof Vector) && (b instanceof Vector)){
         return new Vector(a.x / b.x, a.y / b.y, a.z / b.z);
       }else{

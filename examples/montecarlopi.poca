@@ -1,4 +1,4 @@
-function mcpi(reg n){
+function mcpi(let n){
   let m = 0;
   for(let i = 0; i < n; i++){
     let (x,y) = (Math.random(), Math.random());

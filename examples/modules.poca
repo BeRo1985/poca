@@ -5,7 +5,7 @@ module TestModule {
 
     var a = 0;
      
-    constructor(reg v){
+    constructor(let v){
       this.a = v;  
     }     
     
