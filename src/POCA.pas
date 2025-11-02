@@ -39457,21 +39457,92 @@ begin
     end;
     
     popGETLOCALVALUE:begin
+{$ifdef POCAClosureArrayValues}
      DoItByVMOpcodeDispatcher;
+{$else}
+     // Registers^[Operands^[0]]:=Frame^.LocalValues[Operands^[1]];
+     // Load Frame.LocalValues pointer
+     Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.LocalValues]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.LocalValues)));
+     
+     // Load value from LocalValues[Operands^[1]]
+     Add(#$48#$8b#$80); // mov rax,qword ptr [rax+offset]
+     AddDWord(Operands^[1]*sizeof(TPOCAValue));
+     
+     // Store to Registers[Operands^[0]]
+     Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
+     AddDWord(Operands^[0]*sizeof(TPOCAValue));
+{$endif}
     end;
-    
+
     popSETLOCALVALUE:begin
+{$ifdef POCAClosureArrayValues}
      DoItByVMOpcodeDispatcher;
+{$else}
+     // Frame^.LocalValues[Operands^[0]]:=Registers^[Operands^[1]];
+
+     // Load value from Registers[Operands^[1]]
+     Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(TPOCAValue));
+     
+     // Load Frame.LocalValues pointer
+     Add(#$49#$8b#$8d); // mov rcx,qword ptr [r13+TPOCAFrame.LocalValues]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.LocalValues)));
+     
+     // Store to LocalValues[Operands^[0]]
+     Add(#$48#$89#$81); // mov qword ptr [rcx+offset],rax
+     AddDWord(Operands^[0]*sizeof(TPOCAValue));
+{$endif}
     end;
-    
+
     popGETOUTERVALUE:begin
+{$ifdef POCAClosureArrayValues}
      DoItByVMOpcodeDispatcher;
+{$else}
+     // Registers^[Operands^[0]]:=Frame^.OuterValueLevels[Operands^[1]][Operands^[2]];
+
+     // Load Frame.OuterValueLevels pointer (pointer to array of arrays)
+     Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.OuterValueLevels]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.OuterValueLevels)));
+     
+     // Get pointer to OuterValueLevels[Operands^[1]] (the inner array)
+     Add(#$48#$8b#$80); // mov rax,qword ptr [rax+offset]
+     AddDWord(Operands^[1]*sizeof(Pointer));
+     
+     // Load value from inner array[Operands^[2]]
+     Add(#$48#$8b#$80); // mov rax,qword ptr [rax+offset]
+     AddDWord(Operands^[2]*sizeof(TPOCAValue));
+     
+     // Store to Registers[Operands^[0]]
+     Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
+     AddDWord(Operands^[0]*sizeof(TPOCAValue));
+{$endif}
     end;
-    
+
     popSETOUTERVALUE:begin
+{$ifdef POCAClosureArrayValues}
      DoItByVMOpcodeDispatcher;
+{$else}
+     // Frame^.OuterValueLevels[Operands^[0]][Operands^[1]]:=Registers^[Operands^[2]];
+
+     // Load value from Registers[Operands^[2]]
+     Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(TPOCAValue));
+     
+     // Load Frame.OuterValueLevels pointer (pointer to array of arrays)
+     Add(#$49#$8b#$8d); // mov rcx,qword ptr [r13+TPOCAFrame.OuterValueLevels]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.OuterValueLevels)));
+     
+     // Get pointer to OuterValueLevels[Operands^[0]] (the inner array)
+     Add(#$48#$8b#$89); // mov rcx,qword ptr [rcx+offset]
+     AddDWord(Operands^[0]*sizeof(Pointer));
+     
+     // Store to inner array[Operands^[1]]
+     Add(#$48#$89#$81); // mov qword ptr [rcx+offset],rax
+     AddDWord(Operands^[1]*sizeof(TPOCAValue));
+{$endif}
     end;
-    
+
     popNEWARRAY:begin
      DoItByVMOpcodeDispatcher;
     end;
