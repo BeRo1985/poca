@@ -33810,52 +33810,58 @@ begin
 end;
 
 procedure POCASetupArguments(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode;Args:PPOCAValues;CountArguments:TPOCAInt32;ArgIndices:PPOCAUInt32Array=nil);
-var i,j:TPOCAInt32;
+var Index,ArgumentOffset:TPOCAInt32;
     Hash:PPOCAHash;
     Value,Arguments:TPOCAValue;
     ArrayRecord:PPOCAArrayRecord;
 begin
+
  if CountArguments<TPOCAInt32(Code^.CountArguments) then begin
+
   POCASetupArgumentsErrorTooFewArguments(Context,Code,CountArguments);
+
  end else begin
+
   Hash:=PPOCAHash(POCAGetValueReferencePointer(Frame^.Locals));
-  j:=0;
-  for i:=0 to Code^.CountArguments-1 do begin
+
+  ArgumentOffset:=0;
+
+  for Index:=0 to Code^.CountArguments-1 do begin
    if assigned(ArgIndices) then begin
-    Value:=Args^[ArgIndices^[i]];
+    Value:=Args^[ArgIndices^[Index]];
    end else begin
-    Value:=Args^[i];
+    Value:=Args^[Index];
    end;
    if POCAIsValueCode(Value) then begin
     Value:=POCABindFunction(Context,Frame,Value,false);
    end;
-   case Code^.ArgumentLocals[i].Kind of
+   case Code^.ArgumentLocals[Index].Kind of
     TPOCACodeArgument.pcakVAR:begin
      if assigned(Hash) then begin
       if assigned(Hash^.Events) then begin
-       POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.ArgumentSymbols[i]],Value,false);
+       POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.ArgumentSymbols[Index]],Value,false);
       end else begin
-       POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.ArgumentSymbols[i]],Value,false);
+       POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.ArgumentSymbols[Index]],Value,false);
       end;
      end else begin
       POCARuntimeError(Context,'Function has no locals');
      end;
     end;
     TPOCACodeArgument.pcakREG:begin
-     Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
+     Frame^.Registers[Code^.ArgumentLocals[Index].Index]:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
      if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      POCAArrayFastSet(Frame^.LocalValues,Code^.ArgumentLocals[i].Index,Value);
+      POCAArrayFastSet(Frame^.LocalValues,Code^.ArgumentLocals[Index].Index,Value);
      end else begin
-      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[i].Level),Code^.ArgumentLocals[i].Index,Value);
+      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[Index].Level),Code^.ArgumentLocals[Index].Index,Value);
      end;
 {$else}
-     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      Frame^.LocalValues[Code^.ArgumentLocals[i].Index]:=Value;
+     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+      Frame^.LocalValues[Code^.ArgumentLocals[Index].Index]:=Value;
      end else begin
-      Frame^.OuterValueLevels[Code^.ArgumentLocals[i].Level][Code^.ArgumentLocals[i].Index]:=Value;
+      Frame^.OuterValueLevels[Code^.ArgumentLocals[Index].Level][Code^.ArgumentLocals[Index].Index]:=Value;
      end;
 {$endif}
     end;
@@ -33863,48 +33869,51 @@ begin
     end;
    end;
   end;
-  inc(j,Code^.CountArguments);
+
+  inc(ArgumentOffset,Code^.CountArguments);
+
   dec(CountArguments,Code^.CountArguments);
-  for i:=0 to Code^.CountOptionalArguments-1 do begin
+
+  for Index:=0 to Code^.CountOptionalArguments-1 do begin
    if CountArguments>0 then begin
     if assigned(ArgIndices) then begin
-     Value:=Args^[ArgIndices^[i+j]];
+     Value:=Args^[ArgIndices^[Index+ArgumentOffset]];
     end else begin
-     Value:=Args^[i+j];
+     Value:=Args^[Index+ArgumentOffset];
     end;
    end else begin
-    Value:=Code^.Constants[Code^.OptionalArgumentValues[i]];
+    Value:=Code^.Constants[Code^.OptionalArgumentValues[Index]];
    end;
    if POCAIsValueCode(Value) then begin
     Value:=POCABindFunction(Context,Frame,Value,false);
    end;
-   case Code^.OptionalArgumentLocals[i].Kind of
+   case Code^.OptionalArgumentLocals[Index].Kind of
     TPOCACodeArgument.pcakVAR:begin
      if assigned(Hash) then begin
       if assigned(Hash^.Events) then begin
-       POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value,false);
+       POCAHashSet(Context,Frame^.Locals,Code^.Constants[Code^.OptionalArgumentSymbols[Index]],Value,false);
       end else begin
-       POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.OptionalArgumentSymbols[i]],Value,false);
+       POCAHashNewSymbol(Context^.Instance,Hash,Code^.Constants[Code^.OptionalArgumentSymbols[Index]],Value,false);
       end;
      end else begin
       POCARuntimeError(Context,'Function has no locals');
      end;
     end;
     TPOCACodeArgument.pcakREG:begin
-     Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
+     Frame^.Registers[Code^.OptionalArgumentLocals[Index].Index]:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
-     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      POCAArrayFastSet(Frame^.LocalValues,Code^.OptionalArgumentLocals[i].Index,Value);
+     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+      POCAArrayFastSet(Frame^.LocalValues,Code^.OptionalArgumentLocals[Index].Index,Value);
      end else begin
-      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[i].Level),Code^.OptionalArgumentLocals[i].Index,Value);
+      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[Index].Level),Code^.OptionalArgumentLocals[Index].Index,Value);
      end;
 {$else}
-     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      Frame^.LocalValues[Code^.OptionalArgumentLocals[i].Index]:=Value;
+     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+      Frame^.LocalValues[Code^.OptionalArgumentLocals[Index].Index]:=Value;
      end else begin
-      Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[i].Level][Code^.OptionalArgumentLocals[i].Index]:=Value;
+      Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[Index].Level][Code^.OptionalArgumentLocals[Index].Index]:=Value;
      end;
 {$endif}
     end;
@@ -33913,7 +33922,9 @@ begin
    end;
    dec(CountArguments);
   end;
-  inc(j,Code^.CountOptionalArguments);
+
+  inc(ArgumentOffset,Code^.CountOptionalArguments);
+
   if Code^.NeedArgumentArray or Code^.HasRestArguments or (CountArguments>0) then begin
    Arguments:=POCANewArray(Context);
    if CountArguments<=0 then begin
@@ -33922,16 +33933,16 @@ begin
    POCAArraySetSize(Arguments,CountArguments);
    if CountArguments>0 then begin
     ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(Arguments))^.ArrayRecord;
-    for i:=0 to CountArguments-1 do begin
+    for Index:=0 to CountArguments-1 do begin
      if assigned(ArgIndices) then begin
-      Value:=Args^[ArgIndices^[i+j]];
+      Value:=Args^[ArgIndices^[Index+ArgumentOffset]];
      end else begin
-      Value:=Args^[i+j];
+      Value:=Args^[Index+ArgumentOffset];
      end;
      if POCAIsValueCode(Value) then begin
       Value:=POCABindFunction(Context,Frame,Value,false);
      end;
-     ArrayRecord^.Data[i]:=Value;
+     ArrayRecord^.Data[Index]:=Value;
     end;
    end;
    if assigned(Hash) then begin
@@ -33944,74 +33955,73 @@ begin
     POCARuntimeError(Context,'Function has no locals');
    end;
   end;
+
  end;
 end;
 
 procedure POCACheckNamedArguments(Context:PPOCAContext;Code:PPOCACode;Hash:PPOCAHash;const HashValue:TPOCAValue);
-var i:TPOCAInt32;
-    Sym,Value:TPOCAValue;
+var Index:TPOCAInt32;
+    Symbol,Value:TPOCAValue;
 begin
-//Value:=POCAValueNull;
  Value.CastedUInt64:=POCAValueNullCastedUInt64;
- for i:=0 to Code^.CountArguments-1 do begin
-  Sym:=Code^.Constants[Code^.ArgumentSymbols[i]];
+ for Index:=0 to Code^.CountArguments-1 do begin
+  Symbol:=Code^.Constants[Code^.ArgumentSymbols[Index]];
   if assigned(Hash^.Events) then begin
-   if not POCAHashGet(Context,HashValue,Sym,Value) then begin
-    POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Sym))^.Data+'"');
+   if not POCAHashGet(Context,HashValue,Symbol,Value) then begin
+    POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Symbol))^.Data+'"');
     exit;
    end;
   end else begin
-   if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Sym)),Value) then begin
-    POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Sym))^.Data+'"');
+   if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Symbol)),Value) then begin
+    POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Symbol))^.Data+'"');
     exit;
    end;
   end;
  end;
- for i:=0 to Code^.CountOptionalArguments-1 do begin
-  Sym:=Code^.Constants[Code^.OptionalArgumentSymbols[i]];
+ for Index:=0 to Code^.CountOptionalArguments-1 do begin
+  Symbol:=Code^.Constants[Code^.OptionalArgumentSymbols[Index]];
   if assigned(Hash^.Events) then begin
-   if not POCAHashGet(Context,HashValue,Sym,Value) then begin
-    POCAHashSet(Context,HashValue,Sym,Code^.Constants[Code^.OptionalArgumentValues[i]],false);
+   if not POCAHashGet(Context,HashValue,Symbol,Value) then begin
+    POCAHashSet(Context,HashValue,Symbol,Code^.Constants[Code^.OptionalArgumentValues[Index]],false);
    end;
   end else begin
-   if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Sym)),Value) then begin
-    POCAHashNewSymbol(Context^.Instance,Hash,Sym,Code^.Constants[Code^.OptionalArgumentValues[i]],false);
+   if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Symbol)),Value) then begin
+    POCAHashNewSymbol(Context^.Instance,Hash,Symbol,Code^.Constants[Code^.OptionalArgumentValues[Index]],false);
    end;
   end;
  end;
  if Code^.NeedArgumentArray then begin
-  Sym:=Code^.Constants[Code^.RestArgSym];
+  Symbol:=Code^.Constants[Code^.RestArgSym];
   if assigned(Hash^.Events) then begin
-   if not POCAHashGet(Context,HashValue,Sym,Value) then begin
-    POCAHashSet(Context,HashValue,Sym,POCANewArray(Context),false);
+   if not POCAHashGet(Context,HashValue,Symbol,Value) then begin
+    POCAHashSet(Context,HashValue,Symbol,POCANewArray(Context),false);
    end;
   end else begin
-   if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Sym)),Value) then begin
-    POCAHashNewSymbol(Context^.Instance,Hash,Sym,POCANewArray(Context),false);
+   if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Symbol)),Value) then begin
+    POCAHashNewSymbol(Context^.Instance,Hash,Symbol,POCANewArray(Context),false);
    end;
   end;
  end;
 end;
 
 procedure POCASetupNamedArgumentsWithLocals(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode;const Hash,Locals:TPOCAValue);
-var i:TPOCAInt32;
-    Sym,Value:TPOCAValue;
+var Index:TPOCAInt32;
+    Symbol,Value:TPOCAValue;
 begin
-//Value:=POCAValueNull;
  Value.CastedUInt64:=POCAValueNullCastedUInt64;
- for i:=0 to Code^.CountArguments-1 do begin
-  Sym:=Code^.Constants[Code^.ArgumentSymbols[i]];
-  if POCAHashGet(Context,Hash,Sym,Value) then begin
-   case Code^.ArgumentLocals[i].Kind of
+ for Index:=0 to Code^.CountArguments-1 do begin
+  Symbol:=Code^.Constants[Code^.ArgumentSymbols[Index]];
+  if POCAHashGet(Context,Hash,Symbol,Value) then begin
+   case Code^.ArgumentLocals[Index].Kind of
     TPOCACodeArgument.pcakVAR:begin
      if POCAIsValueHash(Locals) then begin
-      POCAHashSet(Context,Locals,Sym,Value,false);
+      POCAHashSet(Context,Locals,Symbol,Value,false);
      end else begin
       POCARuntimeError(Context,'Function has no locals');
      end;
     end;
     TPOCACodeArgument.pcakREG:begin
-     Frame^.Registers[Code^.ArgumentLocals[i].Index]:=Value;
+     Frame^.Registers[Code^.ArgumentLocals[Index].Index]:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
@@ -34021,10 +34031,10 @@ begin
       POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[i].Level),Code^.ArgumentLocals[i].Index,Value);
      end;
 {$else}
-     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      Frame^.LocalValues[Code^.ArgumentLocals[i].Index]:=Value;
+     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+      Frame^.LocalValues[Code^.ArgumentLocals[Index].Index]:=Value;
      end else begin
-      Frame^.OuterValueLevels[Code^.ArgumentLocals[i].Level][Code^.ArgumentLocals[i].Index]:=Value;
+      Frame^.OuterValueLevels[Code^.ArgumentLocals[Index].Level][Code^.ArgumentLocals[Index].Index]:=Value;
      end;
 {$endif}
     end;
@@ -34032,25 +34042,25 @@ begin
     end;
    end;
   end else begin
-   POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Sym))^.Data+'"');
+   POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Symbol))^.Data+'"');
    exit;
   end;
  end;
- for i:=0 to Code^.CountOptionalArguments-1 do begin
-  Sym:=Code^.Constants[Code^.OptionalArgumentSymbols[i]];
-  if not POCAHashGet(Context,Hash,Sym,Value) then begin
-   Value:=Code^.Constants[Code^.OptionalArgumentValues[i]];
+ for Index:=0 to Code^.CountOptionalArguments-1 do begin
+  Symbol:=Code^.Constants[Code^.OptionalArgumentSymbols[Index]];
+  if not POCAHashGet(Context,Hash,Symbol,Value) then begin
+   Value:=Code^.Constants[Code^.OptionalArgumentValues[Index]];
   end;
-  case Code^.OptionalArgumentLocals[i].Kind of
+  case Code^.OptionalArgumentLocals[Index].Kind of
    TPOCACodeArgument.pcakVAR:begin
     if POCAIsValueHash(Locals) then begin
-     POCAHashSet(Context,Locals,Sym,Value,false);
+     POCAHashSet(Context,Locals,Symbol,Value,false);
     end else begin
      POCARuntimeError(Context,'Function has no locals');
     end;
    end;
    TPOCACodeArgument.pcakREG:begin
-    Frame^.Registers[Code^.OptionalArgumentLocals[i].Index]:=Value;
+    Frame^.Registers[Code^.OptionalArgumentLocals[Index].Index]:=Value;
    end;
    TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
@@ -34060,10 +34070,10 @@ begin
      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[i].Level),Code^.OptionalArgumentLocals[i].Index,Value);
     end;
 {$else}
-    if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-     Frame^.LocalValues[Code^.OptionalArgumentLocals[i].Index]:=Value;
+    if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+     Frame^.LocalValues[Code^.OptionalArgumentLocals[Index].Index]:=Value;
     end else begin
-     Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[i].Level][Code^.OptionalArgumentLocals[i].Index]:=Value;
+     Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[Index].Level][Code^.OptionalArgumentLocals[Index].Index]:=Value;
     end;
 {$endif}
    end;
@@ -34072,12 +34082,12 @@ begin
   end;
  end;
  if Code^.NeedArgumentArray then begin
-  Sym:=Code^.Constants[Code^.RestArgSym];
-  if not POCAHashGet(Context,Hash,Sym,Value) then begin
+  Symbol:=Code^.Constants[Code^.RestArgSym];
+  if not POCAHashGet(Context,Hash,Symbol,Value) then begin
    Value:=POCANewArray(Context);
   end;
   if POCAIsValueHash(Locals) then begin
-   POCAHashSet(Context,Locals,Sym,Value,false);
+   POCAHashSet(Context,Locals,Symbol,Value,false);
   end else begin
    POCARuntimeError(Context,'Function has no locals');
   end;
