@@ -492,7 +492,7 @@ let b = name ?? "Anonymous";   // b = ""  (because "" is not nullish)
 
 ==== Precedence and Mixing Rules
 
-The `??` operator has **very low precedence**. It's lower than `||` and `&&`, but higher than the ternary `?:`, so it evaluates **after** most other operators.
+The `??` operator has **very low precedence**. It's lower than `||` and `&&`, but higher than the ternary `?:`, so it evaluates **after** most other operators. This means that in mixed expressions, `||` and `&&` bind their operands first, and the resulting value then becomes the operand for `??`.
 
 **When mixing `??` with `&&` or `||`, the evaluation order may be surprising** because those operators bind more tightly, as `??` has lower precedence:
 
