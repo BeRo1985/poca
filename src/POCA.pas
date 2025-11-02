@@ -2130,6 +2130,10 @@ function POCAContextSub(Super:PPOCAContext):PPOCAContext;
 
 function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
 
+procedure POCASetupRegisters(Frame:PPOCAFrame;Code:PPOCACode); {$ifdef caninline}inline;{$endif}
+procedure POCASetupFrameValues(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode); {$ifdef caninline}inline;{$endif}
+function POCASetupCallGetFuncObjPtr(var Func,Obj:TPOCAValue;const MethodCall:Boolean):PPOCAObject; {$ifdef caninline}inline;{$endif}
+
 function POCAInstanceCreate:PPOCAInstance;
 procedure POCAInstanceDestroy(var Instance:PPOCAInstance);
 
@@ -34131,174 +34135,79 @@ begin
 {$ifdef POCAClosureArrayValues}
   Frame^.LocalValues.CastedUInt64:=POCAValueNullCastedUInt64;
 {$else}
- Frame^.LocalValues:=nil;
+  Frame^.LocalValues:=nil;
 {$endif}
 
  end;
 
 end;
 
-function POCASetupFunctionCall(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:TPOCAUInt32;Operands:PPOCAUInt32Array;MethodCall,Named:boolean;TheFunc:PPOCAValue=nil):PPOCAFrame;
-var Func,Obj,Code:TPOCAValue;
-    i,CountArguments,ArgumentIndex:TPOCAInt32;
-    ObjPtr:PPOCAObject;
+function POCASetupCallGetFuncObjPtr(var Func,Obj:TPOCAValue;const MethodCall:Boolean):PPOCAObject;
 begin
-//Obj:=POCAValueNull;
- Obj.CastedUInt64:=POCAValueNullCastedUInt64;
-
- CountArguments:=Opcode shr 8;
-
- Frame^.ResultRegister:=Operands^[0];
-
- if MethodCall then begin
-  Obj:=Frame^.Registers[Operands^[1]];
-  Func:=Frame^.Registers[Operands^[2]];
-  dec(CountArguments,3);
-  ArgumentIndex:=3;
- end else begin
-  if assigned(TheFunc) then begin
-   Func:=TheFunc^;
-   dec(CountArguments);
-   ArgumentIndex:=1;
-  end else begin
-   Func:=Frame^.Registers[Operands^[1]];
-   dec(CountArguments,2);
-   ArgumentIndex:=2;
-  end;
- end;
-
- ObjPtr:=nil;
- repeat
-  if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
-   ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
-   case ObjPtr^.Header.ValueType of
-    pvtFUNCTION:begin
-     if not MethodCall then begin
-      Obj:=PPOCAFunction(ObjPtr)^.Obj;
-     end;
-     break;
-    end;
-    pvtHASH:begin
-     if assigned(PPOCAHash(ObjPtr)^.Events) and assigned(PPOCAHash(ObjPtr)^.Events^.HashRecord^.Events) then begin
-      if POCAIsValueNull(Obj) then begin
-       Obj:=Func;
-      end;
-      Func:=PPOCAHash(ObjPtr)^.Events^.HashRecord^.Events^[pmoCALL];
-      if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
-       ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
-       if ObjPtr^.Header.ValueType=pvtFUNCTION then begin
-        break;
-       end;
-      end;
-     end;
+ if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
+  result:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
+  case result^.Header.ValueType of
+   pvtFUNCTION:begin
+    if not MethodCall then begin
+     Obj:=PPOCAFunction(result)^.Obj;
     end;
    end;
-  end;
-  if not MethodCall then begin
-   POCARuntimeError(Context,'Method call on uncallable object');
-  end else begin
-   POCARuntimeError(Context,'Function call on uncallable object');
-  end;
-  break;
- until false;
-
- Code:=PPOCAFunction(ObjPtr)^.Code;
-
- if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Code.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask)){$else}(Code.ReferenceTag=POCAValueReferenceTag) and assigned(Code.Reference.Ptr){$endif} then begin
-  ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask){$else}Code.Reference.Ptr{$endif};
-  case ObjPtr^.Header.ValueType of
-   pvtNATIVECODE:begin
-    if CountArguments>length(Frame^.Arguments) then begin
-     SetLength(Frame^.Arguments,CountArguments);
-    end;
-    for i:=0 to CountArguments-1 do begin
-     Frame^.Arguments[i]:=Frame^.Registers[Operands^[i+ArgumentIndex]];
-    end;
-    Frame^.CountArguments:=CountArguments;
-    if Named then begin
-     POCARuntimeError(Context,'Native functions have no named arguments');
-    end;
-{   if assigned(PPOCANativeCode(ObjPtr)^.UserData) then begin
-     Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
-    end else begin
-     Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
-    end;}
-    Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
-    Frame^.CountArguments:=0;
-    result:=@Context.FrameStack[Context.FrameTop-1];
-    exit;
-   end;
-   pvtCODE:begin
-    if Context^.FrameTop>=POCA_MAX_RECURSION then begin
-     POCARuntimeError(Context,'Call frame overflow');
-    end;
-
-{$ifdef POCAHasJIT}
-    if not assigned(PPOCACode(ObjPtr)^.NativeCode) then begin
-     POCAGenerateNativeCode(Context,PPOCACode(ObjPtr));
-    end;
-{$endif}
-
-    result:=@Context^.FrameStack[Context^.FrameTop];
-    if Named and not PPOCACode(ObjPtr)^.HasArgumentLocals then begin
-     result^.Locals:=Frame^.Registers[Operands^[ArgumentIndex]];
-     inc(ArgumentIndex);
-     dec(CountArguments);
-    end else begin
-     if PPOCACode(ObjPtr)^.FastFunction then begin
-//    result^.Locals:=POCAValueNull;
-      result^.Locals.CastedUInt64:=POCAValueNullCastedUInt64;
+   pvtHASH:begin
+    if assigned(PPOCAHash(result)^.Events) and assigned(PPOCAHash(result)^.Events^.HashRecord^.Events) then begin
+     if POCAIsValueNull(Obj) then begin
+      Obj:=Func;
+     end;
+     Func:=PPOCAHash(result)^.Events^.HashRecord^.Events^[pmoCALL];
+     if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
+      result:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
+      if result^.Header.ValueType<>pvtFUNCTION then begin
+       result:=nil;
+      end;
      end else begin
-      result^.Locals:=POCANewHash(Context);
+      result:=nil;
      end;
-    end;
-    result^.Func:=Func;
-    result^.InstructionPointer:=0;
-    if PPOCACode(ObjPtr)^.LocalsAsThisObj then begin
-     result^.Obj:=result^.Locals;
     end else begin
-     result^.Obj:=Obj;
+     result:=nil;
     end;
-
-    if PPOCACode(ObjPtr)^.HasArguments or not PPOCACode(ObjPtr)^.IsEmpty then begin
-
-     POCASetupRegisters(result,PPOCACode(ObjPtr));
-
-     POCASetupFrameValues(Context,result,PPOCACode(ObjPtr));
-
-     if PPOCACode(ObjPtr)^.HasArguments then begin
-      if Named then begin
-       if PPOCACode(ObjPtr)^.HasArgumentLocals then begin
-        POCASetupNamedArgumentsWithLocals(Context,result,PPOCACode(ObjPtr),Frame^.Registers[Operands^[ArgumentIndex]],result^.Locals);
-       end else begin
-        POCACheckNamedArguments(Context,PPOCACode(ObjPtr),PPOCAHash(POCAGetValueReferencePointer(result^.Locals)),result^.Locals);
-       end;
-      end else begin
-       POCASetupArguments(Context,result,PPOCACode(ObjPtr),@Frame^.Registers[0],CountArguments,@Operands^[ArgumentIndex]);
-      end;
-     end;
-    end;
-
-    if PPOCACode(ObjPtr)^.IsEmpty then begin
-//   Frame^.Registers[Frame^.ResultRegister]:=POCAValueNull;
-     Frame^.Registers[Frame^.ResultRegister].CastedUInt64:=POCAValueNullCastedUInt64;
-     Frame^.CountArguments:=0;
-     result:=@Context.FrameStack[Context.FrameTop-1];
-    end else begin
-     inc(Context^.FrameTop);
-    end;
-    exit;
+   end;
+   else begin
+    result:=nil;
    end;
   end;
+ end else begin
+  result:=nil;
  end;
-
-//Frame^.Registers[Frame^.ResultRegister]:=POCAValueNull;
- Frame^.Registers[Frame^.ResultRegister].CastedUInt64:=POCAValueNullCastedUInt64;
- Frame^.CountArguments:=0;
-
- result:=@Context.FrameStack[Context.FrameTop-1];
-
 end;
+
+function POCASetupFunctionOpCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array;Func:TPOCAValue):PPOCAFrame;
+{$define POCASETUPFUNCTIONCALLOP}
+{$undef POCASETUPFUNCTIONCALLMETHOD}
+{$undef POCASETUPFUNCTIONCALLNAMED}
+{$i POCASetupFunctionCall.inc}
+
+function POCASetupFunctionMethodCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
+{$undef POCASETUPFUNCTIONCALLOP}
+{$define POCASETUPFUNCTIONCALLMETHOD}
+{$undef POCASETUPFUNCTIONCALLNAMED}
+{$i POCASetupFunctionCall.inc}
+
+function POCASetupFunctionMethodNamedCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
+{$undef POCASETUPFUNCTIONCALLOP}
+{$define POCASETUPFUNCTIONCALLMETHOD}
+{$define POCASETUPFUNCTIONCALLNAMED}
+{$i POCASetupFunctionCall.inc}
+
+function POCASetupFunctionNormalCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
+{$undef POCASETUPFUNCTIONCALLOP}
+{$undef POCASETUPFUNCTIONCALLMETHOD}
+{$undef POCASETUPFUNCTIONCALLNAMED}
+{$i POCASetupFunctionCall.inc}
+
+function POCASetupFunctionNormalNamedCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
+{$undef POCASETUPFUNCTIONCALLOP}
+{$undef POCASETUPFUNCTIONCALLMETHOD}
+{$define POCASETUPFUNCTIONCALLNAMED}
+{$i POCASetupFunctionCall.inc}
 
 procedure POCARunStackOverflow(Context:PPOCAContext);
 begin
@@ -35462,7 +35371,7 @@ var HashEvents:PPOCAHashEvents;
 begin
  HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]],Frame^.Registers[Operands^[2]],Operation);
  if assigned(HashEvents) and POCAIsValueFunctionOrNativeCode(HashEvents^[Operation]) then begin
-  Frame:=POCASetupFunctionCall(Context,Frame,3 shl 8,Operands,false,false,@HashEvents^[Operation]);
+  Frame:=POCASetupFunctionOpCall(Context,Frame,3,Operands,HashEvents^[Operation]);
   result:=true;
  end else begin
   result:=false;
@@ -35474,7 +35383,7 @@ var HashEvents:PPOCAHashEvents;
 begin
  HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[2]],Operation);
  if assigned(HashEvents) and POCAIsValueFunctionOrNativeCode(HashEvents^[Operation]) then begin
-  Frame:=POCASetupFunctionCall(Context,Frame,3 shl 8,Operands,false,false,@HashEvents^[Operation]);
+  Frame:=POCASetupFunctionOpCall(Context,Frame,3,Operands,HashEvents^[Operation]);
   result:=true;
  end else begin
   result:=false;
@@ -35486,7 +35395,7 @@ var HashEvents:PPOCAHashEvents;
 begin
  HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]]);
  if assigned(HashEvents) and POCAIsValueFunctionOrNativeCode(HashEvents^[Operation]) then begin
-  Frame:=POCASetupFunctionCall(Context,Frame,2 shl 8,Operands,false,false,@HashEvents^[Operation]);
+  Frame:=POCASetupFunctionOpCall(Context,Frame,2,Operands,HashEvents^[Operation]);
   result:=true;
  end else begin
   result:=false;
@@ -35498,7 +35407,7 @@ var HashEvents:PPOCAHashEvents;
 begin
  HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]],Frame^.Registers[Operands^[2]],Frame^.Registers[Operands^[3]],Operation);
  if assigned(HashEvents) and POCAIsValueFunctionOrNativeCode(HashEvents^[Operation]) then begin
-  Frame:=POCASetupFunctionCall(Context,Frame,4 shl 8,Operands,false,false,@HashEvents^[Operation]);
+  Frame:=POCASetupFunctionOpCall(Context,Frame,4,Operands,HashEvents^[Operation]);
   result:=true;
  end else begin
   result:=false;
@@ -41357,13 +41266,13 @@ begin
     end;
    end;
    popFCALL:begin
-    Frame:=POCASetupFunctionCall(Context,Frame,Opcode,Operands,false,false);
+    Frame:=POCASetupFunctionNormalCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMCALL:begin
-    Frame:=POCASetupFunctionCall(Context,Frame,Opcode,Operands,true,false);
+    Frame:=POCASetupFunctionMethodCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
@@ -41510,13 +41419,13 @@ begin
     end;
    end;
    popFCALLH:begin
-    Frame:=POCASetupFunctionCall(Context,Frame,Opcode,Operands,false,true);
+    Frame:=POCASetupFunctionNormalNamedCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMCALLH:begin
-    Frame:=POCASetupFunctionCall(Context,Frame,Opcode,Operands,true,true);
+    Frame:=POCASetupFunctionMethodNamedCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
@@ -41752,7 +41661,7 @@ begin
     end;
    end;
    popFTAILCALL:begin
-    Frame:=POCASetupFunctionCall(Context,Frame,Opcode,Operands,false,false);
+    Frame:=POCASetupFunctionNormalCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     Frame^:=Context^.FrameStack[Context^.FrameTop];
@@ -41761,7 +41670,7 @@ begin
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMTAILCALL:begin
-    Frame:=POCASetupFunctionCall(Context,Frame,Opcode,Operands,true,false);
+    Frame:=POCASetupFunctionMethodCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     Frame^:=Context^.FrameStack[Context^.FrameTop];
@@ -41770,7 +41679,7 @@ begin
     Context^.TemporarySavedObjectCount:=0;
    end;
    popFTAILCALLH:begin
-    Frame:=POCASetupFunctionCall(Context,Frame,Opcode,Operands,false,true);
+    Frame:=POCASetupFunctionNormalNamedCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     Frame^:=Context^.FrameStack[Context^.FrameTop];
@@ -41779,7 +41688,7 @@ begin
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMTAILCALLH:begin
-    Frame:=POCASetupFunctionCall(Context,Frame,Opcode,Operands,true,true);
+    Frame:=POCASetupFunctionMethodNamedCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     Frame^:=Context^.FrameStack[Context^.FrameTop];
