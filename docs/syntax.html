@@ -519,7 +519,7 @@ something like</p>
 <div class="content">
 <pre class="highlight"><code class="language-javascript" data-lang="javascript">var a = scope {
   var b = 1;
-  for (reg c = 0; c &lt; 16; c++) {
+  for (let c = 0; c &lt; 16; c++) {
     b += c + c
   };
   b;
@@ -1279,9 +1279,7 @@ let lastname = "Peterson";</code></pre>
 <div class="content">
 <pre class="highlight"><code class="language-javascript" data-lang="javascript">a = 3.14159;                    // a is then inside in the current environment hash table
 var b = 0x10000;                // b is then inside in the current environment hash table
-register c = 0b10101;           // c is then assigned to a VM-register
-reg d = 0b10101;                // reg is a syndrom for register
-let e = 0o77777;                // let is also a syndrom for register
+let c = 0b10101;                // c is then assigned to a VM-register or frame variable storage, depending on the scope
 const f = "This is a constant";
 
 var (g, h) = (0, 1);
@@ -1441,19 +1439,11 @@ readLine();</code></pre>
   return (a + b) * 2;
 }
 
-function Test2(reg a, reg b){
+function Test2(let a, let b){
   return (a + b) * 2;
 }
 
-function Test3(let a, let b){
-  return (a + b) * 2;
-}
-
-fastfunction Test4(reg a, reg b){
-  return (a + b) * 2;
-}
-
-fastfunction Test5(reg a, reg b){
+fastfunction Test2(let a, let b){
   return (a + b) * 2;
 }
 
@@ -1489,7 +1479,7 @@ f(x) -&gt; x + 3;
 function g(m, x) m(x) * m(x);
 puts(g(f, 7));
 
-function searchPrimes(reg from, reg to){
+function searchPrimes(let from, let to){
   let (dummy, primes, n, i, j, isPrime) = (0, 0, 0, 0, 0, 0);
   from = +from;
   to = +to;
@@ -1573,11 +1563,11 @@ class Test extends BaseClass {
 
   var a = 0;
 
-  constructor(reg v){
+  constructor(let v){
     this.a = v + 1;
   }
 
-  function init(reg v){
+  function init(let v){
     this.a = v + 1;
   }
 
@@ -1591,7 +1581,7 @@ class TestB extends Test {
 
   var x = 0;
 
-  constructor(reg v){
+  constructor(let v){
     super(v * 2);
     this.x = v + 1;
   }
@@ -1666,7 +1656,7 @@ readLine();</code></pre>
 
     var a = 0;
 
-    constructor(reg v){
+    constructor(let v){
       this.a = v;
     }
 
@@ -1728,7 +1718,7 @@ TestClassInstanceFromOtherTestModule.c();</code></pre>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-javascript" data-lang="javascript">var Vector = {
-  create: function(reg vx=0, reg vy=0, reg vz=0){
+  create: function(let vx=0, let vy=0, let vz=0){
     return setHashEvents({
                            prototype: this,
                            x: vx,
@@ -1736,7 +1726,7 @@ TestClassInstanceFromOtherTestModule.c();</code></pre>
                            z: vz
                          }, this);
   },
-  __add: fastfunction(reg a, reg b){
+  __add: fastfunction(let a, let b){
     // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
     if((a instanceof Vector) &amp;&amp; (b instanceof Vector)){
       return new Vector(a.x + b.x, a.y + b.y, a.z + b.z);
@@ -1744,7 +1734,7 @@ TestClassInstanceFromOtherTestModule.c();</code></pre>
       throw "No vector?";
     }
   },
-  __sub: fastfunction(reg a, reg b){
+  __sub: fastfunction(let a, let b){
     // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
     if((a instanceof Vector) &amp;&amp; (b instanceof Vector)){
       return new Vector(a.x - b.x, a.y - b.y, a.z - b.z);
@@ -1752,7 +1742,7 @@ TestClassInstanceFromOtherTestModule.c();</code></pre>
       throw "No vector?";
     }
   },
-  __mul:fastfunction(reg a, reg b){
+  __mul:fastfunction(let a, let b){
     // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
     if((a instanceof Vector) &amp;&amp; (b instanceof Vector)){
       return new Vector(a.x * b.x, a.y * b.y, a.z * b.z);
@@ -1760,7 +1750,7 @@ TestClassInstanceFromOtherTestModule.c();</code></pre>
       throw "No vector?";
     }
   },
-  __div: fastfunction(reg a, reg b){
+  __div: fastfunction(let a, let b){
     // Important hint: "this" can be null here (even in non-fastfunction functions), so doesn't use it here! :-)
     if((a instanceof Vector) &amp;&amp; (b instanceof Vector)){
       return new Vector(a.x / b.x, a.y / b.y, a.z / b.z);
@@ -1899,7 +1889,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-02 19:29:50 +0100
+Last updated 2025-11-03 00:09:32 +0100
 </div>
 </div>
 </body>
