@@ -28548,7 +28548,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
-       SetRegisterTypeKind(result,tKUNKNOWN);
+       SetRegisterTypeKind(result,tkUNKNOWN);
        Reg2:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg2);
        FreeRegister(Reg2);
