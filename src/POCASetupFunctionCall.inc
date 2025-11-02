@@ -8,7 +8,7 @@ const ArgumentIndex=2;
 {$ifend}
 {$endif}
 var {$ifndef POCASETUPFUNCTIONCALLOP}Func,{$endif}Obj,Code:TPOCAValue;
-    i{$if defined(POCASETUPFUNCTIONCALLNAMED)},ArgumentIndex{$ifend}:TPOCAInt32;
+    {$if defined(POCASETUPFUNCTIONCALLNAMED)}ArgumentIndex{$else}Index{$ifend}:TPOCAInt32;
     ObjPtr:PPOCAObject;
 begin
 
@@ -53,8 +53,8 @@ begin
      if CountArguments>length(Frame^.Arguments) then begin
       SetLength(Frame^.Arguments,CountArguments);
      end;
-     for i:=0 to CountArguments-1 do begin
-      Frame^.Arguments[i]:=Frame^.Registers[Operands^[i+ArgumentIndex]];
+     for Index:=0 to CountArguments-1 do begin
+      Frame^.Arguments[Index]:=Frame^.Registers[Operands^[Index+ArgumentIndex]];
      end;
      Frame^.CountArguments:=CountArguments;
      Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
