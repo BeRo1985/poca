@@ -1500,6 +1500,93 @@ function searchPrimes(let from, let to){
 }</code></pre>
 </div>
 </div>
+<div class="sect3">
+<h4 id="_fast_functions">Fast Functions</h4>
+<div class="paragraph">
+<p>POCA provides a <code>fastfunction</code> keyword for performance-critical functions. Fast
+functions are optimized by eliminating the overhead of the local variable hash
+table that regular functions use for <code>var</code>-declared variables.</p>
+</div>
+<div class="paragraph">
+<p><strong>Key Differences:</strong></p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Regular <code>function</code></strong>: Variables declared with <code>var</code> are stored in a hash table
+(object/dictionary), which provides flexibility but has lookup overhead.</p>
+</li>
+<li>
+<p><strong>Fast <code>fastfunction</code></strong>: Does not create the hash table for <code>var</code> variables.
+All variables must be declared with <code>let</code> or <code>const</code>, which are stored directly
+in the function&#8217;s register set or frame storage for faster access, depending on
+the scoping.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><strong>When to use <code>fastfunction</code>:</strong></p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Performance-critical code (hot loops, frequently called functions)</p>
+</li>
+<li>
+<p>Functions that don&#8217;t need `var&#8217;s dynamic properties</p>
+</li>
+<li>
+<p>Functions where all local variables can be declared with <code>let</code> or <code>const</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><strong>Restrictions:</strong></p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Cannot use <code>var</code> keyword inside a <code>fastfunction</code></p>
+</li>
+<li>
+<p>All local variables must be declared with <code>let</code> or <code>const</code></p>
+</li>
+<li>
+<p>Slightly less flexible than regular functions, but significantly faster</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p><strong>Example:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">// Regular function - uses hash table for var variables
+function regularSum(a, b) {
+  var temp = a + b;  // stored in hash table
+  return temp * 2;
+}
+
+// Fast function - all variables in registers/frame storage
+fastfunction fastSum(let a, let b) {
+  let temp = a + b;  // stored directly in registers/frame storage
+  return temp * 2;
+}
+
+// Fast function with const
+fastfunction computeArea(let width, let height) {
+  const pi = 3.14159;
+  let radius = width / 2;
+  return pi * radius * radius;
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For most code, regular <code>function</code> is fine. Use <code>fastfunction</code> when you&#8217;ve
+identified performance bottlenecks through profiling and the function doesn&#8217;t
+require <code>var</code> semantics.</p>
+</div>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_threads">Threads</h3>
@@ -1889,7 +1976,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-03 00:09:32 +0100
+Last updated 2025-11-03 00:19:25 +0100
 </div>
 </div>
 </body>

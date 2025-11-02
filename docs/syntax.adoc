@@ -867,6 +867,61 @@ function searchPrimes(let from, let to){
 }
 ----
 
+==== Fast Functions
+
+POCA provides a `fastfunction` keyword for performance-critical functions. Fast 
+functions are optimized by eliminating the overhead of the local variable hash 
+table that regular functions use for `var`-declared variables.
+
+**Key Differences:**
+
+* **Regular `function`**: Variables declared with `var` are stored in a hash table 
+  (object/dictionary), which provides flexibility but has lookup overhead.
+* **Fast `fastfunction`**: Does not create the hash table for `var` variables. 
+  All variables must be declared with `let` or `const`, which are stored directly 
+  in the function's register set or frame storage for faster access, depending on 
+  the scoping.
+
+**When to use `fastfunction`:**
+
+* Performance-critical code (hot loops, frequently called functions)
+* Functions that don't need `var`'s dynamic properties
+* Functions where all local variables can be declared with `let` or `const`
+
+**Restrictions:**
+
+* Cannot use `var` keyword inside a `fastfunction`
+* All local variables must be declared with `let` or `const`
+* Slightly less flexible than regular functions, but significantly faster
+
+**Example:**
+
+[source,javascript]
+----
+// Regular function - uses hash table for var variables
+function regularSum(a, b) {
+  var temp = a + b;  // stored in hash table
+  return temp * 2;
+}
+
+// Fast function - all variables in registers/frame storage
+fastfunction fastSum(let a, let b) {
+  let temp = a + b;  // stored directly in registers/frame storage
+  return temp * 2;
+}
+
+// Fast function with const
+fastfunction computeArea(let width, let height) {
+  const pi = 3.14159;
+  let radius = width / 2;
+  return pi * radius * radius;
+}
+----
+
+For most code, regular `function` is fine. Use `fastfunction` when you've 
+identified performance bottlenecks through profiling and the function doesn't 
+require `var` semantics.
+
 === Threads
 
 [source,javascript]
