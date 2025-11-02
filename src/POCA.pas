@@ -34594,12 +34594,17 @@ begin
 { if POCAGetValueType(Box)=pvtARRAY then}begin
    ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(Box));
    ArrayRecord:=ArrayInstance^.ArrayRecord;
-   Index:=trunc(POCAGetNumberValue(Context,Key));
-   if Index<0 then begin
-    inc(Index,ArrayRecord^.Size);
-   end;
-   if (Index>=0) or (Index<ArrayRecord^.Size) then begin
-    result:=ArrayRecord^.Data[Index];
+   if assigned(ArrayRecord) then begin
+    Index:=trunc(POCAGetNumberValue(Context,Key));
+    if Index<0 then begin
+     inc(Index,ArrayRecord^.Size);
+    end;
+    if (Index>=0) or (Index<ArrayRecord^.Size) then begin
+     result:=ArrayRecord^.Data[Index];
+    end else begin
+     POCARuntimeError(Context,'Out of bounds');
+     result.CastedUInt64:=POCAValueNullCastedUInt64;
+    end;
    end else begin
     POCARuntimeError(Context,'Out of bounds');
     result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -34620,7 +34625,7 @@ var ArrayInstance:PPOCAArray;
     Index:TPOCAInt32;
 begin
  if POCAIsValueScalarType(Key) then begin
-  if POCAGetValueType(Box)=pvtARRAY then begin
+{ if POCAGetValueType(Box)=pvtARRAY then}begin
    ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(Box));
    ArrayRecord:=ArrayInstance^.ArrayRecord;
    if assigned(ArrayRecord) then begin
@@ -34637,8 +34642,8 @@ begin
    end else begin
     POCARuntimeError(Context,'Out of bounds');
    end;
-  end else begin
-   POCARuntimeError(Context,'Not an array');
+{ end else begin
+   POCARuntimeError(Context,'Not an array');}
   end;
  end else begin
   POCARuntimeError(Context,'Container index not scalar');
