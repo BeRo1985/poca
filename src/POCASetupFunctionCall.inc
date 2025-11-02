@@ -36,7 +36,7 @@ begin
 {$ifend}
 {$ifend}
 
- if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Func.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
+ if {$ifdef cpu64}((Func.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
   ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask){$else}Func.Reference.Ptr{$endif};
   case ObjPtr^.Header.ValueType of
    pvtFUNCTION:begin
@@ -74,7 +74,7 @@ begin
 
   Code:=PPOCAFunction(ObjPtr)^.Code;
 
-  if {$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@Code.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask)){$else}(Code.ReferenceTag=POCAValueReferenceTag) and assigned(Code.Reference.Ptr){$endif} then begin
+  if {$ifdef cpu64}((Code.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask)){$else}(Code.ReferenceTag=POCAValueReferenceTag) and assigned(Code.Reference.Ptr){$endif} then begin
 
    ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask){$else}Code.Reference.Ptr{$endif};
    case ObjPtr^.Header.ValueType of
