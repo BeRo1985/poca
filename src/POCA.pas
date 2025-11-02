@@ -9056,7 +9056,7 @@ begin
 end;
 
 function POCAArrayNewRecord(Old:PPOCAArrayRecord):PPOCAArrayRecord;
-var i,OldSize,NewSize:TPOCAUInt32;
+var Index,OldSize,NewSize:TPOCAUInt32;
 begin
  if assigned(Old) then begin
   OldSize:=Old^.Size;
@@ -9067,11 +9067,15 @@ begin
  GetMem(result,sizeof(TPOCAArrayRecord)+(NewSize*sizeof(TPOCAValue)));
  FillChar(result^,sizeof(TPOCAArrayRecord)+(NewSize*sizeof(TPOCAValue)),#0);
  result^.Allocated:=NewSize;
- result^.Size:=OldSize;
- i:=0;
- while i<OldSize do begin
-  result^.Data[i]:=Old^.Data[i];
-  inc(i);
+ if assigned(Old) then begin
+  result^.Size:=OldSize;
+  Index:=0;
+  while Index<OldSize do begin
+   result^.Data[Index]:=Old^.Data[Index];
+   inc(Index);
+  end;
+ end else begin
+  result^.Size:=0;
  end;
 end;
 
@@ -9249,6 +9253,9 @@ begin
       for j:=(i+1) to ArrayRecord^.Size-1 do begin
        ArrayRecord^.Data[j-1]:=ArrayRecord^.Data[j];
       end;
+      ArrayRecord^.Data[ArrayRecord^.Size-1].CastedUInt64:=POCAValueNullCastedUInt64;
+     end else begin
+      ArrayRecord^.Data[i].CastedUInt64:=POCAValueNullCastedUInt64;
      end;
      TPasMPInterlocked.Decrement(ArrayRecord^.Size);
      if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
@@ -32976,6 +32983,7 @@ var TokenList:PPOCAToken;
        end else begin
         IsLocal:=false;
        end;
+//     IsLocal:=true;
        Symbol:=t;
       end;
       ptCOMMA:begin
@@ -34096,16 +34104,16 @@ begin
 end;
 
 procedure POCASetupRegisters(Frame:PPOCAFrame;Code:PPOCACode);
-var i:TPOCAInt32;
+var Index:TPOCAInt32;
 begin
  Frame^.CountRegisters:=Code^.CountRegisters;
  if Frame^.CountRegisters>0 then begin
   if length(Frame^.Registers)<TPOCAInt32(Frame^.CountRegisters) then begin
    SetLength(Frame^.Registers,POCARoundUpToPowerOfTwo(Frame^.CountRegisters+1));
   end;
-  for i:=0 to Frame^.CountRegisters-1 do begin
-// Frame^.Registers[i]:=POCAValueNull;
-   Frame^.Registers[i].CastedUInt64:=POCAValueNullCastedUInt64;
+  for Index:=0 to Frame^.CountRegisters-1 do begin
+// Frame^.Registers[Index]:=POCAValueNull;
+   Frame^.Registers[Index].CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end;
 end;
@@ -42067,7 +42075,7 @@ begin
 end;
 
 function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue;
-var i:TPOCAInt32;
+var Index:TPOCAInt32;
     Frame:PPOCAFrame;
     CodePointer:PPOCACode;
     HashEvents:PPOCAHashEvents;
@@ -42078,8 +42086,8 @@ begin
  end;
  try
   POCATemporarySave(Context,Func);
-  for i:=0 to CountArguments-1 do begin
-   POCATemporarySave(Context,Arguments^[i]);
+  for Index:=0 to CountArguments-1 do begin
+   POCATemporarySave(Context,Arguments^[Index]);
   end;
   POCATemporarySave(Context,Obj);
   POCATemporarySave(Context,Locals);
