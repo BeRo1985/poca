@@ -675,17 +675,15 @@ in a dedicated frame storage (when necessary for scope access or lifetime) or
 directly in registers for maximal performance in self-contained cases.</p>
 </div>
 <div class="paragraph">
-<p><code>let</code> and <code>const</code> have higher priority than <code>var</code>. As a result, if a variable is declared
-with <code>let</code> or <code>const</code>, it will shadow any variable with the same name declared with <code>var</code>
-in any scope, including the global scope. Consequently, declaring a variable with <code>let</code>
-or <code>const</code> inside a block does not affect a <code>var</code> variable with the same name in the
-outer scope. Essentially, bindings declared with <code>let</code> and <code>const</code> are searched in all
-scopes first; only if no such binding is found is the <code>var</code> variable considered. For
-optimization reasons, <code>let</code> and <code>const</code> are resolved at compile time because they
-reside in fast-access frame variable storages, whereas <code>var</code> variables are stored in
-the normal local variable hash table and are looked up at runtime, as it is not known
-at compile time whether the variable will be used in the current frame, due to their
-fully dynamic nature.</p>
+<p><code>let</code> and <code>const</code> have higher priority than <code>var</code> in variable resolution. When
+the same identifier is used for both a <code>let</code>/<code>const</code> variable and a <code>var</code> variable,
+the <code>let</code>/<code>const</code> binding takes precedence within its scope, effectively shadowing
+the <code>var</code> variable. This shadowing only affects visibility within the block where
+<code>let</code>/<code>const</code> is declared; the <code>var</code> variable in the outer scope remains unchanged.
+The compiler resolves <code>let</code> and <code>const</code> bindings at compile time through static
+analysis of the lexical scope, providing fast access through registers or frame
+storage. In contrast, <code>var</code> variables are stored in a hash table and resolved at
+runtime, allowing for dynamic behavior but with the overhead of hash table lookups.</p>
 </div>
 <div class="paragraph">
 <p>Example:</p>
@@ -1996,7 +1994,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-03 00:39:25 +0100
+Last updated 2025-11-03 00:53:52 +0100
 </div>
 </div>
 </body>

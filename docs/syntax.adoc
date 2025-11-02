@@ -155,17 +155,15 @@ confined to their block and kept out of the general local table, living either
 in a dedicated frame storage (when necessary for scope access or lifetime) or 
 directly in registers for maximal performance in self-contained cases.
 
-`let` and `const` have higher priority than `var`. As a result, if a variable is declared 
-with `let` or `const`, it will shadow any variable with the same name declared with `var` 
-in any scope, including the global scope. Consequently, declaring a variable with `let` 
-or `const` inside a block does not affect a `var` variable with the same name in the 
-outer scope. Essentially, bindings declared with `let` and `const` are searched in all 
-scopes first; only if no such binding is found is the `var` variable considered. For 
-optimization reasons, `let` and `const` are resolved at compile time because they 
-reside in fast-access frame variable storages, whereas `var` variables are stored in 
-the normal local variable hash table and are looked up at runtime, as it is not known 
-at compile time whether the variable will be used in the current frame, due to their 
-fully dynamic nature.
+`let` and `const` have higher priority than `var` in variable resolution. When 
+the same identifier is used for both a `let`/`const` variable and a `var` variable, 
+the `let`/`const` binding takes precedence within its scope, effectively shadowing 
+the `var` variable. This shadowing only affects visibility within the block where 
+`let`/`const` is declared; the `var` variable in the outer scope remains unchanged. 
+The compiler resolves `let` and `const` bindings at compile time through static 
+analysis of the lexical scope, providing fast access through registers or frame 
+storage. In contrast, `var` variables are stored in a hash table and resolved at 
+runtime, allowing for dynamic behavior but with the overhead of hash table lookups.
 
 Example:
 
