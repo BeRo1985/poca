@@ -148,9 +148,11 @@ class MyClass extends BaseClass {
   var x = 10;
   constructor(v) { this.x = v; }
   function method() { ... }
+  ...
 }
 
 function MyClass.testMethod() { ... }
+
 function MyClass::otherMethod() { ... }
 ```
 
@@ -162,10 +164,14 @@ var MyClass = (classfunction(let PROTO) {
   local.classType = local;
   local.prototype = PROTO;
   local.constructor = PROTO;
+  local.x = 10;
+  local.create = function MyClass(v) { this.x = v; };
+  local.method = function method() { ... };
   // ... class body ...
 })(BaseClass);
 
 myClass.testMethod = function testMethod() { ... };
+
 myClass.otherMethod = function otherMethod() { ... };
 ```
 
