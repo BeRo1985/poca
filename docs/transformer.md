@@ -44,6 +44,11 @@ let square = function square(x) { return x * x; };
 let double = x => x * 2; // without parentheses, single parameter
 // becomes
 let double = function double(x) { return x * 2; };
+
+let otherSquare(x) => x * x;
+// becomes
+let otherSquare = function otherSquare(x) { return x * x; };
+
 ```
 
 Key operations:

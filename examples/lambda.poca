@@ -8,6 +8,11 @@ let z=(x)->x+x;
 
 puts(z(4));
 
+// single parameter lambda without parentheses
+let u=x=>(x*x)+x; 
+
+puts(u(4));
+
 // some more verbose lambdas using the function keyword
 
 let w = function(x)(x*x)-x;
