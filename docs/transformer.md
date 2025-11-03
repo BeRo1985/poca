@@ -1,7 +1,7 @@
 
 ## POCA Transformer Deep Dive
 
-The **Transformer** is a sophisticated token stream manipulation stage that sits between the lexer and parser. It performs **syntactic desugaring** and **normalization** by rewriting token sequences into simpler, canonical forms that the parser can handle more easily.
+The **Transformer** is a sophisticated token stream manipulation stage that sits between the lexer and parser. It performs **syntactic desugaring** and **normalization** by rewriting token sequences into simpler, canonical forms that the parser can handle more easily. In essence, it transforms high-level language constructs into more primitive ones, for to keeping the parser simpler and more focused on core semantics.
 
 ### Main Entry Point
 
