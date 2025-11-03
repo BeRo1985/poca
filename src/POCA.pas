@@ -24508,13 +24508,25 @@ var TokenList:PPOCAToken;
       if assigned(NextToken) and (NextToken^.Token=ptSYMBOLNAME) then begin
        NextToken:=NextToken^.Next;
       end;
-      if not (assigned(CurrentToken^.Previous) and (CurrentToken^.Previous^.Token=ptRPAR)) then begin
-       SyntaxError('Missed closed parenthesis brace',CurrentToken^.SourceFile,CurrentToken^.SourceLine,CurrentToken^.SourceColumn);
+      // Check if we have parentheses or just a symbol
+      if assigned(CurrentToken^.Previous) and (CurrentToken^.Previous^.Token=ptRPAR) then begin
+       // Case: (x) => or (x, y) => and so on
+       Token:=ScanBlockBackwards(CurrentToken^.Previous);
+       if not (assigned(Token) and (Token^.Token=ptLPAR)) then begin
+        SyntaxError('Missed open parenthesis brace',CurrentToken^.SourceFile,CurrentToken^.SourceLine,CurrentToken^.SourceColumn);
+       end;
+      end else if assigned(CurrentToken^.Previous) and (CurrentToken^.Previous^.Token=ptSYMBOL) then begin       
+       // Case: x => (single parameter without parentheses)       
+       Token:=CurrentToken^.Previous;       
+       // Insert parentheses around the parameter
+       InsertBefore(Token,ptLPAR);
+       InsertAfter(Token,ptRPAR);
+       Token:=Token^.Previous; // Correct token pointer to the opening parenthesis 
+      end else begin
+       SyntaxError('Invalid lambda syntax',CurrentToken^.SourceFile,CurrentToken^.SourceLine,CurrentToken^.SourceColumn);
+       Token:=nil; // Suppress uninitialized variable warning
       end;
-      Token:=ScanBlockBackwards(CurrentToken^.Previous);
-      if not (assigned(Token) and (Token^.Token=ptLPAR)) then begin
-       SyntaxError('Missed open parenthesis brace',CurrentToken^.SourceFile,CurrentToken^.SourceLine,CurrentToken^.SourceColumn);
-      end;
+      // Move function keyword before the opening parenthesis
       MoveToBefore(Token,CurrentToken);
       if CurrentToken^.Token=ptFASTLAMBDA then begin
        CurrentToken^.Token:=ptFASTFUNCTION;

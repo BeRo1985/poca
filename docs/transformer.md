@@ -40,6 +40,10 @@ let add = function add(a, b) { return a + b; };
 let square = (x) => x * x;
 // becomes
 let square = function square(x) { return x * x; };
+
+let double = x => x * 2; // without parentheses, single parameter
+// becomes
+let double = function double(x) { return x * 2; };
 ```
 
 Key operations:
