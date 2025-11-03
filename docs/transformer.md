@@ -170,7 +170,7 @@ myClass.otherMethod = function otherMethod() { ... };
 ```
 
 Key operations:
-- Inserts `local.hashKind`, `local.className`, `local.classType`
+- Inserts `local.hashKind`, `local.className`, `local.classType` so that runtime knows it's actually a class
 - Sets up `local.prototype` and `local.constructor`
 - For modules: adds `local.exports = {}`
 - Handles `extends` clause by passing parent class as argument
