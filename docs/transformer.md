@@ -147,7 +147,7 @@ This is **extremely complex**. Classes get transformed into function calls with 
 class MyClass extends BaseClass {
   var x = 10;
   constructor(v) { this.x = v; }
-  method() { ... }
+  function method() { ... }
 }
 
 function MyClass.testMethod() { ... }
