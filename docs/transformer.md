@@ -151,6 +151,7 @@ class MyClass extends BaseClass {
 }
 
 function MyClass.testMethod() { ... }
+function MyClass::otherMethod() { ... }
 ```
 
 Becomes roughly:
@@ -165,6 +166,7 @@ var MyClass = (classfunction(let PROTO) {
 })(BaseClass);
 
 myClass.testMethod = function testMethod() { ... };
+myClass.otherMethod = function otherMethod() { ... };
 ```
 
 Key operations:
