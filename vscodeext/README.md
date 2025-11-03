@@ -66,7 +66,7 @@ puts(counter()); // 1
 puts(counter()); // 2
 
 // And more...
- 
+
 ```
 
 ### Object-Oriented Programming
@@ -138,7 +138,7 @@ For comprehensive documentation, see:
 To compile and run POCA programs:
 
 ```bash
-# Compile the POCA compiler/interpreter (requires Free Pascal)
+# Compile the POCA compiler/interpreter (requires Free Pascal or Delphi)
 cd src
 fpc -O3 -Sd pocarun.dpr
 
