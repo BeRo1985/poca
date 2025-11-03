@@ -783,7 +783,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ptMODEQ,
       ptPOW,
       ptPOWEQ,
-      ptREGISTER,
       ptSCOPE,
       ptCODE,
       ptSUPERTHAT,
@@ -825,7 +824,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ptGLOBAL,
       ptBASECLASS,
       ptLET,
-      ptREG,
       ptCONST,
       ptFUNC,
       ptFASTFUNC,
@@ -22544,9 +22542,6 @@ var TokenList:PPOCAToken;
     ptPOWEQ:begin
      DumpIt(' **= ');
     end;
-    ptREGISTER:begin
-     DumpIt(' register ');
-    end;
     ptSCOPE:begin
      DumpIt(' block ');
     end;
@@ -22670,9 +22665,6 @@ var TokenList:PPOCAToken;
     ptLET:begin
      DumpIt(' let ');
     end;
-    ptREG:begin
-     DumpIt(' reg ');
-    end;
     ptCONST:begin
      DumpIt(' const ');
     end;
@@ -22771,9 +22763,6 @@ var TokenList:PPOCAToken;
     end;
     ptLOR:begin
      Token:=ptOR;
-    end;
-    ptREG,ptREGISTER:begin
-     Token:=ptLET;
     end;
     ptFUNC:begin
      Token:=ptFUNCTION;
@@ -22890,10 +22879,10 @@ var TokenList:PPOCAToken;
       ptASSIGN,ptLT,ptLTEQ,ptEQ,ptNEQ,ptGT,ptGTEQ,ptCMP,ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptEMPTY,
       ptNULL,ptELLIPSIS,ptQUESTION,ptVAR,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptFORINDEX,ptLAND,ptLOR,ptTRY,ptCATCH,ptFINALLY,
       ptTHROW,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptPOSTDEC,ptPOSTINC,ptPREDEC,ptPREINC,ptBAND,ptBOR,ptBXOR,ptBNOT,ptBSHL,ptBSHR,
-      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptLET,ptSCOPE,ptCODE,
+      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptSCOPE,ptCODE,
       ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
-      ptCLASSFUNCTION,ptMODULEFUNCTION,ptREGISTER,ptREG,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
+      ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
       ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptELVISEQ,ptSYMBOLNAME,
       ptNULLISHOR])) then begin
     AddToken(ptAUTOSEMI,'',0);
@@ -43221,7 +43210,6 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
   AddKeywordToken(ptDEFAULT,'default');
   AddKeywordToken(ptFALLTHROUGH,'fallthrough');
   AddKeywordToken(ptRETRY,'retry');
-  AddKeywordToken(ptREGISTER,'register');
   AddKeywordToken(ptSCOPE,'scope');
   AddKeywordToken(ptCODE,'code');
   AddKeywordToken(ptTHAT,'that');
@@ -43246,7 +43234,6 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
   AddKeywordToken(ptGLOBAL,'global');
   AddKeywordToken(ptBASECLASS,'baseclass');
   AddKeywordToken(ptLET,'let');
-  AddKeywordToken(ptREG,'reg');
   AddKeywordToken(ptCONST,'const');
   AddKeywordToken(ptFUNC,'func');
   AddKeywordToken(ptFASTFUNC,'fastfunc');
