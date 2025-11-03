@@ -149,6 +149,8 @@ class MyClass extends BaseClass {
   constructor(v) { this.x = v; }
   method() { ... }
 }
+
+function MyClass.testMethod() { ... }
 ```
 
 Becomes roughly:
@@ -161,6 +163,8 @@ var MyClass = (classfunction(let PROTO) {
   local.constructor = PROTO;
   // ... class body ...
 })(BaseClass);
+
+myClass.testMethod = function testMethod() { ... };
 ```
 
 Key operations:
