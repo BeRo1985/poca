@@ -1409,7 +1409,23 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCAGarbageCollectorState=(pgcsRESET,pgcsINIT,pgcsMARKROOTS,pgcsMARKPROTECTED,pgcsMARKGREYS,pgcsSWEEPINIT,pgcsMARKWHITEGHOSTS,pgcsMARKWHITEGHOSTGREYS,pgcsSWEEP,pgcsFLIP,pgcsDONE);
 
+     TPOCAGarbageCollectorMarkHookFunction=function(const aInstance:PPOCAInstance;const aData:Pointer):Boolean;
+
+     TPOCAGarbageCollectorMarkHookMethod=function(const aInstance:PPOCAInstance;const aData:Pointer):Boolean of object;
+
+     PPOCAGarbageCollectorMarkHook=^TPOCAGarbageCollectorMarkHook;
+     TPOCAGarbageCollectorMarkHook=record
+      Previous:PPOCAGarbageCollectorMarkHook;
+      Next:PPOCAGarbageCollectorMarkHook;
+      Data:Pointer;
+      MarkHookFunction:TPOCAGarbageCollectorMarkHookFunction;
+      MarkHookMethod:TPOCAGarbageCollectorMarkHookMethod;
+     end;
+
      PPOCAGarbageCollector=^TPOCAGarbageCollector;
+
+     { TPOCAGarbageCollector }
+
      TPOCAGarbageCollector=record
 
       Instance:PPOCAInstance;
@@ -1461,6 +1477,13 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       MinimumBlockSize:TPOCAInt32;
       ScanContextGrays:TPasMPBool32;
 
+      MarkHookFirst:PPOCAGarbageCollectorMarkHook;
+      MarkHookLast:PPOCAGarbageCollectorMarkHook;
+
+      function AddMarkHook(const aFunction:TPOCAGarbageCollectorMarkHookFunction;const aData:Pointer=nil):PPOCAGarbageCollectorMarkHook; overload;
+      function AddMarkHook(const aMethod:TPOCAGarbageCollectorMarkHookMethod;const aData:Pointer=nil):PPOCAGarbageCollectorMarkHook; overload;
+      function RemoveMarkHook(const aMarkHook:PPOCAGarbageCollectorMarkHook):Boolean;
+
       function IsWhite(const Obj:PPOCAObject):Boolean;
       class function IsGray(const Obj:PPOCAObject):Boolean; static;
       function IsBlack(const Obj:PPOCAObject):Boolean;
@@ -1490,6 +1513,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       procedure MarkTemporarySavedObjects(Context:PPOCAContext);
 
       procedure MarkGlobals;
+
+      procedure MarkHooks;
 
       function MarkContexts:boolean;
 
@@ -1963,6 +1988,12 @@ function POCAGarbageCollectorProcessIncrementalCycle(const Instance:PPOCAInstanc
 procedure POCAGarbageCollectorProcessFullCycle(const Instance:PPOCAInstance);
 
 procedure POCAGarbageCollectorWriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue);
+
+function POCAGarbageCollectorAddMarkHook(const aInstance:PPOCAInstance;const aFunction:TPOCAGarbageCollectorMarkHookFunction;const aData:Pointer=nil):PPOCAGarbageCollectorMarkHook; overload;
+function POCAGarbageCollectorAddMarkHook(const aInstance:PPOCAInstance;const aMethod:TPOCAGarbageCollectorMarkHookMethod;const aData:Pointer=nil):PPOCAGarbageCollectorMarkHook; overload;
+function POCAGarbageCollectorRemoveMarkHook(const aInstance:PPOCAInstance;const aMarkHook:PPOCAGarbageCollectorMarkHook):Boolean;
+
+function POCAGarbageCollectorMarkValue(const aInstance:PPOCAInstance;const aValue:TPOCAValue):Boolean;
 
 procedure POCATemporarySave(Context:PPOCAContext;const Value:TPOCAValue); {$ifdef UseRegister}register;{$endif}
 procedure POCAResetTemporarySaves(Context:PPOCAContext); {$ifdef UseRegister}register;{$endif}
@@ -6450,6 +6481,86 @@ begin
  TPOCAGarbageCollector.WriteBarrier(ParentObj,Value);
 end;
 
+function TPOCAGarbageCollector.AddMarkHook(const aFunction:TPOCAGarbageCollectorMarkHookFunction;const aData:Pointer):PPOCAGarbageCollectorMarkHook;
+begin
+ GetMem(result,SizeOf(TPOCAGarbageCollectorMarkHook));
+ FillChar(result^,SizeOf(TPOCAGarbageCollectorMarkHook),#0);
+ result^.MarkHookFunction:=aFunction;
+ result^.Data:=aData;
+ if assigned(MarkHookLast) then begin
+  MarkHookLast^.Next:=result;
+  result^.Previous:=MarkHookLast;
+ end else begin
+  MarkHookFirst:=result;
+  result^.Previous:=nil;
+ end; 
+ result^.Next:=nil;
+ MarkHookLast:=result;
+end;
+
+function TPOCAGarbageCollector.AddMarkHook(const aMethod:TPOCAGarbageCollectorMarkHookMethod;const aData:Pointer):PPOCAGarbageCollectorMarkHook;
+begin
+ GetMem(result,SizeOf(TPOCAGarbageCollectorMarkHook));
+ FillChar(result^,SizeOf(TPOCAGarbageCollectorMarkHook),#0);
+ result^.MarkHookMethod:=aMethod;
+ result^.Data:=aData;
+ if assigned(MarkHookLast) then begin
+  MarkHookLast^.Next:=result;
+  result^.Previous:=MarkHookLast;
+ end else begin
+  MarkHookFirst:=result;
+  result^.Previous:=nil;
+ end; 
+ result^.Next:=nil;
+ MarkHookLast:=result;
+end;
+
+function TPOCAGarbageCollector.RemoveMarkHook(const aMarkHook:PPOCAGarbageCollectorMarkHook):Boolean;
+var Current,Previous,Next:PPOCAGarbageCollectorMarkHook;
+begin
+ if assigned(aMarkHook) then begin
+  Current:=MarkHookFirst;
+  Previous:=nil;
+  while assigned(Current) do begin
+   Next:=Current^.Next;
+   if Current=aMarkHook then begin
+    Previous:=Current^.Previous;
+    if assigned(Previous) then begin
+     Previous^.Next:=Next;
+    end else begin
+     MarkHookFirst:=Next;
+    end;
+    if assigned(Next) then begin
+     Next^.Previous:=Previous;
+    end else begin
+     MarkHookLast:=Previous;
+    end;
+    FreeMem(Current);
+    result:=true;
+    exit;
+   end else begin
+    Current:=Next;
+   end;  
+  end;
+ end;
+ result:=false;
+end;
+
+function POCAGarbageCollectorAddMarkHook(const aInstance:PPOCAInstance;const aFunction:TPOCAGarbageCollectorMarkHookFunction;const aData:Pointer):PPOCAGarbageCollectorMarkHook;
+begin
+ result:=aInstance^.Globals.GarbageCollector.AddMarkHook(aFunction,aData);
+end;
+
+function POCAGarbageCollectorAddMarkHook(const aInstance:PPOCAInstance;const aMethod:TPOCAGarbageCollectorMarkHookMethod;const aData:Pointer):PPOCAGarbageCollectorMarkHook;
+begin
+ result:=aInstance^.Globals.GarbageCollector.AddMarkHook(aMethod,aData);
+end;
+
+function POCAGarbageCollectorRemoveMarkHook(const aInstance:PPOCAInstance;const aMarkHook:PPOCAGarbageCollectorMarkHook):Boolean;
+begin
+ result:=aInstance^.Globals.GarbageCollector.RemoveMarkHook(aMarkHook);
+end;
+
 function TPOCAGarbageCollector.IsWhite(const Obj:PPOCAObject):Boolean;
 begin
  result:=(Obj^.Header.GarbageCollector.State and WhiteMask)<>0;
@@ -6604,6 +6715,11 @@ begin
  end else begin
   result:=false;
  end;
+end;
+
+function POCAGarbageCollectorMarkValue(const aInstance:PPOCAInstance;const aValue:TPOCAValue):Boolean;
+begin
+ result:=aInstance^.Globals.GarbageCollector.MarkValue(aValue);
 end;
 
 function TPOCAGarbageCollector.MarkArrayAsGray(Obj:PPOCAArray):boolean;
@@ -6864,6 +6980,20 @@ begin
  MarkValue(Instance^.Globals.UniqueStringArray);
 end;
 
+procedure TPOCAGarbageCollector.MarkHooks;
+var Current:PPOCAGarbageCollectorMarkHook;
+begin
+ Current:=MarkHookFirst;
+ while assigned(Current) do begin
+  if assigned(Current^.MarkHookFunction) then begin
+   Current^.MarkHookFunction(Instance,Current^.Data);
+  end else if assigned(Current^.MarkHookMethod) then begin
+   Current^.MarkHookMethod(Instance,Current^.Data);
+  end;
+  Current:=Current^.Next;
+ end;
+end;
+
 function TPOCAGarbageCollector.MarkContexts:boolean;
 var Context:PPOCAContext;
     Frame:PPOCAFrame;
@@ -6950,6 +7080,7 @@ end;
 procedure TPOCAGarbageCollector.MarkRoots;
 begin
  MarkGlobals;
+ MarkHooks;
  MarkContexts;
  MarkPersistents;
 end;
@@ -19370,6 +19501,8 @@ begin
   result^.Globals.GarbageCollector.ContextCacheSize:=128;
   result^.Globals.GarbageCollector.MinimumBlockSize:=1024;
   result^.Globals.GarbageCollector.ScanContextGrays:=false;
+  result^.Globals.GarbageCollector.MarkHookFirst:=nil;
+  result^.Globals.GarbageCollector.MarkHookLast:=nil;
  end;
  begin
   result^.Globals.DeadAllocationCount:=256;
@@ -19481,6 +19614,7 @@ procedure POCAInstanceDestroy(var Instance:PPOCAInstance);
 var CurrentContext{,NextContext}:PPOCAContext;
     //i:TPOCAInt32;
     Ghost:boolean;
+    MarkHookCurrent,MarkHookNext:PPOCAGarbageCollectorMarkHook;
 begin
  if assigned(Instance) then begin
   try
@@ -19528,6 +19662,15 @@ begin
     FreeMem(Instance^.Globals.DeadBlocks);
     Instance^.Globals.DeadBlocks:=nil;
    end;
+
+   MarkHookCurrent:=Instance^.Globals.GarbageCollector.MarkHookFirst;
+   while assigned(MarkHookCurrent) do begin
+    MarkHookNext:=MarkHookCurrent^.Next;
+    FreeMem(MarkHookCurrent);
+    MarkHookCurrent:=MarkHookNext;
+   end;
+   Instance^.Globals.GarbageCollector.MarkHookFirst:=nil;
+   Instance^.Globals.GarbageCollector.MarkHookLast:=nil;
 
    for Ghost:=false to true do begin
     Instance^.Globals.GarbageCollector.WhiteLists[Ghost]^.Finalize;
