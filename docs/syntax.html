@@ -886,8 +886,9 @@ accessible.</p>
 </li>
 <li>
 <p><strong>Dynamic scoping</strong> (<code>var</code>): Variables are resolved at runtime and can be accessed from
-anywhere within their scope, regardless of the declaration order in the source code. This
-provides more flexibility but comes with the overhead of hash table lookups.</p>
+anywhere within their scope, regardless of the declaration order in the source code, unless
+they are shadowed by another <code>let</code>/<code>const</code>/<code>var</code> definition. This provides more flexibility
+but comes with the overhead of hash table lookups.</p>
 </li>
 </ul>
 </div>
@@ -956,7 +957,8 @@ before use, with compile-time verification. This is a compile-time check, not a 
 </li>
 <li>
 <p><strong><code>var</code></strong>: Uses <strong>true dynamic scoping</strong> with runtime hash table lookup, allowing access from
-anywhere within the scope regardless of declaration order.</p>
+anywhere within the scope regardless of declaration order, unless they are shadowed by another
+<code>let</code>/<code>const</code>/<code>var</code> definition.</p>
 </li>
 </ul>
 </div>
@@ -2094,7 +2096,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-05 23:29:25 +0100
+Last updated 2025-11-05 23:33:59 +0100
 </div>
 </div>
 </body>

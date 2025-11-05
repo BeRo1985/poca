@@ -354,8 +354,9 @@ implications for when and how variables can be accessed:
   accessible.
 
 * **Dynamic scoping** (`var`): Variables are resolved at runtime and can be accessed from 
-  anywhere within their scope, regardless of the declaration order in the source code. This 
-  provides more flexibility but comes with the overhead of hash table lookups.
+  anywhere within their scope, regardless of the declaration order in the source code, unless 
+  they are shadowed by another `let`/`const`/`var` definition. This provides more flexibility 
+  but comes with the overhead of hash table lookups.
 
 This means that a function or `scope { ... }` block can reference a `var` variable that is 
 declared later in the source code (as long as it's in the same scope), but attempting to 
@@ -405,7 +406,8 @@ In **POCA**:
   before use, with compile-time verification. This is a compile-time check, not a runtime TDZ.
 
 * **`var`**: Uses **true dynamic scoping** with runtime hash table lookup, allowing access from 
-  anywhere within the scope regardless of declaration order.
+  anywhere within the scope regardless of declaration order, unless they are shadowed by another 
+  `let`/`const`/`var` definition.
 
 The key difference: JavaScript uses hoisting (moving declarations to the top) with all three 
 keywords using lexical scoping, while POCA fundamentally distinguishes between compile-time 
