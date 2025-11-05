@@ -869,6 +869,105 @@ The <code>scope</code> keyword creates a new scope, while the <code>code</code> 
 code block without introducing a new scope. This provides additional control over
 variable visibility and lifetime.</p>
 </div>
+<div class="sect3">
+<h4 id="_static_vs_dynamic_scoping">Static vs Dynamic Scoping</h4>
+<div class="paragraph">
+<p>An important distinction in POCA is that <code>let</code> and <code>const</code> follow static scoping rules based
+on declaration order, while <code>var</code> uses dynamic scoping. This difference has significant
+implications for when and how variables can be accessed:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Static scoping</strong> (<code>let</code>/<code>const</code>): Variables must be declared in the source code before
+they can be referenced. The compiler performs static analysis to resolve these bindings
+at compile time, ensuring that only variables defined earlier in the lexical scope are
+accessible.</p>
+</li>
+<li>
+<p><strong>Dynamic scoping</strong> (<code>var</code>): Variables are resolved at runtime and can be accessed from
+anywhere within their scope, regardless of the declaration order in the source code. This
+provides more flexibility but comes with the overhead of hash table lookups.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>This means that a function or <code>scope { &#8230;&#8203; }</code> block can reference a <code>var</code> variable that is
+declared later in the source code (as long as it&#8217;s in the same scope), but attempting to
+reference a <code>let</code> or <code>const</code> variable declared after the function or scope block will result
+in a compile-time error.</p>
+</div>
+<div class="paragraph">
+<p>Example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-javascript" data-lang="javascript">let outerLet = 1;
+
+function example(){
+  puts(outerLet);    // Valid: outerLet is declared before the function
+  puts(dynamicVar);  // Valid: var uses dynamic scoping
+  puts(laterLet);    // Error: let/const are statically scoped by order
+}
+
+let laterLet = 2;
+var dynamicVar = 3;
+
+example();</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This design choice allows POCA to optimize <code>let</code> and <code>const</code> variables for performance
+through static analysis and register allocation, while maintaining the flexibility of
+<code>var</code> for dynamic programming patterns that require runtime variable resolution.</p>
+</div>
+<div class="paragraph">
+<p><strong>Comparison with JavaScript/ECMAScript:</strong></p>
+</div>
+<div class="paragraph">
+<p>For developers familiar with JavaScript/ECMAScript, it&#8217;s important to note that POCA&#8217;s
+scoping behavior differs significantly from JavaScript&#8217;s hoisting mechanism:</p>
+</div>
+<div class="paragraph">
+<p>In <strong>JavaScript/ECMAScript</strong>:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong><code>let</code> and <code>const</code></strong>: Have block scope and are subject to the <strong>Temporal Dead Zone (TDZ)</strong>.
+They are hoisted but cannot be accessed before their declaration, resulting in a
+<code>ReferenceError</code> if referenced earlier in the code.</p>
+</li>
+<li>
+<p><strong><code>var</code></strong>: Has function scope (or global scope) and is <strong>hoisted</strong> to the top of its scope.
+The declaration is hoisted but not the initialization, so accessing a <code>var</code> variable before
+its declaration line returns <code>undefined</code> rather than an error.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>In <strong>POCA</strong>:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong><code>let</code> and <code>const</code></strong>: Follow <strong>static scoping by declaration order</strong> - they must be declared
+before use, with compile-time verification. This is a compile-time check, not a runtime TDZ.</p>
+</li>
+<li>
+<p><strong><code>var</code></strong>: Uses <strong>true dynamic scoping</strong> with runtime hash table lookup, allowing access from
+anywhere within the scope regardless of declaration order.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The key difference: JavaScript uses hoisting (moving declarations to the top) with all three
+keywords using lexical scoping, while POCA fundamentally distinguishes between compile-time
+static resolution (<code>let</code>/<code>const</code>) and runtime dynamic resolution (<code>var</code>). This makes POCA&#8217;s
+<code>var</code> more flexible for dynamic programming patterns, while <code>let</code>/<code>const</code> enable better
+compile-time optimization.</p>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -1995,7 +2094,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-03 00:59:07 +0100
+Last updated 2025-11-05 23:29:25 +0100
 </div>
 </div>
 </body>

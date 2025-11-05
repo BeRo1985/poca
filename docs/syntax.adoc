@@ -342,6 +342,77 @@ The `scope` keyword creates a new scope, while the `code` keyword creates a new
 code block without introducing a new scope. This provides additional control over 
 variable visibility and lifetime.
 
+==== Static vs Dynamic Scoping
+
+An important distinction in POCA is that `let` and `const` follow static scoping rules based 
+on declaration order, while `var` uses dynamic scoping. This difference has significant 
+implications for when and how variables can be accessed:
+
+* **Static scoping** (`let`/`const`): Variables must be declared in the source code before 
+  they can be referenced. The compiler performs static analysis to resolve these bindings 
+  at compile time, ensuring that only variables defined earlier in the lexical scope are 
+  accessible.
+
+* **Dynamic scoping** (`var`): Variables are resolved at runtime and can be accessed from 
+  anywhere within their scope, regardless of the declaration order in the source code. This 
+  provides more flexibility but comes with the overhead of hash table lookups.
+
+This means that a function or `scope { ... }` block can reference a `var` variable that is 
+declared later in the source code (as long as it's in the same scope), but attempting to 
+reference a `let` or `const` variable declared after the function or scope block will result 
+in a compile-time error.
+
+Example:
+
+[source,javascript]
+----
+let outerLet = 1;
+
+function example(){
+  puts(outerLet);    // Valid: outerLet is declared before the function
+  puts(dynamicVar);  // Valid: var uses dynamic scoping
+  puts(laterLet);    // Error: let/const are statically scoped by order
+}
+
+let laterLet = 2;
+var dynamicVar = 3;
+
+example();
+----
+
+This design choice allows POCA to optimize `let` and `const` variables for performance 
+through static analysis and register allocation, while maintaining the flexibility of 
+`var` for dynamic programming patterns that require runtime variable resolution.
+
+**Comparison with JavaScript/ECMAScript:**
+
+For developers familiar with JavaScript/ECMAScript, it's important to note that POCA's 
+scoping behavior differs significantly from JavaScript's hoisting mechanism:
+
+In **JavaScript/ECMAScript**:
+
+* **`let` and `const`**: Have block scope and are subject to the **Temporal Dead Zone (TDZ)**. 
+  They are hoisted but cannot be accessed before their declaration, resulting in a 
+  `ReferenceError` if referenced earlier in the code.
+
+* **`var`**: Has function scope (or global scope) and is **hoisted** to the top of its scope. 
+  The declaration is hoisted but not the initialization, so accessing a `var` variable before 
+  its declaration line returns `undefined` rather than an error.
+
+In **POCA**:
+
+* **`let` and `const`**: Follow **static scoping by declaration order** - they must be declared 
+  before use, with compile-time verification. This is a compile-time check, not a runtime TDZ.
+
+* **`var`**: Uses **true dynamic scoping** with runtime hash table lookup, allowing access from 
+  anywhere within the scope regardless of declaration order.
+
+The key difference: JavaScript uses hoisting (moving declarations to the top) with all three 
+keywords using lexical scoping, while POCA fundamentally distinguishes between compile-time 
+static resolution (`let`/`const`) and runtime dynamic resolution (`var`). This makes POCA's 
+`var` more flexible for dynamic programming patterns, while `let`/`const` enable better 
+compile-time optimization.
+
 == A quick tour
 
 === How to declare variables
