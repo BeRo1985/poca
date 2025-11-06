@@ -2182,7 +2182,7 @@ function POCAGetSourceFileName(Context:PPOCAContext;FrameNumber:TPOCAInt32;Absol
 function POCABindToContext(Context:PPOCAContext;Code:TPOCAValue):TPOCAValue;
 
 function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue; overload;
-function POCACall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValues;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
+function POCACall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValue;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
 
 procedure POCARuntimeError(Context:PPOCAContext;const Msg:TPOCAUTF8String);
 
@@ -42294,7 +42294,7 @@ begin
  end;
 end;
 
-function POCACall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValues;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
+function POCACall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValue;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
 begin
  if length(aArguments)>0 then begin
   result:=POCACall(aContext,aFunc,@aArguments[0],length(aArguments),aObj,aLocals);
