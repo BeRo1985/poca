@@ -1,4 +1,4 @@
-﻿(****************************************************************************** 
+﻿(******************************************************************************
  *                                     POCA                                   *
  ******************************************************************************
  *            for version see POCAVersion constant string here below          *
@@ -888,7 +888,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       pmoREGEXPEQ,
       pmoREGEXPNEQ,
       pmoSQRT
-     );            
+     );
 
      PPOCATokenTypes=^TPOCATokenTypes;
      TPOCATokenTypes=set of TPOCATokenType;
@@ -1429,7 +1429,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCAGarbageCollector=record
 
       Instance:PPOCAInstance;
-     
+
       WhiteMask:TPOCAUInt32;
       BlackMask:TPOCAUInt32;
 
@@ -1535,7 +1535,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       function CollectCycle:boolean;
 
       procedure CollectAll;
-      
+
      end;
 
      TPOCARequestGarbageCollection=(prgcNONE,prgcCYCLE,prgcFULLEPHEMERAL,prgcFULL);
@@ -1594,7 +1594,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       GhostHashValueReference:TPOCAValue;
       HashValueReference:TPOCAValue;
       FunctionValueReference:TPOCAValue;
-      ClassGhostValueReference:TPOCAValue;  
+      ClassGhostValueReference:TPOCAValue;
       ModuleGhostValueReference:TPOCAValue;
       HashGhostValueReference:TPOCAValue;
       GhostValueReference:TPOCAValue;
@@ -1802,7 +1802,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        function GetPropertyType(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32):TPOCAInt32; virtual;
        function GetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;var Value:TPOCAValue):boolean; virtual;
        function SetPropertyValue(const Context:PPOCAContext;const PropertyIndex:TPOCAInt32;const Value:TPOCAValue):boolean; virtual;
-      public 
+      public
        property Instance:PPOCAInstance read fInstance;
        property Object_:TObject read fObject;
        property Expandable:boolean read fExpandable;
@@ -1819,13 +1819,13 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      end;
 
      TPOCAValueDataFileHeaderSignature=array[0..3] of AnsiChar;
-     
+
      TPOCAValueDataFileHeader=packed record
       Signature:TPOCAValueDataFileHeaderSignature;
       Version:TPOCAUInt32;
       CheckSum:TPOCAUInt32;
       DataSize:TPOCAUInt64;
-     end;  
+     end;
      PPOCAValueDataFileHeader=^TPOCAValueDataFileHeader;
 
 const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
@@ -2181,7 +2181,8 @@ function POCAGetSourceFileName(Context:PPOCAContext;FrameNumber:TPOCAInt32;Absol
 
 function POCABindToContext(Context:PPOCAContext;Code:TPOCAValue):TPOCAValue;
 
-function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue;
+function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue; overload;
+function POCACall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValues;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
 
 procedure POCARuntimeError(Context:PPOCAContext;const Msg:TPOCAUTF8String);
 
@@ -5605,7 +5606,7 @@ end;
 
 function POCAIsValueGhostEventHash(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 var Ghost:PPOCAGhost;
-begin         
+begin
  Ghost:=PPOCAGhost(POCAGetValueReferencePointer(v));
  result:=(POCAIsValueObject(v) and (Ghost^.Header.ValueType=pvtGHOST)) and assigned(Ghost^.Hash) and assigned(Ghost^.Hash^.Events);
 end;
@@ -6125,7 +6126,7 @@ begin
 end;
 
 procedure POCAPoolFreeElement(Pool:PPOCAPool;Obj:PPOCAObject); {$ifdef UseRegister}register;{$endif}
-begin            
+begin
  POCAPoolCleanElement(Pool,Obj);
 {$ifdef POCAGarbageCollectorPoolBlockReferenceCounting}
  if TPasMPInterlocked.Decrement(Obj^.Header.PoolBlock^.ReferenceCounter)=0 then begin
@@ -6474,7 +6475,7 @@ begin
   aList^.Name:=aWithList^.Name;
   aWithList^.Name:=Name;
  end;
-end; 
+end;
 
 procedure POCAGarbageCollectorWriteBarrier(const ParentObj:PPOCAObject;const Value:TPOCAValue);
 begin
@@ -6493,7 +6494,7 @@ begin
  end else begin
   MarkHookFirst:=result;
   result^.Previous:=nil;
- end; 
+ end;
  result^.Next:=nil;
  MarkHookLast:=result;
 end;
@@ -6510,7 +6511,7 @@ begin
  end else begin
   MarkHookFirst:=result;
   result^.Previous:=nil;
- end; 
+ end;
  result^.Next:=nil;
  MarkHookLast:=result;
 end;
@@ -6540,7 +6541,7 @@ begin
     exit;
    end else begin
     Current:=Next;
-   end;  
+   end;
   end;
  end;
  result:=false;
@@ -6606,7 +6607,7 @@ begin
   if not IsGray(ParentObj) then begin
    GrayList.TakeOver(ParentObj);
    ParentObj^.Header.GarbageCollector.State:=(ParentObj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
-  end; 
+  end;
  finally
   POCALockLeave(Lock);
  end;
@@ -7886,7 +7887,7 @@ begin
   Obj^.Header.ValueType:=ValueType;
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
   Obj^.Header.Instance:=Instance;
-{$endif}  
+{$endif}
  end;
 end;
 
@@ -9010,7 +9011,7 @@ begin
   end;
  end;
 end;
-            
+
 function POCACompareEvent(Context:PPOCAContext;const a,b:TPOCAValue):TPOCAInt32;
 var HashEvents:PPOCAHashEvents;
     SubContext:PPOCAContext;
@@ -10727,7 +10728,7 @@ begin
    result:=false;
   end;
  end;
-end;                                                          
+end;
 
 function POCAValueSetConstructorValue(Context:PPOCAContext;const Hash,Constructor_:TPOCAValue;const Level:TPOCAInt32):TPOCABool32;
 begin
@@ -10810,7 +10811,7 @@ begin
     p:=PPOCAHash(POCAGetValueReferencePointer(Hash))^.Constructor_;
     if assigned(p) then begin
      POCASetValueReferencePointer(result,p);
-    end;     
+    end;
    end;
    pvtGHOST:begin
     result:=POCAValueGetConstructorValue(Context,POCAGhostGetHashValue(Hash),Level+1);
@@ -12294,7 +12295,7 @@ function POCAHashArray(Context:PPOCAContext;const Hash:TPOCAValue):TPOCAValue;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     i,Entity:TPOCAInt32;
-    Keys,KeyValuePair,Key,Value:TPOCAValue;    
+    Keys,KeyValuePair,Key,Value:TPOCAValue;
 begin
  if POCAIsValueHash(Hash) then begin
   result:=POCANewArray(Context);
@@ -12334,7 +12335,7 @@ begin
   end;
  end else begin
   result.CastedUInt64:=POCAValueNullCastedUInt64;
- end; 
+ end;
 end;
 
 procedure POCAHashClear(Context:PPOCAContext;const Hash:TPOCAValue);
@@ -12454,7 +12455,7 @@ begin
 end;
 
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
-begin                     
+begin
  POCALockEnter(Instance^.Globals.Lock);
  try
   result:=Instance^.Globals.FreeContexts;
@@ -13867,7 +13868,7 @@ begin
     if fm='c' then begin
      FileMode:=fmOpenReadWrite;
      DoCreate:=true;
-     Binary:=false;     
+     Binary:=false;
     end else if fm='r' then begin
      FileMode:=fmOpenRead;
      Binary:=false;
@@ -13899,7 +13900,7 @@ begin
      end else begin
       FileMode:=fmOpenReadWrite;
       DoCreate:=true;
-     end;      
+     end;
     end else begin
      FileMode:=fmOpenRead;
      Binary:=false;
@@ -13935,7 +13936,7 @@ begin
      end;
      if assigned(f) then begin
       Dispose(f);
-      f:=nil; 
+      f:=nil;
      end;
     except
     end;
@@ -13963,7 +13964,7 @@ begin
    if (IOData^.TextHandle<>@System.Input) and (IOData^.TextHandle<>@System.Output) and (IOData^.TextHandle<>@System.ErrOutput) then begin
     System.Close(IOData^.TextHandle^);
    end;
-  end; 
+  end;
   if assigned(IOData^.BinaryHandle) then begin
    System.Close(IOData^.BinaryHandle^);
   end;
@@ -13984,7 +13985,7 @@ var IOData:PPOCAIOGhostData;
 begin
  if POCAGhostGetType(This)<>@POCAIOGhost then begin
   POCARuntimeError(Context,'Bad THIS value');
- end;                
+ end;
  IOData:=PPOCAIOGhostData(POCAGhostGetPointer(This));
  if assigned(IOData^.TextHandle) then begin
   result.Num:=ord(eof(IOData^.TextHandle^)) and 1;
@@ -14106,18 +14107,18 @@ begin
  end;
 end;
 
-// IO.getDirectoryEntries(path:string):array of list of objects with name, datetime, size and type  
+// IO.getDirectoryEntries(path:string):array of list of objects with name, datetime, size and type
 function POCAIOFunctionGETDIRECTORYENTRIES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Path:TPOCARawByteString;
     ListItem:TPOCAValue;
     FindData:TSearchRec;
 begin
  if CountArguments>0 then begin
-  
+
   Path:=POCAGetStringValue(Context,Arguments^[0]);
-  
+
   result:=POCANewArray(Context);
-  
+
   if FindFirst(Path,faAnyFile,FindData)=0 then begin
 
    repeat
@@ -14149,7 +14150,7 @@ begin
 //result:=POCAValueNull;
   result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
-end; 
+end;
 
 function POCAInitIONamespace(Context:PPOCAContext):TPOCAValue;
 var FileNil:^File;
@@ -14184,12 +14185,12 @@ begin
   result:=POCANewString(Context,ExcludeTrailingPathDelimiter(ExtractFilePath(Path)));
  end else begin
   result.CastedUInt64:=POCAValueNullCastedUInt64;
- end;  
+ end;
 end;
 
 function POCAPathFunctionFILENAME(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Path:TPOCARawByteString;
-begin 
+begin
  if CountArguments>0 then begin
   Path:=POCAGetStringValue(Context,Arguments^[0]);
   result:=POCANewString(Context,ExtractFileName(Path));
@@ -14299,7 +14300,7 @@ begin
      end;
      Path:=Path+Part;
     end;
-   end; 
+   end;
    result:=POCANewString(Context,Path);
   end else begin
    result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -14321,15 +14322,15 @@ begin
   IsAbsolute:=(length(Path)>0) and ((Path[1]='\') or (Path[1]='/'));
 {$endif}
   result.Num:=ord(IsAbsolute) and 1;
- end else begin 
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
 function POCAPathFunctionDELIMITER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=POCANewString(Context,{$ifdef Windows}'\'{$else}'/'{$endif});
-end; 
+end;
 
 function POCAPathFunctionCURRENT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
@@ -14361,7 +14362,7 @@ begin
    end;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 {$else}
@@ -14372,16 +14373,16 @@ begin
  if CountArguments>0 then begin
   Path:=POCAGetStringValue(Context,Arguments^[0]);
   Path:=IncludeTrailingPathDelimiter(Path)+{$ifdef Windows}'*.*'{$else}'*'{$endif};
-  result:=POCANewArray(Context); 
+  result:=POCANewArray(Context);
   if FindFirst(Path,faAnyFile,FindData)=0 then begin
    repeat
     POCAArrayPush(result,POCANewString(Context,FindData.Name));
    until FindNext(FindData)<>0;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
-end; 
+end;
 {$ifend}
 
 function POCAPathFunctionSTAT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -14409,12 +14410,12 @@ begin
     POCAHashSetString(Context,result,'symlink',POCANewNumber(Context,0));
    end;
   end else begin
-   result.CastedUInt64:=POCAValueNullCastedUInt64; 
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
-end;  
+end;
 {$else}
 // With FindFirst and emulating stat
 var Path:TPOCARawByteString;
@@ -14435,10 +14436,10 @@ begin
    end;
    POCAHashSetString(Context,result,'symlink',POCANewNumber(Context,0));
   end else begin
-   result.CastedUInt64:=POCAValueNullCastedUInt64; 
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 {$ifend}
@@ -14450,7 +14451,7 @@ begin
   Path:=POCAGetStringValue(Context,Arguments^[0]);
   result.Num:=ord(DirectoryExists(Path)) and 1;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14461,7 +14462,7 @@ begin
   Path:=POCAGetStringValue(Context,Arguments^[0]);
   result.Num:=ord(FileExists(Path)) and 1;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14479,7 +14480,7 @@ begin
    end;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 {$else}
@@ -14495,7 +14496,7 @@ begin
    end;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 {$ifend}
@@ -14514,7 +14515,7 @@ begin
   end;
   result:=POCANewString(Context,Path);
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 {$else}
@@ -14525,14 +14526,14 @@ begin
   if FileExists(Path) then begin
    result:=POCANewString(Context,Path);
   end else begin
-   result.CastedUInt64:=POCAValueNullCastedUInt64; 
+   result.CastedUInt64:=POCAValueNullCastedUInt64;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 {$ifend}
- 
+
 function POCAPathFunctionMKDIR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Path:TPOCARawByteString;
 begin
@@ -14548,7 +14549,7 @@ begin
    result.Num:=0;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14566,8 +14567,8 @@ begin
   end else begin
    result.Num:=0;
   end;
- end else begin 
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14586,7 +14587,7 @@ begin
    result.Num:=0;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14597,7 +14598,7 @@ begin
   Path:=POCAGetStringValue(Context,Arguments^[0]);
   result.Num:=ord(FileExists(Path) or DirectoryExists(Path)) and 1;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14616,7 +14617,7 @@ begin
    result.Num:=0;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14644,11 +14645,11 @@ begin
    result.Num:=0;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
-function POCAPathFunctionMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue; 
+function POCAPathFunctionMOVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var SourcePath,DestPath:TPOCARawByteString;
 begin
  if CountArguments>1 then begin
@@ -14664,7 +14665,7 @@ begin
    result.Num:=0;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14684,7 +14685,7 @@ begin
    result.Num:=0;
   end;
  end else begin
-  result.CastedUInt64:=POCAValueNullCastedUInt64; 
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
 
@@ -14715,7 +14716,7 @@ begin
  POCAAddNativeFunction(Context,result,'remove',POCAPathFunctionREMOVE);
  POCAAddNativeFunction(Context,result,'copy',POCAPathFunctionCOPY);
  POCAAddNativeFunction(Context,result,'move',POCAPathFunctionMOVE);
- POCAAddNativeFunction(Context,result,'rename',POCAPathFunctionRENAME); 
+ POCAAddNativeFunction(Context,result,'rename',POCAPathFunctionRENAME);
 end;
 
 //////////
@@ -14786,7 +14787,7 @@ begin
   POCARuntimeError(Context,'Bad THIS value');
  end;
  if CountArguments>0 then begin
-  s:=''; 
+  s:='';
   if CountArguments>1 then begin
    StartCodeUnit:=POCAStringUTF8GetCodeUnit(Context,Arguments^[0],trunc(POCAGetNumberValue(Context,Arguments^[1])));
   end else begin
@@ -15372,7 +15373,7 @@ begin
     end;
     else begin
      result:=POCANewString(Context,'none');
-    end;     
+    end;
    end;
   end else begin
 // result:=POCAValueNull;
@@ -15497,7 +15498,7 @@ begin
 {$endif}
 {$endif}
    DataCasted^.Handle:=0;
-  end; 
+  end;
   if assigned(DataCasted^.Context) then begin
    DataCasted^.Context^.ThreadData:=nil;
    POCAContextDestroy(DataCasted^.Context);
@@ -15984,7 +15985,7 @@ begin
   POCAArraySetSize(result,trunc(POCAGetNumberValue(Context,Arguments^[0])));
   for i:=1 to CountArguments-1 do begin
    POCAArraySet(result,i-1,Arguments^[i]);
-  end;       
+  end;
  end;
 end;
 
@@ -16097,7 +16098,7 @@ begin
 end;
 
 function POCABooleanFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
-begin                  
+begin
  if CountArguments>0 then begin
   result:=POCABooleanValue(Context,Arguments^[0]);
  end else begin
@@ -16386,7 +16387,7 @@ end;
 
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aExtendedRTTI:Boolean);
 begin
- inherited Create;  
+ inherited Create;
  fObject:=self;
  fObjects:=nil;
  fCountObjects:=0;
@@ -16411,7 +16412,7 @@ end;
 
 constructor TPOCANativeObject.Create(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aPrototype,aConstructor:PPOCAValue;const aExpandable:boolean;const aObject:TObject;const aExtendedRTTI:Boolean);
 begin
- inherited Create;  
+ inherited Create;
  if assigned(aObject) then begin
   fObject:=aObject;
  end else begin
@@ -16493,7 +16494,7 @@ procedure TPOCANativeObject.AddObject(const aObject:TObject);
 var Index:TPOCANativeInt;
     ObjectData:PPOCANativeObjectData;
 begin
- 
+
  // Add only if not nil and not self
  if assigned(aObject) and (aObject<>self) then begin
 
@@ -16504,7 +16505,7 @@ begin
     exit;
    end;
   end;
-  
+
   // Otherwise, add object
   Index:=fCountObjects;
   inc(fCountObjects);
@@ -17651,7 +17652,7 @@ begin
 end;
 
 function POCABaseClassFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
-var ConstructorValue:TPOCAValue;                        
+var ConstructorValue:TPOCAValue;
     SubContext:PPOCAContext;
 begin
  result:=POCANewHash(Context);
@@ -17784,7 +17785,7 @@ end;
 function POCAArrayFunctionSPLICE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Start,DeleteCount,InsertionCount,Size,NewSize,i:TPOCAInt32;
 begin
- 
+
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "splice"');
  end;
@@ -17838,17 +17839,17 @@ begin
  // Adjust the original array
  NewSize:=(Size+InsertionCount)-DeleteCount;
  if InsertionCount>DeleteCount then begin
-  
+
   // Increase size first
   POCAArraySetSize(This,NewSize);
-  
+
   // Shift trailing elements right
   for i:=Size-1 downto Start+DeleteCount do begin
    POCAArraySet(This,(i+InsertionCount)-DeleteCount,POCAArrayGet(This,i));
   end;
 
  end else if InsertionCount<DeleteCount then begin
-  
+
   // Shift trailing elements left
   for i:=Start+DeleteCount to Size-1 do begin
    POCAArraySet(This,i-(DeleteCount-InsertionCount),POCAArrayGet(This,i));
@@ -17912,7 +17913,7 @@ begin
   InsertionCount:=0;
  end;
 
- // Calculate new size 
+ // Calculate new size
  NewSize:=(Size+InsertionCount)-DeleteCount;
 
  // Build output spliced array
@@ -18151,7 +18152,7 @@ end;
 
 function POCAArrayFunctionREVERSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var i,j,Size:TPOCAInt32;
-    a,b:TPOCAValue; 
+    a,b:TPOCAValue;
 begin
  if not POCAIsValueArray(This) then begin
   POCARuntimeError(Context,'Bad this value to "reverse"');
@@ -18185,7 +18186,7 @@ begin
    POCAArrayPush(result,POCAArrayGet(This,i));
   end;
  end;
-end; 
+end;
 
 function POCAArrayFunctionINCLUDES(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
@@ -19545,7 +19546,7 @@ begin
    begin
     result^.Globals.ArgumentsValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'arguments'));
     result^.Globals.ConstructorValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,ConstructorValueSymbolString));
-    begin                    
+    begin
      result^.Globals.NullValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'Null'));
      result^.Globals.ReferenceValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'Reference'));
      result^.Globals.NumberValueReference:=POCAInternSymbol(Context,result,POCANewUniqueString(Context,'Number'));
@@ -24350,7 +24351,7 @@ var TokenList:PPOCAToken;
    New(NewToken);
    FillChar(NewToken^,sizeof(TPOCAToken),#0);
    NewToken^.TokenListNext:=TokenList;
-   TokenList:=NewToken;     
+   TokenList:=NewToken;
    NewToken^.Token:=ptLITERALNUM;
    NewToken^.Num:=Value;
    NewToken^.Visited:=false;
@@ -24658,13 +24659,13 @@ var TokenList:PPOCAToken;
        if not (assigned(Token) and (Token^.Token=ptLPAR)) then begin
         SyntaxError('Missed open parenthesis brace',CurrentToken^.SourceFile,CurrentToken^.SourceLine,CurrentToken^.SourceColumn);
        end;
-      end else if assigned(CurrentToken^.Previous) and (CurrentToken^.Previous^.Token=ptSYMBOL) then begin       
-       // Case: x => (single parameter without parentheses)       
-       Token:=CurrentToken^.Previous;       
+      end else if assigned(CurrentToken^.Previous) and (CurrentToken^.Previous^.Token=ptSYMBOL) then begin
+       // Case: x => (single parameter without parentheses)
+       Token:=CurrentToken^.Previous;
        // Insert parentheses around the parameter
        InsertBefore(Token,ptLPAR);
        InsertAfter(Token,ptRPAR);
-       Token:=Token^.Previous; // Correct token pointer to the opening parenthesis 
+       Token:=Token^.Previous; // Correct token pointer to the opening parenthesis
       end else begin
        SyntaxError('Invalid lambda syntax',CurrentToken^.SourceFile,CurrentToken^.SourceLine,CurrentToken^.SourceColumn);
        Token:=nil; // Suppress uninitialized variable warning
@@ -27475,7 +27476,7 @@ var TokenList:PPOCAToken;
      end else if c^.Token=t^.Token then begin
       case c^.Token of
        ptLITERALNUM:begin
-        if c^.Num=t^.Num then begin     
+        if c^.Num=t^.Num then begin
          result:=CodeGenerator^.ConstantRegisters[i];
          exit;
         end;
@@ -29589,7 +29590,7 @@ var TokenList:PPOCAToken;
       end;
      end;
      procedure EmitList(t:PPOCAToken);
-     var Count,r:TPOCAInt32;  
+     var Count,r:TPOCAInt32;
      begin
       Count:=0;
       while assigned(t) do begin
@@ -29715,7 +29716,7 @@ var TokenList:PPOCAToken;
        SetRegisterTypeKind(result,tkNULL);
        CombineCurrentRegisters(Registers);
        FixTargetImmediate(JumpEnd);
-      end;     
+      end;
       FreeRegister(Reg2);
       FreeRegister(Reg1);
      finally
@@ -30072,7 +30073,7 @@ var TokenList:PPOCAToken;
           end;
          end;
          Optimized:=true;
-        end;   
+        end;
        end;
       end;
       FreeRegister(RegLeft);
@@ -31385,7 +31386,7 @@ var TokenList:PPOCAToken;
         lv:=lv^.Right;
         Variable:=vCONST;
        end;
-      end;                                   
+      end;
       if (rv^.Token=ptLPAR) and not (Binary(rv) or not assigned(rv^.Right)) then begin
        if Len<>ParameterListLen(rv) then begin
         SyntaxError('Bad assignment count',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -31738,7 +31739,7 @@ var TokenList:PPOCAToken;
          end;
         end;
        end;
-      end; 
+      end;
       Registers[0]:=GetRegisters;
       Start:=CodeGenerator^.ByteCodeSize;
       ScopePush(ScopeState);
@@ -33363,7 +33364,7 @@ var TokenList:PPOCAToken;
      ScanForNestedFunctions(ArgumentList,Block);
      ScopeStart;
      ProcessConstantFolding(ArgumentList);
-     PreprocessArgumentList(ArgumentList);                                 
+     PreprocessArgumentList(ArgumentList);
      if assigned(Block) and not (((Block^.Token=ptEMPTY) and not (assigned(Block^.Left) or assigned(Block^.Right))) or ((Block^.Token=ptTOP) and ((not assigned(Block^.Left)) or (((Block^.Left^.Token=ptEMPTY) and not (assigned(Block^.Left^.Left) or assigned(Block^.Left^.Right))))))) then begin
       ProcessConstantFolding(Block);
       CollectConstants(Block);
@@ -35610,7 +35611,7 @@ var Fixups:TFixups;
  procedure DoItByVMOpcodeDispatcher;
  begin
   Code^.InterpretByteCodeMap[LastPC]:=true;
-  
+
   Add(#$c7#$45#$00); // mov dword ptr [ebp+$00],LastPC
   AddDWord(LastPC);
 
@@ -38539,7 +38540,7 @@ begin
 
       Add(#$dc#$9b); // fcomp qword ptr [ebx+RegisterOfs]
       AddDWord(Operands^[2]*sizeof(double));
-      
+
       asm
        jmp @Skip
         @CodeBegin:
@@ -38684,14 +38685,14 @@ begin
       Add(#$81#$bb); // cmp dword ptr [ebx+Operand1+4], 0x7fff6789
       AddDWord((Operands^[1]*sizeof(double))+4);
       AddDWord($7fff6789);
-      
+
       Add(#$75#$0d); // jne +13 (skip pointer check)
-      
+
       // Check if pointer is NULL (lower 4 bytes, offset +0)
       Add(#$83#$bb); // cmp dword ptr [ebx+Operand1], 0
       AddDWord(Operands^[1]*sizeof(double));
       Add(#$00);
-      
+
       Add(#$0f#$84); // jz (jump if null)
       asm
        jmp @Skip
@@ -38720,7 +38721,7 @@ begin
       Add(#$81#$bb); // cmp dword ptr [ebx+Operand1+4], 0x7fff6789
       AddDWord((Operands^[1]*sizeof(double))+4);
       AddDWord($7fff6789);
-      
+
       Add(#$0f#$85); // jne (jump if not null - tag differs)
       asm
        jmp @Skip
@@ -38739,12 +38740,12 @@ begin
       Fixups[CountFixups].Ofs:=CodeBufferLen-4;
       Fixups[CountFixups].ToOfs:=Operands^[0];
       inc(CountFixups);
-      
+
       // Check if pointer is not NULL
       Add(#$83#$bb); // cmp dword ptr [ebx+Operand1], 0
       AddDWord(Operands^[1]*sizeof(double));
       Add(#$00);
-      
+
       Add(#$0f#$85); // jnz (jump if not null - pointer not zero)
       asm
        jmp @Skip
@@ -38994,7 +38995,7 @@ var Fixups:TFixups;
  procedure DoItByVMOpcodeDispatcher;
  begin
   Code^.InterpretByteCodeMap[LastPC]:=true;
-  
+
   Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],LastPC
   AddDWord(LastPC);
 
@@ -39019,7 +39020,7 @@ begin
    SetLength(Code^.InterpretByteCodeMap,Code^.ByteCodeSize);
   end;
   CurrentPC:=0;
-  
+
   // Main bytecode processing loop
   while CurrentPC<Code^.ByteCodeSize do begin
    LastPC:=CurrentPC;
@@ -39029,7 +39030,7 @@ begin
    Operands:=@Code^.ByteCode^[CurrentPC+1];
    inc(CurrentPC,1+(Instruction shr 8));
    Opcode:=Instruction and $ff;
-   
+
    case Opcode of
     popNOP:begin
     end;
@@ -39048,7 +39049,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popSUB:begin
      AddBinaryOpTypeCheck;
 
@@ -39061,7 +39062,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popMUL:begin
      AddBinaryOpTypeCheck;
 
@@ -39105,7 +39106,7 @@ begin
 
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
-     
+
      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
      Add(#$0f#$94#$c0); // setz al
@@ -39155,7 +39156,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popGT:begin
      AddBinaryOpTypeCheck;
 
@@ -39173,7 +39174,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popGTEQ:begin
      AddBinaryOpTypeCheck;
 
@@ -39191,7 +39192,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popEQ:begin
      AddBinaryOpTypeCheck;
 
@@ -39231,19 +39232,19 @@ begin
     popCMP:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSEQ:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSNEQ:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popEACH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popJMP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$e9); // jmp Arg
@@ -39257,11 +39258,11 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popJMPLOOP:begin
      // Check for GC bottleneck
      AddGarbageCollectorBottleneckCheck;
-     
+
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$e9); // jmp Arg
       if CountFixups>=length(Fixups) then begin
@@ -39274,14 +39275,14 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popJIFTRUE:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       AddUnaryOpTypeCheck;
 
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
       Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
       Add(#$0f#$85); // jnz
@@ -39295,14 +39296,14 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popJIFFALSE:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       AddUnaryOpTypeCheck;
 
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
       Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
       Add(#$0f#$84); // jz
@@ -39316,7 +39317,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popJIFTRUELOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       // Check for GC bottleneck
@@ -39326,7 +39327,7 @@ begin
 
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
       Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
       Add(#$0f#$85); // jnz
@@ -39340,7 +39341,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popJIFFALSELOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       // Check for GC bottleneck
@@ -39350,7 +39351,7 @@ begin
 
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
       Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
       Add(#$0f#$84); // jz
@@ -39364,23 +39365,23 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popFCALL:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popMCALL:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popRETURN:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popLOADCODE:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popLOADCONST:begin
      v:=Code^.Constants^[Operands^[1]];
      if POCAIsValueCode(v) then begin
@@ -39392,20 +39393,20 @@ begin
       AddDWord(Operands^[0]*sizeof(double));
      end;
     end;
-    
+
     popLOADONE:begin
      Add(#$48#$b8); // mov rax,POCADoubleOne
      AddQWord(TPOCAUInt64(TPOCAPointer(@POCADoubleOne)^));
      Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popLOADZERO:begin
      Add(#$48#$31#$c0); // xor rax,rax
      Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popLOADINT32:begin
      v.Num:=Operands^[1];
      Add(#$48#$b8); // mov rax,immediate64
@@ -39413,14 +39414,14 @@ begin
      Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popLOADNULL:begin
      Add(#$48#$b8); // mov rax,POCAValueNull
      AddQWord(TPOCAUInt64(TPOCAPointer(@POCAValueNull)^));
      Add(#$48#$89#$83); // mov qword ptr [rbx+Reg],rax
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popLOADTHAT:begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -39429,7 +39430,7 @@ begin
      // Load Frame.Obj into register
      Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Obj]
      AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Obj)));
-     
+
      Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
      AddDWord(Operands^[0]*sizeof(double));
     end;
@@ -39438,16 +39439,16 @@ begin
      // Load Frame.Func into register
      Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Func]
      AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Func)));
-     
+
      Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popLOADLOCAL:begin
      // Load Frame.Locals into register
      Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Locals]
      AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Locals)));
-     
+
      Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
      AddDWord(Operands^[0]*sizeof(double));
     end;
@@ -39461,35 +39462,35 @@ begin
       AddDWord(Operands^[0]*sizeof(double));
      end;
     end;
-    
+
     popINSERT:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popEXTRACT:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popGETLENGTH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popGETMEMBER:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSETMEMBER:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popGETLOCAL:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSETLOCAL:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popGETLOCALVALUE:begin
 {$ifdef POCAClosureArrayValues}
      DoItByVMOpcodeDispatcher;
@@ -39498,11 +39499,11 @@ begin
      // Load Frame.LocalValues pointer
      Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.LocalValues]
      AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.LocalValues)));
-     
+
      // Load value from LocalValues[Operands^[1]]
      Add(#$48#$8b#$80); // mov rax,qword ptr [rax+offset]
      AddDWord(Operands^[1]*sizeof(TPOCAValue));
-     
+
      // Store to Registers[Operands^[0]]
      Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
      AddDWord(Operands^[0]*sizeof(TPOCAValue));
@@ -39518,11 +39519,11 @@ begin
      // Load value from Registers[Operands^[1]]
      Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(TPOCAValue));
-     
+
      // Load Frame.LocalValues pointer
      Add(#$49#$8b#$8d); // mov rcx,qword ptr [r13+TPOCAFrame.LocalValues]
      AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.LocalValues)));
-     
+
      // Store to LocalValues[Operands^[0]]
      Add(#$48#$89#$81); // mov qword ptr [rcx+offset],rax
      AddDWord(Operands^[0]*sizeof(TPOCAValue));
@@ -39538,15 +39539,15 @@ begin
      // Load Frame.OuterValueLevels pointer (pointer to array of arrays)
      Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.OuterValueLevels]
      AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.OuterValueLevels)));
-     
+
      // Get pointer to OuterValueLevels[Operands^[1]] (the inner array)
      Add(#$48#$8b#$80); // mov rax,qword ptr [rax+offset]
      AddDWord(Operands^[1]*sizeof(Pointer));
-     
+
      // Load value from inner array[Operands^[2]]
      Add(#$48#$8b#$80); // mov rax,qword ptr [rax+offset]
      AddDWord(Operands^[2]*sizeof(TPOCAValue));
-     
+
      // Store to Registers[Operands^[0]]
      Add(#$48#$89#$83); // mov qword ptr [rbx+RegisterOfs],rax
      AddDWord(Operands^[0]*sizeof(TPOCAValue));
@@ -39562,15 +39563,15 @@ begin
      // Load value from Registers[Operands^[2]]
      Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[2]*sizeof(TPOCAValue));
-     
+
      // Load Frame.OuterValueLevels pointer (pointer to array of arrays)
      Add(#$49#$8b#$8d); // mov rcx,qword ptr [r13+TPOCAFrame.OuterValueLevels]
      AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.OuterValueLevels)));
-     
+
      // Get pointer to OuterValueLevels[Operands^[0]] (the inner array)
      Add(#$48#$8b#$89); // mov rcx,qword ptr [rcx+offset]
      AddDWord(Operands^[0]*sizeof(Pointer));
-     
+
      // Store to inner array[Operands^[1]]
      Add(#$48#$89#$81); // mov qword ptr [rcx+offset],rax
      AddDWord(Operands^[1]*sizeof(TPOCAValue));
@@ -39580,67 +39581,67 @@ begin
     popNEWARRAY:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popARRAYPUSH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popARRAYRANGEPUSH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popNEWHASH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popHASHAPPEND:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSETSYM:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popINDEX:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popFCALLH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popMCALLH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popUNPACK:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSLICE:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSLICE2:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSLICE3:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popTRY:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popTRYBLOCKEND:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popTHROW:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popDEC:begin
      AddUnaryOpTypeCheck;
 
@@ -39668,7 +39669,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popINC:begin
      AddUnaryOpTypeCheck;
 
@@ -39696,7 +39697,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popBAND:begin
      AddBinaryOpTypeCheck;
 
@@ -39714,7 +39715,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popBXOR:begin
      AddBinaryOpTypeCheck;
 
@@ -39731,7 +39732,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popBOR:begin
      AddBinaryOpTypeCheck;
 
@@ -39762,7 +39763,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popBSHL:begin
      AddBinaryOpTypeCheck;
 
@@ -39779,7 +39780,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popBSHR:begin
      AddBinaryOpTypeCheck;
 
@@ -39796,7 +39797,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popBUSHR:begin
      AddBinaryOpTypeCheck;
 
@@ -39813,7 +39814,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popMOD:begin
 
      AddBinaryOpTypeCheck;
@@ -39841,7 +39842,7 @@ begin
 (*{$ifdef POCAX8664UseX87}
      // Type check both operands
      AddBinaryOpTypeCheck;
-     
+
      // Use x87 FPU for MOD operation (fprem)
      // Load operand2 (divisor) onto FPU stack
      Add(#$dd#$83); // fld qword ptr [rbx+Operand2]
@@ -39866,37 +39867,37 @@ begin
      DoItByVMOpcodeDispatcher;  // MOD is complex, keep VM for now
 {$endif}*)
     end;
-    
+
     popPOW:begin
 {$ifdef POCAX8664UseX87}
      // Type check both operands
      AddBinaryOpTypeCheck;
-     
+
      // Use x87 FPU for POW operation (base^exponent using fyl2x, f2xm1, fscale)
      // Algorithm: base^exp = 2^(exp * log2(base))
-     
+
      // Load exponent onto FPU stack
      Add(#$dd#$83); // fld qword ptr [rbx+Operand2]
      AddDWord(Operands^[2]*sizeof(double));
 
-     // Load base onto FPU stack  
+     // Load base onto FPU stack
      Add(#$dd#$83); // fld qword ptr [rbx+Operand1]
      AddDWord(Operands^[1]*sizeof(double));
 
      // Calculate base^exponent using x87 instructions
      Add(#$d9#$f1); // fyl2x - ST(0) = ST(1) * log2(ST(0)), result = exp * log2(base)
-     
+
      // Split into integer and fractional parts
      Add(#$d9#$c0); // fld st(0) - Duplicate ST(0)
      Add(#$d9#$fc); // frndint - ST(0) = integer part
      Add(#$d9#$c9); // fxch st(1) - Exchange ST(0) and ST(1)
      Add(#$d8#$e1); // fsub st(0), st(1) - ST(0) = fractional part
-     
+
      // Calculate 2^(fractional part) using f2xm1
      Add(#$d9#$f0); // f2xm1 - ST(0) = 2^ST(0) - 1
      Add(#$d9#$e8); // fld1 - Load 1.0
      Add(#$de#$c1); // faddp - ST(0) = 2^(fractional part)
-     
+
      // Scale by integer part
      Add(#$d9#$fd); // fscale - ST(0) = ST(0) * 2^ST(1)
      Add(#$dd#$d9); // fstp st(1) - Pop ST(1), leaving result in ST(0)
@@ -39908,43 +39909,43 @@ begin
      DoItByVMOpcodeDispatcher;  // POW needs runtime function, keep VM for now
 {$endif}
     end;
-    
+
     popKEY:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popIN:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popINRANGE:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popFTAILCALL:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popMTAILCALL:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popFTAILCALLH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popMTAILCALLH:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popINSTANCEOF:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popBREAKPOINT:begin
      Add(#$cc); // int3
     end;
-    
+
     popNUM:begin
      AddUnaryOpTypeCheck;
 
@@ -39956,11 +39957,11 @@ begin
       AddDWord(Operands^[0]*sizeof(double));
      end;
     end;
-    
+
     popN_NOT:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
-     
+
      Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
      Add(#$0f#$94#$c0); // setz al
@@ -39970,7 +39971,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_ADD:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -39981,7 +39982,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_SUB:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -39992,7 +39993,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_MUL:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40003,7 +40004,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_DIV:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40014,7 +40015,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_NEG:begin
      Add(#$66#$0f#$ef#$c0); // pxor xmm0,xmm0
 
@@ -40024,7 +40025,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_LT:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40040,7 +40041,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_LTEQ:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40056,7 +40057,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_GT:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40072,7 +40073,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_GTEQ:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40088,7 +40089,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_EQ:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40104,7 +40105,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_NEQ:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40114,17 +40115,17 @@ begin
 
      Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
      Add(#$0f#$95#$c0); // setnz al
-     Add(#$0f#$b6#$c0); // movzx eax,al 
+     Add(#$0f#$b6#$c0); // movzx eax,al
      Add(#$f2#$0f#$2a#$c0); // cvtsi2sd xmm0,eax
 
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_CMP:begin
      DoItByVMOpcodeDispatcher; // Complex, keep VM for now
     end;
-    
+
     popN_DEC:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40150,7 +40151,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_INC:begin
      Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40176,7 +40177,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_BAND:begin
      Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40191,7 +40192,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_BXOR:begin
      Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40206,7 +40207,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_BOR:begin
      Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40221,7 +40222,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_BNOT:begin
      Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40233,7 +40234,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_BSHL:begin
      Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40248,7 +40249,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_BSHR:begin
      Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40263,7 +40264,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_BUSHR:begin
      Add(#$f2#$48#$0f#$2c#$83); // cvttsd2si rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40278,7 +40279,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_MOD:begin
 
      // XMM0 = a (Operand1), XMM1 = b (Operand2)
@@ -40328,34 +40329,34 @@ begin
 {$endif}*)
 
     end;
-    
+
     popN_POW:begin
 {$ifdef POCAX8664UseX87}
      // Use x87 FPU for POW operation (base^exponent using fyl2x, f2xm1, fscale)
      // Algorithm: base^exp = 2^(exp * log2(base))
-     
+
      // Load exponent onto FPU stack
      Add(#$dd#$83); // fld qword ptr [rbx+Operand2]
      AddDWord(Operands^[2]*sizeof(double));
 
-     // Load base onto FPU stack  
+     // Load base onto FPU stack
      Add(#$dd#$83); // fld qword ptr [rbx+Operand1]
      AddDWord(Operands^[1]*sizeof(double));
 
      // Calculate base^exponent using x87 instructions
      Add(#$d9#$f1); // fyl2x - ST(0) = ST(1) * log2(ST(0)), result = exp * log2(base)
-     
+
      // Split into integer and fractional parts
      Add(#$d9#$c0); // fld st(0) - Duplicate ST(0)
      Add(#$d9#$fc); // frndint - ST(0) = integer part
      Add(#$d9#$c9); // fxch st(1) - Exchange ST(0) and ST(1)
      Add(#$d8#$e1); // fsub st(0), st(1) - ST(0) = fractional part
-     
+
      // Calculate 2^(fractional part) using f2xm1
      Add(#$d9#$f0); // f2xm1 - ST(0) = 2^ST(0) - 1
      Add(#$d9#$e8); // fld1 - Load 1.0
      Add(#$de#$c1); // faddp - ST(0) = 2^(fractional part)
-     
+
      // Scale by integer part
      Add(#$d9#$fd); // fscale - ST(0) = ST(0) * 2^ST(1)
      Add(#$dd#$d9); // fstp st(1) - Pop ST(1), leaving result in ST(0)
@@ -40367,16 +40368,16 @@ begin
      DoItByVMOpcodeDispatcher; // Complex, keep VM for now
 {$endif}
     end;
-    
+
     popN_INRANGE:begin
      DoItByVMOpcodeDispatcher; // Complex, keep VM for now
     end;
-    
+
     popN_JIFTRUE:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
       Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
       Add(#$0f#$85); // jnz
@@ -40390,12 +40391,12 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFFALSE:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
       Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
       Add(#$0f#$84); // jz
@@ -40409,7 +40410,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFTRUELOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       // GC bottleneck check
@@ -40417,7 +40418,7 @@ begin
 
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
       Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
       Add(#$0f#$85); // jnz
@@ -40431,7 +40432,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFFALSELOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       // GC bottleneck check
@@ -40439,7 +40440,7 @@ begin
 
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       Add(#$66#$0f#$ef#$c9); // pxor xmm1,xmm1
       Add(#$66#$0f#$2e#$c1); // ucomisd xmm0,xmm1
       Add(#$0f#$84); // jz
@@ -40453,7 +40454,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFLT:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
@@ -40474,7 +40475,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFLTEQ:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
@@ -40495,7 +40496,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFGT:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
@@ -40516,7 +40517,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFGTEQ:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
@@ -40537,7 +40538,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFEQ:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
@@ -40558,7 +40559,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFNEQ:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
@@ -40579,10 +40580,10 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFLTLOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
-      
+
       // GC bottleneck check
       AddGarbageCollectorBottleneckCheck;
 
@@ -40602,10 +40603,10 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFLTEQLOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
-      
+
       // GC bottleneck check
       AddGarbageCollectorBottleneckCheck;
 
@@ -40625,7 +40626,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFGTLOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
@@ -40648,7 +40649,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFGTEQLOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
@@ -40671,7 +40672,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFEQLOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
 
@@ -40694,7 +40695,7 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popN_JIFNEQLOOP:begin
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
       AddGarbageCollectorBottleneckCheck;
@@ -40714,23 +40715,23 @@ begin
       Add(#$00#$00#$00#$00);
      end;
     end;
-    
+
     popUPDATESTRING:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popREGEXP:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popREGEXPEQ:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popREGEXPNEQ:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSQRT:begin
      AddUnaryOpTypeCheck;
 
@@ -40740,7 +40741,7 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popN_SQRT:begin
      Add(#$f2#$0f#$51#$83); // sqrtsd xmm0,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(double));
@@ -40748,71 +40749,71 @@ begin
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
     end;
-    
+
     popGETPROTOTYPE:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSETPROTOTYPE:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popGETCONSTRUCTOR:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSETCONSTRUCTOR:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popDELETE:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popDELETEEX:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popDEFINED:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popDEFINEDEX:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popLOADGLOBAL:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popLOADBASECLASS:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popGETHASHKIND:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popSETHASHKIND:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popTYPEOF:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popIDOF:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popGHOSTTYPEOF:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popELVIS:begin
      DoItByVMOpcodeDispatcher;
     end;
-    
+
     popIS:begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -40824,17 +40825,17 @@ begin
       Add(#$66#$81#$bb); // cmp word ptr [rbx+Operand1+6],0xFFFF
       AddDWord((Operands^[1]*sizeof(double))+6);
       Add(#$ff#$ff);
-      
+
       // If not 0xFFFF, skip the null check (it's not null)
       Add(#$75#$17); // jne +23 (skip lower 48-bit check)
-      
+
       // Check if lower 48 bits are 0 (compare qword with mask)
       Add(#$48#$b8); // movabs rax, 0x0000FFFFFFFFFFFF
       AddQWord($0000FFFFFFFFFFFF);
-      
+
       Add(#$48#$23#$83); // and rax, qword ptr [rbx+Operand1]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       // Jump if lower 48 bits are 0 (i.e., it's null)
       Add(#$0f#$84); // jz (near jump to target)
       if CountFixups>=length(Fixups) then begin
@@ -40847,7 +40848,7 @@ begin
       Add(#$00#$00#$00#$00); // Placeholder for jump offset
      end;
     end;
-   
+
     popJIFNOTNULL:begin
      // Jump if value is NOT null (not 0xFFFF000000000000)
      if TPOCAUInt32(Operands^[0])<>CurrentPC then begin
@@ -40855,7 +40856,7 @@ begin
       Add(#$66#$81#$bb); // cmp word ptr [rbx+Operand1+6],0xFFFF
       AddDWord((Operands^[1]*sizeof(double))+6);
       Add(#$ff#$ff);
-      
+
       // If not 0xFFFF, it's not null, so jump
       Add(#$0f#$85); // jne (near jump to target)
       if CountFixups>=length(Fixups) then begin
@@ -40866,14 +40867,14 @@ begin
       Fixups[CountFixups].ToOfs:=Operands^[0];
       inc(CountFixups);
       Add(#$00#$00#$00#$00); // Placeholder for jump offset
-      
+
       // Check if lower 48 bits are 0
       Add(#$48#$b8); // movabs rax, 0x0000FFFFFFFFFFFF
       AddQWord($0000FFFFFFFFFFFF);
-      
+
       Add(#$48#$23#$83); // and rax, qword ptr [rbx+Operand1]
       AddDWord(Operands^[1]*sizeof(double));
-      
+
       // Jump if lower 48 bits are NOT 0 (i.e., it's not null)
       Add(#$0f#$85); // jnz (near jump to target)
       if CountFixups>=length(Fixups) then begin
@@ -40907,7 +40908,7 @@ begin
     end;
    end;
   end;
-  
+
   // Add return epilogue for final bytecode position
   RetOfs:=CodeBufferLen;
   begin
@@ -40920,7 +40921,7 @@ begin
 
    Add(#$c3); // ret
   end;
-  
+
   SetLength(CodeBuffer,CodeBufferLen);
   Code.NativeCodeSize:=CodeBufferLen;
   Code.NativeCode:=POCANativeCodeMemoryManagerGetMemory(Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.NativeCodeMemoryManager,Code.NativeCodeSize);
@@ -40971,23 +40972,23 @@ asm
  push r14
  push r15
  sub rsp, 40  // Shadow space (32) + alignment (8) = 40 bytes
- 
+
  mov r12, rcx  // R12 = Context
  mov r13, rdx  // R13 = Frame
  mov r14, r8   // R14 = Code
- 
+
  mov rax, qword ptr [r14+TPOCACode.NativeCode]
  mov rbx, qword ptr [r13+TPOCAFrame.Registers]
  lea rbp, [r13+TPOCAFrame.InstructionPointer]
  mov r10, qword ptr [r14+TPOCACode.ByteCodeToNativeCodeMap]
  mov r11d, dword ptr [rbp]
  add rax, qword ptr [r10+r11*8]
- 
+
  // R12 = Context, R13 = Frame, R14 = Code, RBX = Registers, RBP = &InstructionPointer
- 
+
  call rax
  not eax
- 
+
  add rsp, 40
  pop r15
  pop r14
@@ -41006,23 +41007,23 @@ asm
  push r14
  push r15
  sub rsp, 8  // Align stack to 16 bytes (6 pushes = 48 bytes, +8 = 56 bytes → aligned)
- 
+
  mov r12, rdi  // R12 = Context
  mov r13, rsi  // R13 = Frame
  mov r14, rdx  // R14 = Code
- 
+
  mov rax, qword ptr [r14+TPOCACode.NativeCode]
  mov rbx, qword ptr [r13+TPOCAFrame.Registers]
  lea rbp, [r13+TPOCAFrame.InstructionPointer]
  mov r8, qword ptr [r14+TPOCACode.ByteCodeToNativeCodeMap]
  mov r9d, dword ptr [rbp]
  add rax, qword ptr [r8+r9*8]
- 
+
  // R12 = Context, R13 = Frame, R14 = Code, RBX = Registers, RBP = &InstructionPointer
- 
+
  call rax
  not eax
- 
+
  add rsp, 8
  pop r15
  pop r14
@@ -42293,6 +42294,15 @@ begin
  end;
 end;
 
+function POCACall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValues;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
+begin
+ if length(aArguments)>0 then begin
+  result:=POCACall(aContext,aFunc,@aArguments[0],length(aArguments),aObj,aLocals);
+ end else begin
+  result:=POCACall(aContext,aFunc,nil,0,aObj,aLocals);
+ end;
+end;
+
 {$hints off}
 function POCAGetFileContent(FileName:TPOCAUTF8String):TPOCARawByteString;
 var OldFileMode:TPOCAUInt8;
@@ -42540,16 +42550,16 @@ begin
 
  Index:=1;
  PathLength:=length(aPath);
- 
+
  while Index<=PathLength do begin
   Ch:=aPath[Index];
-  
+
   // Skip dots
   if Ch='.' then begin
    inc(Index);
    continue;
   end;
-  
+
   // Check if this is the last segment
   IsLastSegment:=true;
   for StartIndex:=Index to PathLength do begin
@@ -42558,33 +42568,33 @@ begin
     break;
    end;
   end;
-  
+
   // Reset key type flags
   IsStringKey:=false;
   KeyString:='';
-  
+
   // Parse identifier or bracket notation
   if Ch='[' then begin
    // Bracket notation: [key]
    inc(Index);
-   
+
    // Skip whitespace
    while (Index<=PathLength) and (aPath[Index] in [' ',#9]) do begin
     inc(Index);
    end;
-   
+
    if Index>PathLength then begin
     break;
    end;
-   
+
    Ch:=aPath[Index];
-   
+
    // String literal with quotes
    if (Ch='"') or (Ch='''') then begin
-    
+
     QuoteChar:=Ch;
     inc(Index);
-    
+
     StringLiteral:='';
     while (Index<=PathLength) and (aPath[Index]<>QuoteChar) do begin
      if (aPath[Index]='\') and ((Index+1)<=PathLength) then begin
@@ -42615,22 +42625,22 @@ begin
     if Index<=PathLength then begin
      inc(Index); // Skip closing quote
     end;
-    
+
     IsStringKey:=true;
     KeyString:=StringLiteral;
 
    end else begin // Number or boolean or identifier
-   
+
     StartIndex:=Index;
     while (Index<=PathLength) and not (aPath[Index] in [']',' ',#9]) do begin
      inc(Index);
     end;
 
     KeyString:=Copy(aPath,StartIndex,Index-StartIndex);
-    
+
     // Check if it's a valid identifier (starts with letter or underscore)
     if (length(KeyString)>0) and (KeyString[1] in ['A'..'Z','a'..'z','_']) then begin
-    
+
      // Try to parse as boolean
      if (KeyString='true') or (KeyString='false') then begin
       KeyValue.Num:=ord(KeyString='true') and 1;
@@ -42641,7 +42651,7 @@ begin
      end;
 
     end else begin
-     
+
      // Try to parse as number
      NumberValue:=ConvertStringToDouble(KeyString,rmNearest,@OK);
      if OK then begin
@@ -42655,7 +42665,7 @@ begin
     end;
 
    end;
-   
+
    // Skip whitespace and closing bracket
    while (Index<=PathLength) and (aPath[Index] in [' ',#9]) do begin
     inc(Index);
@@ -42663,30 +42673,30 @@ begin
    if (Index<=PathLength) and (aPath[Index]=']') then begin
     inc(Index);
    end;
-   
+
   end else begin
-   
+
    // Dot notation: identifier
-   
+
    StartIndex:=Index;
    while (Index<=PathLength) and not (aPath[Index] in ['.',  '[']) do begin
     inc(Index);
    end;
-   
-   KeyString:=Copy(aPath,StartIndex,Index-StartIndex);   
-   
+
+   KeyString:=Copy(aPath,StartIndex,Index-StartIndex);
+
    IsStringKey:=true;
 
   end;
-  
+
   // Navigate to the value
   if IsLastSegment and aSetValue then begin
-   
+
    // Set the value at this key
    ValueType:=POCAGetValueType(CurrentValue);
    case ValueType of
     pvtHASH:begin
-     
+
      if IsStringKey then begin
       POCAHashSetString(aContext,CurrentValue,KeyString,aValue,false);
      end else begin
@@ -42697,7 +42707,7 @@ begin
 
     end;
     pvtARRAY:begin
-     
+
      if IsStringKey then begin
       // Can't use string key on array
       result:=false;
@@ -42717,20 +42727,20 @@ begin
    break;
 
   end else begin
-   
+
    // Get the value at this key
    ValueType:=POCAGetValueType(CurrentValue);
    case ValueType of
     pvtHASH:begin
-   
+
      if IsStringKey then begin
-   
+
       TempValue:=POCAHashGetString(aContext,CurrentValue,KeyString);
-   
+
       if POCAIsValueNull(TempValue) then begin
-   
+
        // Key doesn't exist
-   
+
        if aSetValue then begin
         // Create intermediate object/array as needed
         TempValue:=POCANewHash(aContext);
@@ -42743,41 +42753,41 @@ begin
       end;
 
      end else begin
-     
+
       if not POCAHashGet(aContext,CurrentValue,KeyValue,TempValue) then begin
-     
+
        // Key doesn't exist
        if aSetValue then begin
-     
+
         // Create intermediate object/array as needed
         TempValue:=POCANewHash(aContext);
         POCAHashSet(aContext,CurrentValue,KeyValue,TempValue,false);
 
        end else begin
-       
+
         aValue.CastedUInt64:=POCAValueNullCastedUInt64;
         exit;
 
        end;
-     
+
       end;
-    
+
      end;
-    
+
      ParentValue:=CurrentValue;
      CurrentValue:=TempValue;
 
     end;
     pvtARRAY:begin
-    
+
      if IsStringKey then begin
-    
+
       // Can't use string key on array
       aValue.CastedUInt64:=POCAValueNullCastedUInt64;
       exit;
-   
+
      end else if POCAGetValueType(KeyValue)=pvtNUMBER then begin
-   
+
       ArrayIndex:=Trunc(KeyValue.Num);
       if (ArrayIndex>=0) and (ArrayIndex<POCAArraySize(CurrentValue)) then begin
        ParentValue:=CurrentValue;
@@ -42798,12 +42808,12 @@ begin
         exit;
        end;
       end;
-    
+
      end else begin
       aValue.CastedUInt64:=POCAValueNullCastedUInt64;
       exit;
      end;
-   
+
     end;
     else begin
      // Not a hash or array, can't navigate further
@@ -42813,9 +42823,9 @@ begin
    end;
 
   end;
-  
+
  end;
- 
+
  if not aSetValue then begin
   aValue:=CurrentValue;
   result:=true;
@@ -42949,7 +42959,7 @@ var FileHeader:TPOCAValueDataFileHeader;
      Key,Value:TPOCAValue;
      DataString:TPOCARawByteString;
  begin
-  
+
   result.CastedUInt64:=POCAValueNullCastedUInt64;
 
   if aStream.Position>=EndPosition then begin // other out-of-bounds checks are done later at ReadBuffer calls itself. This is just a quick pre-check
@@ -43003,15 +43013,15 @@ var FileHeader:TPOCAValueDataFileHeader;
     POCARuntimeError(aContext,'Invalid POCA value file format: function value type not supported yet');
    end;
    pvftNATIVECODE:begin
-    POCARuntimeError(aContext,'Invalid POCA value file format: native code value type not supported yet'); 
+    POCARuntimeError(aContext,'Invalid POCA value file format: native code value type not supported yet');
    end;
    pvftGHOST:begin
-    POCARuntimeError(aContext,'Invalid POCA value file format: ghost value type not supported yet'); 
+    POCARuntimeError(aContext,'Invalid POCA value file format: ghost value type not supported yet');
    end;
    else begin
     POCARuntimeError(aContext,'Invalid POCA value file format: unsupported value type');
    end;
-  end; 
+  end;
 
  end;
 
@@ -43033,7 +43043,7 @@ begin
  end;
 
  result:=LoadValue;
- 
+
  if aStream.Position<>EndPosition then begin
   POCARuntimeError(aContext,'Invalid POCA value file format');
  end;
@@ -43143,15 +43153,15 @@ var FileHeader:TPOCAValueDataFileHeader;
    end;
    pvftHASH:begin
 
-    HashInstance:=PPOCAHash(POCAGetValueReferencePointer(aValue));  
-   
+    HashInstance:=PPOCAHash(POCAGetValueReferencePointer(aValue));
+
     if assigned(HashInstance) then begin
 
      if assigned(HashInstance^.Events) or assigned(HashInstance^.Prototype) then begin
 
       Keys:=POCANewArray(aContext);
       POCAHashKeys(aContext,Keys,aValue);
-      
+
       CountElements:=0;
       for Index:=1 to POCAArraySize(Keys) do begin
        Key:=POCAArrayGet(Keys,Index-1);
@@ -43175,7 +43185,7 @@ var FileHeader:TPOCAValueDataFileHeader;
       HashRec:=HashInstance^.HashRecord;
       if assigned(HashRec) then begin
 
-       CountElements:=0;       
+       CountElements:=0;
        for Index:=1 to 2 shl HashRec^.LogSize do begin
         Entity:=HashRec^.CellToEntityIndex^[Index-1];
         if Entity>=0 then begin
@@ -43239,7 +43249,7 @@ begin
  FileHeader.Version:=POCAValueDataFileVersion;
  FileHeader.CheckSum:=0;
  FileHeader.DataSize:=0;
- 
+
  StartPosition:=aStream.Position;
  aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueDataFileHeader));
 
