@@ -12639,6 +12639,10 @@ begin
  end;
  result^.CallDepth:=Super^.CallDepth+1;
  result^.CallParent:=Super;
+ result^.UserIOWrite:=Super^.UserIOWrite;
+ result^.UserIOWriteLn:=Super^.UserIOWriteLn;
+ result^.UserIOReadLn:=Super^.UserIOReadLn;
+ result^.UserIOFlush:=Super^.UserIOFlush;
  Super^.CallChild:=result;
 end;
 
