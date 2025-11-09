@@ -351,7 +351,7 @@
 
 interface
 
-uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
+uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
 const POCAVersion='2025-11-01-21-44-0000';
 
@@ -2157,6 +2157,14 @@ function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 procedure POCAContextDestroy(Context:PPOCAContext);
 function POCAContextSub(Super:PPOCAContext):PPOCAContext;
 
+{$ifdef POCAThreadContextTracking}
+function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
+function POCAGetCurrentThreadContext:PPOCAContext;
+procedure POCAPushThreadContext(const aContext:PPOCAContext);
+procedure POCAPopThreadContext;
+function POCAContextSubAuto(aSuper:PPOCAContext;const aExplicitParent:PPOCAContext=nil):PPOCAContext;
+{$endif}
+
 function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
 
 procedure POCASetupRegisters(Frame:PPOCAFrame;Code:PPOCACode); {$ifdef caninline}inline;{$endif}
@@ -2213,6 +2221,16 @@ implementation
 //const EPSILON=1e-18;
 const ConstructorValueSymbolString:TPOCARawByteString='$|constuctor|$';
 
+{$ifdef POCAThreadContextTracking}
+type PPOCAThreadContextStack=^TPOCAThreadContextStack;
+     TPOCAThreadContextStack=record
+      ThreadID:TThreadID;
+      ContextStack:array of PPOCAContext;
+      StackDepth:TPOCAInt32;
+      Next:PPOCAThreadContextStack;
+     end;
+{$endif}
+
 type TPOCALexerKeywordTokens=array[TPOCATokenType] of TPOCARawByteString;
 
      PPOCALexerKeywordTokenCharTreeNode=^TPOCALexerKeywordTokenCharTreeNode;
@@ -2249,6 +2267,11 @@ var LexerKeywordTokens:TPOCALexerKeywordTokens;
 
     MetaOpNames:TPOCAMetaOpNames;
     MetaOpNamesHashMap:TPOCAStringHashMap;
+
+{$ifdef POCAThreadContextTracking}
+    POCAGlobalThreadContextLock:TPasMPCriticalSection=nil;
+    POCAGlobalThreadContextList:PPOCAThreadContextStack=nil;
+{$endif}
 
 function IntLog2(x:TPOCAUInt32):TPOCAUInt32; {$if defined(fpc)} //{$ifdef CAN_INLINE}inline;{$endif}
 begin
@@ -12627,6 +12650,98 @@ begin
   end;
  end;
 end;
+
+{$ifdef POCAThreadContextTracking}
+
+function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
+begin
+{$if defined(Windows)}
+ result:=Windows.GetCurrentThreadID;
+{$elseif defined(Linux)}
+ result:=TThreadID(pthread_self);
+{$elseif defined(Unix)}
+ result:=GetThreadID;
+{$else}
+ {$error Unsupported platform}
+{$ifend}
+end;
+
+function POCAGetThreadContextStack(const aThreadID:TThreadID;const aCreate:Boolean):PPOCAThreadContextStack;
+var Current:PPOCAThreadContextStack;
+begin
+ POCALockEnter(POCAGlobalThreadContextLock);
+ try
+  Current:=POCAGlobalThreadContextList;
+  while assigned(Current) do begin
+   if Current^.ThreadID=aThreadID then begin
+    result:=Current;
+    exit;
+   end;
+   Current:=Current^.Next;
+  end;
+  if aCreate then begin
+   New(Current);
+   Current^.ThreadID:=aThreadID;
+   SetLength(Current^.ContextStack,16);
+   Current^.StackDepth:=0;
+   Current^.Next:=POCAGlobalThreadContextList;
+   POCAGlobalThreadContextList:=Current;
+   result:=Current;
+  end else begin
+   result:=nil;
+  end;
+ finally
+  POCALockLeave(POCAGlobalThreadContextLock);
+ end;
+end;
+
+function POCAGetCurrentThreadContext:PPOCAContext;
+var Stack:PPOCAThreadContextStack;
+begin
+ Stack:=POCAGetThreadContextStack(POCAGetCurrentThreadID,false);
+ if assigned(Stack) and (Stack^.StackDepth>0) then begin
+  result:=Stack^.ContextStack[Stack^.StackDepth-1];
+ end else begin
+  result:=nil;
+ end;
+end;
+
+procedure POCAPushThreadContext(const aContext:PPOCAContext);
+var Stack:PPOCAThreadContextStack;
+begin
+ Stack:=POCAGetThreadContextStack(POCAGetCurrentThreadID,true);
+ if Stack^.StackDepth>=Length(Stack^.ContextStack) then begin
+  SetLength(Stack^.ContextStack,Length(Stack^.ContextStack)*2);
+ end;
+ Stack^.ContextStack[Stack^.StackDepth]:=aContext;
+ inc(Stack^.StackDepth);
+end;
+
+procedure POCAPopThreadContext;
+var Stack:PPOCAThreadContextStack;
+begin
+ Stack:=POCAGetThreadContextStack(POCAGetCurrentThreadID,false);
+ if assigned(Stack) and (Stack^.StackDepth>0) then begin
+  dec(Stack^.StackDepth);
+ end;
+end;
+
+function POCAContextSubAuto(aSuper:PPOCAContext;const aExplicitParent:PPOCAContext=nil):PPOCAContext;
+var CurrentContext:PPOCAContext;
+begin
+ if assigned(aExplicitParent) then begin
+  result:=POCAContextSub(aExplicitParent);
+ end else begin
+  CurrentContext:=POCAGetCurrentThreadContext;
+  if assigned(CurrentContext) then begin
+   result:=POCAContextSub(CurrentContext);
+  end else begin
+   result:=POCAContextSub(aSuper);
+  end;
+ end;
+end;
+
+{$endif}
 
 function POCAContextSub(Super:PPOCAContext):PPOCAContext;
 begin
@@ -42231,72 +42346,81 @@ var Index:TPOCAInt32;
     HashEvents:PPOCAHashEvents;
     NativeCode:PPOCANativeCode;
 begin
- if not assigned(Context^.CallParent) then begin
-  POCAGarbageCollectorLock(Context);
- end;
+{$ifdef POCAThreadContextTracking}
+ POCAPushThreadContext(Context);
  try
-  POCATemporarySave(Context,Func);
-  for Index:=0 to CountArguments-1 do begin
-   POCATemporarySave(Context,Arguments^[Index]);
+{$endif}
+  if not assigned(Context^.CallParent) then begin
+   POCAGarbageCollectorLock(Context);
   end;
-  POCATemporarySave(Context,Obj);
-  POCATemporarySave(Context,Locals);
-  if POCAIsValueEventHash(Func) or POCAIsValueGhostEventHash(Func) then begin
-   HashEvents:=POCAHashGetHashEvents(Func);
-   if assigned(HashEvents) then begin
-    if POCAIsValueNull(Obj) then begin
-     Obj:=Func;
-    end;
-    Func:=HashEvents^[pmoCALL];
+  try
+   POCATemporarySave(Context,Func);
+   for Index:=0 to CountArguments-1 do begin
+    POCATemporarySave(Context,Arguments^[Index]);
    end;
-  end;
-  if not (POCAIsValueFunction(Func) or POCAIsValueCode(Func) or POCAIsValueNativeCode(Func)) then begin
-   if POCAIsValueNull(Obj) then begin
-    POCARuntimeError(Context,'Function call on uncallable object');
-   end else begin
-    POCARuntimeError(Context,'Method call on uncallable object');
-   end;
-  end;
-  if POCAIsValueFunction(Func) and POCAIsValueNativeCode(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code) then begin
-   NativeCode:=PPOCANativeCode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code));
-   result:=NativeCode^.FunctionPointer(Context,Obj,Arguments,CountArguments,NativeCode^.UserData);
-  end else if POCAIsValueNativeCode(Func) then begin
-   NativeCode:=PPOCANativeCode(POCAGetValueReferencePointer(Func));
-   result:=NativeCode^.FunctionPointer(Context,Obj,Arguments,CountArguments,NativeCode^.UserData);
-  end else begin
-   begin
-    if POCAIsValueNull(Locals) and not PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code))^.FastFunction then begin
-     Locals:=POCANewHash(Context);
-    end;
-    if not POCAIsValueFunction(Func) then begin
-     Func:=POCANewFunction(Context,Func);
-     PPOCAFunction(POCAGetValueReferencePointer(Func))^.Namespace:=Locals;
-     PPOCAFunction(POCAGetValueReferencePointer(Func))^.Obj:=Obj;
-    end else begin
+   POCATemporarySave(Context,Obj);
+   POCATemporarySave(Context,Locals);
+   if POCAIsValueEventHash(Func) or POCAIsValueGhostEventHash(Func) then begin
+    HashEvents:=POCAHashGetHashEvents(Func);
+    if assigned(HashEvents) then begin
      if POCAIsValueNull(Obj) then begin
-      Obj:=PPOCAFunction(POCAGetValueReferencePointer(Func))^.Obj;
+      Obj:=Func;
+     end;
+     Func:=HashEvents^[pmoCALL];
+    end;
+   end;
+   if not (POCAIsValueFunction(Func) or POCAIsValueCode(Func) or POCAIsValueNativeCode(Func)) then begin
+    if POCAIsValueNull(Obj) then begin
+     POCARuntimeError(Context,'Function call on uncallable object');
+    end else begin
+     POCARuntimeError(Context,'Method call on uncallable object');
+    end;
+   end;
+   if POCAIsValueFunction(Func) and POCAIsValueNativeCode(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code) then begin
+    NativeCode:=PPOCANativeCode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code));
+    result:=NativeCode^.FunctionPointer(Context,Obj,Arguments,CountArguments,NativeCode^.UserData);
+   end else if POCAIsValueNativeCode(Func) then begin
+    NativeCode:=PPOCANativeCode(POCAGetValueReferencePointer(Func));
+    result:=NativeCode^.FunctionPointer(Context,Obj,Arguments,CountArguments,NativeCode^.UserData);
+   end else begin
+    begin
+     if POCAIsValueNull(Locals) and not PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code))^.FastFunction then begin
+      Locals:=POCANewHash(Context);
+     end;
+     if not POCAIsValueFunction(Func) then begin
+      Func:=POCANewFunction(Context,Func);
+      PPOCAFunction(POCAGetValueReferencePointer(Func))^.Namespace:=Locals;
+      PPOCAFunction(POCAGetValueReferencePointer(Func))^.Obj:=Obj;
+     end else begin
+      if POCAIsValueNull(Obj) then begin
+       Obj:=PPOCAFunction(POCAGetValueReferencePointer(Func))^.Obj;
+      end;
      end;
     end;
+    CodePointer:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code));
+    begin
+     Context^.FrameTop:=1;
+     Frame:=@Context^.FrameStack[0];
+     Frame^.Func:=Func;
+     Frame^.Locals:=Locals;
+     Frame^.Obj:=Obj;
+     Frame^.InstructionPointer:=0;
+     POCASetupRegisters(Frame,CodePointer);
+     POCASetupFrameValues(Context,Frame,CodePointer);
+    end;
+    POCASetupArguments(Context,@Context^.FrameStack[0],CodePointer,Arguments,CountArguments);
+    result:=POCARun(Context);
    end;
-   CodePointer:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code));
-   begin
-    Context^.FrameTop:=1;
-    Frame:=@Context^.FrameStack[0];
-    Frame^.Func:=Func;
-    Frame^.Locals:=Locals;
-    Frame^.Obj:=Obj;
-    Frame^.InstructionPointer:=0;
-    POCASetupRegisters(Frame,CodePointer);
-    POCASetupFrameValues(Context,Frame,CodePointer);
+  finally
+   if not assigned(Context^.CallParent) then begin
+    POCAGarbageCollectorUnlock(Context);
    end;
-   POCASetupArguments(Context,@Context^.FrameStack[0],CodePointer,Arguments,CountArguments);
-   result:=POCARun(Context);
   end;
+{$ifdef POCAThreadContextTracking}
  finally
-  if not assigned(Context^.CallParent) then begin
-   POCAGarbageCollectorUnlock(Context);
-  end;
+  POCAPopThreadContext;
  end;
+{$endif}
 end;
 
 function POCACall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValue;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
@@ -43282,6 +43406,13 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
       FPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
       FPURoundingMode:TFPURoundingMode=rmNearest;
       FPUPrecisionMode:TFPUPrecisionMode={$ifdef HAS_TYPE_EXTENDED}pmEXTENDED{$else}pmDOUBLE{$endif};
+{$IFDEF POCA_THREAD_CONTEXT_TRACKING}
+ procedure InitializeThreadContextTracking;
+ begin
+  POCAGlobalThreadContextLock:=TPasMPCriticalSection.Create;
+  POCAGlobalThreadContextList:=nil;
+ end;
+{$ENDIF}
  procedure InitializeTokens;
  var i:TPOCAInt32;
      t:TPOCATokenType;
@@ -43489,6 +43620,9 @@ begin
   InitializeTokens;
   InitializeKeywords;
   InitializeMetaOpNames;
+{$ifdef POCAThreadContextTracking}
+  InitializeThreadContextTracking;
+{$endif}
   begin
    OldFPUExceptionMask:=GetExceptionMask;
    OldFPURoundingMode:=GetRoundMode;
@@ -43530,6 +43664,26 @@ procedure FinalizePOCA;
    Node:=nil;
   end;
  end;
+{$ifdef POCAThreadContextTracking}
+ procedure FinalizeThreadContextTracking;
+ var Current,Next:PPOCAThreadContextStack;
+ begin
+  POCALockEnter(POCAGlobalThreadContextLock);
+  try
+   Current:=POCAGlobalThreadContextList;
+   while assigned(Current) do begin
+    Next:=Current^.Next;
+    SetLength(Current^.ContextStack,0);
+    Dispose(Current);
+    Current:=Next;
+   end;
+   POCAGlobalThreadContextList:=nil;
+  finally
+   POCALockLeave(POCAGlobalThreadContextLock);
+  end;
+  FreeAndNil(POCAGlobalThreadContextLock);
+ end;
+{$endif}
 var i:TPOCAMetaOp;
     t:TPOCATokenType;
 begin
@@ -43542,6 +43696,9 @@ begin
    MetaOpNames[i]:='';
   end;
   FreeAndNil(MetaOpNamesHashMap);
+{$ifdef POCAThreadContextTracking}
+  FinalizeThreadContextTracking;
+{$endif}
   POCAInitialized:=false;
  end;
 end;
