@@ -2228,6 +2228,16 @@ type PPOCAThreadContextStack=^TPOCAThreadContextStack;
       ContextStack:array of PPOCAContext;
       StackDepth:TPOCAInt32;
       Next:PPOCAThreadContextStack;
+      Used:Boolean;
+     end;
+
+     TPPOCAThreadContextStackArray=array of PPOCAThreadContextStack;
+
+     TPOCAThreadContextHashTable=record
+      Items:TPPOCAThreadContextStackArray;
+      Count:TPOCAInt32;
+      Capacity:TPOCAInt32;
+      Mask:TPOCAInt32;
      end;
 {$endif}
 
@@ -2269,8 +2279,9 @@ var LexerKeywordTokens:TPOCALexerKeywordTokens;
     MetaOpNamesHashMap:TPOCAStringHashMap;
 
 {$ifdef POCAThreadContextTracking}
-    POCAGlobalThreadContextLock:TPasMPCriticalSection=nil;
+    POCAGlobalThreadContextLock:TPasMPMultipleReaderSingleWriterLock=nil;
     POCAGlobalThreadContextList:PPOCAThreadContextStack=nil;
+    POCAGlobalThreadContextHashTable:TPOCAThreadContextHashTable;
 {$endif}
 
 function IntLog2(x:TPOCAUInt32):TPOCAUInt32; {$if defined(fpc)} //{$ifdef CAN_INLINE}inline;{$endif}
@@ -12667,32 +12678,122 @@ begin
 end;
 
 function POCAGetThreadContextStack(const aThreadID:TThreadID;const aCreate:Boolean):PPOCAThreadContextStack;
-var Current:PPOCAThreadContextStack;
+var Index,StartIndex,OldCapacity,NewIndex:TPOCAInt32;
+    NewCapacity:TPOCAInt32;
+    OldItems:TPPOCAThreadContextStackArray;
+    WasWrite:Boolean;
+    Current:PPOCAThreadContextStack;
 begin
- POCALockEnter(POCAGlobalThreadContextLock);
+
+ // Default to not found
+ result:=nil;
+
+ // Assume no write lock initially
+ WasWrite:=false;
+
+ POCAGlobalThreadContextLock.AcquireRead;
  try
-  Current:=POCAGlobalThreadContextList;
-  while assigned(Current) do begin
-   if Current^.ThreadID=aThreadID then begin
+  // Hash the thread ID and search using linear probing
+  if POCAGlobalThreadContextHashTable.Capacity>0 then begin
+   StartIndex:=TPOCAInt32(aThreadID) and POCAGlobalThreadContextHashTable.Mask;
+   Index:=StartIndex;
+   
+   repeat
+    Current:=POCAGlobalThreadContextHashTable.Items[Index];
+    if assigned(Current) then begin
+     if Current^.Used and (Current^.ThreadID=aThreadID) then begin
+      result:=Current;
+      break;
+     end;
+    end else begin
+     break;
+    end;
+    // Linear probing
+    Index:=(Index+1) and POCAGlobalThreadContextHashTable.Mask;
+   until Index=StartIndex;
+  end;
+  
+  // Not found, create if requested
+  if not assigned(result) then begin
+
+   if aCreate then begin
+
+    // Upgrade to write lock
+    POCAGlobalThreadContextLock.ReadToWrite;
+
+    // Indicate that it is a write lock now, for the release later
+    WasWrite:=true;    
+
+    // Initialize hash table if needed
+    if POCAGlobalThreadContextHashTable.Capacity=0 then begin
+     POCAGlobalThreadContextHashTable.Capacity:=16;
+     POCAGlobalThreadContextHashTable.Mask:=POCAGlobalThreadContextHashTable.Capacity-1;
+     SetLength(POCAGlobalThreadContextHashTable.Items,POCAGlobalThreadContextHashTable.Capacity);
+     POCAGlobalThreadContextHashTable.Count:=0;
+     FillChar(POCAGlobalThreadContextHashTable.Items[0],POCAGlobalThreadContextHashTable.Capacity*SizeOf(PPOCAThreadContextStack),#0);
+    end;
+    
+    New(Current);
+    Current^.ThreadID:=aThreadID;
+    SetLength(Current^.ContextStack,16);
+    Current^.StackDepth:=0;
+    Current^.Next:=POCAGlobalThreadContextList;
+    Current^.Used:=true;
+    POCAGlobalThreadContextList:=Current;
+    
+    // Find empty slot in hash table
+    StartIndex:=TPOCAInt32(aThreadID) and POCAGlobalThreadContextHashTable.Mask;
+    Index:=StartIndex;
+    while assigned(POCAGlobalThreadContextHashTable.Items[Index]) do begin
+     Index:=(Index+1) and POCAGlobalThreadContextHashTable.Mask;
+    end;
+    POCAGlobalThreadContextHashTable.Items[Index]:=Current;
+    Inc(POCAGlobalThreadContextHashTable.Count);
+    
+    // Check if we need to resize (load factor > 0.5)
+    if (POCAGlobalThreadContextHashTable.Count shl 1)>=POCAGlobalThreadContextHashTable.Capacity then begin
+     OldCapacity:=POCAGlobalThreadContextHashTable.Capacity;
+     NewCapacity:=OldCapacity*2;
+     OldItems:=POCAGlobalThreadContextHashTable.Items;
+     
+     // Create new table
+     SetLength(POCAGlobalThreadContextHashTable.Items,NewCapacity);
+     POCAGlobalThreadContextHashTable.Capacity:=NewCapacity;
+     POCAGlobalThreadContextHashTable.Mask:=NewCapacity-1;
+     POCAGlobalThreadContextHashTable.Count:=0;
+     FillChar(POCAGlobalThreadContextHashTable.Items[0],NewCapacity*SizeOf(PPOCAThreadContextStack),#0);
+     
+     // Rehash all items
+     for NewIndex:=0 to OldCapacity-1 do begin
+      if assigned(OldItems[NewIndex]) then begin
+       StartIndex:=TPOCAInt32(OldItems[NewIndex]^.ThreadID) and POCAGlobalThreadContextHashTable.Mask;
+       Index:=StartIndex;
+       while assigned(POCAGlobalThreadContextHashTable.Items[Index]) do begin
+        Index:=(Index+1) and POCAGlobalThreadContextHashTable.Mask;
+       end;
+       POCAGlobalThreadContextHashTable.Items[Index]:=OldItems[NewIndex];
+       Inc(POCAGlobalThreadContextHashTable.Count);
+      end;
+     end;
+    end;
+    
     result:=Current;
-    exit;
+
    end;
-   Current:=Current^.Next;
+  
   end;
-  if aCreate then begin
-   New(Current);
-   Current^.ThreadID:=aThreadID;
-   SetLength(Current^.ContextStack,16);
-   Current^.StackDepth:=0;
-   Current^.Next:=POCAGlobalThreadContextList;
-   POCAGlobalThreadContextList:=Current;
-   result:=Current;
-  end else begin
-   result:=nil;
-  end;
+
  finally
-  POCALockLeave(POCAGlobalThreadContextLock);
+
+  // Release the lock (read or write, depending on what the last operation was) 
+  if WasWrite then begin
+   POCAGlobalThreadContextLock.ReleaseWrite;
+  end else begin
+   POCAGlobalThreadContextLock.ReleaseRead;
+  end;
+
  end;
+
 end;
 
 function POCAGetCurrentThreadContext:PPOCAContext;
@@ -43411,8 +43512,11 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
 {$ifdef POCAThreadContextTracking}
  procedure InitializeThreadContextTracking;
  begin
-  POCAGlobalThreadContextLock:=TPasMPCriticalSection.Create;
+  POCAGlobalThreadContextLock:=TPasMPMultipleReaderSingleWriterLock.Create;
   POCAGlobalThreadContextList:=nil;
+  POCAGlobalThreadContextHashTable.Capacity:=0;
+  POCAGlobalThreadContextHashTable.Count:=0;
+  SetLength(POCAGlobalThreadContextHashTable.Items,0);
  end;
 {$endif}
  procedure InitializeTokens;
@@ -43670,7 +43774,7 @@ procedure FinalizePOCA;
  procedure FinalizeThreadContextTracking;
  var Current,Next:PPOCAThreadContextStack;
  begin
-  POCALockEnter(POCAGlobalThreadContextLock);
+  POCAGlobalThreadContextLock.AcquireWrite;
   try
    Current:=POCAGlobalThreadContextList;
    while assigned(Current) do begin
@@ -43679,9 +43783,12 @@ procedure FinalizePOCA;
     Dispose(Current);
     Current:=Next;
    end;
+   SetLength(POCAGlobalThreadContextHashTable.Items,0);
+   POCAGlobalThreadContextHashTable.Capacity:=0;
+   POCAGlobalThreadContextHashTable.Count:=0;
    POCAGlobalThreadContextList:=nil;
   finally
-   POCALockLeave(POCAGlobalThreadContextLock);
+   POCAGlobalThreadContextLock.ReleaseWrite;
   end;
   FreeAndNil(POCAGlobalThreadContextLock);
  end;
