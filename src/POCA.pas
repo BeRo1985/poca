@@ -12750,12 +12750,18 @@ begin
      Index:=(Index+1) and POCAGlobalThreadContextHashTable.Mask;
     end;
     POCAGlobalThreadContextHashTable.Items[Index]:=Current;
-    Inc(POCAGlobalThreadContextHashTable.Count);
+    inc(POCAGlobalThreadContextHashTable.Count);
     
-    // Check if we need to resize (load factor > 0.5)
+    // Check if we need to resize (load factor >= 0.5)    
     if (POCAGlobalThreadContextHashTable.Count shl 1)>=POCAGlobalThreadContextHashTable.Capacity then begin
+     
+     // Save old capacity
      OldCapacity:=POCAGlobalThreadContextHashTable.Capacity;
-     NewCapacity:=OldCapacity*2;
+
+     // Calculate new capacity
+     NewCapacity:=OldCapacity shl 1;
+
+     // Save old items
      OldItems:=POCAGlobalThreadContextHashTable.Items;
      
      // Create new table
@@ -12774,10 +12780,13 @@ begin
         Index:=(Index+1) and POCAGlobalThreadContextHashTable.Mask;
        end;
        POCAGlobalThreadContextHashTable.Items[Index]:=OldItems[NewIndex];
-       Inc(POCAGlobalThreadContextHashTable.Count);
+       inc(POCAGlobalThreadContextHashTable.Count);
       end;
      end;
     end;
+
+    // Clear old items array
+    OldItems:=nil;
     
     result:=Current;
 
