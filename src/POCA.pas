@@ -12691,8 +12691,10 @@ begin
  // Assume no write lock initially
  WasWrite:=false;
 
+ // Acquire read lock 
  POCAGlobalThreadContextLock.AcquireRead;
  try
+
   // Hash the thread ID and search using linear probing
   if POCAGlobalThreadContextHashTable.Capacity>0 then begin
    StartIndex:=TPOCAInt32(aThreadID) and POCAGlobalThreadContextHashTable.Mask;
