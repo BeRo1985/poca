@@ -86,6 +86,9 @@
         <DebugInfoType Value="dsDwarf3"/>
       </Debugging>
     </Linking>
+    <Other>
+      <CustomOptions Value="-dPOCAThreadContextTracking"/>
+    </Other>
   </CompilerOptions>
   <Debugging>
     <Exceptions>

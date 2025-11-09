@@ -43408,13 +43408,13 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
       FPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
       FPURoundingMode:TFPURoundingMode=rmNearest;
       FPUPrecisionMode:TFPUPrecisionMode={$ifdef HAS_TYPE_EXTENDED}pmEXTENDED{$else}pmDOUBLE{$endif};
-{$IFDEF POCA_THREAD_CONTEXT_TRACKING}
+{$ifdef POCAThreadContextTracking}
  procedure InitializeThreadContextTracking;
  begin
   POCAGlobalThreadContextLock:=TPasMPCriticalSection.Create;
   POCAGlobalThreadContextList:=nil;
  end;
-{$ENDIF}
+{$endif}
  procedure InitializeTokens;
  var i:TPOCAInt32;
      t:TPOCATokenType;
