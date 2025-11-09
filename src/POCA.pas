@@ -2162,7 +2162,7 @@ function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
 function POCAGetCurrentThreadContext:PPOCAContext;
 procedure POCAPushThreadContext(const aContext:PPOCAContext);
 procedure POCAPopThreadContext;
-function POCAContextSubAuto(aSuper:PPOCAContext;const aExplicitParent:PPOCAContext=nil):PPOCAContext;
+function POCAContextSubAuto(const aSuper:PPOCAContext;const aExplicitParent:PPOCAContext=nil):PPOCAContext;
 {$endif}
 
 function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
@@ -12708,13 +12708,15 @@ end;
 
 procedure POCAPushThreadContext(const aContext:PPOCAContext);
 var Stack:PPOCAThreadContextStack;
+    Index:TPOCAInt32;
 begin
  Stack:=POCAGetThreadContextStack(POCAGetCurrentThreadID,true);
- if Stack^.StackDepth>=Length(Stack^.ContextStack) then begin
-  SetLength(Stack^.ContextStack,Length(Stack^.ContextStack)*2);
- end;
- Stack^.ContextStack[Stack^.StackDepth]:=aContext;
+ Index:=Stack^.StackDepth;
  inc(Stack^.StackDepth);
+ if length(Stack^.ContextStack)<Stack^.StackDepth then begin
+  SetLength(Stack^.ContextStack,Stack^.StackDepth+((Stack^.StackDepth+1) shr 1));
+ end;
+ Stack^.ContextStack[Index]:=aContext;
 end;
 
 procedure POCAPopThreadContext;
@@ -12726,7 +12728,7 @@ begin
  end;
 end;
 
-function POCAContextSubAuto(aSuper:PPOCAContext;const aExplicitParent:PPOCAContext=nil):PPOCAContext;
+function POCAContextSubAuto(const aSuper:PPOCAContext;const aExplicitParent:PPOCAContext):PPOCAContext;
 var CurrentContext:PPOCAContext;
 begin
  if assigned(aExplicitParent) then begin
