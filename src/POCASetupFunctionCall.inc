@@ -6,7 +6,7 @@ const ArgumentIndex=3;
 {$else}
 const ArgumentIndex=2;
 {$ifend}
-{$endif}
+{$ifend}
 var {$ifndef POCASETUPFUNCTIONCALLOP}Func,{$endif}Obj,Code:TPOCAValue;
     {$if defined(POCASETUPFUNCTIONCALLNAMED)}ArgumentIndex{$else}Index{$ifend}:TPOCAInt32;
     ObjPtr:PPOCAObject;
