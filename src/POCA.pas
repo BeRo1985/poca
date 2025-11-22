@@ -353,7 +353,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
 
-const POCAVersion='2025-11-01-21-44-0000';
+const POCAVersion='2025-11-22-06-55-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -6867,14 +6867,16 @@ end;
 function TPOCAGarbageCollector.MarkGhostAsGray(Obj:PPOCAGhost):boolean;
 begin
  result:=false;
- if assigned(Obj^.GhostType) and assigned(addr(Obj^.GhostType^.Mark)) then begin
-  if Obj^.GhostType^.Mark(Obj) then begin
-   result:=true;
+ if assigned(Obj^.Ptr) then begin
+  if assigned(Obj^.GhostType) and assigned(addr(Obj^.GhostType^.Mark)) then begin
+   if Obj^.GhostType^.Mark(Obj) then begin
+    result:=true;
+   end;
   end;
- end;
- if assigned(Obj^.Hash) then begin
-  if MarkObjectAsGray(TPOCAPointer(Obj^.Hash)) then begin
-   result:=true;
+  if assigned(Obj^.Hash) then begin
+   if MarkObjectAsGray(TPOCAPointer(Obj^.Hash)) then begin
+    result:=true;
+   end;
   end;
  end;
 end;
@@ -7348,9 +7350,20 @@ begin
       if i>0 then begin
        dec(i);
       end;
-      if (((Obj^.Header.ValueType=pvtGHOST) and assigned(PPOCAGhost(Obj)^.GhostType)) and assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy))) and not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj)) then begin
-       GrayList.TakeOver(Obj);
-       Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+      if Obj^.Header.ValueType=pvtGHOST then begin
+       if assigned(PPOCAGhost(Obj)^.Ptr) then begin
+        if assigned(PPOCAGhost(Obj)^.GhostType) and assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy)) and not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj)) then begin
+         GrayList.TakeOver(Obj);
+         Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+        end else begin
+         SweepLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
+         Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not pgcbLIST;
+         TryMarkGhostAsGray(Obj);
+        end;
+       end else begin
+        GrayList.TakeOver(Obj);
+        Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
+       end;
       end else begin
        SweepLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
        Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not pgcbLIST;
@@ -8800,12 +8813,22 @@ end;
 
 function POCANewGhost(Context:PPOCAContext;const GhostType:PPOCAGhostType;const Ptr:TPOCAPointer;const Hash:PPOCAHash=nil;const PtrType:TPOCAGhostPtrType=pgptRAW):TPOCAValue;
 var Ghost:PPOCAGhost;
+//  t:textfile;
 begin
  result:=POCANew(Context,pvtGHOST,PPOCAObject(Ghost));
  Ghost^.GhostType:=GhostType;
  Ghost^.PtrType:=PtrType;
  Ghost^.Ptr:=Ptr;
  Ghost^.Hash:=Hash;
+(*AssignFile(t,'ghostdebug.txt');
+ {$i-}Append(t);{$i+}
+ if IOResult<>0 then begin
+  {$i-}Rewrite(t);{$i+}
+ end;
+ if IOResult=0 then begin
+  writeln(t,IntToHex(TPOCAPtrUInt(result)),' ',IntToHex(TPOCAPtrUInt(GhostType)),' ',IntToHex(TPOCAPtrUInt(Ptr)),' ',GhostType^.Name);
+  CloseFile(t);
+ end;*)
 end;
 
 function POCANewNativeObject(Context:PPOCAContext;const NativeObjectValue:TPOCANativeObject):TPOCAValue;
@@ -16510,7 +16533,8 @@ end;
 procedure TPOCANativeObjectDestroy(const Ghost:PPOCAGhost);
 begin
  if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
-  TPOCANativeObject(Ghost^.Ptr).Free;
+  TPOCANativeObject(Ghost^.Ptr).fGhostValue.CastedUInt64:=POCAValueNullCastedUInt64;
+  FreeAndNil(TPOCANativeObject(Ghost^.Ptr));
  end;
 end;
 
@@ -16696,7 +16720,14 @@ end;
 destructor TPOCANativeObject.Destroy;
 var Index:TPOCANativeInt;
     ObjectData:PPOCANativeObjectData;
+    Ghost:PPOCAGhost;
 begin
+ if POCAIsValueGhost(fGhostValue) then begin
+  Ghost:=PPOCAGhost(POCAGetValueReferencePointer(fGhostValue));
+  if assigned(Ghost) and (Ghost^.Ptr=self) then begin
+   Ghost^.Ptr:=nil;
+  end;
+ end;
  FreeAndNil(fPropHashMap);
  fProperties:=nil;
  for Index:=0 to fCountObjects-1 do begin
