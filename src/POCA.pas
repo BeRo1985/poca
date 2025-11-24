@@ -28647,21 +28647,16 @@ var TokenList:PPOCAToken;
          end;
         end;
         if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
-         if Token=ptVAR then begin
-          Symbol:=FindScopeSymbol(t,false,true,false);
-         end else begin
-          Symbol:=nil;
-         end;
-         if not assigned(Symbol) then begin
-          Symbol:=DefineScopeSymbol(t,false,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
-         end;
+         Symbol:=DefineScopeSymbol(t,false,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
          if assigned(Symbol) then begin
           result:=Symbol^.Register;
          end else begin
+          // Failed to define symbol, so no local register
           result:=-1;
          end;
          exit;
         end else begin
+         // FRAMEVALUE and VAR can't be used as local register 
          result:=-1;
          exit;
         end;
