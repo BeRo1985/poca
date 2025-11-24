@@ -30998,6 +30998,7 @@ var TokenList:PPOCAToken;
       SetLength(Registers[4],0);
       SetLength(Registers[5],0);
      end;
+     ScopeEnd;
     end;
     function GenerateForEachForIndexForKey(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var JumpNext,JumpOver,BreakPos,ContinuePos,Reg1,Reg2,Reg3,Reg4,Len,Start:TPOCAInt32;
