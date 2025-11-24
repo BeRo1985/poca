@@ -28647,7 +28647,11 @@ var TokenList:PPOCAToken;
          end;
         end;
         if SymbolKind=TPOCACodeGeneratorScopeSymbolKind.sskREG then begin
-         Symbol:=FindScopeSymbol(t,false,true,false);
+         if Token=ptVAR then begin
+          Symbol:=FindScopeSymbol(t,false,true,false);
+         end else begin
+          Symbol:=nil;
+         end;
          if not assigned(Symbol) then begin
           Symbol:=DefineScopeSymbol(t,false,(Token=ptLET) or (Token=ptCONST),Token=ptCONST,false,GetRegister(false,Token=ptCONST));
          end;
