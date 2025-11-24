@@ -9365,9 +9365,16 @@ begin
   if POCAIsValueNumber(FromValue) or POCAIsValueNumber(ToValue) then begin
    Value.Num:=POCAGetNumberValue(Context,FromValue);
    ToNumber:=POCAGetNumberValue(Context,ToValue);
-   while POCAIsFinite(Value.Num) and (Value.Num<=ToNumber) do begin
-    POCAArrayPush(ArrayObject,Value);
-    Value.Num:=Value.Num+1;
+   if Value.Num>ToNumber then begin
+    while POCAIsFinite(Value.Num) and (Value.Num>=ToNumber) do begin
+     POCAArrayPush(ArrayObject,Value);
+     Value.Num:=Value.Num-1;
+    end;
+   end else begin
+    while POCAIsFinite(Value.Num) and (Value.Num<=ToNumber) do begin
+     POCAArrayPush(ArrayObject,Value);
+     Value.Num:=Value.Num+1;
+    end;
    end;
   end else if POCAIsValueString(FromValue) or POCAIsValueString(ToValue) then begin
    sFrom:=POCAGetStringValue(Context,FromValue);
