@@ -35081,7 +35081,7 @@ begin
        result.Num:=PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint);
       end;
      end else begin
-      result.Num:=ord(PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]) and 1;
+      result.Num:=ord(PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
      end;
     end;
    end;
