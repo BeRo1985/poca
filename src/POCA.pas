@@ -34916,7 +34916,7 @@ begin
     if Index<0 then begin
      inc(Index,ArrayRecord^.Size);
     end;
-    if (Index>=0) or (Index<ArrayRecord^.Size) then begin
+    if (Index>=0) and (Index<ArrayRecord^.Size) then begin
      result:=ArrayRecord^.Data[Index];
     end else begin
      POCARuntimeError(Context,'Out of bounds');
@@ -34950,7 +34950,7 @@ begin
     if Index<0 then begin
      inc(Index,ArrayRecord^.Size);
     end;
-    if (Index>=0) or (Index<ArrayRecord^.Size) then begin
+    if (Index>=0) and (Index<ArrayRecord^.Size) then begin
      ArrayRecord^.Data[Index]:=Value;
      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
     end else begin
