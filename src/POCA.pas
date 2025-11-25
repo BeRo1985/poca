@@ -35016,12 +35016,12 @@ begin
       CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
       CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Box,CodePoint);
       if (CodeUnit>0) and (CodeUnit<=length(PPOCAString(POCAGetValueReferencePointer(Box))^.Data)) then begin
-       result.Num:=PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit);
+       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit)));
       end else begin
-       result.Num:=PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint);
+       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint)));
       end;
      end else begin
-      result.Num:=ord(PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
+      result:=POCANewString(Context,PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
      end;
     end;
    end;
@@ -35086,12 +35086,12 @@ begin
       CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
       CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Box,CodePoint);
       if (CodeUnit>0) and (CodeUnit<=length(PPOCAString(POCAGetValueReferencePointer(Box))^.Data)) then begin
-       result.Num:=PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit);
+       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit)));
       end else begin
-       result.Num:=PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint);
+       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint)));
       end;
      end else begin
-      result.Num:=ord(PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
+      result:=POCANewString(Context,PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
      end;
     end;
    end;
@@ -35169,9 +35169,9 @@ begin
       CodePoint:=CurrentIndex;
       CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Obj,CodePoint);
       if (CodeUnit>0) and (CodeUnit<=Str^.DataLength) then begin
-       Value.Num:=PUCUUTF8CodeUnitGetChar(Str^.Data,CodeUnit);
+       Value:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(Str^.Data,CodeUnit)));
       end else begin
-       Value.Num:=PUCUUTF8CodePointGetChar(Str^.Data,CodePoint);
+       Value:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(Str^.Data,CodePoint)));
       end;
       result:=true;
      end;
@@ -35179,7 +35179,7 @@ begin
      if ((CurrentIndex>=0) and (CurrentIndex<Str^.DataLength)) then begin
       Index.Num:=CurrentIndex+1;
       CodeUnit:=CurrentIndex+1;
-      Value.Num:=TPOCAUInt8(AnsiChar(Str^.Data[CodeUnit]));
+      Value:=POCANewString(Context,AnsiChar(Str^.Data[CodeUnit]));
       result:=true;
      end;
     end;
