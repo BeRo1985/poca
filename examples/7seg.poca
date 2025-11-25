@@ -10,17 +10,17 @@ if (arguments.length > 0 or SIZE < 1 or SPACING < 1) {
   return 1;
 }
 
-# bit segment
-# assignments
-#
-#    - 0 -
-#    1   5
-#    - 2 -
-#    3   6
-#    - 4 -
-#
-#   (little
-#   endian)
+// bit segment
+// assignments
+//
+//    - 0 -
+//    1   5
+//    - 2 -
+//    3   6
+//    - 4 -
+//
+//   (little
+//   endian)
 
 let DIGITS = [ 0b1111011, 0b1100000, 0b0111101, 0b1110101, 0b1100110,
                0b1010111, 0b1011111, 0b1100001, 0b1111111, 0b1110111 ];
