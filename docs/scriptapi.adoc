@@ -50,11 +50,11 @@ or using the literal syntax:
 let arr = [];
 ----
 
-You can also provide an initial size and elements:
+You can also provide an initial elements:
 
 [source,js]
 ----
-let arr = Array.create(3, "a", "b", "c");
+let arr = Array.create("a", "b", "c");
 ----
 
 or via literal notation (when supported):

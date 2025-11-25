@@ -16242,13 +16242,23 @@ begin
 end;
 
 function POCAArrayFunctionCREATE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
-var i:TPOCAInt32;
+var Index:TPOCAInt32;
 begin
  result:=POCANewArray(Context);
  if CountArguments>0 then begin
-  POCAArraySetSize(result,trunc(POCAGetNumberValue(Context,Arguments^[0])));
-  for i:=1 to CountArguments-1 do begin
-   POCAArraySet(result,i-1,Arguments^[i]);
+  // Check if arrayLength or a list of elements
+  if (CountArguments=1) and POCAIsValueNumber(Arguments^[0]) then begin
+   // Create empty array with size
+   POCAArraySetSize(result,trunc(POCAGetNumberValue(Context,Arguments^[0])));
+{  for Index:=1 to CountArguments-1 do begin
+    POCAArraySet(result,Index-1,Arguments^[Index]);
+   end;}
+  end else begin 
+   // Create array with elements
+   POCAArraySetSize(result,CountArguments);
+   for Index:=0 to CountArguments-1 do begin
+    POCAArraySet(result,Index,Arguments^[Index]);
+   end;
   end;
  end;
 end;
