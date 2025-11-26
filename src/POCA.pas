@@ -29124,10 +29124,10 @@ var TokenList:PPOCAToken;
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
-         EmitOpcode(popN_JIFTRUE,0,result);
+         EmitOpcode(popJMP,0,result);
         end;
         else begin
-         EmitOpcode(popJIFTRUE,0,result);
+         EmitOpcode(popJIFNOTNULL,0,result);
         end;
        end;
        Registers:=GetRegisters;
@@ -29148,7 +29148,14 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETPROTOTYPE,result,Reg1);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,result);
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg3:=GenerateExpression(t^.Right,result,true);
        if result<>Reg3 then begin
@@ -29167,7 +29174,14 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETHASHKIND,result,Reg1);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,result);
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg3:=GenerateExpression(t^.Right,result,true);
        if result<>Reg3 then begin
@@ -29188,7 +29202,14 @@ var TokenList:PPOCAToken;
         tkARRAY:begin
          EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
          JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-         EmitOpcode(popJIFNOTNULL,0,result);
+         case GetRegisterTypeKind(result) of
+          tkNUMBER:begin
+           EmitOpcode(popJMP,0,result);
+          end;
+          else begin
+           EmitOpcode(popJIFNOTNULL,0,result);
+          end;
+         end;
          Registers:=GetRegisters;
          Reg3:=GenerateExpression(t^.Right,result,true);
          if result<>Reg3 then begin
@@ -29217,7 +29238,14 @@ var TokenList:PPOCAToken;
       end;
       popCOPY:begin
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,Reg1);
+       case GetRegisterTypeKind(Reg1) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,Reg1);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,Reg1);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,Reg1,true);
        if Reg1<>Reg2 then begin
@@ -29242,7 +29270,14 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,result);
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
        if result<>Reg2 then begin
@@ -29262,7 +29297,14 @@ var TokenList:PPOCAToken;
        EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,result);
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
        if result<>Reg2 then begin
@@ -29283,7 +29325,14 @@ var TokenList:PPOCAToken;
        EmitOpcode(popGETOUTERVALUE,result,FrameValueLevel,FrameValueIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,result);
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
        if result<>Reg2 then begin
@@ -29304,7 +29353,14 @@ var TokenList:PPOCAToken;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,result);
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
        if result<>Reg2 then begin
@@ -29324,7 +29380,14 @@ var TokenList:PPOCAToken;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,result);
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
        if result<>Reg2 then begin
@@ -29343,7 +29406,14 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFNOTNULL,0,result);
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
        Registers:=GetRegisters;
        Reg2:=GenerateExpression(t^.Right,result,true);
        if result<>Reg2 then begin
