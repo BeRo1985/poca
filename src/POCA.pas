@@ -838,7 +838,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ptEXPORT,
       ptAUTOSEMI,
       ptELVIS,
-      ptELVISEQ,
+      ptLOGICALOREQ,
       ptSYMBOLNAME,
       ptSUPERCODESYMBOL,
       ptNULLISHOR,
@@ -20028,7 +20028,7 @@ const POCATokenPrecedences:array[0..31] of TPOCATokenPrecedence=((Tokens:[ptSEMI
                                                                  (Tokens:[ptELLIPSIS];Rule:prSUFFIX),
                                                                  (Tokens:[ptREGEXP];Rule:prPREFIX),
                                                                  (Tokens:[ptRETURN,ptBREAK,ptCONTINUE,ptTHROW,ptBREAKPOINT,ptDELETE];Rule:prPREFIX),
-                                                                 (Tokens:[ptASSIGN,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMODEQ,ptPOWEQ,ptELVISEQ,ptNULLISHEQ];Rule:prREVERSE),
+                                                                 (Tokens:[ptASSIGN,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMODEQ,ptPOWEQ,ptLOGICALOREQ,ptNULLISHEQ];Rule:prREVERSE),
                                                                  (Tokens:[ptCOLON,ptQUESTION];Rule:prREVERSE),
                                                                  (Tokens:[ptINSTANCEOF,ptIN,ptIS];Rule:prBINARY),
                                                                  (Tokens:[ptDOTDOT];Rule:prREVERSE),
@@ -23134,8 +23134,8 @@ var TokenList:PPOCAToken;
     ptELVIS:begin
      DumpIt(' ?: ');
     end;
-    ptELVISEQ:begin
-     DumpIt(' ?= ');
+    ptLOGICALOREQ:begin
+     DumpIt(' ||= ');
     end;
     ptNULLISHEQ:begin
      DumpIt(' ??= ');
@@ -23313,7 +23313,7 @@ var TokenList:PPOCAToken;
       ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
       ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
-      ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptELVISEQ,ptSYMBOLNAME,
+      ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptLOGICALOREQ,ptSYMBOLNAME,
       ptNULLISHOR,ptNULLISHEQ])) then begin
     AddToken(ptAUTOSEMI,'',0);
    end;
@@ -23457,10 +23457,6 @@ var TokenList:PPOCAToken;
           inc(SourcePosition);
           AddToken(ptELVIS,'',0);
          end;
-         '=':begin
-          inc(SourcePosition);
-          AddToken(ptELVISEQ,'',0);
-         end;
          '.':begin
           inc(SourcePosition);
           AddToken(ptSAFEDOT,'',0);
@@ -23575,7 +23571,17 @@ var TokenList:PPOCAToken;
         case Source[SourcePosition] of
          '|':begin
           inc(SourcePosition);
-          AddToken(ptOR,'',0);
+          if SourcePosition<=SourceLength then begin
+           case Source[SourcePosition] of
+            '=':begin
+             inc(SourcePosition);
+             AddToken(ptLOGICALOREQ,'',0);
+            end;
+            else begin
+             AddToken(ptOR,'',0);
+            end;
+           end;
+          end;
          end;
          '=':begin
           inc(SourcePosition);
@@ -29350,7 +29356,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function GenerateElvisAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    function GenerateLogicalOrAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue,FrameValueLevel,FrameValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
         Registers:TPOCACodeGeneratorRegisters;
@@ -33580,8 +33586,8 @@ var TokenList:PPOCAToken;
       ptPOWEQ:begin
        result:=GenerateAssignOp(popPOW,t,OutReg);
       end;
-      ptELVISEQ:begin
-       result:=GenerateElvisAssignOp(t,OutReg);
+      ptLOGICALOREQ:begin
+       result:=GenerateLogicalOrAssignOp(t,OutReg);
       end;
       ptNULLISHEQ:begin
        result:=GenerateNullishAssignOp(t,OutReg);
