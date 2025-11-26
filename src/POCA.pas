@@ -13337,14 +13337,14 @@ begin
     (
      (ModuleName[1]='.') and 
      (
-      ((ModuleName[2]='/') or (ModuleName[2]='\')) or
+      ((ModuleName[2]='/') or (ModuleName[2]='\')){or
       (
        (length(ModuleName)>=3) and
        (
         (ModuleName[2]='.') and 
         ((ModuleName[3]='/') or (ModuleName[3]='\')) 
        )
-      )
+      )}
      )
     ) then begin
   CallerFileName:=POCAGetSourceFileName(Context,Context^.FrameTop-1,false);
