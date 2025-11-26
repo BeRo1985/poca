@@ -518,11 +518,12 @@ const POCAVersion='2025-11-22-06-55-0000';
       popIS=152;
       popJIFNULL=153;
       popJIFNOTNULL=154;
-      popSAFEEXTRACT=155;
-      popSAFEGETMEMBER=156;
-      popSAFESETMEMBER=157;
-      popSETCONSTLOCAL=158;
-      popCOUNT=159;
+      popSAFEINSERT=155;
+      popSAFEEXTRACT=156;
+      popSAFEGETMEMBER=157;
+      popSAFESETMEMBER=158;
+      popSETCONSTLOCAL=159;
+      popCOUNT=160;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -28768,7 +28769,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex:TPOCAInt32;out Symbol:PPOCACodeGeneratorScopeSymbol;const AllowSafeDot:Boolean):TPOCAUInt32;
+    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex:TPOCAInt32;out Symbol:PPOCACodeGeneratorScopeSymbol;const AllowSafeOperation:Boolean):TPOCAUInt32;
     var Token:TPOCATokenType;
         SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
     begin
@@ -28781,7 +28782,7 @@ var TokenList:PPOCAToken;
      case Token of
       ptLPAR:begin
        if t^.Rule<>prSUFFIX then begin
-        result:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,AllowSafeDot);
+        result:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,AllowSafeOperation);
         exit;
        end;
       end;
@@ -28827,7 +28828,7 @@ var TokenList:PPOCAToken;
        exit;
       end;
       ptSAFEDOT:begin
-       if AllowSafeDot then begin
+       if AllowSafeOperation then begin
         Reg1:=GenerateExpression(t^.Left,-1,true);
         if assigned(t^.Right) and (t^.Right^.Token=ptPROTOTYPE) then begin
          result:=popSETPROTOTYPE;
@@ -28851,7 +28852,14 @@ var TokenList:PPOCAToken;
        exit;
       end;
       ptSAFELBRA:begin
-       SyntaxError('?[ is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+       if AllowSafeOperation then begin
+        SyntaxError('?[ is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+       end else begin
+        Reg1:=GenerateExpression(t^.Left,-1,true);
+        Reg2:=GenerateExpression(t^.Right,-1,true);
+        result:=popSAFEINSERT;
+        exit;
+       end;
       end;
       ptVAR,ptLET,ptCONST:begin
        t:=t^.Right;
@@ -28949,6 +28957,9 @@ var TokenList:PPOCAToken;
          EmitOpcode(popINSERT,Reg1,Reg2,Reg);
         end;
        end;
+      end;
+      popSAFEINSERT:begin
+       EmitOpcode(popSAFEINSERT,Reg1,Reg2,Reg);
       end;
       popCOPY:begin
        EmitOpcode(popCOPY,Reg1,Reg);
@@ -29067,6 +29078,19 @@ var TokenList:PPOCAToken;
          EmitOpcode(popINSERT,Reg1,Reg2,result);
         end;
        end;
+      end;
+      popSAFEINSERT:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg3:=GenerateExpression(t^.Right,-1,true);
+       EmitOpcode(Op,result,result,Reg3);
+       FreeRegister(Reg3);
+       EmitOpcode(popSAFEINSERT,Reg1,Reg2,result);
       end;
       popCOPY:begin
        Reg2:=GenerateExpression(t^.Right,-1,true);
@@ -29327,6 +29351,25 @@ var TokenList:PPOCAToken;
          EmitOpcode(popINSERT,Reg1,Reg2,result);
         end;
        end;
+      end;
+      popSAFEINSERT:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSAFEINSERT,Reg1,Reg2,result);
       end;
       popCOPY:begin
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
@@ -29685,6 +29728,25 @@ var TokenList:PPOCAToken;
         end;
        end;
       end;
+      popSAFEINSERT:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFTRUE,0,result);
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSAFEINSERT,Reg1,Reg2,result);
+      end;
       popCOPY:begin
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(Reg1) of
@@ -30042,6 +30104,25 @@ var TokenList:PPOCAToken;
         end;
        end;
       end;
+      popSAFEINSERT:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFFALSE,0,result);
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSAFEINSERT,Reg1,Reg2,result);
+      end;
       popCOPY:begin
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(Reg1) of
@@ -30319,6 +30400,19 @@ var TokenList:PPOCAToken;
         end;
        end;
       end;
+      popSAFEINSERT:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       Reg3:=GetRegister(true,false);
+       EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       EmitOpcode(Op,Reg3,result);
+       EmitOpcode(popSAFEINSERT,Reg1,Reg2,Reg3);
+       FreeRegister(Reg3);
+      end;
       popCOPY:begin
        if OutReg<0 then begin
         result:=GetRegister(true,false);
@@ -30493,6 +30587,18 @@ var TokenList:PPOCAToken;
          EmitOpcode(popINSERT,Reg1,Reg2,result);
         end;
        end;
+      end;
+      popSAFEINSERT:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       Reg3:=GetRegister(true,false);
+       EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       EmitOpcode(Op,result,result);
+       EmitOpcode(popSAFEINSERT,Reg1,Reg2,result);
       end;
       popCOPY:begin
        if OutReg<0 then begin
@@ -35777,6 +35883,23 @@ begin
  end;
 end;
 
+function POCARunSafeCheckString(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32;
+var s:TPOCARawByteString;
+begin
+ s:=POCAGetStringValue(Context,r);
+ try
+  result:=trunc(POCAGetNumberValue(Context,Index));
+  if result<0 then begin
+   inc(result,length(s));
+  end;
+  if (result<0) or (result>=length(s)) then begin
+   result:=-1;
+  end;
+ finally
+  s:='';
+ end;
+end;
+
 function POCARunCheckStringUTF8(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32;
 var l:TPOCAInt32;
 begin
@@ -35788,6 +35911,22 @@ begin
   end;
   if (result<0) or (result>=l) then begin
    POCARuntimeError(Context,'String index '+TPOCARawByteString(IntToStr(result))+' is out of bounds with size '+TPOCARawByteString(IntToStr(l)));
+  end;
+ finally
+ end;
+end;
+
+function POCARunSafeCheckStringUTF8(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32;
+var l:TPOCAInt32;
+begin
+ l:=POCAGetStringUTF8Length(Context,r);
+ try
+  result:=trunc(POCAGetNumberValue(Context,Index));
+  if result<0 then begin
+   inc(result,l);
+  end;
+  if (result<0) or (result>=l) then begin
+   result:=-1;
   end;
  finally
  end;
@@ -36029,6 +36168,45 @@ begin
    end;
    else begin
     POCARuntimeError(Context,'Insert into non-container');
+   end;
+  end;
+ end;
+end;
+
+procedure POCARunContainerSafeSet(Context:PPOCAContext;const Box,Key,Value:TPOCAValue;const Constant:Boolean);
+var Index,CodePoint:TPOCAInt32;
+    CharValue:TPOCAUInt32;
+begin
+ if POCAIsValueScalarType(Key) then begin
+  case POCAGetValueType(Box) of
+   pvtHASH:begin
+    POCAHashSet(Context,Box,Key,Value,Constant);
+   end;
+   pvtARRAY:begin
+    Index:=POCARunSafeCheckArray(Context,Box,Key);
+    if Index>=0 then begin
+     POCAArraySet(Box,Index,Value);
+    end;
+   end;
+   pvtSTRING:begin
+    if PPOCAString(POCAGetValueReferencePointer(Box))^.HashCode=0 then begin
+     CharValue:=trunc(POCAGetNumberValue(Context,Value));
+     if (PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8) or ((PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suPOSSIBLEUTF8) and (CharValue>$7f)) then begin
+      CodePoint:=POCARunSafeCheckStringUTF8(Context,Box,Key);
+      if CodePoint>=0 then begin
+       PPOCAString(POCAGetValueReferencePointer(Box))^.Data:=POCAStringUTF8CopyCodePointRange(Context,Box,0,CodePoint-1)+PUCUUTF32CharToUTF8(CharValue)+POCAStringUTF8CopyCodePointRange(Context,Box,CodePoint+1,PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8Length-1);
+       PPOCAString(POCAGetValueReferencePointer(Box))^.Dirty:=true;
+       POCAStringUpdate(Context,Box);
+      end;
+     end else begin
+      Index:=POCARunSafeCheckString(Context,Box,Key);
+      if Index>=0 then begin
+       PPOCAString(POCAGetValueReferencePointer(Box))^.Data[Index+1]:=ansichar(TPOCAUInt8(CharValue));
+      end;
+     end;
+    end;
+   end;
+   else begin
    end;
   end;
  end;
@@ -39939,6 +40117,9 @@ begin
       inc(CountFixups);
      end;
     end;
+    popSAFEINSERT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
     popSAFEEXTRACT:begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -42064,6 +42245,10 @@ begin
      end;
     end;
 
+    popSAFEINSERT:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
     popSAFEEXTRACT:begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -43347,6 +43532,10 @@ begin
     if Registers^[Operands^[1]].CastedUInt64<>POCAValueNullCastedUInt64 then begin
      Frame^.InstructionPointer:=Operands^[0];
     end;
+   end;
+   popSAFEINSERT:begin
+    POCARunContainerSafeSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],false);
+    Context^.TemporarySavedObjectCount:=0;
    end;
    popSAFEEXTRACT:begin
     Registers^[Operands^[0]]:=POCARunContainerSafeGet(Context,Registers^[Operands^[1]],Registers^[Operands^[2]]);
