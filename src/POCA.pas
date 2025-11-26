@@ -13296,7 +13296,7 @@ var ModuleLoaderFunctionIndex:TPOCAInt32;
     Index:TPOCAUInt32;
     SubContext:PPOCAContext;
     Code,Imports,ModuleScope,Import,Value,ExportValue,ModuleValue,ModuleTime:TPOCAValue;
-    ModuleName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
+    ModuleName,CallerFileName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
     ModuleDateTime:TDateTime;
     ImportName:TPOCARawByteString;
     Frame:PPOCAFrame;
@@ -13333,6 +13333,25 @@ begin
  end;
 
  ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
+ if (length(ModuleName)>=2) and 
+    (
+     (ModuleName[1]='.') and 
+     (
+      ((ModuleName[2]='/') or (ModuleName[2]='\')) or
+      (
+       (length(ModuleName)>=3) and
+       (
+        (ModuleName[2]='.') and 
+        ((ModuleName[3]='/') or (ModuleName[3]='\')) 
+       )
+      )
+     )
+    ) then begin
+  CallerFileName:=POCAGetSourceFileName(Context,Context^.FrameTop-1,true);
+  if length(CallerFileName)>0 then begin
+   ModuleName:=POCAExpandRelativePath(ModuleName,POCAExtractFilePath(CallerFileName));    
+  end;
+ end;
 
  CleanedModuleName:=POCACleanModuleName(ModuleName);
 
