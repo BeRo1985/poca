@@ -13296,7 +13296,8 @@ var ModuleLoaderFunctionIndex:TPOCAInt32;
     Index:TPOCAUInt32;
     SubContext:PPOCAContext;
     Code,Imports,ModuleScope,Import,Value,ExportValue,ModuleValue,ModuleTime:TPOCAValue;
-    ModuleName,CallerFileName,CleanedModuleName,ModuleFileName,ModuleCode:TPOCAUTF8String;
+    ModuleName,OriginalModuleName,CallerFileName,CleanedModuleName,ModuleFileName,
+    ModuleCode:TPOCAUTF8String;
     ModuleDateTime:TDateTime;
     ImportName:TPOCARawByteString;
     Frame:PPOCAFrame;
@@ -13333,18 +13334,24 @@ begin
  end;
 
  ModuleName:=POCAGetStringValue(Context,Arguments^[0]);
- if (length(ModuleName)>=2) and 
+
+ OriginalModuleName:=ModuleName;
+
+ if (not IsRequire) or
     (
-     (ModuleName[1]='.') and 
+     (length(ModuleName)>=2) and
      (
-      ((ModuleName[2]='/') or (ModuleName[2]='\')){or
+      (ModuleName[1]='.') and
       (
-       (length(ModuleName)>=3) and
+       ((ModuleName[2]='/') or (ModuleName[2]='\')){or
        (
-        (ModuleName[2]='.') and 
-        ((ModuleName[3]='/') or (ModuleName[3]='\')) 
-       )
-      )}
+        (length(ModuleName)>=3) and
+        (
+         (ModuleName[2]='.') and
+         ((ModuleName[3]='/') or (ModuleName[3]='\'))
+        )
+       )}
+      )
      )
     ) then begin
   CallerFileName:=POCAGetSourceFileName(Context,Context^.FrameTop-1,false);
@@ -13427,7 +13434,7 @@ begin
 
   if POCAIsValueHash(ModuleScope) and POCAIsValueHash(Frame^.Locals) then begin
 
-   POCAHashSetString(Context,Frame^.Locals,ModuleName,ModuleScope);
+   POCAHashSetString(Context,Frame^.Locals,ExtractFileName(OriginalModuleName),ModuleScope);
 
    if POCAIsValueArray(Imports) then begin
 
