@@ -28770,7 +28770,7 @@ var TokenList:PPOCAToken;
        exit;
       end;
       ptSAFEDOT:begin
-       SyntaxError('??. is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+       SyntaxError('?. is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
       end;
       ptLBRA:begin
        Reg1:=GenerateExpression(t^.Left,-1,true);
