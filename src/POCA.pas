@@ -27190,6 +27190,20 @@ var TokenList:PPOCAToken;
     Emit(OperandD);
     Emit(OperandE);
    end;
+   procedure EmitSafeGetMember(OperandA,OperandB,OperandC,OperandD,OperandE:TPOCAUInt32);
+   begin
+    if (POCAGetStringValue(Context,POCAArrayGet(CodeGenerator^.Consts,OperandC))='length') or
+       (POCAArrayGet(CodeGenerator^.Consts,OperandC).CastedUInt64=Context^.Instance^.Globals.LengthStringReference.CastedUInt64) then begin
+     EmitImmediate(popGETLENGTH,5);
+    end else begin
+     EmitImmediate(popSAFEGETMEMBER,5);
+    end;
+    Emit(OperandA);
+    Emit(OperandB);
+    Emit(OperandC);
+    Emit(OperandD);
+    Emit(OperandE);
+   end;
    function NewConstant(c:TPOCAValue):TPOCAInt32;
    begin
     POCAArrayPush(CodeGenerator^.Consts,c);
@@ -29134,7 +29148,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -29458,7 +29472,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -29789,7 +29803,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
