@@ -28936,7 +28936,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
        Reg3:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg3);
@@ -29092,42 +29092,6 @@ var TokenList:PPOCAToken;
        FreeRegister(Reg2);
        EmitOpcode(SetOp and $ff,ConstantIndex,result);
       end;
-     end;
-    end;
-    procedure GenerateNullishOp(var OutReg:TPOCAInt32;LeftReg,RightReg:TPOCAInt32);
-    var e,r:TPOCAInt32;
-        Registers:TPOCACodeGeneratorRegisters;
-    begin
-     Registers:=nil;
-     try
-      begin
-       if OutReg<0 then begin
-        OutReg:=GetRegister(true,false);
-       end;
-       result:=OutReg;
-       r:=LeftReg;
-       if result<>r then begin
-        EmitOpcode(popCOPY,result,r);
-        SetRegisterTypeKind(result,GetRegisterTypeKind(r));
-       end;
-       if GetRegisterTypeKind(result)=tkNUMBER then begin
-        e:=CodeGenerator^.ByteCodeSize+1;
-        EmitOpcode(popJMP,0);
-       end else begin
-        e:=CodeGenerator^.ByteCodeSize+1;
-        EmitOpcode(popJIFNOTNULL,0,result);
-       end;
-       Registers:=GetRegisters;
-       r:=RightReg;
-       if result<>r then begin
-        EmitOpcode(popCOPY,result,r);
-        SetRegisterTypeKind(result,GetRegisterTypeKind(r));
-       end;
-       CombineCurrentRegisters(Registers);
-       FixTargetImmediate(e);
-      end;
-     finally
-      SetLength(Registers,0);
      end;
     end;
     function GenerateNullishAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
