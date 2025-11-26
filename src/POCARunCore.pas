@@ -737,10 +737,13 @@ procedure MainProc;
 var Instance:PPOCAInstance;
     Context:PPOCAContext;
     Code:TPOCAValue;
+    ResultValue:TPOCAValue;
+    ExitCode:TPOCAInt32;
     FileName:string;
     Arguments:array of TPOCAValue;
     i:longint;
 begin
+ ExitCode:=0;
 {$ifdef Windows}
 {SetTextCodePage(Input,CP_UTF8);
  SetTextCodePage(Output,CP_UTF8);
@@ -772,7 +775,10 @@ begin
      end else begin
       Code:=POCACompile(Instance,Context,REPLCode,'<REPL>');
      end;
-     POCACall(Context,Code,@Arguments[0],length(Arguments),POCAValueNull,Instance^.Globals.Namespace);
+     ResultValue:=POCACall(Context,Code,@Arguments[0],length(Arguments),POCAValueNull,Instance^.Globals.Namespace);
+     if POCAIsValueNumber(ResultValue) then begin
+      ExitCode:=trunc(POCAGetNumberValue(Context,ResultValue));
+     end;
     finally
      FinalizeForPOCAContext(Context);
     end;
@@ -797,6 +803,9 @@ begin
    SetLength(Arguments,0);
    POCAInstanceDestroy(Instance);
   end;
+ end;
+ if ExitCode<>0 then begin
+  halt(ExitCode);
  end;
 end;
 

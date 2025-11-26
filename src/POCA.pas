@@ -841,7 +841,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ptELVISEQ,
       ptSYMBOLNAME,
       ptSUPERCODESYMBOL,
-      ptNULLISHOR
+      ptNULLISHOR,
+      ptNULLISHEQ
      );
 
      PPOCAMetaOp=^TPOCAMetaOp;
@@ -20027,7 +20028,7 @@ const POCATokenPrecedences:array[0..31] of TPOCATokenPrecedence=((Tokens:[ptSEMI
                                                                  (Tokens:[ptELLIPSIS];Rule:prSUFFIX),
                                                                  (Tokens:[ptREGEXP];Rule:prPREFIX),
                                                                  (Tokens:[ptRETURN,ptBREAK,ptCONTINUE,ptTHROW,ptBREAKPOINT,ptDELETE];Rule:prPREFIX),
-                                                                 (Tokens:[ptASSIGN,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMODEQ,ptPOWEQ,ptELVISEQ];Rule:prREVERSE),
+                                                                 (Tokens:[ptASSIGN,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMODEQ,ptPOWEQ,ptELVISEQ,ptNULLISHEQ];Rule:prREVERSE),
                                                                  (Tokens:[ptCOLON,ptQUESTION];Rule:prREVERSE),
                                                                  (Tokens:[ptINSTANCEOF,ptIN,ptIS];Rule:prBINARY),
                                                                  (Tokens:[ptDOTDOT];Rule:prREVERSE),
@@ -23136,6 +23137,9 @@ var TokenList:PPOCAToken;
     ptELVISEQ:begin
      DumpIt(' ?= ');
     end;
+    ptNULLISHEQ:begin
+     DumpIt(' ??= ');
+    end;
     ptSYMBOLNAME:begin
      DumpIt(' _'+Token^.Str+'_ ');
     end;
@@ -23310,7 +23314,7 @@ var TokenList:PPOCAToken;
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
       ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
       ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptELVISEQ,ptSYMBOLNAME,
-      ptNULLISHOR])) then begin
+      ptNULLISHOR,ptNULLISHEQ])) then begin
     AddToken(ptAUTOSEMI,'',0);
    end;
   end;
@@ -23467,7 +23471,17 @@ var TokenList:PPOCAToken;
          end;
          '?':begin
           inc(SourcePosition);
-          AddToken(ptNULLISHOR,'',0);
+          if SourcePosition<=SourceLength then begin
+           case Source[SourcePosition] of
+            '=':begin
+             inc(SourcePosition);
+             AddToken(ptNULLISHEQ,'',0);
+            end;
+            else begin
+             AddToken(ptNULLISHOR,'',0);
+            end;
+           end;
+          end;
          end;
          else begin
           AddToken(ptQUESTION,'',0);
@@ -29046,6 +29060,217 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
+    procedure GenerateNullishOp(var OutReg:TPOCAInt32;LeftReg,RightReg:TPOCAInt32);
+    var e,r:TPOCAInt32;
+        Registers:TPOCACodeGeneratorRegisters;
+    begin
+     Registers:=nil;
+     try
+      begin
+       if OutReg<0 then begin
+        OutReg:=GetRegister(true,false);
+       end;
+       result:=OutReg;
+       r:=LeftReg;
+       if result<>r then begin
+        EmitOpcode(popCOPY,result,r);
+        SetRegisterTypeKind(result,GetRegisterTypeKind(r));
+       end;
+       if GetRegisterTypeKind(result)=tkNUMBER then begin
+        e:=CodeGenerator^.ByteCodeSize+1;
+        EmitOpcode(popJMP,0);
+       end else begin
+        e:=CodeGenerator^.ByteCodeSize+1;
+        EmitOpcode(popJIFNOTNULL,0,result);
+       end;
+       Registers:=GetRegisters;
+       r:=RightReg;
+       if result<>r then begin
+        EmitOpcode(popCOPY,result,r);
+        SetRegisterTypeKind(result,GetRegisterTypeKind(r));
+       end;
+       CombineCurrentRegisters(Registers);
+       FixTargetImmediate(e);
+      end;
+     finally
+      SetLength(Registers,0);
+     end;
+    end;
+    function GenerateNullishAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,FrameValueLevel,FrameValueIndex:TPOCAInt32;
+        SetOp:TPOCAUInt32;
+        Symbol:PPOCACodeGeneratorScopeSymbol;
+    begin
+     ConstantIndex:=0;
+     Reg1:=-1;
+     Reg2:=-1;
+     Reg3:=-1;
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+     case SetOp and $ff of
+      popSETMEMBER:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg3:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg3);
+       FreeRegister(Reg3);
+       EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+      end;
+      popSETPROTOTYPE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETPROTOTYPE,result,Reg1);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg3:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg3);
+       FreeRegister(Reg3);
+       EmitOpcode(popSETPROTOTYPE,Reg1,result);
+      end;
+      popSETHASHKIND:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETHASHKIND,result,Reg1);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg3:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg3);
+       FreeRegister(Reg3);
+       EmitOpcode(popSETHASHKIND,Reg1,result);
+      end;
+      popINSERT:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       case GetRegisterTypeKind(Reg1) of
+        tkARRAY:begin
+         EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
+         SetRegisterTypeKind(result,tkUNKNOWN);
+         Reg3:=GenerateExpression(t^.Right,-1,true);
+         GenerateNullishOp(result,result,Reg3);
+         FreeRegister(Reg3);
+         EmitOpcode(popARRAYINSERT,Reg1,Reg2,result);
+        end;
+        else begin
+         EmitOpcode(popEXTRACT,result,Reg1,Reg2);
+         SetRegisterTypeKind(result,tkUNKNOWN);
+         Reg3:=GenerateExpression(t^.Right,-1,true);
+         GenerateNullishOp(result,result,Reg3);
+         FreeRegister(Reg3);
+         EmitOpcode(popINSERT,Reg1,Reg2,result);
+        end;
+       end;
+      end;
+      popCOPY:begin
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       if (GetRegisterTypeKind(Reg1)=tkNUMBER) and (GetRegisterTypeKind(Reg2)=tkNUMBER) then begin
+        GenerateNullishOp(Reg1,Reg1,Reg2);
+        SetRegisterTypeKind(Reg1,tkNUMBER);
+       end else begin
+        GenerateNullishOp(Reg1,Reg1,Reg2);
+        SetRegisterTypeKind(Reg1,tkUNKNOWN);
+       end;
+       FreeRegister(Reg2);
+       if OutReg<0 then begin
+        result:=Reg1;
+       end else begin
+        EmitOpcode(popCOPY,OutReg,Reg1);
+        SetRegisterTypeKind(OutReg,GetRegisterTypeKind(Reg1));
+        result:=OutReg;
+       end;
+      end;
+      popSETLOCAL:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
+      end;
+      popSETLOCALVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(popSETLOCALVALUE,FrameValueIndex,result);
+       Symbol^.TypeKind:=tkUNKNOWN;
+      end;
+      popSETOUTERVALUE:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETOUTERVALUE,result,FrameValueLevel,FrameValueIndex);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(popSETOUTERVALUE,FrameValueLevel,FrameValueIndex,result);
+       Symbol^.TypeKind:=tkUNKNOWN;
+      end;
+      popSETCONSTLOCAL:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(popSETCONSTLOCAL,ConstantIndex,result,$ffffffff);
+      end;
+      popSETSYM:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(popSETSYM,ConstantIndex,result,$ffffffff);
+      end;
+      else begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg2:=GenerateExpression(t^.Right,-1,true);
+       GenerateNullishOp(result,result,Reg2);
+       FreeRegister(Reg2);
+       EmitOpcode(SetOp and $ff,ConstantIndex,result);
+      end;
+     end;
+    end;
     function GenerateElvisAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue,FrameValueLevel,FrameValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
@@ -33278,6 +33503,9 @@ var TokenList:PPOCAToken;
       end;
       ptELVISEQ:begin
        result:=GenerateElvisAssignOp(t,OutReg);
+      end;
+      ptNULLISHEQ:begin
+       result:=GenerateNullishAssignOp(t,OutReg);
       end;
       ptINSTANCEOF:begin
        result:=GenerateBinaryOperation(popINSTANCEOF,t,OutReg);
