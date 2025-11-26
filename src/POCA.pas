@@ -13347,7 +13347,7 @@ begin
       )
      )
     ) then begin
-  CallerFileName:=POCAGetSourceFileName(Context,Context^.FrameTop-1,true);
+  CallerFileName:=POCAGetSourceFileName(Context,Context^.FrameTop-1,false);
   if length(CallerFileName)>0 then begin
    ModuleName:=POCAExpandRelativePath(ModuleName,POCAExtractFilePath(CallerFileName));    
   end;
