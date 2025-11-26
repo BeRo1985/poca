@@ -35705,6 +35705,11 @@ begin
  POCASetMember(Context,Obj,Fld,Value,Constant,CacheIndex,true);
 end;
 
+procedure POCARunSafeSetMember(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32); {$ifdef caninline}inline;{$endif}
+begin
+ POCASetMember(Context,Obj,Fld,Value,Constant,CacheIndex,false);
+end;
+
 procedure POCARunGetThat(Context:PPOCAContext;const Frame:PPOCAFrame;out Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
 var Func:PPOCAFunction;
 begin
@@ -43335,7 +43340,7 @@ begin
     POCARunSafeGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
    end;
    popSAFESETMEMBER:begin
-    POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
+    POCARunSafeSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
    end;
    popSETCONSTLOCAL:begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],true,Operands^[2]);
