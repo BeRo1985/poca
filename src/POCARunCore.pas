@@ -779,15 +779,15 @@ begin
    except
     on e:EPOCASyntaxError do begin
      writeln('SyntaxError["',Instance^.SourceFiles[e.SourceFile],'":',e.SourceLine,',',e.SourceColumn,']: ',e.Message);
-     readln;
+     raise;
     end;
     on e:EPOCARuntimeError do begin
      writeln('RuntimeError["',Instance^.SourceFiles[e.SourceFile],'":',e.SourceLine,']: ',e.Message);
-     readln;
+     raise;
     end;
     on e:EPOCAScriptError do begin
      writeln('ScriptError["',Instance^.SourceFiles[e.SourceFile],'":',e.SourceLine,']: ',e.Message);
-     readln;
+     raise;
     end;
     on e:Exception do begin
      raise;
