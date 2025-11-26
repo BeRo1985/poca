@@ -15628,6 +15628,21 @@ begin
  end;
 end;
 
+function POCACoroutineNamespaceFunctionINSIDE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var CoroutineData:PPOCACoroutineData;
+begin
+ if assigned(Context) then begin
+  CoroutineData:=Context^.CoroutineData;
+  while (not assigned(CoroutineData)) and assigned(Context^.CallParent) do begin
+   Context:=Context^.CallParent;
+   CoroutineData:=Context^.CoroutineData;
+  end;
+  result.Num:=ord(assigned(CoroutineData)) and 1;
+ end else begin 
+  result.Num:=0;
+ end;
+end;
+
 function POCACoroutineFunctionDATA(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var CoroutineData:PPOCACoroutineData;
 begin
@@ -15752,6 +15767,7 @@ begin
  POCAAddNativeFunction(Context,result,'create',POCACoroutineFunctionCREATE);
  POCAAddNativeFunction(Context,result,'yield',POCACoroutineFunctionYIELD);
  POCAAddNativeFunction(Context,result,'get',POCACoroutineFunctionGET);
+ POCAAddNativeFunction(Context,result,'inside',POCACoroutineNamespaceFunctionINSIDE);
 end;
 
 function POCAInitCoroutineHash(Context:PPOCAContext):TPOCAValue;

@@ -1040,6 +1040,31 @@ function.
 
 '''''
 
+=== Checking if inside a Coroutine at any time
+
+=== Coroutine.inside
+
+*Usage:*
+
+[source,js]
+----
+let result = Coroutine.inside();
+----
+
+* *Description:* Return true if currently executing inside a coroutine, 
+or false otherwise.
+* *Parameters:* None.
+* *Return Value:* A numeric boolean (1 for true, 0 for false).
+* *Example:*
++
+[source,js]
+----
+let inside = Coroutine.inside();
+puts("Inside coroutine: ", inside);
+----
+
+'''''
+
 === Resuming a Coroutine
 
 ==== coroutine.resume
