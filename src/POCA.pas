@@ -33449,7 +33449,7 @@ var TokenList:PPOCAToken;
        end;
       end;
       ptSAFEDOT:begin
-       SyntaxError('??. at Delete is not allowed',Parser.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
+       SyntaxError('?. at Delete is not allowed',Parser.SourceFile,t^.Right^.SourceLine,t^.Right^.SourceColumn);
       end;
       ptSYMBOL:begin
        Symbol:=FindScopeSymbol(t,false,false,false);
