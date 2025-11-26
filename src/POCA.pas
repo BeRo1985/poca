@@ -14498,9 +14498,9 @@ end;
 function POCAPathFunctionCURRENTSCRIPTFILE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  if CountArguments>0 then begin
-  result:=POCANewString(Context,POCAGetSourceFileName(Context,0,POCAGetBooleanValue(Context,Arguments^[0])));
+  result:=POCANewString(Context,POCAGetSourceFileName(Context,Context^.FrameTop-1,POCAGetBooleanValue(Context,Arguments^[0])));
  end else begin
-  result:=POCANewString(Context,POCAGetSourceFileName(Context,0,false));
+  result:=POCANewString(Context,POCAGetSourceFileName(Context,Context^.FrameTop-1,false));
  end;
 end;
 
