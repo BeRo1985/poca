@@ -28936,7 +28936,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff); // safe?
        SetRegisterTypeKind(result,tkUNKNOWN);
        Reg3:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg3);
@@ -29112,7 +29112,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff); // safe?
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -29436,7 +29436,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff); // safe?
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -29767,7 +29767,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff); // safe?
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
