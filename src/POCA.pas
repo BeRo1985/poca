@@ -520,8 +520,9 @@ const POCAVersion='2025-11-22-06-55-0000';
       popJIFNOTNULL=154;
       popSAFEEXTRACT=155;
       popSAFEGETMEMBER=156;
-      popSETCONSTLOCAL=157;
-      popCOUNT=158;
+      popSAFESETMEMBER=157;
+      popSETCONSTLOCAL=158;
+      popCOUNT=159;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -28751,7 +28752,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     end;
-    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex:TPOCAInt32;out Symbol:PPOCACodeGeneratorScopeSymbol):TPOCAUInt32;
+    function ProcessLeftValue(t:PPOCAToken;var ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex:TPOCAInt32;out Symbol:PPOCACodeGeneratorScopeSymbol;const AllowSafeDot:Boolean):TPOCAUInt32;
     var Token:TPOCATokenType;
         SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
     begin
@@ -28764,7 +28765,7 @@ var TokenList:PPOCAToken;
      case Token of
       ptLPAR:begin
        if t^.Rule<>prSUFFIX then begin
-        result:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+        result:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,AllowSafeDot);
         exit;
        end;
       end;
@@ -28810,7 +28811,22 @@ var TokenList:PPOCAToken;
        exit;
       end;
       ptSAFEDOT:begin
-       SyntaxError('?. is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+       if AllowSafeDot then begin
+        Reg1:=GenerateExpression(t^.Left,-1,true);
+        if assigned(t^.Right) and (t^.Right^.Token=ptPROTOTYPE) then begin
+         result:=popSETPROTOTYPE;
+        end else if assigned(t^.Right) and (t^.Right^.Token=ptCONSTRUCTOR) then begin
+         result:=popSETCONSTRUCTOR;
+        end else if assigned(t^.Right) and (t^.Right^.Token=ptHASHKIND) then begin
+         result:=popSETHASHKIND;
+        end else begin
+         ConstantIndex:=FindConstantIndex(t^.Right,false);
+         result:=popSAFESETMEMBER;
+        end;
+        exit;
+       end else begin
+        SyntaxError('?. is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+       end;
       end;
       ptLBRA:begin
        Reg1:=GenerateExpression(t^.Left,-1,true);
@@ -28894,10 +28910,13 @@ var TokenList:PPOCAToken;
      Reg2:=0;
      FrameValueLevel:=0;
      FrameValueIndex:=0;
-     AssignOp:=ProcessLeftValue(t,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+     AssignOp:=ProcessLeftValue(t,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,false);
      case AssignOp and $ff of
       popSETMEMBER:begin
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,Reg,$ffffffff);
+      end;
+      popSAFESETMEMBER:begin
+       EmitOpcode(popSAFESETMEMBER,Reg1,ConstantIndex,Reg,$ffffffff);
       end;
       popSETPROTOTYPE:begin
        EmitOpcode(popSETPROTOTYPE,Reg1,Reg);
@@ -28954,7 +28973,7 @@ var TokenList:PPOCAToken;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,true);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -28962,12 +28981,25 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff); // safe?
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
        Reg3:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg3);
        FreeRegister(Reg3);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+      end;
+      popSAFESETMEMBER:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       Reg3:=GenerateExpression(t^.Right,-1,true);
+       EmitOpcode(Op,result,result,Reg3);
+       FreeRegister(Reg3);
+       EmitOpcode(popSAFESETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
       end;
       popSETPROTOTYPE:begin
        if OutReg<0 then begin
@@ -29130,7 +29162,7 @@ var TokenList:PPOCAToken;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,true);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -29138,7 +29170,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff); // safe?
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -29157,6 +29189,32 @@ var TokenList:PPOCAToken;
        FixTargetImmediate(JumpTrue);
        CombineCurrentRegisters(Registers);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+      end;
+      popSAFESETMEMBER:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popJMP,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFNOTNULL,0,result);
+        end;
+       end;
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSAFESETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
       end;
       popSETPROTOTYPE:begin
        if OutReg<0 then begin
@@ -29454,7 +29512,7 @@ var TokenList:PPOCAToken;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,true);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -29462,7 +29520,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff); // safe?
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -29481,6 +29539,32 @@ var TokenList:PPOCAToken;
        FixTargetImmediate(JumpTrue);
        CombineCurrentRegisters(Registers);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+      end;
+      popSAFESETMEMBER:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
+       end;
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSAFESETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
       end;
       popSETPROTOTYPE:begin
        if OutReg<0 then begin
@@ -29785,7 +29869,7 @@ var TokenList:PPOCAToken;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,true);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -29793,7 +29877,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff); // safe?
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -29812,6 +29896,32 @@ var TokenList:PPOCAToken;
        FixTargetImmediate(JumpTrue);
        CombineCurrentRegisters(Registers);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+      end;
+      popSAFESETMEMBER:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popN_JIFFALSE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFFALSE,0,result);
+        end;
+       end;
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
+       EmitOpcode(popSAFESETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
       end;
       popSETPROTOTYPE:begin
        if OutReg<0 then begin
@@ -30115,7 +30225,7 @@ var TokenList:PPOCAToken;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+     SetOp:=ProcessLeftValue(t^.Left,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,true);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -30128,6 +30238,19 @@ var TokenList:PPOCAToken;
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,Reg2,result);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,Reg2,$ffffffff);
+       FreeRegister(Reg2);
+      end;
+      popSAFESETMEMBER:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       Reg2:=GetRegister(true,false);
+       EmitSafeGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       EmitOpcode(Op,Reg2,result);
+       EmitOpcode(popSAFESETMEMBER,Reg1,ConstantIndex,Reg2,$ffffffff);
        FreeRegister(Reg2);
       end;
       popSETPROTOTYPE:begin
@@ -30283,7 +30406,7 @@ var TokenList:PPOCAToken;
      Reg1:=-1;
      Reg2:=-1;
      Reg3:=-1;
-     SetOp:=ProcessLeftValue(t^.Right,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol);
+     SetOp:=ProcessLeftValue(t^.Right,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,true);
      case SetOp and $ff of
       popSETMEMBER:begin
        if OutReg<0 then begin
@@ -30296,6 +30419,18 @@ var TokenList:PPOCAToken;
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+      end;
+      popSAFESETMEMBER:begin
+       if OutReg<0 then begin
+        result:=GetRegister(true,false);
+       end else begin
+        result:=OutReg;
+       end;
+       Reg2:=GetRegister(true,false);
+       EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       SetRegisterTypeKind(result,tkUNKNOWN);
+       EmitOpcode(Op,result,result);
+       EmitOpcode(popSAFESETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
       end;
       popSETPROTOTYPE:begin
        if OutReg<0 then begin
@@ -39789,6 +39924,9 @@ begin
     popSAFEGETMEMBER:begin
      DoItByVMOpcodeDispatcher;
     end;
+    popSAFESETMEMBER:begin
+     DoItByVMOpcodeDispatcher;
+    end;
     popSETCONSTLOCAL:begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -41913,11 +42051,13 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
 
-    popSETCONSTLOCAL:begin
+    popSAFESETMEMBER:begin
      DoItByVMOpcodeDispatcher;
     end;
 
-    //*)
+    popSETCONSTLOCAL:begin
+     DoItByVMOpcodeDispatcher;
+    end;
 
     else begin
      // For now, all other opcodes fall back to VM interpreter
@@ -43193,6 +43333,9 @@ begin
    end;
    popSAFEGETMEMBER:begin
     POCARunSafeGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
+   end;
+   popSAFESETMEMBER:begin
+    POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
    end;
    popSETCONSTLOCAL:begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],true,Operands^[2]);
