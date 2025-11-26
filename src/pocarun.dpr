@@ -25,5 +25,11 @@ uses
   POCARunCore in 'POCARunCore.pas';
 
 begin
- MainProc;
+ try
+  MainProc;
+ except
+  on e:EPOCAError do begin
+   halt(1);
+  end;
+ end;
 end.
