@@ -29097,8 +29097,9 @@ var TokenList:PPOCAToken;
      end;
     end;
     function GenerateNullishAssignOp(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
-    var ConstantIndex,Reg1,Reg2,Reg3,FrameValueLevel,FrameValueIndex:TPOCAInt32;
+    var ConstantIndex,Reg1,Reg2,Reg3,JumpTrue,FrameValueLevel,FrameValueIndex:TPOCAInt32;
         SetOp:TPOCAUInt32;
+        Registers:TPOCACodeGeneratorRegisters;
         Symbol:PPOCACodeGeneratorScopeSymbol;
     begin
      ConstantIndex:=0;
@@ -29114,10 +29115,23 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
-       SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg3:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg3);
-       FreeRegister(Reg3);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       case GetRegisterTypeKind(result) of
+        tkNUMBER:begin
+         EmitOpcode(popN_JIFTRUE,0,result);
+        end;
+        else begin
+         EmitOpcode(popJIFTRUE,0,result);
+        end;
+       end;
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
       end;
       popSETPROTOTYPE:begin
@@ -29127,10 +29141,16 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popGETPROTOTYPE,result,Reg1);
-       SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg3:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg3);
-       FreeRegister(Reg3);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(popSETPROTOTYPE,Reg1,result);
       end;
       popSETHASHKIND:begin
@@ -29140,10 +29160,16 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popGETHASHKIND,result,Reg1);
-       SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg3:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg3);
-       FreeRegister(Reg3);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg3:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg3 then begin
+        EmitOpcode(popCOPY,result,Reg3);
+        FreeRegister(Reg3);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(popSETHASHKIND,Reg1,result);
       end;
       popINSERT:begin
@@ -29155,32 +29181,45 @@ var TokenList:PPOCAToken;
        case GetRegisterTypeKind(Reg1) of
         tkARRAY:begin
          EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
-         SetRegisterTypeKind(result,tkUNKNOWN);
-         Reg3:=GenerateExpression(t^.Right,-1,true);
-         GenerateNullishOp(result,result,Reg3);
-         FreeRegister(Reg3);
+         JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+         EmitOpcode(popJIFNOTNULL,0,result);
+         Registers:=GetRegisters;
+         Reg3:=GenerateExpression(t^.Right,result,true);
+         if result<>Reg3 then begin
+          EmitOpcode(popCOPY,result,Reg3);
+          FreeRegister(Reg3);
+         end;
+         FixTargetImmediate(JumpTrue);
+         CombineCurrentRegisters(Registers);
          EmitOpcode(popARRAYINSERT,Reg1,Reg2,result);
         end;
         else begin
          EmitOpcode(popEXTRACT,result,Reg1,Reg2);
-         SetRegisterTypeKind(result,tkUNKNOWN);
-         Reg3:=GenerateExpression(t^.Right,-1,true);
-         GenerateNullishOp(result,result,Reg3);
-         FreeRegister(Reg3);
+         JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+         EmitOpcode(popJIFNOTNULL,0,result);
+         Registers:=GetRegisters;
+         Reg3:=GenerateExpression(t^.Right,result,true);
+         if result<>Reg3 then begin
+          EmitOpcode(popCOPY,result,Reg3);
+          FreeRegister(Reg3);
+         end;
+         FixTargetImmediate(JumpTrue);
+         CombineCurrentRegisters(Registers);
          EmitOpcode(popINSERT,Reg1,Reg2,result);
         end;
        end;
       end;
       popCOPY:begin
-       Reg2:=GenerateExpression(t^.Right,-1,true);
-       if (GetRegisterTypeKind(Reg1)=tkNUMBER) and (GetRegisterTypeKind(Reg2)=tkNUMBER) then begin
-        GenerateNullishOp(Reg1,Reg1,Reg2);
-        SetRegisterTypeKind(Reg1,tkNUMBER);
-       end else begin
-        GenerateNullishOp(Reg1,Reg1,Reg2);
-        SetRegisterTypeKind(Reg1,tkUNKNOWN);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,Reg1);
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,Reg1,true);
+       if Reg1<>Reg2 then begin
+        EmitOpcode(popCOPY,Reg1,Reg2);
+        FreeRegister(Reg2);
        end;
-       FreeRegister(Reg2);
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        if OutReg<0 then begin
         result:=Reg1;
        end else begin
@@ -29196,10 +29235,16 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
-       SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg2:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg2);
-       FreeRegister(Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
       end;
       popSETLOCALVALUE:begin
@@ -29210,11 +29255,18 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCALVALUE,result,FrameValueIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg2:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg2);
-       FreeRegister(Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(popSETLOCALVALUE,FrameValueIndex,result);
-       Symbol^.TypeKind:=tkUNKNOWN;
+       Symbol^.TypeKind:=GetRegisterTypeKind(result);
       end;
       popSETOUTERVALUE:begin
        if OutReg<0 then begin
@@ -29224,11 +29276,18 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETOUTERVALUE,result,FrameValueLevel,FrameValueIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg2:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg2);
-       FreeRegister(Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(popSETOUTERVALUE,FrameValueLevel,FrameValueIndex,result);
-       Symbol^.TypeKind:=tkUNKNOWN;
+       Symbol^.TypeKind:=GetRegisterTypeKind(result);
       end;
       popSETCONSTLOCAL:begin
        if OutReg<0 then begin
@@ -29238,9 +29297,16 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg2:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg2);
-       FreeRegister(Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(popSETCONSTLOCAL,ConstantIndex,result,$ffffffff);
       end;
       popSETSYM:begin
@@ -29251,9 +29317,16 @@ var TokenList:PPOCAToken;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg2:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg2);
-       FreeRegister(Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(popSETSYM,ConstantIndex,result,$ffffffff);
       end;
       else begin
@@ -29263,10 +29336,16 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
-       SetRegisterTypeKind(result,tkUNKNOWN);
-       Reg2:=GenerateExpression(t^.Right,-1,true);
-       GenerateNullishOp(result,result,Reg2);
-       FreeRegister(Reg2);
+       JumpTrue:=CodeGenerator^.ByteCodeSize+1;
+       EmitOpcode(popJIFNOTNULL,0,result);
+       Registers:=GetRegisters;
+       Reg2:=GenerateExpression(t^.Right,result,true);
+       if result<>Reg2 then begin
+        EmitOpcode(popCOPY,result,Reg2);
+        FreeRegister(Reg2);
+       end;
+       FixTargetImmediate(JumpTrue);
+       CombineCurrentRegisters(Registers);
        EmitOpcode(SetOp and $ff,ConstantIndex,result);
       end;
      end;
