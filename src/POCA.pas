@@ -28853,12 +28853,12 @@ var TokenList:PPOCAToken;
       end;
       ptSAFELBRA:begin
        if AllowSafeOperation then begin
-        SyntaxError('?[ is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-       end else begin
         Reg1:=GenerateExpression(t^.Left,-1,true);
         Reg2:=GenerateExpression(t^.Right,-1,true);
         result:=popSAFEINSERT;
         exit;
+       end else begin
+        SyntaxError('[? is not allowed as lvalue',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end;
       end;
       ptVAR,ptLET,ptCONST:begin
