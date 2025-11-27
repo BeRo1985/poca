@@ -17503,7 +17503,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashOwnKeys(Context,result,Hash);
- POCAArraySort(Context,result);
+//POCAArraySort(Context,result);
 end;
 
 function POCAGlobalFunctionKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -17520,7 +17520,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashKeys(Context,result,Hash);
- POCAArraySort(Context,result);
+//POCAArraySort(Context,result);
 end;
 
 function POCAGlobalFunctionPRINT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -19104,7 +19104,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashKeys(Context,result,This);
- POCAArraySort(Context,result);
+//POCAArraySort(Context,result);
 end;
 
 function POCAHashFunctionOWNKEYS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -19114,7 +19114,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashOwnKeys(Context,result,This);
- POCAArraySort(Context,result);
+//POCAArraySort(Context,result);
 end;
 
 function POCAHashFunctionSETHASHEVENTS(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -36984,7 +36984,7 @@ begin
    if CurrentIndex=0 then begin
     Keys:=POCANewArray(Context);
     POCAHashKeys(Context,Keys,Obj);
-    POCAArraySort(Context,Keys);
+//  POCAArraySort(Context,Keys);
    end;
    if POCAIsValueArray(Keys) then begin
     ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(Keys))^.ArrayRecord;
@@ -37028,7 +37028,7 @@ begin
   if CurrentIndex=0 then begin
    Keys:=POCANewArray(Context);
    POCAHashKeys(Context,Keys,Obj);
-   POCAArraySort(Context,Keys);
+// POCAArraySort(Context,Keys);
   end;
   if POCAIsValueArray(Keys) then begin
    ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(Keys))^.ArrayRecord;
