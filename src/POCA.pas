@@ -31149,7 +31149,6 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       Reg2:=GetRegister(true,false);
        EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
@@ -31161,7 +31160,6 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       Reg2:=GetRegister(true,false);
        EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
@@ -31173,7 +31171,6 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       Reg2:=GetRegister(true,false);
        EmitOpcode(popGETPROTOTYPE,result,Reg1);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
@@ -31185,7 +31182,6 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       Reg2:=GetRegister(true,false);
        EmitOpcode(popGETHASHKIND,result,Reg1);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
@@ -31197,7 +31193,6 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       Reg3:=GetRegister(true,false);
        case GetRegisterTypeKind(Reg1) of
         tkARRAY:begin
          EmitOpcode(popARRAYEXTRACT,result,Reg1,Reg2);
@@ -31219,7 +31214,6 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       Reg3:=GetRegister(true,false);
        EmitOpcode(popSAFEEXTRACT,result,Reg1,Reg2);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
@@ -31227,21 +31221,17 @@ var TokenList:PPOCAToken;
       end;
       popCOPY:begin
        if OutReg<0 then begin
-        if GetRegisterTypeKind(Reg1)=tkNUMBER then begin
-         EmitOpcode(GetNumberOp(Op),Reg1,Reg1);
-        end else begin
-         EmitOpcode(Op,Reg1,Reg1);
-        end;
         result:=Reg1;
        end else begin
         result:=OutReg;
-        if GetRegisterTypeKind(Reg1)=tkNUMBER then begin
-         EmitOpcode(GetNumberOp(Op),result,Reg1);
-         SetRegisterTypeKind(result,tkNUMBER);
-        end else begin
-         EmitOpcode(Op,result,Reg1);
-         SetRegisterTypeKind(result,tkUNKNOWN);
-        end;
+       end;
+       if GetRegisterTypeKind(Reg1)=tkNUMBER then begin
+        EmitOpcode(GetNumberOp(Op),Reg1,Reg1);
+       end else begin
+        EmitOpcode(Op,Reg1,Reg1);
+       end;
+       if result<>Reg1 then begin
+        EmitOpcode(popCOPY,result,Reg1);
        end;
       end;
       popSETLOCAL:begin
@@ -31310,9 +31300,6 @@ var TokenList:PPOCAToken;
        EmitOpcode(SetOp and $ff,ConstantIndex,result);
       end;
      end;
-     FreeRegister(Reg3);
-     FreeRegister(Reg2);
-     FreeRegister(Reg1);
     end;
     function GenerateLambda(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     begin
