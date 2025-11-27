@@ -19203,10 +19203,83 @@ begin
  end;
 end;
 
+function POCAFunctionFunctionCLOSURE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i:TPOCAInt32;
+    f:PPOCAFunction;
+    Func,Index:TPOCAValue;
+begin
+
+ Func:=This;
+ 
+ if CountArguments>0 then begin
+  Index:=POCANumberValue(Context,Arguments^[0]);
+ end else begin
+  Index.Num:=0;
+ end;
+ 
+ if (not POCAIsValueFunction(Func)) or POCAIsValueNull(Index) then begin
+  POCARuntimeError(Context,'Bad arguments to "closure"');
+ end;
+ 
+ i:=trunc(Index.Num);
+ f:=PPOCAFunction(POCAGetValueReferencePointer(Func));
+ while assigned(f) and (i>0) do begin
+  f:=PPOCAFunction(POCAGetValueReferencePointer(f^.Next));
+  dec(i);
+ end;
+ 
+ if assigned(f) then begin
+  result:=POCANewArray(Context);
+  POCAArrayPush(result,f^.Namespace);
+  POCAArrayPush(result,f^.Obj);
+ end else begin
+//result:=POCAValueNull;
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAFunctionFunctionBIND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Func,Hash,Obj,Next:TPOCAValue;
+begin
+
+ Func:=This;
+ 
+ if CountArguments>0 then begin
+  Hash:=Arguments^[0];
+ end else begin
+  Hash:=POCANewHash(Context);
+ end;
+ 
+ if CountArguments>1 then begin
+  Obj:=Arguments^[1];
+ end else begin
+//Obj:=POCAValueNull;
+  Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ 
+ if CountArguments>2 then begin
+  Next:=Arguments^[2];
+ end else begin
+//Next:=POCAValueNull;
+  Next.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ 
+ if ((not POCAIsValueFunction(Func)) or (not POCAIsValueHash(Hash))) or ((not POCAIsValueNull(Obj)) and (not POCAIsValueFunction(Obj))) or ((not POCAIsValueNull(Next)) and (not POCAIsValueFunction(Next))) then begin
+  POCARuntimeError(Context,'Bad arguments to "bind"');
+ end;
+ 
+ result:=POCANewFunction(Context,PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code);
+ PPOCAFunction(POCAGetValueReferencePointer(result))^.Namespace:=Hash;
+ PPOCAFunction(POCAGetValueReferencePointer(result))^.Obj:=Obj;
+ PPOCAFunction(POCAGetValueReferencePointer(result))^.Next:=Next;
+end;
+
 function POCAInitFunctionHash(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'call',POCAFunctionFunctionCALL);
+ POCAAddNativeFunction(Context,result,'closure',POCAFunctionFunctionCLOSURE);
+ POCAAddNativeFunction(Context,result,'bind',POCAFunctionFunctionBIND);
 end;
 
 function POCANumberFunctionTOSTRING(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;

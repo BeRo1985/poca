@@ -3638,6 +3638,157 @@ proper scoping and error handling.
 
 '''''
 
+==== Function.closure
+
+*Usage:*
+
+[source,js]
+----
+let closureData = myFunction.closure(index);
+----
+
+* *Description:* Retrieves the closure data (namespace and object context) 
+for a function at a specified index in the closure chain. Functions in POCA 
+can have nested closures, forming a chain where each function captures its 
+execution environment. This method allows you to inspect these captured 
+environments by traversing the closure chain.
+
+* *Parameters:*
+** `+index+` (optional) – A numeric value indicating which closure in the 
+chain to retrieve. `+0+` (the default) refers to the current function's 
+closure, `+1+` refers to the next closure in the chain, and so on.
+
+* *Return Value:* An array containing two elements: `+[namespace, object]+`, 
+where `+namespace+` is the hash object representing the function's namespace, 
+and `+object+` is the context object. Returns `+null+` if the index is out 
+of range or if no closure exists at that position.
+
+* *Example:*
+
++
+[source,js]
+----
+function outer() {
+  var x = 10;
+  
+  function inner() {
+    var y = 20;
+    
+    // Get the closure data for this function
+    let closureData = inner.closure(0);
+    print("Namespace: " ~ closureData[0] ~ "\n");
+    print("Object: " ~ closureData[1] ~ "\n");
+    
+    // Get the closure data for the outer function
+    let outerClosure = inner.closure(1);
+    if (outerClosure != null) {
+      print("Outer namespace: " ~ outerClosure[0] ~ "\n");
+    }
+  }
+  
+  return inner;
+}
+
+let fn = outer();
+fn();
+
+// Comparing with global closure() function
+// These two calls are equivalent:
+let data1 = myFunc.closure(0);
+let data2 = closure(myFunc, 0);
+----
+
+* *Notes:*
+** The `+closure+` method is similar to the global `+closure+` function, 
+but with the function itself as the receiver (method syntax) rather than 
+as the first parameter.
+** Closures are fundamental to POCA's scoping model and allow functions 
+to capture and access variables from their defining scope even after that 
+scope has finished executing.
+** This method is primarily useful for debugging, introspection, or 
+advanced metaprogramming scenarios.
+
+'''''
+
+==== Function.bind
+
+*Usage:*
+
+[source,js]
+----
+let boundFunc = myFunction.bind(namespace, thisObj, nextFunc);
+----
+
+* *Description:* Creates a new function with a specific namespace, 
+`+this+` object, and optional next function in the closure chain. This is 
+a powerful mechanism for creating functions with pre-configured execution 
+environments, enabling partial application, method borrowing, and custom 
+closure chains.
+
+* *Parameters:*
+** `+namespace+` (optional) – A hash object to use as the function's 
+namespace. This defines the scope in which the function will execute. If 
+not provided or invalid, a new empty hash is created.
+** `+thisObj+` (optional) – The value to bind as `+this+` within the 
+function. Must be `+null+` or a function value. If not provided, defaults 
+to `+null+`.
+** `+nextFunc+` (optional) – Another function to link in the closure chain. 
+Must be `+null+` or a function value. If not provided, defaults to `+null+`.
+
+* *Return Value:* A new function that shares the same code as the original 
+but with the specified namespace, `+this+` object, and closure chain.
+
+* *Example:*
+
++
+[source,js]
+----
+function greet(name) {
+  print("Hello, " ~ name ~ "!\n");
+  print("Language: " ~ this.language ~ "\n");
+}
+
+// Create a namespace with some variables
+let context = { language: "English" };
+let customNamespace = { greeting: "Hi" };
+
+// Bind the function with a custom namespace and 'this' object
+let boundGreet = greet.bind(customNamespace, context);
+
+boundGreet.call(["Alice"]);
+// Prints: Hello, Alice!
+//         Language: English
+
+// Partial application example
+function add(a, b) {
+  return a + b;
+}
+
+let addFive = add.bind({ five: 5 });
+// Use the bound function
+let result = addFive.call([3, 5]);
+print("Result: " ~ result ~ "\n"); // Result: 8
+
+// Comparing with global bind() function
+// These two calls are equivalent:
+let bound1 = myFunc.bind(ns, thisObj, next);
+let bound2 = bind(myFunc, ns, thisObj, next);
+----
+
+* *Notes:*
+** The `+bind+` method is similar to the global `+bind+` function, but 
+with the function itself as the receiver (method syntax) rather than as 
+the first parameter.
+** The newly created function shares the same bytecode as the original 
+but operates in a different execution environment.
+** This is useful for creating specialized versions of functions with 
+pre-configured contexts, implementing partial application, or building 
+complex closure chains for advanced control flow.
+** The `+thisObj+` and `+nextFunc+` parameters must be either `+null+` 
+or function values; any other type will cause a runtime error.
+
+'''''
+
 === Summary
 
 *Function Methods in POCA*
@@ -3646,6 +3797,12 @@ The Function API provides methods for advanced function manipulation:
 
 1. *`+call+`* – Invoke a function with explicit control over the 
 arguments array, `+this+` context, and execution namespace.
+
+2. *`+closure+`* – Retrieve the closure data (namespace and object) for 
+a function at a specific index in the closure chain.
+
+3. *`+bind+`* – Create a new function with a specific namespace, `+this+` 
+object, and closure chain configuration.
 
 These methods enable functional programming patterns such as dynamic 
 method borrowing, context manipulation, and flexible function application. 

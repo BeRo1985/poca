@@ -681,6 +681,8 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_api_functions">API Functions</a>
 <ul class="sectlevel3">
 <li><a href="#_function_call">Function.call</a></li>
+<li><a href="#_function_closure">Function.closure</a></li>
+<li><a href="#_function_bind">Function.bind</a></li>
 </ul>
 </li>
 <li><a href="#_summary_8">Summary</a></li>
@@ -7076,6 +7078,213 @@ proper scoping and error handling.</p>
 </div>
 <hr>
 </div>
+<div class="sect3">
+<h4 id="_function_closure">Function.closure</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let closureData = myFunction.closure(index);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Retrieves the closure data (namespace and object context)
+for a function at a specified index in the closure chain. Functions in POCA
+can have nested closures, forming a chain where each function captures its
+execution environment. This method allows you to inspect these captured
+environments by traversing the closure chain.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>index</code> (optional) – A numeric value indicating which closure in the
+chain to retrieve. <code>0</code> (the default) refers to the current function&#8217;s
+closure, <code>1</code> refers to the next closure in the chain, and so on.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> An array containing two elements: <code>[namespace, object]</code>,
+where <code>namespace</code> is the hash object representing the function&#8217;s namespace,
+and <code>object</code> is the context object. Returns <code>null</code> if the index is out
+of range or if no closure exists at that position.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">function outer() {
+  var x = 10;
+
+  function inner() {
+    var y = 20;
+
+    // Get the closure data for this function
+    let closureData = inner.closure(0);
+    print("Namespace: " ~ closureData[0] ~ "\n");
+    print("Object: " ~ closureData[1] ~ "\n");
+
+    // Get the closure data for the outer function
+    let outerClosure = inner.closure(1);
+    if (outerClosure != null) {
+      print("Outer namespace: " ~ outerClosure[0] ~ "\n");
+    }
+  }
+
+  return inner;
+}
+
+let fn = outer();
+fn();
+
+// Comparing with global closure() function
+// These two calls are equivalent:
+let data1 = myFunc.closure(0);
+let data2 = closure(myFunc, 0);</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p><strong>Notes:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p>The <code>closure</code> method is similar to the global <code>closure</code> function,
+but with the function itself as the receiver (method syntax) rather than
+as the first parameter.</p>
+</li>
+<li>
+<p>Closures are fundamental to POCA&#8217;s scoping model and allow functions
+to capture and access variables from their defining scope even after that
+scope has finished executing.</p>
+</li>
+<li>
+<p>This method is primarily useful for debugging, introspection, or
+advanced metaprogramming scenarios.</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_function_bind">Function.bind</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let boundFunc = myFunction.bind(namespace, thisObj, nextFunc);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Creates a new function with a specific namespace,
+<code>this</code> object, and optional next function in the closure chain. This is
+a powerful mechanism for creating functions with pre-configured execution
+environments, enabling partial application, method borrowing, and custom
+closure chains.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>namespace</code> (optional) – A hash object to use as the function&#8217;s
+namespace. This defines the scope in which the function will execute. If
+not provided or invalid, a new empty hash is created.</p>
+</li>
+<li>
+<p><code>thisObj</code> (optional) – The value to bind as <code>this</code> within the
+function. Must be <code>null</code> or a function value. If not provided, defaults
+to <code>null</code>.</p>
+</li>
+<li>
+<p><code>nextFunc</code> (optional) – Another function to link in the closure chain.
+Must be <code>null</code> or a function value. If not provided, defaults to <code>null</code>.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new function that shares the same code as the original
+but with the specified namespace, <code>this</code> object, and closure chain.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">function greet(name) {
+  print("Hello, " ~ name ~ "!\n");
+  print("Language: " ~ this.language ~ "\n");
+}
+
+// Create a namespace with some variables
+let context = { language: "English" };
+let customNamespace = { greeting: "Hi" };
+
+// Bind the function with a custom namespace and 'this' object
+let boundGreet = greet.bind(customNamespace, context);
+
+boundGreet.call(["Alice"]);
+// Prints: Hello, Alice!
+//         Language: English
+
+// Partial application example
+function add(a, b) {
+  return a + b;
+}
+
+let addFive = add.bind({ five: 5 });
+// Use the bound function
+let result = addFive.call([3, 5]);
+print("Result: " ~ result ~ "\n"); // Result: 8
+
+// Comparing with global bind() function
+// These two calls are equivalent:
+let bound1 = myFunc.bind(ns, thisObj, next);
+let bound2 = bind(myFunc, ns, thisObj, next);</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p><strong>Notes:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p>The <code>bind</code> method is similar to the global <code>bind</code> function, but
+with the function itself as the receiver (method syntax) rather than as
+the first parameter.</p>
+</li>
+<li>
+<p>The newly created function shares the same bytecode as the original
+but operates in a different execution environment.</p>
+</li>
+<li>
+<p>This is useful for creating specialized versions of functions with
+pre-configured contexts, implementing partial application, or building
+complex closure chains for advanced control flow.</p>
+</li>
+<li>
+<p>The <code>thisObj</code> and <code>nextFunc</code> parameters must be either <code>null</code>
+or function values; any other type will cause a runtime error.</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_summary_8">Summary</h3>
@@ -7090,6 +7299,14 @@ proper scoping and error handling.</p>
 <li>
 <p><strong><code>call</code></strong> – Invoke a function with explicit control over the
 arguments array, <code>this</code> context, and execution namespace.</p>
+</li>
+<li>
+<p><strong><code>closure</code></strong> – Retrieve the closure data (namespace and object) for
+a function at a specific index in the closure chain.</p>
+</li>
+<li>
+<p><strong><code>bind</code></strong> – Create a new function with a specific namespace, <code>this</code>
+object, and closure chain configuration.</p>
 </li>
 </ol>
 </div>
@@ -14905,7 +15122,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-27 01:50:17 +0100
+Last updated 2025-11-27 02:01:55 +0100
 </div>
 </div>
 </body>
