@@ -3392,6 +3392,131 @@ meta-events. The array is sorted.
 
 '''''
 
+==== map
+
+*Usage:*
+
+[source,js]
+----
+let result = map(collection, callback);
+----
+
+* *Description:* Creates a new array or hash by applying a callback
+function to each element of the input collection.
+** *For arrays*: The callback receives `+(value, index, array)+` and the
+result is a new array.
+** *For hashes*: The callback receives `+(key, value, hash)+` and the
+result is a new hash with the same keys but transformed values.
+* *Parameters:*
+** `+collection+` (array | hash): The collection to map over.
+** `+callback+` (function): Function to call for each element.
+* *Return Value:* A new array or hash with transformed values.
+* *Example:*
++
+[source,js]
+----
+let numbers = [1, 2, 3, 4];
+let doubled = map(numbers, function(x) { return x * 2; });
+// doubled is [2, 4, 6, 8]
+
+let person = { name: "Alice", age: 30 };
+let exclaimed = map(person, function(key, value) { 
+  return value ~ "!"; 
+});
+// exclaimed is { name: "Alice!", age: "30!" }
+----
+
+'''''
+
+==== reduce
+
+*Usage:*
+
+[source,js]
+----
+let result = reduce(collection, callback);
+let result = reduce(collection, callback, initialValue);
+----
+
+* *Description:* Reduces a collection to a single value by executing a
+reducer function on each element.
+** *For arrays*: Processes elements from left to right. The callback
+receives `+(accumulator, value, index, array)+`.
+** *For hashes*: Processes key-value pairs. The callback receives
+`+(accumulator, key, value, hash)+`. Note that hash iteration order is
+based on sorted keys.
+* *Parameters:*
+** `+collection+` (array | hash): The collection to reduce.
+** `+callback+` (function): Reducer function called for each element.
+** `+initialValue+` (optional): Starting value. If omitted, uses the first
+element/value as initial.
+* *Return Value:* The final accumulated value.
+* *Example:*
++
+[source,js]
+----
+// Array example
+let numbers = [1, 2, 3, 4];
+let sum = reduce(numbers, function(acc, val) { 
+  return acc + val; 
+});
+// sum is 10
+
+// Hash example
+let scores = { math: 90, science: 85, english: 92 };
+let total = reduce(scores, function(acc, key, value) {
+  return acc + value;
+}, 0);
+// total is 267
+----
+
+'''''
+
+==== reduceRight
+
+*Usage:*
+
+[source,js]
+----
+let result = reduceRight(collection, callback);
+let result = reduceRight(collection, callback, initialValue);
+----
+
+* *Description:* Reduces a collection to a single value by executing a
+reducer function, but processes elements from right to left (for arrays)
+or in the same order as reduce (for hashes, since they have no inherent
+direction).
+** *For arrays*: Processes elements from right to left. The callback
+receives `+(accumulator, value, index, array)+`.
+** *For hashes*: Behaves identically to `+reduce+` since hashes have no
+inherent order. The callback receives `+(accumulator, key, value, hash)+`.
+* *Parameters:*
+** `+collection+` (array | hash): The collection to reduce.
+** `+callback+` (function): Reducer function called for each element.
+** `+initialValue+` (optional): Starting value. If omitted, uses the last
+element (arrays) or first key-value pair (hashes) as initial.
+* *Return Value:* The final accumulated value.
+* *Example:*
++
+[source,js]
+----
+// Array example - subtract from right to left
+let nums = [1, 2, 3, 4];
+let diff = reduceRight(nums, function(acc, val) { 
+  return acc - val; 
+});
+// diff is -2 (4 - 3 - 2 - 1)
+
+// Build array in reverse
+let reversed = reduceRight(nums, function(acc, val) {
+  acc.push(val);
+  return acc;
+}, []);
+// reversed is [4, 3, 2, 1]
+----
+
+'''''
+
 === Summary
 
 *Global Functions in POCA*
@@ -3410,6 +3535,8 @@ The global namespace contains a variety of utilities that let you:
 `+eval+` and `+compile+`, manipulate function closures with `+caller+`,
 `+closure+`, `+bind+`, and `+call+`. 
 7. *Control or bypass hash meta-events* with `+rawGet+`, `+rawSet+`, etc.
+8. *Transform and reduce collections* with `+map+`, `+reduce+`, and
+`+reduceRight+` for both arrays and hashes.
 
 These functions enable rapid scripting and flexible data handling in
 POCA’s dynamic environment. When combined with the features of

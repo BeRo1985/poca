@@ -667,6 +667,9 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_rawset">rawSet</a></li>
 <li><a href="#_rawsize">rawSize</a></li>
 <li><a href="#_rawkeys">rawKeys</a></li>
+<li><a href="#_map">map</a></li>
+<li><a href="#_reduce">reduce</a></li>
+<li><a href="#_reduceright">reduceRight</a></li>
 </ul>
 </li>
 <li><a href="#_summary_7">Summary</a></li>
@@ -6668,6 +6671,219 @@ meta-events. The array is sorted.</p>
 </div>
 <hr>
 </div>
+<div class="sect3">
+<h4 id="_map">map</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let result = map(collection, callback);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Creates a new array or hash by applying a callback
+function to each element of the input collection.</p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>For arrays</strong>: The callback receives <code>(value, index, array)</code> and the
+result is a new array.</p>
+</li>
+<li>
+<p><strong>For hashes</strong>: The callback receives <code>(key, value, hash)</code> and the
+result is a new hash with the same keys but transformed values.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>collection</code> (array | hash): The collection to map over.</p>
+</li>
+<li>
+<p><code>callback</code> (function): Function to call for each element.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new array or hash with transformed values.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let numbers = [1, 2, 3, 4];
+let doubled = map(numbers, function(x) { return x * 2; });
+// doubled is [2, 4, 6, 8]
+
+let person = { name: "Alice", age: 30 };
+let exclaimed = map(person, function(key, value) {
+  return value ~ "!";
+});
+// exclaimed is { name: "Alice!", age: "30!" }</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_reduce">reduce</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let result = reduce(collection, callback);
+let result = reduce(collection, callback, initialValue);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Reduces a collection to a single value by executing a
+reducer function on each element.</p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>For arrays</strong>: Processes elements from left to right. The callback
+receives <code>(accumulator, value, index, array)</code>.</p>
+</li>
+<li>
+<p><strong>For hashes</strong>: Processes key-value pairs. The callback receives
+<code>(accumulator, key, value, hash)</code>. Note that hash iteration order is
+based on sorted keys.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>collection</code> (array | hash): The collection to reduce.</p>
+</li>
+<li>
+<p><code>callback</code> (function): Reducer function called for each element.</p>
+</li>
+<li>
+<p><code>initialValue</code> (optional): Starting value. If omitted, uses the first
+element/value as initial.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The final accumulated value.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Array example
+let numbers = [1, 2, 3, 4];
+let sum = reduce(numbers, function(acc, val) {
+  return acc + val;
+});
+// sum is 10
+
+// Hash example
+let scores = { math: 90, science: 85, english: 92 };
+let total = reduce(scores, function(acc, key, value) {
+  return acc + value;
+}, 0);
+// total is 267</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_reduceright">reduceRight</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let result = reduceRight(collection, callback);
+let result = reduceRight(collection, callback, initialValue);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Reduces a collection to a single value by executing a
+reducer function, but processes elements from right to left (for arrays)
+or in the same order as reduce (for hashes, since they have no inherent
+direction).</p>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>For arrays</strong>: Processes elements from right to left. The callback
+receives <code>(accumulator, value, index, array)</code>.</p>
+</li>
+<li>
+<p><strong>For hashes</strong>: Behaves identically to <code>reduce</code> since hashes have no
+inherent order. The callback receives <code>(accumulator, key, value, hash)</code>.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>collection</code> (array | hash): The collection to reduce.</p>
+</li>
+<li>
+<p><code>callback</code> (function): Reducer function called for each element.</p>
+</li>
+<li>
+<p><code>initialValue</code> (optional): Starting value. If omitted, uses the last
+element (arrays) or first key-value pair (hashes) as initial.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The final accumulated value.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">// Array example - subtract from right to left
+let nums = [1, 2, 3, 4];
+let diff = reduceRight(nums, function(acc, val) {
+  return acc - val;
+});
+// diff is -2 (4 - 3 - 2 - 1)
+
+// Build array in reverse
+let reversed = reduceRight(nums, function(acc, val) {
+  acc.push(val);
+  return acc;
+}, []);
+// reversed is [4, 3, 2, 1]</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_summary_7">Summary</h3>
@@ -6704,6 +6920,10 @@ meta-events. The array is sorted.</p>
 </li>
 <li>
 <p><strong>Control or bypass hash meta-events</strong> with <code>rawGet</code>, <code>rawSet</code>, etc.</p>
+</li>
+<li>
+<p><strong>Transform and reduce collections</strong> with <code>map</code>, <code>reduce</code>, and
+<code>reduceRight</code> for both arrays and hashes.</p>
 </li>
 </ol>
 </div>
@@ -14520,7 +14740,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-27 01:10:24 +0100
+Last updated 2025-11-27 01:26:49 +0100
 </div>
 </div>
 </body>
