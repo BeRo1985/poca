@@ -35201,6 +35201,7 @@ var TokenList:PPOCAToken;
          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t,true);
          CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
          inc(Code^.CountArguments);
+         Code^.HasArgumentLocals:=true;
         end;
        end;
        ptCOMMA:begin
