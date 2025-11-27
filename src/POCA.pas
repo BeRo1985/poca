@@ -1734,6 +1734,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        constructor Create(const ASourceFile,ASourceLine,ASourceColumn:TPOCAInt32;const AValue:TPOCAValue); overload;
      end;
 
+     EPOCAGeneralError=class(EPOCAError);
+
      EPOCASyntaxError=class(EPOCAError);
 
      EPOCARuntimeError=class(EPOCAError);

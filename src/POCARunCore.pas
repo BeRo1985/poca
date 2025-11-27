@@ -771,6 +771,9 @@ begin
         Arguments[i-2]:=POCANewString(Context,TPOCAUTF8String(ParamStr(i)));
        end;
       end;
+      if not FileExists(FileName) then begin
+       raise EPOCAGeneralError.Create(-1,-1,-1,'File "'+FileName+'" not found');
+      end;
       Code:=POCACompile(Instance,Context,POCAGetFileContent(TPOCAUTF8String(FileName)),TPOCAUTF8String(FileName));
      end else begin
       Code:=POCACompile(Instance,Context,REPLCode,'<REPL>');
@@ -783,6 +786,10 @@ begin
      FinalizeForPOCAContext(Context);
     end;
    except
+    on e:EPOCAGeneralError do begin
+     writeln('GeneralError: ',e.Message);
+     raise;
+    end;
     on e:EPOCASyntaxError do begin
      writeln('SyntaxError["',Instance^.SourceFiles[e.SourceFile],'":',e.SourceLine,',',e.SourceColumn,']: ',e.Message);
      raise;
