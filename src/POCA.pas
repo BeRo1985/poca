@@ -23811,7 +23811,7 @@ var TokenList:PPOCAToken;
       exit;
      end;
     end;
-    ptSYMBOL:begin
+    ptSYMBOL,ptTHIS,ptTHAT,ptLOCAL,ptSELF:begin
      if assigned(Parser.Tree.LastChild) then begin
       case Parser.Tree.LastChild^.Token of
        ptPOSTELLIPSIS:begin
@@ -23852,10 +23852,28 @@ var TokenList:PPOCAToken;
      Token:=ptFASTFUNCTION;
     end;
     ptFALSE:begin
+     if assigned(Parser.Tree.LastChild) then begin
+      case Parser.Tree.LastChild^.Token of
+       ptPOSTELLIPSIS:begin
+        Parser.Tree.LastChild^.Token:=ptPREELLIPSIS;
+       end;
+       else begin
+       end;
+      end;
+     end;
      Token:=ptLITERALNUM;
      Num:=0.0;
     end;
     ptTRUE:begin
+     if assigned(Parser.Tree.LastChild) then begin
+      case Parser.Tree.LastChild^.Token of
+       ptPOSTELLIPSIS:begin
+        Parser.Tree.LastChild^.Token:=ptPREELLIPSIS;
+       end;
+       else begin
+       end;
+      end;
+     end;
      Token:=ptLITERALNUM;
      Num:=1.0;
     end;
