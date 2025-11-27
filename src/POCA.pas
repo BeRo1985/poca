@@ -31323,7 +31323,11 @@ var TokenList:PPOCAToken;
      if (not assigned(t)) or (t^.Token=ptEMPTY) then begin
       exit;
      end;
-     if t^.Token=ptSYMBOL then begin
+     if t^.Token=ptELLIPSIS then begin
+      Reg1:=GenerateExpression(t^.Left,-1,true);
+      EmitOpcode(popHASHCOMBINE,HashReg,Reg1);
+      FreeRegister(Reg1);
+     end else if t^.Token=ptSYMBOL then begin
       // Shorthand
       Reg1:=GenerateScalarConstant(t,-1);
       Reg2:=GenerateExpression(t,-1,true);
