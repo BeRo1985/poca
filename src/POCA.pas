@@ -523,7 +523,11 @@ const POCAVersion='2025-11-22-06-55-0000';
       popSAFEGETMEMBER=157;
       popSAFESETMEMBER=158;
       popSETCONSTLOCAL=159;
-      popCOUNT=160;
+      popFCALLA=160;
+      popMCALLA=162;
+      popFTAILCALLA=163;
+      popMTAILCALLA=164;
+      popCOUNT=165;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -31355,6 +31359,22 @@ var TokenList:PPOCAToken;
         Count,Reg1,Reg2,Reg3,i,JumpNull,JumpEnd,ConstantIndex:TPOCAInt32;
         Registers:TPOCACodeGeneratorRegisters;
         Regs:array of TPOCAInt32;
+     function HasSpreadOperator(t:PPOCAToken):Boolean;
+     begin  
+      result:=false;
+      while assigned(t) do begin
+       if assigned(t) and (t^.Token=ptELLIPSIS) then begin
+        result:=true;
+        break;
+       end else begin
+        if t^.Token=ptCOMMA then begin
+         t:=t^.Right;
+        end else begin
+         break;
+        end;
+       end;
+      end;
+     end; 
      function CollectList(t:PPOCAToken):TPOCAInt32;
      begin
       result:=0;
@@ -31459,15 +31479,40 @@ var TokenList:PPOCAToken;
        EmitGetMember(Reg2,Reg1,ConstantIndex,$ffffffff,$ffffffff);
       end;
       if IsHashCall(t^.Right) then begin
-       Reg3:=GetRegister(true,false);
-       EmitOpcode(popNEWHASH,Reg3);
-       GenerateHash(t^.Right,Reg3);
-       if IsMethod then begin
-        EmitOpcode(popMCALLH,result,Reg1,Reg2,Reg3);
+       if HasSpreadOperator(t^.Right) then begin
+        SyntaxError('Spread operator not compatible with named arguments',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end else begin
-        EmitOpcode(popFCALLH,result,Reg2,Reg3);
+        Reg3:=GetRegister(true,false);
+        EmitOpcode(popNEWHASH,Reg3);
+        GenerateHash(t^.Right,Reg3);
+        if IsMethod then begin
+         EmitOpcode(popMCALLH,result,Reg1,Reg2,Reg3);
+        end else begin
+         EmitOpcode(popFCALLH,result,Reg2,Reg3);
+        end;
+        FreeRegister(Reg3);
+       end; 
+      end else if HasSpreadOperator(t^.Right) then begin
+       if assigned(t^.Right) and (t^.Right^.Token=ptELLIPSIS) then begin
+        Reg3:=GenerateExpression(t^.Right^.Left,-1,true);
+        if IsMethod then begin
+         EmitOpcode(popMCALLA,result,Reg1,Reg2,Reg3);
+        end else begin
+         EmitOpcode(popFCALLA,result,Reg2,Reg3);
+        end;
+        FreeRegister(Reg3);
+       end else begin
+        SyntaxError('Dynamic spread operator not implemented yet',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+{       Reg3:=GetRegister(true,false);
+        EmitOpcode(popNEWARRAY,Reg3);
+        GenerateCallSpreadArray(t^.Right,Reg3);
+        if IsMethod then begin
+         EmitOpcode(popMCALLA,result,Reg1,Reg2,Reg3);
+        end else begin
+         EmitOpcode(popFCALLA,result,Reg2,Reg3);
+        end;
+        FreeRegister(Reg3);}
        end;
-       FreeRegister(Reg3);
       end else begin
        Count:=CollectList(t^.Right);
        SetLength(Regs,Count);
@@ -33986,7 +34031,7 @@ var TokenList:PPOCAToken;
        EmitOpcode(popLOADNULL,result);
       end;
      end;
-     if ((CodeToken=ptFASTFUNCTION) or (assigned(t^.Right) and ((assigned(t^.Right^.Left) and (t^.Right^.Left^.Token=ptSELF)) and (Binary(t^.Right) or not assigned(t^.Right^.Right))))) and ((CodeGenerator^.CountOpcodes>0) and ((CodeGenerator^.ByteCode[CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-1]] and $ff) in [popFCALL,popMCALL,popFCALLH,popMCALLH])) then begin
+     if ((CodeToken=ptFASTFUNCTION) or (assigned(t^.Right) and ((assigned(t^.Right^.Left) and (t^.Right^.Left^.Token=ptSELF)) and (Binary(t^.Right) or not assigned(t^.Right^.Right))))) and ((CodeGenerator^.CountOpcodes>0) and ((CodeGenerator^.ByteCode[CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-1]] and $ff) in [popFCALL,popMCALL,popFCALLH,popMCALLH,popFCALLA,popMCALLA])) then begin
       v:=CodeGenerator^.ByteCode[CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-1]];
       case v and $ff of
        popFCALL:begin
@@ -34000,6 +34045,12 @@ var TokenList:PPOCAToken;
        end;
        popMCALLH:begin
         v:=popMTAILCALLH or (v and $ffffff00);
+       end;
+       popFCALLA:begin
+        v:=popFTAILCALLA or (v and $ffffff00);
+       end;
+       popMCALLA:begin
+        v:=popMTAILCALLA or (v and $ffffff00);
        end;
        else begin
         EmitOpcode(popRETURN,result);
@@ -36102,30 +36153,49 @@ function POCASetupFunctionOpCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArgu
 {$define POCASETUPFUNCTIONCALLOP}
 {$undef POCASETUPFUNCTIONCALLMETHOD}
 {$undef POCASETUPFUNCTIONCALLNAMED}
+{$undef POCASETUPFUNCTIONCALLARRAY}
 {$i POCASetupFunctionCall.inc}
 
 function POCASetupFunctionMethodCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
 {$undef POCASETUPFUNCTIONCALLOP}
 {$define POCASETUPFUNCTIONCALLMETHOD}
 {$undef POCASETUPFUNCTIONCALLNAMED}
+{$undef POCASETUPFUNCTIONCALLARRAY}
 {$i POCASetupFunctionCall.inc}
 
 function POCASetupFunctionMethodNamedCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
 {$undef POCASETUPFUNCTIONCALLOP}
 {$define POCASETUPFUNCTIONCALLMETHOD}
 {$define POCASETUPFUNCTIONCALLNAMED}
+{$undef POCASETUPFUNCTIONCALLARRAY}
+{$i POCASetupFunctionCall.inc}
+
+function POCASetupFunctionMethodArrayCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
+{$undef POCASETUPFUNCTIONCALLOP}
+{$define POCASETUPFUNCTIONCALLMETHOD}
+{$undef POCASETUPFUNCTIONCALLNAMED}
+{$define POCASETUPFUNCTIONCALLARRAY}
 {$i POCASetupFunctionCall.inc}
 
 function POCASetupFunctionNormalCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
 {$undef POCASETUPFUNCTIONCALLOP}
 {$undef POCASETUPFUNCTIONCALLMETHOD}
 {$undef POCASETUPFUNCTIONCALLNAMED}
+{$undef POCASETUPFUNCTIONCALLARRAY}
 {$i POCASetupFunctionCall.inc}
 
 function POCASetupFunctionNormalNamedCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
 {$undef POCASETUPFUNCTIONCALLOP}
 {$undef POCASETUPFUNCTIONCALLMETHOD}
 {$define POCASETUPFUNCTIONCALLNAMED}
+{$undef POCASETUPFUNCTIONCALLARRAY}
+{$i POCASetupFunctionCall.inc}
+
+function POCASetupFunctionNormalArrayCall(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):PPOCAFrame;
+{$undef POCASETUPFUNCTIONCALLOP}
+{$undef POCASETUPFUNCTIONCALLMETHOD}
+{$undef POCASETUPFUNCTIONCALLNAMED}
+{$define POCASETUPFUNCTIONCALLARRAY}
 {$i POCASetupFunctionCall.inc}
 
 procedure POCARunStackOverflow(Context:PPOCAContext);
@@ -40661,6 +40731,18 @@ begin
     popSETCONSTLOCAL:begin
      DoItByVMOpcodeDispatcher;
     end;
+    popFCALLA:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popMCALLA:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popFTAILCALLA:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popMTAILCALLA:begin
+     DoItByVMOpcodeDispatcher;
+    end;
     else begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -42794,6 +42876,22 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
 
+    popFCALLA:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    popMCALLA:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    popFTAILCALLA:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    popMTAILCALLA:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
     else begin
      // For now, all other opcodes fall back to VM interpreter
      DoItByVMOpcodeDispatcher;
@@ -44078,6 +44176,36 @@ begin
    end;
    popSETCONSTLOCAL:begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],true,Operands^[2]);
+   end;
+   popFCALLA:begin
+    Frame:=POCASetupFunctionNormalArrayCall(Context,Frame,Opcode shr 8,Operands);
+    Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
+    Registers:=@Frame^.Registers[0];
+    Context^.TemporarySavedObjectCount:=0;
+   end;
+   popMCALLA:begin
+    Frame:=POCASetupFunctionMethodArrayCall(Context,Frame,Opcode shr 8,Operands);
+    Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
+    Registers:=@Frame^.Registers[0];
+    Context^.TemporarySavedObjectCount:=0;
+   end;
+   popFTAILCALLA:begin
+    Frame:=POCASetupFunctionNormalArrayCall(Context,Frame,Opcode shr 8,Operands);
+    dec(Context^.FrameTop);
+    Frame:=@Context^.FrameStack[Context^.FrameTop-1];
+    Frame^:=Context^.FrameStack[Context^.FrameTop];
+    Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
+    Registers:=@Frame^.Registers[0];
+    Context^.TemporarySavedObjectCount:=0;
+   end;
+   popMTAILCALLA:begin
+    Frame:=POCASetupFunctionMethodArrayCall(Context,Frame,Opcode shr 8,Operands);
+    dec(Context^.FrameTop);
+    Frame:=@Context^.FrameStack[Context^.FrameTop-1];
+    Frame^:=Context^.FrameStack[Context^.FrameTop];
+    Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
+    Registers:=@Frame^.Registers[0];
+    Context^.TemporarySavedObjectCount:=0;
    end;
    popCOUNT..255:begin
     POCARuntimeError(Context,'Invalid unknown opcode instruction');

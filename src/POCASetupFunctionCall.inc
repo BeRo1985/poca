@@ -1,4 +1,4 @@
-{$if not defined(POCASETUPFUNCTIONCALLNAMED)}
+{$if not (defined(POCASETUPFUNCTIONCALLNAMED) or defined(POCASETUPFUNCTIONCALLARRAY))}
 {$if defined(POCASETUPFUNCTIONCALLOP)}
 const ArgumentIndex=1;
 {$elseif defined(POCASETUPFUNCTIONCALLMETHOD)}
@@ -7,7 +7,7 @@ const ArgumentIndex=3;
 const ArgumentIndex=2;
 {$ifend}
 {$ifend}
-var {$ifndef POCASETUPFUNCTIONCALLOP}Func,{$endif}Obj,Code:TPOCAValue;
+var {$ifndef POCASETUPFUNCTIONCALLOP}Func,{$endif}Obj,Code{$ifdef POCASETUPFUNCTIONCALLARRAY},ArgumentArray{$endif}:TPOCAValue;
     {$if defined(POCASETUPFUNCTIONCALLNAMED)}ArgumentIndex{$else}Index{$ifend}:TPOCAInt32;
     ObjPtr:PPOCAObject;
 begin
@@ -16,24 +16,54 @@ begin
 
 {$if defined(POCASETUPFUNCTIONCALLOP)}
  Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+{$if defined(POCASETUPFUNCTIONCALLARRAY)}
+ ArgumentArray:=Frame^.Registers[Operands^[1]];
+ dec(CountArguments,2);
+{$if defined(POCASETUPFUNCTIONCALLNAMED)}
+ ArgumentIndex:=2;
+{$ifend}
+{$else}
  dec(CountArguments,1);
 {$if defined(POCASETUPFUNCTIONCALLNAMED)}
  ArgumentIndex:=1;
 {$ifend}
+{$ifend}
 {$elseif defined(POCASETUPFUNCTIONCALLMETHOD)}
  Obj:=Frame^.Registers[Operands^[1]];
  Func:=Frame^.Registers[Operands^[2]];
+{$if defined(POCASETUPFUNCTIONCALLARRAY)}
+ ArgumentArray:=Frame^.Registers[Operands^[3]];
+ dec(CountArguments,4);
+{$if defined(POCASETUPFUNCTIONCALLNAMED)}
+ ArgumentIndex:=4;
+{$ifend}
+{$else}
+ dec(CountArguments,3);
+{$if defined(POCASETUPFUNCTIONCALLNAMED)}
+ ArgumentIndex:=3;
+{$ifend}
+{$ifend}
+{$else}
+ Obj.CastedUInt64:=POCAValueNullCastedUInt64;
+ Func:=Frame^.Registers[Operands^[1]];
+{$if defined(POCASETUPFUNCTIONCALLARRAY)}
+ ArgumentArray:=Frame^.Registers[Operands^[2]];
  dec(CountArguments,3);
 {$if defined(POCASETUPFUNCTIONCALLNAMED)}
  ArgumentIndex:=3;
 {$ifend}
 {$else}
- Obj.CastedUInt64:=POCAValueNullCastedUInt64;
- Func:=Frame^.Registers[Operands^[1]];
  dec(CountArguments,2);
 {$if defined(POCASETUPFUNCTIONCALLNAMED)}
  ArgumentIndex:=2;
 {$ifend}
+{$ifend}
+{$ifend}
+
+{$if defined(POCASETUPFUNCTIONCALLARRAY)}
+ if not POCAIsValueArray(ArgumentArray) then begin
+  POCARuntimeError(Context,'Argument array expected');
+ end;
 {$ifend}
 
  if {$ifdef cpu64}((Func.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(Func.Reference.Ptr) and POCAValueReferenceMask)){$else}(Func.ReferenceTag=POCAValueReferenceTag) and assigned(Func.Reference.Ptr){$endif} then begin
@@ -79,10 +109,23 @@ begin
    ObjPtr:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(Code.Reference.Ptr) and POCAValueReferenceMask){$else}Code.Reference.Ptr{$endif};
    case ObjPtr^.Header.ValueType of
     pvtNATIVECODE:begin
-{$ifdef POCASETUPFUNCTIONCALLNAMED}
+{$if defined(POCASETUPFUNCTIONCALLNAMED)}
      POCARuntimeError(Context,'Native functions have no named arguments');
+{$elseif defined(POCASETUPFUNCTIONCALLARRAY)}
+     CountArguments:=POCAArraySize(ArgumentArray);
+     if length(Frame^.Arguments)<CountArguments then begin
+      SetLength(Frame^.Arguments,CountArguments);
+     end;
+     for Index:=0 to CountArguments-1 do begin
+      Frame^.Arguments[Index]:=POCAArrayGet(ArgumentArray,Index);
+     end;
+     Frame^.CountArguments:=CountArguments;
+     Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
+     Frame^.CountArguments:=0;
+     result:=@Context.FrameStack[Context.FrameTop-1];
+     exit;
 {$else}
-     if CountArguments>length(Frame^.Arguments) then begin
+     if length(Frame^.Arguments)<CountArguments then begin
       SetLength(Frame^.Arguments,CountArguments);
      end;
      for Index:=0 to CountArguments-1 do begin
@@ -93,7 +136,7 @@ begin
      Frame^.CountArguments:=0;
      result:=@Context.FrameStack[Context.FrameTop-1];
      exit;
-{$endif}
+{$ifend}
     end;
     pvtCODE:begin
      if Context^.FrameTop>=POCA_MAX_RECURSION then begin
@@ -140,6 +183,15 @@ begin
        end else begin
         POCACheckNamedArguments(Context,PPOCACode(ObjPtr),PPOCAHash(POCAGetValueReferencePointer(result^.Locals)),result^.Locals);
        end;
+{$elseif defined(POCASETUPFUNCTIONCALLARRAY)}
+       CountArguments:=POCAArraySize(ArgumentArray);
+       if length(Frame^.Arguments)<CountArguments then begin
+        SetLength(Frame^.Arguments,CountArguments);
+       end;
+       for Index:=0 to CountArguments-1 do begin
+        Frame^.Arguments[Index]:=POCAArrayGet(ArgumentArray,Index);
+       end;
+       POCASetupArguments(Context,result,PPOCACode(ObjPtr),@Frame^.Arguments[0],CountArguments,nil);
 {$else}
        POCASetupArguments(Context,result,PPOCACode(ObjPtr),@Frame^.Registers[0],CountArguments,@Operands^[ArgumentIndex]);
 {$endif}
