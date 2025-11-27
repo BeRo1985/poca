@@ -527,8 +527,9 @@ const POCAVersion='2025-11-22-06-55-0000';
       popMCALLA=162;
       popFTAILCALLA=163;
       popMTAILCALLA=164;
-      popARRAYAPPEND=165;
-      popCOUNT=166;
+      popARRAYCOMBINE=165;
+      popHASHCOMBINE=166;
+      popCOUNT=167;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -2090,8 +2091,8 @@ function POCAArrayGet(const ArrayObject:TPOCAValue;i:TPOCAInt32):TPOCAValue;
 procedure POCAArraySet(const ArrayObject:TPOCAValue;i:TPOCAInt32;const Value:TPOCAValue);
 function POCAArraySize(const ArrayObject:TPOCAValue):TPOCAUInt32;
 function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
-function POCAArrayAppend(const ArrayObject:TPOCAValue;const WithArrayObject:TPOCAValue):TPOCAUInt32;
 function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):TPOCAUInt32;
+function POCAArrayCombine(const ArrayObject:TPOCAValue;const WithArrayObject:TPOCAValue):TPOCAUInt32;
 function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:TPOCAInt32):TPOCAUInt32;
 function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
 function POCAArrayIndexOf(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAInt32;
@@ -9395,40 +9396,6 @@ begin
  result:=0;
 end;
 
-function POCAArrayAppend(const ArrayObject:TPOCAValue;const WithArrayObject:TPOCAValue):TPOCAUInt32;
-var Index:TPOCAInt32;
-    TemporaryOldSize:TPOCAUInt32;
-    ArrayInstance,WithArrayInstance:PPOCAArray;
-    ArrayRecord,WithArrayRecord:PPOCAArrayRecord;
-begin
- result:=0;
- if POCAIsValueArray(ArrayObject) and POCAIsValueArray(WithArrayObject) then begin
-  ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
-  WithArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(WithArrayObject));
-  WithArrayRecord:=WithArrayInstance^.ArrayRecord;
-  if assigned(WithArrayRecord) and (WithArrayRecord^.Size>0) then begin
-   ArrayRecord:=ArrayInstance^.ArrayRecord;
-   if assigned(ArrayRecord) then begin
-    TemporaryOldSize:=ArrayRecord^.Size;
-   end else begin
-    TemporaryOldSize:=0;
-   end;
-   ArrayRecord:=POCAArrayGrowToSize(ArrayInstance,TemporaryOldSize+WithArrayRecord^.Size);
-   for Index:=0 to WithArrayRecord^.Size-1 do begin
-    ArrayRecord^.Data[TemporaryOldSize+Index]:=WithArrayRecord^.Data[Index];
-    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),WithArrayRecord^.Data[Index]);
-   end;
-   ArrayRecord^.Size:=TemporaryOldSize+WithArrayRecord^.Size;
-   result:=ArrayRecord^.Size;
-  end else begin
-   ArrayRecord:=ArrayInstance^.ArrayRecord;
-   if assigned(ArrayRecord) then begin
-    result:=ArrayRecord^.Size;
-   end;
-  end;
- end;
-end;
-
 function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):TPOCAUInt32;
 var Value:TPOCAValue;
     ToNumber:double;
@@ -9475,6 +9442,40 @@ begin
   end;
  end;
  result:=0;
+end;
+
+function POCAArrayCombine(const ArrayObject:TPOCAValue;const WithArrayObject:TPOCAValue):TPOCAUInt32;
+var Index:TPOCAInt32;
+    TemporaryOldSize:TPOCAUInt32;
+    ArrayInstance,WithArrayInstance:PPOCAArray;
+    ArrayRecord,WithArrayRecord:PPOCAArrayRecord;
+begin
+ result:=0;
+ if POCAIsValueArray(ArrayObject) and POCAIsValueArray(WithArrayObject) then begin
+  ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
+  WithArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(WithArrayObject));
+  WithArrayRecord:=WithArrayInstance^.ArrayRecord;
+  if assigned(WithArrayRecord) and (WithArrayRecord^.Size>0) then begin
+   ArrayRecord:=ArrayInstance^.ArrayRecord;
+   if assigned(ArrayRecord) then begin
+    TemporaryOldSize:=ArrayRecord^.Size;
+   end else begin
+    TemporaryOldSize:=0;
+   end;
+   ArrayRecord:=POCAArrayGrowToSize(ArrayInstance,TemporaryOldSize+WithArrayRecord^.Size);
+   for Index:=0 to WithArrayRecord^.Size-1 do begin
+    ArrayRecord^.Data[TemporaryOldSize+Index]:=WithArrayRecord^.Data[Index];
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),WithArrayRecord^.Data[Index]);
+   end;
+   ArrayRecord^.Size:=TemporaryOldSize+WithArrayRecord^.Size;
+   result:=ArrayRecord^.Size;
+  end else begin
+   ArrayRecord:=ArrayInstance^.ArrayRecord;
+   if assigned(ArrayRecord) then begin
+    result:=ArrayRecord^.Size;
+   end;
+  end;
+ end;
 end;
 
 function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:TPOCAInt32):TPOCAUInt32;
@@ -31292,7 +31293,7 @@ var TokenList:PPOCAToken;
       end else begin
        if t^.Token=ptELLIPSIS then begin
         Reg1:=GenerateExpression(t^.Left,-1,true);
-        EmitOpcode(popARRAYAPPEND,ArrayReg,Reg1);
+        EmitOpcode(popARRAYCOMBINE,ArrayReg,Reg1);
         FreeRegister(Reg1);
        end else begin
         Reg1:=GenerateExpression(t,-1,true);
@@ -42969,7 +42970,11 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
 
-    popARRAYAPPEND:begin
+    popARRAYCOMBINE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
+    popHASHCOMBINE:begin
      DoItByVMOpcodeDispatcher;
     end;
 
@@ -44288,8 +44293,11 @@ begin
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
    end;
-   popARRAYAPPEND:begin
-    POCAArrayAppend(Registers^[Operands^[0]],Registers^[Operands^[1]]);
+   popARRAYCOMBINE:begin
+    POCAArrayCombine(Registers^[Operands^[0]],Registers^[Operands^[1]]);
+   end;
+   popHASHCOMBINE:begin
+    POCAHashCombine(Context,Registers^[Operands^[0]],Registers^[Operands^[1]]);
    end;
    popCOUNT..255:begin
     POCARuntimeError(Context,'Invalid unknown opcode instruction');
