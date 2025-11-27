@@ -23823,6 +23823,19 @@ var TokenList:PPOCAToken;
        ptPOSTINC:begin
         Parser.Tree.LastChild^.Token:=ptPREINC;
        end;
+       else begin
+       end;
+      end;
+     end;
+    end;
+    ptLBRA,ptLCURL,ptLPAR:begin
+     if assigned(Parser.Tree.LastChild) then begin
+      case Parser.Tree.LastChild^.Token of
+       ptPOSTELLIPSIS:begin
+        Parser.Tree.LastChild^.Token:=ptPREELLIPSIS;
+       end;
+       else begin
+       end;
       end;
      end;
     end;
@@ -23845,6 +23858,8 @@ var TokenList:PPOCAToken;
     ptTRUE:begin
      Token:=ptLITERALNUM;
      Num:=1.0;
+    end;
+    else begin
     end;
    end;
    New(NewToken);
