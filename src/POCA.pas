@@ -31393,7 +31393,7 @@ var TokenList:PPOCAToken;
     begin
      if assigned(t) then begin
       if (not assigned(t^.Left)) or
-         ((assigned(t^.Left) and (t^.Token=ptCOMMA) and (t^.Left^.Token in [ptCOLON,ptSYMBOL])) or (t^.Token=ptCOLON)) then begin
+         ((assigned(t^.Left) and (t^.Token=ptCOMMA) and (t^.Left^.Token in [ptCOLON,ptSYMBOL,ptELLIPSIS])) or (t^.Token=ptCOLON)) then begin
        result:=false;
       end else begin
        result:=true;
