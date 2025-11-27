@@ -5,7 +5,47 @@
     empty_string_is_not_null: () => Test.assertNotNull(''),
     empty_string_is_not_like_null: () => Test.assertNotLikeNull(''),
 
+    empty_string_has_length_zero: () => Test.assertZero(''.length),
+    empty_string_has_size_zero: () => Test.assertZero(''.size()),
+
+    string_has_length_one: () => Test.assertEqual(' '.length, 1),
+    string_has_size_one: () => Test.assertEqual(' '.size(), 1),
+
     space_string_is_true: () => Test.assertFalse(' '),
+
+    string_length: [
+      () => {
+        let a = '';
+        let b = "";
+        let c = ``;
+        Test.assertZero(a.length);
+        Test.assertZero(b.length);
+        Test.assertZero(c.length);
+      }
+    ],
+
+    string_size: [
+      () => {
+        let a = '';
+        let b = "";
+        let c = ``;
+        Test.assertZero(a.size());
+        Test.assertZero(b.size());
+        Test.assertZero(c.size());
+      }
+    ],
+
+    string_type: [
+      () => {
+        const ca = '';
+        const cb = "";
+        const cc = ``;
+
+        Test.assertType(ca, 'String');
+        Test.assertType(cb, 'String');
+        Test.assertType(cc, 'String');
+      }
+    ],
 
     split_string_is_correct: [
       () => {

@@ -11,10 +11,11 @@
    - option to only run specific tests
 */
 
-import Test from 'tests/unit/base.poca';
+import Test from 'unit/base.poca';
+import TestRunner from 'runner.poca';
 
-let align = function(s, col = 44) {
-  const padding = Math.max(0, col - s.length());
+let align = function(s, col = 50) {
+  const padding = Math.max(0, col - s.length);
   return ' '.repeat(padding);
 };
 
@@ -27,23 +28,67 @@ const WHITE  = "\x1b[37m";
 
 let test_files = [];
 
-foreach (let entry in IO.getDirectoryEntries('tests/unit/test_*.poca'))
-  if (entry.type == 'file' && entry.size > 0)
-    test_files.push(entry.name);
+if (arguments.length > 0)
+  test_files = arguments;
 
-test_files.sort();
+if (test_files.empty()) {
+  foreach (let entry in IO.getDirectoryEntries('tests/unit/test_*.poca'))
+    if (entry.type == 'file' && entry.size > 0)
+      test_files.push('tests/unit/' ~ entry.name);
+
+  test_files.sort();
+}
+
+let total = 0, succeeded = 0, failed = 0;
 
 foreach (let f in test_files) {
-  let t = require('tests/unit/' ~ f);
+  let t = require(f);
 
   puts();
-  puts(RESET ~ "=> Running test file '" ~ YELLOW ~ f ~ RESET ~ "'...");
+  puts(RESET ~ "=> Running test '" ~ YELLOW ~ f ~ RESET ~ "'...");
 
   foreach (let n in t.keys())
     if (typeof(t[n]) === 'Array') {
       puts();
-      for (let i = 0; i < t[n].size(); ++i)
-        puts(WHITE ~ `${n}#${BLUE}${i+1}${WHITE}` ~ align(`${n}#${i+1}`) ~ '[' ~ (t[n][i]() ? GREEN ~ 'OK' : RED ~'FAIL') ~ WHITE ~ ']');
-    } else
-      puts(WHITE ~ n ~ align(n) ~ '[' ~ (t[n]() ? GREEN ~ 'OK' : RED ~ 'FAIL') ~ WHITE ~ ']');
+      for (let i = 0; i < t[n].length; ++i) {
+        ++total;
+
+        let res = TestRunner.run_as_coro(t[n][i]);
+        if (typeof(res) === 'Array') {
+          let rres = true;
+          foreach (let ok in res) {
+            if (!ok) {
+              rres = false;
+              break;
+            }
+          }
+          (rres == true) ? ++succeeded : ++failed;
+          puts(WHITE ~ `${n}#${BLUE}${i+1}${WHITE}` ~ align(`${n}#${i+1}`) ~ '[' ~ (rres ? GREEN ~ 'OK' : RED ~'FAIL') ~ WHITE ~ ']');
+        } else {
+          (res == true) ? ++succeeded : ++failed;
+          puts(WHITE ~ `${n}#${BLUE}${i+1}${WHITE}` ~ align(`${n}#${i+1}`) ~ '[' ~ (res ? GREEN ~ 'OK' : RED ~'FAIL') ~ WHITE ~ ']');
+        }
+
+        //const res = t[n][i]();
+      }
+    } else {
+      ++total;
+      const res = t[n]();
+      (res == true) ? ++succeeded : ++failed;
+      puts(WHITE ~ n ~ align(n) ~ '[' ~ (res ? GREEN ~ 'OK' : RED ~ 'FAIL') ~ WHITE ~ ']');
+    }
 }
+
+puts();
+
+let error = if (failed > 0 || total !== (succeeded + failed)) {
+  puts(RED ~ `${failed} of ${total} test${total > 1 ? 's' : ''} failed. 😞` ~ WHITE);
+  true;
+} else {
+  puts(GREEN ~ `${succeeded} of ${total} test${total > 1 ? 's' : ''} succeeded. 🥳` ~ WHITE);
+  false;
+};
+
+puts();
+
+return error;
