@@ -1626,6 +1626,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       ArrayHash:TPOCAValue;
       HashHash:TPOCAValue;
+      FunctionHash:TPOCAValue;
       NumberHash:TPOCAValue;
       StringHash:TPOCAValue;
       IOHash:TPOCAValue;
@@ -6985,6 +6986,7 @@ begin
  MarkValue(Instance^.Globals.BaseClass);
  MarkValue(Instance^.Globals.ArrayHash);
  MarkValue(Instance^.Globals.HashHash);
+ MarkValue(Instance^.Globals.FunctionHash);
  MarkValue(Instance^.Globals.NumberHash);
  MarkValue(Instance^.Globals.StringHash);
  MarkValue(Instance^.Globals.IOHash);
@@ -10673,6 +10675,9 @@ begin
    pvtSTRING:begin
     result:=POCAValueSetPrototypeValue(Context,Context.Instance^.Globals.StringHash,Prototype,Level+1);
    end;
+   pvtFUNCTION:begin
+    result:=POCAValueSetPrototypeValue(Context,Context.Instance^.Globals.FunctionHash,Prototype,Level+1);
+   end;
    pvtHASH:begin
     case POCAGetValueType(Prototype) of
      pvtHASH:begin
@@ -10732,6 +10737,9 @@ begin
    end;
    pvtSTRING:begin
     result:=POCAValueGetPrototypeValue(Context,Context.Instance^.Globals.StringHash,Level+1);
+   end;
+   pvtFUNCTION:begin
+    result:=POCAValueGetPrototypeValue(Context,Context.Instance^.Globals.FunctionHash,Level+1);
    end;
    pvtHASH:begin
     p:=PPOCAHash(POCAGetValueReferencePointer(Hash))^.Prototype;
@@ -10812,6 +10820,9 @@ begin
    pvtSTRING:begin
     result:=POCAValueSetConstructorValue(Context,Context.Instance^.Globals.StringHash,Constructor_,Level+1);
    end;
+   pvtFUNCTION:begin
+    result:=POCAValueSetConstructorValue(Context,Context.Instance^.Globals.FunctionHash,Constructor_,Level+1);
+   end;
    pvtHASH:begin
     case POCAGetValueType(Constructor_) of
      pvtHASH,pVTGHOST:begin
@@ -10874,6 +10885,9 @@ begin
    end;
    pvtSTRING:begin
     result:=POCAValueGetPrototypeValue(Context,Context.Instance^.Globals.StringHash,Level+1);
+   end;
+   pvtFUNCTION:begin
+    result:=POCAValueGetConstructorValue(Context,Context.Instance^.Globals.FunctionHash,Level+1);
    end;
    pvtHASH:begin
     p:=PPOCAHash(POCAGetValueReferencePointer(Hash))^.Constructor_;
@@ -19123,6 +19137,78 @@ begin
  POCAAddNativeFunction(Context,result,'rawKeys',POCAHashFunctionRAWKEYS);
 end;
 
+function POCAFunctionFunctionCALL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Func,CallArguments,CallThis,CallNamespace:TPOCAValue;
+    SubContext:PPOCAContext;
+    ArrayRecord:PPOCAArrayRecord;
+begin
+
+ Func:=This;
+ 
+ if CountArguments>0 then begin
+  CallArguments:=Arguments^[0];
+ end else begin
+//CallArguments:=POCAValueNull;
+  CallArguments.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ 
+ if CountArguments>1 then begin
+  CallThis:=Arguments^[1];
+ end else begin
+//CallThis:=POCAValueNull;
+  CallThis.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ 
+ if CountArguments>2 then begin
+  CallNamespace:=Arguments^[2];
+ end else begin
+//CallNamespace:=POCAValueNull;
+//CallNamespace.CastedUInt64:=POCAValueNullCastedUInt64;
+  CallNamespace:=POCANewHash(Context); ///!
+  POCATemporarySave(Context,CallNamespace);
+ end;
+ 
+ if not (POCAIsValueHash(CallThis) or POCAIsValueGhost(CallThis)) then begin
+//CallThis:=POCAValueNull;
+  CallThis.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ 
+ if not POCAIsValueHash(CallNamespace) then begin
+//CallNamespace:=POCAValueNull;
+  CallNamespace.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+ 
+ if not POCAIsValueFunction(Func) then begin
+  POCARuntimeError(Context,'Bad this value to "call" - must be a function');
+ end;
+ 
+ if not (POCAIsValueNull(CallArguments) or POCAIsValueArray(CallArguments)) then begin
+  POCARuntimeError(Context,'Bad arguments to "call" - arguments must be null or an array');
+ end;
+ 
+ SubContext:=POCAContextSub(Context);
+ try
+  if POCAIsValueArray(CallArguments) then begin
+   ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(CallArguments))^.ArrayRecord;
+   if assigned(ArrayRecord) then begin
+    result:=POCACall(SubContext,Func,@ArrayRecord^.Data[0],ArrayRecord^.Size,CallThis,CallNamespace);
+   end else begin
+    result:=POCACall(SubContext,Func,nil,0,CallThis,CallNamespace);
+   end;
+  end else begin
+   result:=POCACall(SubContext,Func,nil,0,CallThis,CallNamespace);
+  end;
+ finally
+  POCAContextDestroy(SubContext);
+ end;
+end;
+
+function POCAInitFunctionHash(Context:PPOCAContext):TPOCAValue;
+begin
+ result:=POCANewHash(Context);
+ POCAAddNativeFunction(Context,result,'call',POCAFunctionFunctionCALL);
+end;
+
 function POCANumberFunctionTOSTRING(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result:=POCAStringValue(Context,This);
@@ -20259,6 +20345,7 @@ begin
    begin
     result^.Globals.ArrayHash:=POCAInitArrayHash(Context);
     result^.Globals.HashHash:=POCAInitHashHash(Context);
+    result^.Globals.FunctionHash:=POCAInitFunctionHash(Context);
     result^.Globals.NumberHash:=POCAInitNumberHash(Context);
     result^.Globals.StringHash:=POCAInitStringHash(Context);
     result^.Globals.IOHash:=POCAInitIOHash(Context);
@@ -20270,6 +20357,7 @@ begin
     begin
      POCAHashSetString(Context,result^.Globals.Namespace,'ArrayHash',result^.Globals.ArrayHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'HashHash',result^.Globals.HashHash);
+     POCAHashSetString(Context,result^.Globals.Namespace,'FunctionHash',result^.Globals.FunctionHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'NumberHash',result^.Globals.NumberHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'StringHash',result^.Globals.StringHash);
      POCAHashSetString(Context,result^.Globals.Namespace,'IOHash',result^.Globals.IOHash);
@@ -35393,6 +35481,13 @@ begin
    end;
   end;
 
+  pvtFUNCTION:begin
+   result:=POCAHashGetCache(Context,Context.Instance^.Globals.FunctionHash,Field,OutValue,CacheIndex);
+   if (not result) and Throw then begin
+    POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
+   end;
+  end;
+
   pvtHASH:begin
 
    if IsInherited then begin
@@ -36362,6 +36457,11 @@ begin
      POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
     end;
    end;
+   pvtFUNCTION:begin
+    if not POCAHashGet(Context,Context.Instance^.Globals.FunctionHash,Key,result) then begin
+     POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+    end;
+   end;
    pvtHASH:begin
     if not POCAHashGet(Context,Box,Key,result) then begin
      if not POCAHashGet(Context,Context.Instance^.Globals.HashHash,Key,result) then begin
@@ -36429,6 +36529,11 @@ begin
   case POCAGetValueType(Box) of
    pvtNUMBER:begin
     if not POCAHashGet(Context,Context.Instance^.Globals.NumberHash,Key,result) then begin
+     result.CastedUInt64:=POCAValueNullCastedUInt64;
+    end;
+   end;
+   pvtFUNCTION:begin
+    if not POCAHashGet(Context,Context.Instance^.Globals.FunctionHash,Key,result) then begin
      result.CastedUInt64:=POCAValueNullCastedUInt64;
     end;
    end;

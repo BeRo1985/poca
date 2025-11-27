@@ -3550,6 +3550,114 @@ developers. They provide a consistent interface for common tasks,
 allowing you to focus on your application logic rather than low-level
 details.
 
+== Function
+
+=== Overview
+
+The POCA Function API provides methods that can be called on function 
+values. Functions in POCA can be stored in variables, passed as arguments, 
+and have methods called on them. The FunctionHash prototype provides these 
+methods to all function values, enabling advanced function manipulation and 
+invocation patterns.
+
+'''''
+
+=== API Functions
+
+==== Function.call
+
+*Usage:*
+
+[source,js]
+----
+let result = myFunction.call(arguments, thisValue, namespace);
+----
+
+* *Description:* Invokes a function with an explicit `+this+` context 
+and namespace. This method provides fine-grained control over function 
+execution by allowing you to specify the context (`+this+` binding) and 
+the namespace in which the function executes. The `+call+` method is 
+particularly useful for: applying a function to different objects, 
+borrowing methods from one object to use on another, or controlling 
+the execution environment of dynamically generated functions.
+
+* *Parameters:*
+** `+arguments+` – An array of arguments to pass to the function, or 
+`+null+` if no arguments are needed. Each element in the array becomes a 
+parameter to the function call.
+** `+thisValue+` (optional) – The value to use as `+this+` when executing 
+the function. Must be a hash or ghost object. If not provided or `+null+`, 
+the function executes without a specific `+this+` context.
+** `+namespace+` (optional) – A hash object to use as the namespace for 
+the function execution. If not provided, a new empty hash is created as 
+the namespace.
+
+* *Return Value:* The return value of the invoked function.
+
+* *Example:*
+
++
+[source,js]
+----
+// Basic usage - calling a function with arguments
+function greet(name, title) {
+  print("Hello, " ~ title ~ " " ~ name ~ "!\n");
+  return "Greeted " ~ name;
+}
+
+let result = greet.call(["Alice", "Dr."]);
+// Prints: Hello, Dr. Alice!
+// result is "Greeted Alice"
+
+// Using with a custom 'this' context
+function introduce() {
+  print("I am " ~ this.name ~ " from " ~ this.city ~ "\n");
+}
+
+let person = { name: "Bob", city: "Berlin" };
+introduce.call([], person);
+// Prints: I am Bob from Berlin
+
+// Comparing with global call() function
+// These two calls are equivalent:
+let result1 = myFunc.call([arg1, arg2], thisObj);
+let result2 = call(myFunc, [arg1, arg2], thisObj);
+----
+
+* *Notes:*
+** The `+call+` method is similar to the global `+call+` function, but 
+with the function itself as the receiver (method syntax) rather than as 
+the first parameter.
+** If the `+arguments+` parameter is not `+null+` or an array, a runtime 
+error is raised.
+** The `+thisValue+` parameter is only used if it is a hash or ghost 
+object; otherwise, the function executes without a specific `+this+` 
+binding.
+** A new sub-context is created for the function execution to ensure 
+proper scoping and error handling.
+
+'''''
+
+=== Summary
+
+*Function Methods in POCA*
+
+The Function API provides methods for advanced function manipulation:
+
+1. *`+call+`* – Invoke a function with explicit control over the 
+arguments array, `+this+` context, and execution namespace.
+
+These methods enable functional programming patterns such as dynamic 
+method borrowing, context manipulation, and flexible function application. 
+When combined with POCA's closure support and the global functions like 
+`+bind+`, `+caller+`, and `+closure+`, the Function API provides a 
+powerful foundation for advanced scripting patterns.
+
+*Note:* All functions in POCA automatically have access to these methods 
+through the FunctionHash prototype. There is no need to explicitly 
+create or configure function objects – any function value can immediately 
+use these methods.
+
 == Hash
 
 === Overview
