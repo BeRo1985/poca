@@ -13030,7 +13030,7 @@ var OutputString:TPOCARawByteString;
     OutputString:=OutputString+'{';
     Keys:=POCANewArray(Context);
     POCAHashKeys(Context,Keys,Value);
-    POCAArraySort(Context,Keys);
+//  POCAArraySort(Context,Keys);
     if POCAIsValueArray(Keys) then begin
      for i:=0 to POCAArraySize(Keys)-1 do begin
       if i>0 then begin
@@ -18016,7 +18016,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashRawKeys(result,Hash);
- POCAArraySort(Context,result);
+//POCAArraySort(Context,result);
 end;
 
 function POCAGlobalFunctionMAP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -19187,7 +19187,7 @@ begin
  end;
  result:=POCANewArray(Context);
  POCAHashRawKeys(result,This);
- POCAArraySort(Context,result);
+//POCAArraySort(Context,result);
 end;
 
 function POCAInitHashHash(Context:PPOCAContext):TPOCAValue;
