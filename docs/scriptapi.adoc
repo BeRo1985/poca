@@ -7724,6 +7724,34 @@ let upper = "HeLLo".toUpperCase();
 
 '''''
 
+==== String.escape
+
+*Usage:*
+
+[source,js]
+----
+let escaped = "Hello\nWorld\t!".escape();
+----
+
+* *Description:* Escapes special characters in the string using standard escape sequences. Control characters (like newline, tab, etc.) are converted to their escape sequences (`\n`, `\t`, etc.). For UTF-8 strings, non-ASCII characters are escaped using Unicode escape sequences: `\xXX` for bytes 0-255, `\uXXXX` for Unicode code points 256-65535, and `\UXXXXXXXX` for code points above 65535. Printable ASCII characters (32-126) except special characters remain unescaped.
+* *Parameters:* None.
+* *Return Value:* A new string with special characters escaped.
+* *Example:*
++
+[source,js]
+----
+let s1 = "Hello\nWorld";
+puts(s1.escape()); // Output: Hello\nWorld
+
+let s2 = "Quote: \"test\"";
+puts(s2.escape()); // Output: Quote: \"test\"
+
+let s3 = "Unicode: \u4F60\u597D";
+puts(s3.escape()); // Output: Unicode: \u4F60\u597D
+----
+
+'''''
+
 ==== String.substr
 
 *Usage:*

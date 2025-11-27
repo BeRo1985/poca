@@ -19724,6 +19724,121 @@ begin
  end;
 end;
 
+function POCAStringFunctionESCAPE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var SourceString,EscapedString:TPOCARawByteString;
+    StringPointer:PPOCAString;
+    Index,CodeUnit:TPOCAInt32;
+    CurrentChar:ansichar;
+    CharValue:TPOCAUInt32;
+begin
+ if not POCAIsValueString(This) then begin
+  POCARuntimeError(Context,'Bad this value to "escape"');
+ end;
+ StringPointer:=PPOCAString(POCAGetValueReferencePointer(This));
+ SourceString:=StringPointer^.Data;
+ EscapedString:='';
+ if StringPointer^.UTF8=suISUTF8 then begin
+  CodeUnit:=1;
+  while CodeUnit<=length(SourceString) do begin
+   CharValue:=PUCUUTF8CodeUnitGetCharAndIncFallback(SourceString,CodeUnit);
+   case CharValue of
+    0:begin
+     EscapedString:=EscapedString+'\0';
+    end;
+    7:begin
+     EscapedString:=EscapedString+'\a';
+    end;
+    8:begin
+     EscapedString:=EscapedString+'\b';
+    end;
+    9:begin
+     EscapedString:=EscapedString+'\t';
+    end;
+    10:begin
+     EscapedString:=EscapedString+'\n';
+    end;
+    11:begin
+     EscapedString:=EscapedString+'\v';
+    end;
+    12:begin
+     EscapedString:=EscapedString+'\f';
+    end;
+    13:begin
+     EscapedString:=EscapedString+'\r';
+    end;
+    ord('"'):begin
+     EscapedString:=EscapedString+'\"';
+    end;
+    ord(''''):begin
+     EscapedString:=EscapedString+'\''';
+    end;
+    ord('\'):begin
+     EscapedString:=EscapedString+'\\';
+    end;
+    32..33,35..38,40..91,93..126:begin
+     EscapedString:=EscapedString+ansichar(TPOCAUInt8(CharValue));
+    end;
+    1..6,14..31,127..255:begin
+     EscapedString:=EscapedString+'\x'+IntToHex(CharValue,2);
+    end;
+    256..65535:begin
+     EscapedString:=EscapedString+'\u'+IntToHex(CharValue,4);
+    end;
+    else begin
+     EscapedString:=EscapedString+'\U'+IntToHex(CharValue,8);
+    end;
+   end;
+  end;
+ end else begin
+  for Index:=1 to length(SourceString) do begin
+   CurrentChar:=SourceString[Index];
+   case CurrentChar of
+    #0:begin
+     EscapedString:=EscapedString+'\0';
+    end;
+    #7:begin
+     EscapedString:=EscapedString+'\a';
+    end;
+    #8:begin
+     EscapedString:=EscapedString+'\b';
+    end;
+    #9:begin
+     EscapedString:=EscapedString+'\t';
+    end;
+    #10:begin
+     EscapedString:=EscapedString+'\n';
+    end;
+    #11:begin
+     EscapedString:=EscapedString+'\v';
+    end;
+    #12:begin
+     EscapedString:=EscapedString+'\f';
+    end;
+    #13:begin
+     EscapedString:=EscapedString+'\r';
+    end;
+    '"':begin
+     EscapedString:=EscapedString+'\"';
+    end;
+    '''':begin
+     EscapedString:=EscapedString+'\''';
+    end;
+    '\':begin
+     EscapedString:=EscapedString+'\\';
+    end;
+    else begin
+     if (ord(CurrentChar)<32) or (ord(CurrentChar)>126) then begin
+      EscapedString:=EscapedString+'\x'+IntToHex(ord(CurrentChar),2);
+     end else begin
+      EscapedString:=EscapedString+CurrentChar;
+     end;
+    end;
+   end;
+  end;
+ end;
+ result:=POCANewString(Context,EscapedString);
+end;
+
 function POCAStringFunctionSUBSTR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var Len,Start,Size,IsUTF8:TPOCAInt32;
     LenValue:TPOCAValue;
@@ -20283,6 +20398,7 @@ begin
  POCAAddNativeFunction(Context,result,'trimRight',POCAStringFunctionTRIMRIGHT);
  POCAAddNativeFunction(Context,result,'toLowerCase',POCAStringFunctionTOLOWERCASE);
  POCAAddNativeFunction(Context,result,'toUpperCase',POCAStringFunctionTOUPPERCASE);
+ POCAAddNativeFunction(Context,result,'escape',POCAStringFunctionESCAPE);
  POCAAddNativeFunction(Context,result,'substr',POCAStringFunctionSUBSTR);
  POCAAddNativeFunction(Context,result,'toLatin1',POCAStringFunctionTOLATIN1);
  POCAAddNativeFunction(Context,result,'isLatin1',POCAStringFunctionISLATIN1);
