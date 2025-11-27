@@ -527,7 +527,8 @@ const POCAVersion='2025-11-22-06-55-0000';
       popMCALLA=162;
       popFTAILCALLA=163;
       popMTAILCALLA=164;
-      popCOUNT=165;
+      popARRAYAPPEND=165;
+      popCOUNT=166;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -2089,6 +2090,7 @@ function POCAArrayGet(const ArrayObject:TPOCAValue;i:TPOCAInt32):TPOCAValue;
 procedure POCAArraySet(const ArrayObject:TPOCAValue;i:TPOCAInt32;const Value:TPOCAValue);
 function POCAArraySize(const ArrayObject:TPOCAValue):TPOCAUInt32;
 function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
+function POCAArrayAppend(const ArrayObject:TPOCAValue;const WithArrayObject:TPOCAValue):TPOCAUInt32;
 function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):TPOCAUInt32;
 function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:TPOCAInt32):TPOCAUInt32;
 function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
@@ -9276,6 +9278,35 @@ begin
  end;
 end;
 
+function POCAArrayGrowToSize(ArrayObject:PPOCAArray;Size:TPOCAUInt32):PPOCAArrayRecord;
+var Old:PPOCAArrayRecord;
+    Index,OldSize,NewSize:TPOCAUInt32;
+begin
+ Old:=ArrayObject^.ArrayRecord;
+ if assigned(Old) then begin
+  OldSize:=Old^.Size;
+ end else begin
+  OldSize:=0;
+ end;
+ if OldSize<Size then begin
+  NewSize:=((Size*3) shr 1)+1;
+  GetMem(result,sizeof(TPOCAArrayRecord)+(NewSize*sizeof(TPOCAValue)));
+  FillChar(result^,sizeof(TPOCAArrayRecord)+(NewSize*sizeof(TPOCAValue)),#0);
+  result^.Allocated:=NewSize;
+  if assigned(Old) then begin
+   result^.Size:=OldSize;
+   Index:=0;
+   while Index<OldSize do begin
+    result^.Data[Index]:=Old^.Data[Index];
+    inc(Index);
+   end;
+  end else begin
+   result^.Size:=0;
+  end;
+  POCAGarbageCollectorSwapFree(ArrayObject^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@ArrayObject^.ArrayRecord,result);
+ end;
+end;
+
 function POCAArrayResize(ArrayObject:PPOCAArray):PPOCAArrayRecord;
 begin
  result:=POCAArrayNewRecord(ArrayObject^.ArrayRecord);
@@ -9350,7 +9381,7 @@ begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   ArrayRecord:=ArrayInstance^.ArrayRecord;
-  while (not assigned(ArrayRecord)) or (ArrayRecord^.Size>=ArrayRecord^.Allocated) do begin
+  while (not assigned(ArrayRecord)) or (ArrayRecord^.Allocated<=ArrayRecord^.Size) do begin
    ArrayRecord:=POCAArrayResize(ArrayInstance);
   end;
   if assigned(ArrayRecord) then begin
@@ -9362,6 +9393,40 @@ begin
   end;
  end;
  result:=0;
+end;
+
+function POCAArrayAppend(const ArrayObject:TPOCAValue;const WithArrayObject:TPOCAValue):TPOCAUInt32;
+var Index:TPOCAInt32;
+    TemporaryOldSize:TPOCAUInt32;
+    ArrayInstance,WithArrayInstance:PPOCAArray;
+    ArrayRecord,WithArrayRecord:PPOCAArrayRecord;
+begin
+ result:=0;
+ if POCAIsValueArray(ArrayObject) and POCAIsValueArray(WithArrayObject) then begin
+  ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
+  WithArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(WithArrayObject));
+  WithArrayRecord:=WithArrayInstance^.ArrayRecord;
+  if assigned(WithArrayRecord) and (WithArrayRecord^.Size>0) then begin
+   ArrayRecord:=ArrayInstance^.ArrayRecord;
+   if assigned(ArrayRecord) then begin
+    TemporaryOldSize:=ArrayRecord^.Size;
+   end else begin
+    TemporaryOldSize:=0;
+   end;
+   ArrayRecord:=POCAArrayGrowToSize(ArrayInstance,TemporaryOldSize+WithArrayRecord^.Size);
+   for Index:=0 to WithArrayRecord^.Size-1 do begin
+    ArrayRecord^.Data[TemporaryOldSize+Index]:=WithArrayRecord^.Data[Index];
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),WithArrayRecord^.Data[Index]);
+   end;
+   ArrayRecord^.Size:=TemporaryOldSize+WithArrayRecord^.Size;
+   result:=ArrayRecord^.Size;
+  end else begin
+   ArrayRecord:=ArrayInstance^.ArrayRecord;
+   if assigned(ArrayRecord) then begin
+    result:=ArrayRecord^.Size;
+   end;
+  end;
+ end;
 end;
 
 function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):TPOCAUInt32;
@@ -31225,9 +31290,15 @@ var TokenList:PPOCAToken;
        FreeRegister(Reg2);
        FreeRegister(Reg1);
       end else begin
-       Reg1:=GenerateExpression(t,-1,true);
-       EmitOpcode(popARRAYPUSH,ArrayReg,Reg1);
-       FreeRegister(Reg1);
+       if t^.Token=ptELLIPSIS then begin
+        Reg1:=GenerateExpression(t^.Left,-1,true);
+        EmitOpcode(popARRAYAPPEND,ArrayReg,Reg1);
+        FreeRegister(Reg1);
+       end else begin
+        Reg1:=GenerateExpression(t,-1,true);
+        EmitOpcode(popARRAYPUSH,ArrayReg,Reg1);
+        FreeRegister(Reg1);
+       end;
       end;
      end;
     end;
@@ -31363,11 +31434,14 @@ var TokenList:PPOCAToken;
      begin  
       result:=false;
       while assigned(t) do begin
-       if assigned(t) and (t^.Token=ptELLIPSIS) then begin
+       if assigned(t^.Left) and (t^.Left^.Token=ptELLIPSIS) then begin
         result:=true;
         break;
        end else begin
-        if t^.Token=ptCOMMA then begin
+        if assigned(t) and (t^.Token=ptELLIPSIS) then begin
+         result:=true;
+         break;
+        end else if t^.Token=ptCOMMA then begin
          t:=t^.Right;
         end else begin
          break;
@@ -31502,16 +31576,15 @@ var TokenList:PPOCAToken;
         end;
         FreeRegister(Reg3);
        end else begin
-        SyntaxError('Dynamic spread operator not implemented yet',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-{       Reg3:=GetRegister(true,false);
+        Reg3:=GetRegister(true,false);
         EmitOpcode(popNEWARRAY,Reg3);
-        GenerateCallSpreadArray(t^.Right,Reg3);
+        GenerateArray(t^.Right,Reg3);
         if IsMethod then begin
          EmitOpcode(popMCALLA,result,Reg1,Reg2,Reg3);
         end else begin
          EmitOpcode(popFCALLA,result,Reg2,Reg3);
         end;
-        FreeRegister(Reg3);}
+        FreeRegister(Reg3);
        end;
       end else begin
        Count:=CollectList(t^.Right);
@@ -40743,6 +40816,9 @@ begin
     popMTAILCALLA:begin
      DoItByVMOpcodeDispatcher;
     end;
+    popARRAYAPPEND:begin
+     DoItByVMOpcodeDispatcher;
+    end;
     else begin
      DoItByVMOpcodeDispatcher;
     end;
@@ -42892,6 +42968,10 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
 
+    popARRAYAPPEND:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
     else begin
      // For now, all other opcodes fall back to VM interpreter
      DoItByVMOpcodeDispatcher;
@@ -44206,6 +44286,9 @@ begin
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
+   end;
+   popARRAYAPPEND:begin
+    POCAArrayAppend(Registers^[Operands^[0]],Registers^[Operands^[1]]);
    end;
    popCOUNT..255:begin
     POCARuntimeError(Context,'Invalid unknown opcode instruction');
