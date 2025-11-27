@@ -653,6 +653,141 @@ arr.unshift("new item");
 
 '''''
 
+==== Array.map
+
+*Usage:*
+[source,js]
+----
+let newArr = arr.map(callback);
+----
+
+* *Description:* Creates a new array populated with the results of calling
+a provided function on every element in the calling array.
+* *Parameters:*
+** `+callback+` (function): A function that is called for every element of
+the array. It accepts three arguments:
+*** `+currentValue+`: The current element being processed.
+*** `+index+`: The index of the current element.
+*** `+array+`: The array that `+map+` was called upon.
+* *Return Value:* A new array with each element being the result of the
+callback function.
+* *Example:*
++
+[source,js]
+----
+function myFunction(num) {
+  return num * 10;
+}
+
+let numbers = [65, 44, 12, 4];
+let newArr = numbers.map(myFunction);
+// newArr is [650, 440, 120, 40]
+
+// Using inline function
+let doubled = numbers.map(function(x) { return x * 2; });
+// doubled is [130, 88, 24, 8]
+----
+
+'''''
+
+==== Array.reduce
+
+*Usage:*
+[source,js]
+----
+let result = arr.reduce(callback);
+let result = arr.reduce(callback, initialValue);
+----
+
+* *Description:* Executes a reducer function on each element of the array,
+resulting in a single output value. The reducer function is executed from
+left to right.
+* *Parameters:*
+** `+callback+` (function): A function to execute on each element in the
+array. It accepts four arguments:
+*** `+accumulator+`: The accumulated value previously returned in the last
+invocation of the callback, or `+initialValue+`, if supplied.
+*** `+currentValue+`: The current element being processed.
+*** `+index+`: The index of the current element.
+*** `+array+`: The array that `+reduce+` was called upon.
+** `+initialValue+` (optional): A value to use as the first argument to the
+first call of the callback. If no initial value is supplied, the first
+element in the array will be used as the initial accumulator value and
+skipped as currentValue.
+* *Return Value:* The single value that results from the reduction.
+* *Example:*
++
+[source,js]
+----
+function sum(accumulator, currentValue) {
+  return accumulator + currentValue;
+}
+
+let numbers = [65, 44, 12, 4];
+let total = numbers.reduce(sum);
+// total is 125
+
+// With initial value
+let totalWithInit = numbers.reduce(sum, 100);
+// totalWithInit is 225
+
+// Finding maximum value
+let max = numbers.reduce(function(acc, val) {
+  if (val > acc) {
+    return val;
+  }
+  return acc;
+});
+// max is 65
+----
+
+'''''
+
+==== Array.reduceRight
+
+*Usage:*
+[source,js]
+----
+let result = arr.reduceRight(callback);
+let result = arr.reduceRight(callback, initialValue);
+----
+
+* *Description:* Applies a function against an accumulator and each value
+of the array (from right-to-left) to reduce it to a single value.
+* *Parameters:*
+** `+callback+` (function): A function to execute on each element in the
+array, taking four arguments:
+*** `+accumulator+`: The accumulated value previously returned in the last
+invocation of the callback, or `+initialValue+`, if supplied.
+*** `+currentValue+`: The current element being processed.
+*** `+index+`: The index of the current element.
+*** `+array+`: The array that `+reduceRight+` was called upon.
+** `+initialValue+` (optional): Value to use as accumulator to the first
+call of the callback. If no initial value is supplied, the last element in
+the array will be used and skipped.
+* *Return Value:* The value that results from the reduction.
+* *Example:*
++
+[source,js]
+----
+let nums = [1, 2, 3, 4];
+
+// Subtract from right to left
+let difference = nums.reduceRight(function(acc, val) {
+  return acc - val;
+});
+// difference is -2 (4 - 3 - 2 - 1)
+
+// Build array in reverse
+let reversed = nums.reduceRight(function(acc, val) {
+  acc.push(val);
+  return acc;
+}, []);
+// reversed is [4, 3, 2, 1]
+----
+
+'''''
+
 === Summary
 
 * *Global Object:* The Array object acts as a factory for creating array
@@ -670,11 +805,34 @@ empty.
 ** *push:* Appends one or more elements to the end of the array.
 ** *pop:* Removes and returns the last element of the array.
 ** *slice:* Extracts a portion of the array into a new array.
+** *splice:* Changes the contents of an array by removing or replacing
+existing elements and/or adding new elements.
+** *toSpliced:* Returns a new array with some elements removed and/or
+replaced at a given index.
 ** *sort:* Sorts the array elements.
+** *toSorted:* Returns a new sorted array without modifying the original.
 ** *join:* Concatenates array elements into a string, separated by a
 specified separator.
 ** *fill:* Replaces a range of elements in the array with a specified
 value.
+** *toFilled:* Returns a new array with a range of elements filled with a
+specified value.
+** *delete:* Removes an element at a specified index.
+** *remove:* Removes the first occurrence of a specified value.
+** *indexOf:* Returns the first index at which a given element can be found.
+** *lastIndexOf:* Returns the last index at which a given element can be
+found.
+** *reverse:* Reverses the order of the elements in the array.
+** *toReversed:* Returns a new array with the elements in reversed order.
+** *includes:* Determines whether an array contains a specified element.
+** *shift:* Removes and returns the first element from the array.
+** *unshift:* Adds one or more elements to the beginning of the array.
+** *map:* Creates a new array with the results of calling a provided
+function on every element.
+** *reduce:* Executes a reducer function on each element, resulting in a
+single output value (left to right).
+** *reduceRight:* Executes a reducer function on each element, resulting in
+a single output value (right to left).
 * *Usage:* Arrays in POCA function similarly to JavaScript arrays,
 offering dynamic resizing and a rich set of operations for manipulating
 collections of values. This comprehensive API lets you incorporate

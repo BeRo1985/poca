@@ -18565,6 +18565,134 @@ begin
  result:=This;
 end;
 
+function POCAArrayFunctionMAP(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Size:TPOCAInt32;
+    MapFunction:TPOCAValue;
+    CallArguments:array[0..2] of TPOCAValue;
+    SubContext:PPOCAContext;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "map"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "map"');
+ end;
+ MapFunction:=Arguments^[0];
+ if not POCAIsValueFunctionOrNativeCode(MapFunction) then begin
+  POCARuntimeError(Context,'First argument to "map" must be a function');
+ end;
+ Size:=POCAArraySize(This);
+ result:=POCANewArray(Context);
+ POCAArraySetSize(result,Size);
+ SubContext:=POCAContextSub(Context);
+ try
+  for i:=0 to Size-1 do begin
+   CallArguments[0]:=POCAArrayGet(This,i);
+   CallArguments[1].Num:=i;
+   CallArguments[2]:=This;
+   POCAArraySet(result,i,POCACall(SubContext,MapFunction,@CallArguments,3,POCAValueNull,POCAValueNull));
+  end;
+ finally
+  POCAContextDestroy(SubContext);
+ end;
+end;
+
+function POCAArrayFunctionREDUCE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Size,StartIndex:TPOCAInt32;
+    ReduceFunction:TPOCAValue;
+    CallArguments:array[0..3] of TPOCAValue;
+    SubContext:PPOCAContext;
+    Accumulator:TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "reduce"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "reduce"');
+ end;
+ ReduceFunction:=Arguments^[0];
+ if not POCAIsValueFunctionOrNativeCode(ReduceFunction) then begin
+  POCARuntimeError(Context,'First argument to "reduce" must be a function');
+ end;
+ Size:=POCAArraySize(This);
+ if Size=0 then begin
+  if CountArguments>=2 then begin
+   result:=Arguments^[1];
+  end else begin
+   POCARuntimeError(Context,'Reduce of empty array with no initial value');
+  end;
+  exit;
+ end;
+ if CountArguments>=2 then begin
+  Accumulator:=Arguments^[1];
+  StartIndex:=0;
+ end else begin
+  Accumulator:=POCAArrayGet(This,0);
+  StartIndex:=1;
+ end;
+ SubContext:=POCAContextSub(Context);
+ try
+  for i:=StartIndex to Size-1 do begin
+   CallArguments[0]:=Accumulator;
+   CallArguments[1]:=POCAArrayGet(This,i);
+   CallArguments[2].Num:=i;
+   CallArguments[3]:=This;
+   Accumulator:=POCACall(SubContext,ReduceFunction,@CallArguments,4,POCAValueNull,POCAValueNull);
+  end;
+ finally
+  POCAContextDestroy(SubContext);
+ end;
+ result:=Accumulator;
+end;
+
+function POCAArrayFunctionREDUCERIGHT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Size,StartIndex:TPOCAInt32;
+    ReduceFunction:TPOCAValue;
+    CallArguments:array[0..3] of TPOCAValue;
+    SubContext:PPOCAContext;
+    Accumulator:TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "reduceRight"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "reduceRight"');
+ end;
+ ReduceFunction:=Arguments^[0];
+ if not POCAIsValueFunctionOrNativeCode(ReduceFunction) then begin
+  POCARuntimeError(Context,'First argument to "reduceRight" must be a function');
+ end;
+ Size:=POCAArraySize(This);
+ if Size=0 then begin
+  if CountArguments>=2 then begin
+   result:=Arguments^[1];
+  end else begin
+   POCARuntimeError(Context,'Reduce of empty array with no initial value');
+  end;
+  exit;
+ end;
+ if CountArguments>=2 then begin
+  Accumulator:=Arguments^[1];
+  StartIndex:=Size-1;
+ end else begin
+  Accumulator:=POCAArrayGet(This,Size-1);
+  StartIndex:=Size-2;
+ end;
+ SubContext:=POCAContextSub(Context);
+ try
+  for i:=StartIndex downto 0 do begin
+   CallArguments[0]:=Accumulator;
+   CallArguments[1]:=POCAArrayGet(This,i);
+   CallArguments[2].Num:=i;
+   CallArguments[3]:=This;
+   Accumulator:=POCACall(SubContext,ReduceFunction,@CallArguments,4,POCAValueNull,POCAValueNull);
+  end;
+ finally
+  POCAContextDestroy(SubContext);
+ end;
+ result:=Accumulator;
+end;
+
 function POCAInitArrayHash(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
@@ -18590,6 +18718,9 @@ begin
  POCAAddNativeFunction(Context,result,'includes',POCAArrayFunctionINCLUDES);
  POCAAddNativeFunction(Context,result,'shift',POCAArrayFunctionSHIFT);
  POCAAddNativeFunction(Context,result,'unshift',POCAArrayFunctionUNSHIFT);
+ POCAAddNativeFunction(Context,result,'map',POCAArrayFunctionMAP);
+ POCAAddNativeFunction(Context,result,'reduce',POCAArrayFunctionREDUCE);
+ POCAAddNativeFunction(Context,result,'reduceRight',POCAArrayFunctionREDUCERIGHT);
 end;
 
 function POCAHashFunctionEMPTY(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -35352,7 +35483,7 @@ begin
 
   inc(ArgumentOffset,Code^.CountOptionalArguments);
 
-  if Code^.NeedArgumentArray or Code^.HasRestArguments or (CountArguments>0) then begin
+  if Code^.NeedArgumentArray or Code^.HasRestArguments or ((CountArguments>0) and not Code^.FastFunction) then begin
    Arguments:=POCANewArray(Context);
    if CountArguments<=0 then begin
     CountArguments:=0;
@@ -43634,8 +43765,10 @@ begin
     result:=NativeCode^.FunctionPointer(Context,Obj,Arguments,CountArguments,NativeCode^.UserData);
    end else begin
     begin
-     if POCAIsValueNull(Locals) and not PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code))^.FastFunction then begin
-      Locals:=POCANewHash(Context);
+     if POCAIsValueNull(Locals) then begin
+      if not PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code))^.FastFunction then begin
+       Locals:=POCANewHash(Context);
+      end;
      end;
      if not POCAIsValueFunction(Func) then begin
       Func:=POCANewFunction(Context,Func);

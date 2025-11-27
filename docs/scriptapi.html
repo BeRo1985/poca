@@ -480,6 +480,9 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_array_includes">Array.includes</a></li>
 <li><a href="#_array_shift">Array.shift</a></li>
 <li><a href="#_array_unshift">Array.unshift</a></li>
+<li><a href="#_array_map">Array.map</a></li>
+<li><a href="#_array_reduce">Array.reduce</a></li>
+<li><a href="#_array_reduceright">Array.reduceRight</a></li>
 </ul>
 </li>
 <li><a href="#_summary">Summary</a></li>
@@ -2062,6 +2065,236 @@ array.</p>
 </div>
 <hr>
 </div>
+<div class="sect3">
+<h4 id="_array_map">Array.map</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let newArr = arr.map(callback);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Creates a new array populated with the results of calling
+a provided function on every element in the calling array.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>callback</code> (function): A function that is called for every element of
+the array. It accepts three arguments:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>currentValue</code>: The current element being processed.</p>
+</li>
+<li>
+<p><code>index</code>: The index of the current element.</p>
+</li>
+<li>
+<p><code>array</code>: The array that <code>map</code> was called upon.</p>
+</li>
+</ul>
+</div>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new array with each element being the result of the
+callback function.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">function myFunction(num) {
+  return num * 10;
+}
+
+let numbers = [65, 44, 12, 4];
+let newArr = numbers.map(myFunction);
+// newArr is [650, 440, 120, 40]
+
+// Using inline function
+let doubled = numbers.map(function(x) { return x * 2; });
+// doubled is [130, 88, 24, 8]</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_array_reduce">Array.reduce</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let result = arr.reduce(callback);
+let result = arr.reduce(callback, initialValue);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Executes a reducer function on each element of the array,
+resulting in a single output value. The reducer function is executed from
+left to right.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>callback</code> (function): A function to execute on each element in the
+array. It accepts four arguments:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>accumulator</code>: The accumulated value previously returned in the last
+invocation of the callback, or <code>initialValue</code>, if supplied.</p>
+</li>
+<li>
+<p><code>currentValue</code>: The current element being processed.</p>
+</li>
+<li>
+<p><code>index</code>: The index of the current element.</p>
+</li>
+<li>
+<p><code>array</code>: The array that <code>reduce</code> was called upon.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><code>initialValue</code> (optional): A value to use as the first argument to the
+first call of the callback. If no initial value is supplied, the first
+element in the array will be used as the initial accumulator value and
+skipped as currentValue.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The single value that results from the reduction.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">function sum(accumulator, currentValue) {
+  return accumulator + currentValue;
+}
+
+let numbers = [65, 44, 12, 4];
+let total = numbers.reduce(sum);
+// total is 125
+
+// With initial value
+let totalWithInit = numbers.reduce(sum, 100);
+// totalWithInit is 225
+
+// Finding maximum value
+let max = numbers.reduce(function(acc, val) {
+  if (val &gt; acc) {
+    return val;
+  }
+  return acc;
+});
+// max is 65</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
+<h4 id="_array_reduceright">Array.reduceRight</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let result = arr.reduceRight(callback);
+let result = arr.reduceRight(callback, initialValue);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Applies a function against an accumulator and each value
+of the array (from right-to-left) to reduce it to a single value.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>callback</code> (function): A function to execute on each element in the
+array, taking four arguments:</p>
+<div class="ulist">
+<ul>
+<li>
+<p><code>accumulator</code>: The accumulated value previously returned in the last
+invocation of the callback, or <code>initialValue</code>, if supplied.</p>
+</li>
+<li>
+<p><code>currentValue</code>: The current element being processed.</p>
+</li>
+<li>
+<p><code>index</code>: The index of the current element.</p>
+</li>
+<li>
+<p><code>array</code>: The array that <code>reduceRight</code> was called upon.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><code>initialValue</code> (optional): Value to use as accumulator to the first
+call of the callback. If no initial value is supplied, the last element in
+the array will be used and skipped.</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The value that results from the reduction.</p>
+</li>
+<li>
+<p><strong>Example:</strong></p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let nums = [1, 2, 3, 4];
+
+// Subtract from right to left
+let difference = nums.reduceRight(function(acc, val) {
+  return acc - val;
+});
+// difference is -2 (4 - 3 - 2 - 1)
+
+// Build array in reverse
+let reversed = nums.reduceRight(function(acc, val) {
+  acc.push(val);
+  return acc;
+}, []);
+// reversed is [4, 3, 2, 1]</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<hr>
+</div>
 </div>
 <div class="sect2">
 <h3 id="_summary">Summary</h3>
@@ -2102,7 +2335,18 @@ empty.</p>
 <p><strong>slice:</strong> Extracts a portion of the array into a new array.</p>
 </li>
 <li>
+<p><strong>splice:</strong> Changes the contents of an array by removing or replacing
+existing elements and/or adding new elements.</p>
+</li>
+<li>
+<p><strong>toSpliced:</strong> Returns a new array with some elements removed and/or
+replaced at a given index.</p>
+</li>
+<li>
 <p><strong>sort:</strong> Sorts the array elements.</p>
+</li>
+<li>
+<p><strong>toSorted:</strong> Returns a new sorted array without modifying the original.</p>
 </li>
 <li>
 <p><strong>join:</strong> Concatenates array elements into a string, separated by a
@@ -2111,6 +2355,50 @@ specified separator.</p>
 <li>
 <p><strong>fill:</strong> Replaces a range of elements in the array with a specified
 value.</p>
+</li>
+<li>
+<p><strong>toFilled:</strong> Returns a new array with a range of elements filled with a
+specified value.</p>
+</li>
+<li>
+<p><strong>delete:</strong> Removes an element at a specified index.</p>
+</li>
+<li>
+<p><strong>remove:</strong> Removes the first occurrence of a specified value.</p>
+</li>
+<li>
+<p><strong>indexOf:</strong> Returns the first index at which a given element can be found.</p>
+</li>
+<li>
+<p><strong>lastIndexOf:</strong> Returns the last index at which a given element can be
+found.</p>
+</li>
+<li>
+<p><strong>reverse:</strong> Reverses the order of the elements in the array.</p>
+</li>
+<li>
+<p><strong>toReversed:</strong> Returns a new array with the elements in reversed order.</p>
+</li>
+<li>
+<p><strong>includes:</strong> Determines whether an array contains a specified element.</p>
+</li>
+<li>
+<p><strong>shift:</strong> Removes and returns the first element from the array.</p>
+</li>
+<li>
+<p><strong>unshift:</strong> Adds one or more elements to the beginning of the array.</p>
+</li>
+<li>
+<p><strong>map:</strong> Creates a new array with the results of calling a provided
+function on every element.</p>
+</li>
+<li>
+<p><strong>reduce:</strong> Executes a reducer function on each element, resulting in a
+single output value (left to right).</p>
+</li>
+<li>
+<p><strong>reduceRight:</strong> Executes a reducer function on each element, resulting in
+a single output value (right to left).</p>
 </li>
 </ul>
 </div>
@@ -14232,7 +14520,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-26 23:31:57 +0100
+Last updated 2025-11-27 01:10:24 +0100
 </div>
 </div>
 </body>
