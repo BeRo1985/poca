@@ -748,7 +748,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ptLITERALSTR,
       ptEMPTY,
       ptNULL,
-      ptELLIPSIS,
+      ptPREELLIPSIS,
+      ptPOSTELLIPSIS,
       ptQUESTION,
       ptVAR,
       ptPLUSEQ,
@@ -20651,8 +20652,9 @@ type TPOCATokenPrecedenceRule=(prNONE,prBINARY,prREVERSE,prPREFIX,prSUFFIX);
      end;
      PPOCABinaryToPrefixUnaryTokenCorrectionMap=^TPOCABinaryToPrefixUnaryTokenCorrectionMap;
      TPOCABinaryToPrefixUnaryTokenCorrectionMap=array[TPOCATokenType] of TPOCATokenType;
-const POCATokenPrecedences:array[0..31] of TPOCATokenPrecedence=((Tokens:[ptSEMI,ptCOMMA,ptAUTOSEMI];Rule:prREVERSE),
-                                                                 (Tokens:[ptELLIPSIS];Rule:prSUFFIX),
+const POCATokenPrecedences:array[0..32] of TPOCATokenPrecedence=((Tokens:[ptSEMI,ptCOMMA,ptAUTOSEMI];Rule:prREVERSE),
+                                                                 (Tokens:[ptPREELLIPSIS];Rule:prPREFIX),
+                                                                 (Tokens:[ptPOSTELLIPSIS];Rule:prSUFFIX),
                                                                  (Tokens:[ptREGEXP];Rule:prPREFIX),
                                                                  (Tokens:[ptRETURN,ptBREAK,ptCONTINUE,ptTHROW,ptBREAKPOINT,ptDELETE];Rule:prPREFIX),
                                                                  (Tokens:[ptASSIGN,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMODEQ,ptPOWEQ,ptLOGICALOREQ,ptNULLISHEQ,ptLOGICALANDEQ];Rule:prREVERSE),
@@ -23467,8 +23469,11 @@ var TokenList:PPOCAToken;
     ptNULL:begin
      DumpIt(' null ');
     end;
-    ptELLIPSIS:begin
-     DumpIt(' ... ');
+    ptPREELLIPSIS:begin
+     DumpIt(' ...');
+    end;
+    ptPOSTELLIPSIS:begin
+     DumpIt('... ');
     end;
     ptQUESTION:begin
      DumpIt(' ? ');
@@ -23809,6 +23814,9 @@ var TokenList:PPOCAToken;
     ptSYMBOL:begin
      if assigned(Parser.Tree.LastChild) then begin
       case Parser.Tree.LastChild^.Token of
+       ptPOSTELLIPSIS:begin
+        Parser.Tree.LastChild^.Token:=ptPREELLIPSIS;
+       end;
        ptPOSTDEC:begin
         Parser.Tree.LastChild^.Token:=ptPREDEC;
        end;
@@ -23937,9 +23945,9 @@ var TokenList:PPOCAToken;
    if AutomaticSemicolonInsertion and (assigned(Parser.Tree.LastChild) and not (Parser.Tree.LastChild^.Token in
      [ptAND,ptOR,ptNOT,ptLPAR,ptRPAR,ptLBRA,ptRBRA,ptLCURL,ptMUL,ptPLUS,ptMINUS,ptNEG,ptDIV,ptNUM,ptCOLON,ptDOT,ptCOMMA,ptSEMI,
       ptASSIGN,ptLT,ptLTEQ,ptEQ,ptNEQ,ptGT,ptGTEQ,ptCMP,ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptEMPTY,
-      ptNULL,ptELLIPSIS,ptQUESTION,ptVAR,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptFORINDEX,ptLAND,ptLOR,ptTRY,ptCATCH,ptFINALLY,
-      ptTHROW,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptPOSTDEC,ptPOSTINC,ptPREDEC,ptPREINC,ptBAND,ptBOR,ptBXOR,ptBNOT,ptBSHL,ptBSHR,
-      ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptSCOPE,ptCODE,
+      ptNULL,ptPREELLIPSIS,ptPOSTELLIPSIS,ptQUESTION,ptVAR,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptFORINDEX,ptLAND,ptLOR,ptTRY,
+      ptCATCH,ptFINALLY,ptTHROW,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptPOSTDEC,ptPOSTINC,ptPREDEC,ptPREINC,ptBAND,ptBOR,ptBXOR,ptBNOT,
+      ptBSHL,ptBSHR,ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptSCOPE,ptCODE,
       ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
       ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
@@ -24149,7 +24157,7 @@ var TokenList:PPOCAToken;
         inc(SourcePosition);
         if (SourcePosition<=SourceLength) and (Source[SourcePosition]='.') then begin
          inc(SourcePosition);
-         AddToken(ptELLIPSIS,'',0);
+         AddToken(ptPOSTELLIPSIS,'',0);
         end else begin
          AddToken(ptDOTDOT,'',0);
         end;
@@ -31291,7 +31299,7 @@ var TokenList:PPOCAToken;
        FreeRegister(Reg2);
        FreeRegister(Reg1);
       end else begin
-       if t^.Token=ptELLIPSIS then begin
+       if (t^.Token=ptPREELLIPSIS) or (t^.Token=ptPOSTELLIPSIS) then begin
         if assigned(t^.Left) then begin
          Reg1:=GenerateExpression(t^.Left,-1,true);
         end else begin
@@ -31327,7 +31335,7 @@ var TokenList:PPOCAToken;
      if (not assigned(t)) or (t^.Token=ptEMPTY) then begin
       exit;
      end;
-     if t^.Token=ptELLIPSIS then begin
+     if (t^.Token=ptPREELLIPSIS) or (t^.Token=ptPOSTELLIPSIS) then begin
       if assigned(t^.Left) then begin
        Reg1:=GenerateExpression(t^.Left,-1,true);
       end else begin
@@ -31401,7 +31409,7 @@ var TokenList:PPOCAToken;
     begin
      if assigned(t) then begin
       if (not assigned(t^.Left)) or
-         ((assigned(t^.Left) and (t^.Token=ptCOMMA) and (t^.Left^.Token in [ptCOLON,ptSYMBOL,ptELLIPSIS])) or (t^.Token=ptCOLON)) then begin
+         ((assigned(t^.Left) and (t^.Token=ptCOMMA) and (t^.Left^.Token in [ptCOLON,ptSYMBOL,ptPREELLIPSIS,ptPOSTELLIPSIS])) or (t^.Token=ptCOLON)) then begin
        result:=false;
       end else begin
        result:=true;
@@ -31447,11 +31455,11 @@ var TokenList:PPOCAToken;
      begin  
       result:=false;
       while assigned(t) do begin
-       if assigned(t^.Left) and (t^.Left^.Token=ptELLIPSIS) then begin
+       if assigned(t^.Left) and ((t^.Left^.Token=ptPREELLIPSIS) or (t^.Left^.Token=ptPOSTELLIPSIS)) then begin
         result:=true;
         break;
        end else begin
-        if assigned(t) and (t^.Token=ptELLIPSIS) then begin
+        if assigned(t) and ((t^.Token=ptPREELLIPSIS) or (t^.Token=ptPOSTELLIPSIS)) then begin
          result:=true;
          break;
         end else if t^.Token=ptCOMMA then begin
@@ -31580,7 +31588,7 @@ var TokenList:PPOCAToken;
         FreeRegister(Reg3);
        end; 
       end else if HasSpreadOperator(t^.Right) then begin
-       if assigned(t^.Right) and (t^.Right^.Token=ptELLIPSIS) then begin
+       if assigned(t^.Right) and ((t^.Right^.Token=ptPREELLIPSIS) or (t^.Right^.Token=ptPOSTELLIPSIS)) then begin
         if assigned(t^.Right^.Left) then begin
          Reg3:=GenerateExpression(t^.Right^.Left,-1,true);
         end else begin
@@ -35009,7 +35017,7 @@ var TokenList:PPOCAToken;
     if assigned(t) and (t^.Token<>ptEMPTY) then begin
      Symbol:=nil;
      case t^.Token of
-      ptELLIPSIS:begin
+      ptPREELLIPSIS,ptPOSTELLIPSIS:begin
        IsLocal:=false;
        if CodeToken=ptFASTFUNCTION then begin
         SyntaxError('Bad fastfunction argument expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -35109,7 +35117,7 @@ var TokenList:PPOCAToken;
       SyntaxError('Remainder must be last',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
      end else begin
       case t^.Token of
-       ptELLIPSIS:begin
+       ptPREELLIPSIS,ptPOSTELLIPSIS:begin
         if assigned(t^.Left) and (t^.Left^.Token=ptSYMBOL) then begin
          CodeGenerator^.RestArgSymbolString:=t^.Left^.Str;
          CodeGenerator^.RestArgSym:=POCAInternSymbol(Parser.Context,Instance,POCANewString(Parser.Context,t^.Left^.Str));
