@@ -31221,7 +31221,7 @@ var TokenList:PPOCAToken;
       end;
       popCOPY:begin
        if OutReg<0 then begin
-        result:=Reg1;
+        result:=GetRegister(true,false);
        end else begin
         result:=OutReg;
        end;
