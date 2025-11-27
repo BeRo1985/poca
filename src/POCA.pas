@@ -31292,7 +31292,11 @@ var TokenList:PPOCAToken;
        FreeRegister(Reg1);
       end else begin
        if t^.Token=ptELLIPSIS then begin
-        Reg1:=GenerateExpression(t^.Left,-1,true);
+        if assigned(t^.Left) then begin
+         Reg1:=GenerateExpression(t^.Left,-1,true);
+        end else begin
+         Reg1:=GenerateExpression(t^.Right,-1,true);
+        end;
         EmitOpcode(popARRAYCOMBINE,ArrayReg,Reg1);
         FreeRegister(Reg1);
        end else begin
@@ -31324,7 +31328,11 @@ var TokenList:PPOCAToken;
       exit;
      end;
      if t^.Token=ptELLIPSIS then begin
-      Reg1:=GenerateExpression(t^.Left,-1,true);
+      if assigned(t^.Left) then begin
+       Reg1:=GenerateExpression(t^.Left,-1,true);
+      end else begin
+       Reg1:=GenerateExpression(t^.Right,-1,true);
+      end;
       EmitOpcode(popHASHCOMBINE,HashReg,Reg1);
       FreeRegister(Reg1);
      end else if t^.Token=ptSYMBOL then begin
@@ -31573,7 +31581,11 @@ var TokenList:PPOCAToken;
        end; 
       end else if HasSpreadOperator(t^.Right) then begin
        if assigned(t^.Right) and (t^.Right^.Token=ptELLIPSIS) then begin
-        Reg3:=GenerateExpression(t^.Right^.Left,-1,true);
+        if assigned(t^.Right^.Left) then begin
+         Reg3:=GenerateExpression(t^.Right^.Left,-1,true);
+        end else begin
+         Reg3:=GenerateExpression(t^.Right^.Right,-1,true);
+        end;
         if IsMethod then begin
          EmitOpcode(popMCALLA,result,Reg1,Reg2,Reg3);
         end else begin
@@ -35098,14 +35110,20 @@ var TokenList:PPOCAToken;
      end else begin
       case t^.Token of
        ptELLIPSIS:begin
-        if (not assigned(t^.Left)) or (t^.Left^.Token<>ptSYMBOL) then begin
-         SyntaxError('Bad function argument expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-        end else begin
+        if assigned(t^.Left) and (t^.Left^.Token=ptSYMBOL) then begin
          CodeGenerator^.RestArgSymbolString:=t^.Left^.Str;
          CodeGenerator^.RestArgSym:=POCAInternSymbol(Parser.Context,Instance,POCANewString(Parser.Context,t^.Left^.Str));
          CodeGenerator^.HasLocals:=true;
          CodeGenerator^.HasRestArguments:=true;
          Code^.HasRestArguments:=true;
+        end else if assigned(t^.Right) and (t^.Right^.Token=ptSYMBOL) then begin
+         CodeGenerator^.RestArgSymbolString:=t^.Right^.Str;
+         CodeGenerator^.RestArgSym:=POCAInternSymbol(Parser.Context,Instance,POCANewString(Parser.Context,t^.Right^.Str));
+         CodeGenerator^.HasLocals:=true;
+         CodeGenerator^.HasRestArguments:=true;
+         Code^.HasRestArguments:=true;
+        end else begin
+         SyntaxError('Bad function argument expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
        end;
        ptASSIGN:begin
