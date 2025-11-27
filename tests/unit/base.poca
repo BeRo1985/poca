@@ -1,6 +1,6 @@
 import assert_structure from '../helper';
 
-#undefine USE_TABLE
+#undef USE_TABLE
 
 #define ASSERT_CODE(comparison)       \
         const ok = comparison;        \
