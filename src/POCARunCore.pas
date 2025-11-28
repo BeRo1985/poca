@@ -753,7 +753,7 @@ begin
 {$endif}
  Randomize;
  Arguments:=nil;
- if FindCmdLineSwitch('/h',true) then begin
+ if FindCmdLineSwitch('h',true) then begin
   writeln('Usage: '+ExtractFileName(ParamStr(0))+' file.poca [parameters...]');
  end else begin
   Instance:=POCAInstanceCreate;
