@@ -24050,7 +24050,7 @@ var TokenList:PPOCAToken;
       exit;
      end;
     end;
-    ptSYMBOL,ptTHIS,ptTHAT,ptLOCAL,ptSELF:begin
+    ptSYMBOL,ptTHIS,ptTHAT,ptLOCAL,ptSELF,ptIMPORT:begin
      if assigned(Parser.Tree.LastChild) then begin
       case Parser.Tree.LastChild^.Token of
        ptPOSTELLIPSIS:begin
