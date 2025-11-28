@@ -37609,7 +37609,7 @@ begin
    end;
   end;
   else begin
-   POCARuntimeError(Context,'foreach emumeration of non-array, non-string and non-hash');
+   POCARuntimeError(Context,'foreach enumeration of non-array, non-string and non-hash');
   end;
  end;
 end;
