@@ -14946,7 +14946,10 @@ let th = Thread.create(function(a, b) {
 <p><strong>Description:</strong> Resumes the execution of a suspended thread. If the
 thread has not yet started, this signals its start semaphore to begin
 execution. Optionally, a value can be passed to the thread; this value
-will be available within the thread upon resumption.</p>
+will be available within the thread upon resumption. Like suspend, it
+is not supported on all platforms. On non-supporting platforms, calling
+this function will be a no-op. So usage of this function should be done
+with caution.</p>
 </li>
 <li>
 <p><strong>Parameters:</strong></p>
@@ -15204,7 +15207,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-28 01:38:44 +0100
+Last updated 2025-11-28 01:39:27 +0100
 </div>
 </div>
 </body>

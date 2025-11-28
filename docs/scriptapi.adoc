@@ -8224,7 +8224,10 @@ th.resume(value);
 * *Description:* Resumes the execution of a suspended thread. If the
 thread has not yet started, this signals its start semaphore to begin
 execution. Optionally, a value can be passed to the thread; this value
-will be available within the thread upon resumption.
+will be available within the thread upon resumption. Like suspend, it
+is not supported on all platforms. On non-supporting platforms, calling
+this function will be a no-op. So usage of this function should be done
+with caution.
 * *Parameters:*
 ** `+value+` (any): The value to pass to the thread on resume. If
 omitted, a null value is used.
