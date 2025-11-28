@@ -44942,13 +44942,17 @@ end;
 function POCAExtractFilePath(aPath:TPOCARawByteString):TPOCARawByteString;
 var Index:TPOCAInt32;
 begin
- result:=aPath;
- for Index:=length(result) downto 1 do begin
-  if POCAIsPathSeparator(result[Index]) then begin
-   SetLength(result,Index);
+ for Index:=length(aPath) downto 1 do begin
+  if POCAIsPathSeparator(aPath[Index]) then begin
+   if Index>1 then begin
+    result:=copy(aPath,1,Index-1);
+   end else begin
+    result:='';
+   end;
    exit;
   end;
  end;
+ result:='';
 end;
 
 function POCAGetSetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;var aValue:TPOCAValue;const aSetValue:Boolean):Boolean;
