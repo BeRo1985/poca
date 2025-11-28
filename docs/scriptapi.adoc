@@ -7071,7 +7071,7 @@ capture details.
 * *Parameters:*
 ** `+input+` (string): The string to search.
 ** `+start+` (number): The starting code unit in the string (defaults to
-1 if not specified).
+0 if not specified).
 ** `+limit+` (number): The maximum number of matches to process
 (defaults to 1 if not specified).
 * *Return Value:* An array of capture results or null if no match is
@@ -7080,7 +7080,7 @@ found.
 +
 [source,js]
 ----
-let captures = re.exec("user@example.com", 1);
+let captures = re.exec("user@example.com", 0);
 // 'captures' contains details for each capture group found in the match.
 ----
 
@@ -7099,14 +7099,14 @@ let isMatch = re.test(input, start);
 string starting from the given position.
 * *Parameters:*
 ** `+input+` (string): The string to test.
-** `+start+` (number): The starting code unit (defaults to 1 if not
+** `+start+` (number): The starting code unit (defaults to 0 if not
 specified).
 * *Return Value:* A numeric boolean value (1 for true, 0 for false).
 * *Example:*
 +
 [source,js]
 ----
-if (re.test("user@example.com", 1)) {
+if (re.test("user@example.com", 0)) {
   puts("Email format is valid.");
 }
 ----
@@ -7126,7 +7126,7 @@ let position = re.find(input, start);
 string starting from the specified code unit.
 * *Parameters:*
 ** `+input+` (string): The string in which to search.
-** `+start+` (number): The starting code unit (defaults to 1 if not
+** `+start+` (number): The starting code unit (defaults to 0 if not
 specified).
 * *Return Value:* The starting code point of the first match or a
 special indicator if no match is found.
@@ -7134,7 +7134,7 @@ special indicator if no match is found.
 +
 [source,js]
 ----
-let pos = re.find("The quick brown fox", 1);
+let pos = re.find("The quick brown fox", 0);
 ----
 
 '''''
@@ -7155,7 +7155,7 @@ mapping group names to the captured substrings.
 ** Otherwise, each match is returned as an array of captured substrings.
 * *Parameters:*
 ** `+input+` (string): The input string.
-** `+start+` (number): The starting code unit (defaults to 1 if not
+** `+start+` (number): The starting code unit (defaults to 0 if not
 specified).
 ** `+limit+` (number): The maximum number of matches (defaults to 1 if
 not specified).
@@ -7164,7 +7164,7 @@ not specified).
 +
 [source,js]
 ----
-let allMatches = re.match("user@example.com", 1, 1);
+let allMatches = re.match("user@example.com", 0, 1);
 ----
 
 '''''
@@ -7182,7 +7182,7 @@ let parts = re.split(input, start, limit);
 regular expression matches.
 * *Parameters:*
 ** `+input+` (string): The string to split.
-** `+start+` (number): The starting code unit (defaults to 1 if not
+** `+start+` (number): The starting code unit (defaults to 0 if not
 specified).
 ** `+limit+` (number): The maximum number of splits (defaults to -1,
 meaning no limit).
@@ -7191,7 +7191,7 @@ meaning no limit).
 +
 [source,js]
 ----
-let tokens = re.split("a,b,c", 1, -1);
+let tokens = re.split("a,b,c", 0, -1);
 ----
 
 '''''
@@ -7210,7 +7210,7 @@ input string with the given replacement string.
 * *Parameters:*
 ** `+input+` (string): The string to search.
 ** `+replacement+` (string): The string to replace each match.
-** `+start+` (number): The starting code unit (defaults to 1 if not
+** `+start+` (number): The starting code unit (defaults to 0 if not
 specified).
 ** `+limit+` (number): The maximum number of replacements (defaults to
 -1, meaning no limit).
@@ -7219,7 +7219,7 @@ specified).
 +
 [source,js]
 ----
-let result = re.replace("Hello World", "Universe", 1, -1);
+let result = re.replace("Hello World", "Universe", 0, -1);
 ----
 
 '''''
