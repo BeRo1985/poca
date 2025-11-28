@@ -8197,7 +8197,7 @@ created thread.
 [source,js]
 ----
 // Create a thread that accepts two arguments.
-let th = Thread.create(function(a, b) {
+let th = Thread.create(function(a, b) { 
   puts("Started with: " + a + " and " + b);
   // Perform thread-specific work...
   return "Done";
@@ -8289,7 +8289,9 @@ th.stop();
 * *Description:* Terminates the thread forcibly. This function calls the
 underlying system routine (e.g., `+KillThread+` or `+TerminateThread+`)
 to stop the thread, marks the thread as terminated, and cleans up its
-resources.
+resources. Like suspend and resume, it is not supported on all platforms. On
+non-supporting platforms, calling this function will be a no-op. So usage
+of this function should be done with caution.
 * *Parameters:* None.
 * *Return Value:* The thread ghost object itself.
 * *Example:*

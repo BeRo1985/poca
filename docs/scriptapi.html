@@ -15043,7 +15043,9 @@ th.suspend();</code></pre>
 <p><strong>Description:</strong> Terminates the thread forcibly. This function calls the
 underlying system routine (e.g., <code>KillThread</code> or <code>TerminateThread</code>)
 to stop the thread, marks the thread as terminated, and cleans up its
-resources.</p>
+resources. Like suspend and resume, it is not supported on all platforms. On
+non-supporting platforms, calling this function will be a no-op. So usage
+of this function should be done with caution.</p>
 </li>
 <li>
 <p><strong>Parameters:</strong> None.</p>
@@ -15207,7 +15209,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-28 01:39:27 +0100
+Last updated 2025-11-28 01:40:47 +0100
 </div>
 </div>
 </body>
