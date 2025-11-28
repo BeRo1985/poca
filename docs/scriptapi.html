@@ -12830,7 +12830,7 @@ manipulate regular expressions before they are used in pattern matching.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let re = new RegExp("foo(bar)?");</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let re = new RegExp("/foo(bar)?/");</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -12838,7 +12838,7 @@ manipulate regular expressions before they are used in pattern matching.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let re = RegExp.create("foo(bar)?");</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let re = RegExp.create("/foo(bar)?/");</code></pre>
 </div>
 </div>
 <div class="paragraph">
@@ -12846,7 +12846,7 @@ manipulate regular expressions before they are used in pattern matching.</p>
 </div>
 <div class="listingblock">
 <div class="content">
-<pre class="highlight"><code class="language-js" data-lang="js">let re = RegExp.compile("foo(bar)?");</code></pre>
+<pre class="highlight"><code class="language-js" data-lang="js">let re = RegExp.compile("/foo(bar)?/");</code></pre>
 </div>
 </div>
 <div class="ulist">
@@ -12879,13 +12879,13 @@ pattern and supports regex operations.</p>
 <div class="listingblock">
 <div class="content">
 <pre class="highlight"><code class="language-js" data-lang="js">// Using the new operator (alias for RegExp.create):
-let re1 = new RegExp("foo(bar)?");
+let re1 = new RegExp("/foo(bar)?/");
 
 // Using RegExp.create:
-let re2 = RegExp.create("foo(bar)?");
+let re2 = RegExp.create("/foo(bar)?/");
 
 // Using RegExp.compile:
-let re3 = RegExp.compile("foo(bar)?");</code></pre>
+let re3 = RegExp.compile("/foo(bar)?/");</code></pre>
 </div>
 </div>
 </li>
@@ -12953,7 +12953,7 @@ automatically compiled into a RegExp ghost object.</p>
 <div class="content">
 <pre class="highlight"><code class="language-js" data-lang="js">let reLiteral = /foo(bar)?/;
 // This is equivalent to:
-let reLiteral2 = RegExp.compile("foo(bar)?");</code></pre>
+let reLiteral2 = RegExp.compile("/foo(bar)?/");</code></pre>
 </div>
 </div>
 </li>
@@ -15209,7 +15209,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-28 01:40:47 +0100
+Last updated 2025-11-28 22:01:41 +0100
 </div>
 </div>
 </body>

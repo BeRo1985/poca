@@ -6955,21 +6955,21 @@ manipulate regular expressions before they are used in pattern matching.
 
 [source,js]
 ----
-let re = new RegExp("foo(bar)?");
+let re = new RegExp("/foo(bar)?/");
 ----
 
 or equivalently,
 
 [source,js]
 ----
-let re = RegExp.create("foo(bar)?");
+let re = RegExp.create("/foo(bar)?/");
 ----
 
 or
 
 [source,js]
 ----
-let re = RegExp.compile("foo(bar)?");
+let re = RegExp.compile("/foo(bar)?/");
 ----
 
 * *Description:* These functions compile the provided pattern into a
@@ -6988,13 +6988,13 @@ pattern and supports regex operations.
 [source,js]
 ----
 // Using the new operator (alias for RegExp.create):
-let re1 = new RegExp("foo(bar)?");
+let re1 = new RegExp("/foo(bar)?/");
 
 // Using RegExp.create:
-let re2 = RegExp.create("foo(bar)?");
+let re2 = RegExp.create("/foo(bar)?/");
 
 // Using RegExp.compile:
-let re3 = RegExp.compile("foo(bar)?");
+let re3 = RegExp.compile("/foo(bar)?/");
 ----
 
 ==== RegExp.escape
@@ -7036,7 +7036,7 @@ automatically compiled into a RegExp ghost object.
 ----
 let reLiteral = /foo(bar)?/;
 // This is equivalent to:
-let reLiteral2 = RegExp.compile("foo(bar)?");
+let reLiteral2 = RegExp.compile("/foo(bar)?/");
 ----
 
 _Note:_ Both the literal syntax and the factory methods produce ghost
