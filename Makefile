@@ -17,7 +17,7 @@ $(TARGET): $(SOURCES) $(LPI)
 	~/fpcupdeluxe/lazarus/lazbuild -q --pcp="~/fpcupdeluxe/config_lazarus" --os=linux -B $(LPI)
 
 test:
-	$(TARGET) tests/run.poca
+	@$(TARGET) tests/run.poca
 
 docs: $(DOC_OUT)
 

@@ -6,8 +6,7 @@
   TODO:
    - load tests from relative path (need Path.methods)
    - capture exceptions
-   - option to abort if test/case FAILs
-   - option to only run specific tests
+   - option to only run specific tests from one or more files
 */
 
 import Test from 'unit/base.poca';
