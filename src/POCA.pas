@@ -10516,7 +10516,7 @@ var h,k:TPOCAUInt32;
 const m=TPOCAUInt32($57559429);
       n=TPOCAUInt32($5052acdb);
 begin
- // Hash the 64-bit value using a similar algorithm to POCAHashString
+ // Hash the 64-bit value
  h:=8; // length of UInt64 in bytes
  k:=h+n+1;
  // Process low 32 bits
@@ -13340,7 +13340,9 @@ var OutputString:TPOCARawByteString;
    end;
    pvtARRAY:begin
     OutputString:=OutputString+'[';
-    if not assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+    if assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+     OutputString:=OutputString+'(cycle)';
+    end else begin
      UInt64HashMapItem:=AntiCircularHashMap.NewKey(Value.CastedUInt64);
      if assigned(UInt64HashMapItem) then begin
       try
@@ -13359,7 +13361,9 @@ var OutputString:TPOCARawByteString;
    end;
    pvtHASH:begin
     OutputString:=OutputString+'{';
-    if not assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+    if assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+     OutputString:=OutputString+'(cycle)';
+    end else begin
      UInt64HashMapItem:=AntiCircularHashMap.NewKey(Value.CastedUInt64);
      if assigned(UInt64HashMapItem) then begin
       try
@@ -13400,7 +13404,9 @@ var OutputString:TPOCARawByteString;
    pvtGHOST:begin
     OutputString:=OutputString+'ghost';
     if assigned(POCAGhostGetHash(Value)) then begin
-     if not assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+     if assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+      OutputString:=OutputString+'(cycle)';
+      end else begin
       UInt64HashMapItem:=AntiCircularHashMap.NewKey(Value.CastedUInt64);
       if assigned(UInt64HashMapItem) then begin
        try
