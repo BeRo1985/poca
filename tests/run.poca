@@ -6,13 +6,14 @@
   TODO:
    - load tests from relative path (need Path.methods)
    - capture exceptions
-   - support multiple asserts per test function
    - option to abort if test/case FAILs
    - option to only run specific tests
 */
 
 import Test from 'unit/base.poca';
 import TestRunner from 'runner.poca';
+
+import dump from 'tests/helper.poca';
 
 let align = function(s, col = 50) {
   const padding = Math.max(0, col - s.length);
@@ -28,6 +29,11 @@ const WHITE  = "\x1b[37m";
 
 let test_files = [];
 
+const flags = arguments.map(arg => (/\-/.match(arg)) && arg);
+const verbose = (flags.includes('-v') || flags.includes('--verbose')) && arguments.remove('-v').remove('--verbose');
+const quiet = (flags.includes('-q') || flags.includes('--quiet')) && arguments.remove('-q').remove('--quiet');
+const abort = (flags.includes('-s') || flags.includes('--stop-on-error')) && arguments.remove('-s').remove('--stop-on-error');
+
 if (arguments.length > 0)
   test_files = arguments;
 
@@ -41,54 +47,93 @@ if (test_files.empty()) {
 
 let total = 0, succeeded = 0, failed = 0;
 
+let results = {};
+let log = (quiet) ? (file, topic, args...) => {} : (file, topic, args...) => {
+  if (!results.contains(file))
+    results[file] = {};
+
+  if (!results[file].contains(topic))
+    results[file][topic] = [];
+
+  if (args.length)
+    results[file][topic].push(args...)
+};
+
 foreach (let f in test_files) {
   let t = require(f);
 
-  puts();
-  puts(RESET ~ "=> Running test '" ~ YELLOW ~ f ~ RESET ~ "'...");
+  foreach (let n in t.keys()) {
+    const tests = (typeof(t[n]) === 'Array') ? t[n] : [ t[n] ];
 
-  foreach (let n in t.keys())
-    if (typeof(t[n]) === 'Array') {
-      puts();
-      for (let i = 0; i < t[n].length; ++i) {
-        ++total;
+    for (let i = 0; i < tests.length; ++i) {
+      ++total;
 
-        let res = TestRunner.run_as_coro(t[n][i]);
-        if (typeof(res) === 'Array') {
-          let rres = true;
-          foreach (let ok in res) {
-            if (!ok) {
-              rres = false;
-              break;
-            }
+      let res = TestRunner.run_as_coro(tests[i]); // tests[i]()
+      if (typeof(res) === 'Array') {
+        let sub_res = true;
+        foreach (let ok in res) {
+          if (!ok) {
+            sub_res = false;
+            break; // break early if a sub-test fails
           }
-          (rres == true) ? ++succeeded : ++failed;
-          puts(WHITE ~ `${n}#${BLUE}${i+1}${WHITE}` ~ align(`${n}#${i+1}`) ~ '[' ~ (rres ? GREEN ~ 'OK' : RED ~'FAIL') ~ WHITE ~ ']');
-        } else {
-          (res == true) ? ++succeeded : ++failed;
-          puts(WHITE ~ `${n}#${BLUE}${i+1}${WHITE}` ~ align(`${n}#${i+1}`) ~ '[' ~ (res ? GREEN ~ 'OK' : RED ~'FAIL') ~ WHITE ~ ']');
         }
 
-        //const res = t[n][i]();
+        res = sub_res;
       }
-    } else {
-      ++total;
-      const res = t[n]();
+
       (res == true) ? ++succeeded : ++failed;
-      puts(WHITE ~ n ~ align(n) ~ '[' ~ (res ? GREEN ~ 'OK' : RED ~ 'FAIL') ~ WHITE ~ ']');
+      log(f, n, res);
+
+      if (abort && failed > 0)
+        break;
     }
+
+    if (abort && failed > 0)
+      break;
+  }
+
+  if (abort && failed > 0)
+    break;
 }
 
-puts();
+let line_break = false;
+
+forkey (let test in results) {
+  forkey (let topic in results[test]) {
+    const tests = results[test][topic];
+
+    const num_ok = tests.reduce((sum, v) => sum += v );
+    if (!verbose && tests.length == num_ok)
+      continue;
+
+    line_break = true;
+
+    puts();
+    puts(RESET ~ "=> Running test '" ~ YELLOW ~ test ~ RESET ~ "'...");
+
+    if (tests.length > 1) {
+      for (let i = 0; i < tests.length; ++i) {
+        const res = tests[i];
+        puts(WHITE ~ `${topic}#${BLUE}${i+1}${WHITE}` ~ align(`${topic}#${i+1}`) ~ '[' ~ (res ? GREEN ~ 'OK' : RED ~'FAIL') ~ WHITE ~ ']');
+      }
+    } else puts(WHITE ~ topic ~ align(topic) ~ '[' ~ (tests[0] ? GREEN ~ 'OK' : RED ~ 'FAIL') ~ WHITE ~ ']');
+  }
+}
+
+if (line_break)
+  puts();
 
 let error = if (failed > 0 || total !== (succeeded + failed)) {
-  puts(RED ~ `${failed} of ${total} test${total > 1 ? 's' : ''} failed. 😞` ~ WHITE);
+  if (!quiet)
+    puts(RED ~ `D'oh! ${failed} of ${total} test${total > 1 ? 's' : ''} failed. 😬` ~ WHITE);
   true;
 } else {
-  puts(GREEN ~ `${succeeded} of ${total} test${total > 1 ? 's' : ''} succeeded. 🥳` ~ WHITE);
+  if (!quiet)
+    puts(GREEN ~ `Perfect! All ${succeeded} test${total > 1 ? 's' : ''} succeeded. 🥳` ~ WHITE);
   false;
 };
 
-puts();
+if (verbose)
+  puts();
 
 return error;

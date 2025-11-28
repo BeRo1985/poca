@@ -1,10 +1,5 @@
 import dump from '../helper';
 
-//let arr = [ false, 1, 'a', [ 2, null, 'b', 'c', [ (function(){}), 3, 'd'], 'e' ], 'f', { g: 'g', h: [ 5, 6, 7 ], l: { aha: 'foo' } } ]; //.map((a) => { typeof(a) == 'String' && a.repeat(2) || a});
-//let arr = [ false, 1, 'a', [ 2, null, 'b', 'c', [ (function(){}), 3, 'd'], 'e' ], 'f', { g: 'g', h: [ 5, 6, 7 ], l: 'foo' } ]; //.map((a) => { typeof(a) == 'String' && a.repeat(2) || a});
-//let arr = { foo: 'bar', baz: 'bat', oi: { punk: true, bonehead: false } };
-//const lala = dump(arr);
-
 (function() {
 
   return {
