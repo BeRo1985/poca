@@ -972,6 +972,44 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
        property Values[const Key:TPOCARawByteString]:TPOCAInt64 read GetValue write SetValue; default;
      end;
 
+     PPOCAUInt64HashMapItem=^TPOCAUInt64HashMapItem;
+     TPOCAUInt64HashMapItem=record
+      Previous,Next,HashPrevious,HashNext:PPOCAUInt64HashMapItem;
+      Hash:TPOCAUInt32;
+      Key:TPOCAUInt64;
+      Value:TPOCAInt64;
+     end;
+
+     TPOCAUInt64HashMapHashBucket=record
+      HashFirst,HashLast:PPOCAUInt64HashMapItem;
+     end;
+
+     TPOCAUInt64HashMapHashBuckets=array of TPOCAUInt64HashMapHashBucket;
+
+     TPOCAUInt64HashMap=class
+      private
+       LastUsedItem:PPOCAUInt64HashMapItem;
+       procedure GrowAndRehashIfNeeded;
+      protected
+       function GetValue(const Key:TPOCAUInt64):TPOCAInt64;
+       procedure SetValue(const Key:TPOCAUInt64;const Value:TPOCAInt64);
+      public
+       First,Last:PPOCAUInt64HashMapItem;
+       HashBuckets:TPOCAUInt64HashMapHashBuckets;
+       HashSize:TPOCAUInt32;
+       HashSizeMask:TPOCAUInt32;
+       HashedItems:TPOCAUInt32;
+       HashBucketsUsed:TPOCAUInt32;
+       Optimize:TPOCABool32;
+       constructor Create(AOptimize:TPOCABool32);
+       destructor Destroy; override;
+       procedure Clear;
+       function GetKey(const Key:TPOCAUInt64):PPOCAUInt64HashMapItem;
+       function NewKey(const Key:TPOCAUInt64;Force:boolean=false):PPOCAUInt64HashMapItem;
+       function DeleteKey(const Item:PPOCAUInt64HashMapItem):boolean;
+       property Values[const Key:TPOCAUInt64]:TPOCAInt64 read GetValue write SetValue; default;
+     end;
+
      TPOCAPointerList=class
       private
        List:PPOCAPointerArray;
@@ -2107,6 +2145,7 @@ procedure POCAArraySort(Context:PPOCAContext;const ArrayObject,CompareFunction:T
 procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue;const ItemIndex:TPOCAInt32); overload;
 
 function POCAHashString(const Str:TPOCARawByteString):TPOCAUInt32;
+function POCAHashUInt64(const Value:TPOCAUInt64):TPOCAUInt32;
 function POCAHashNumber(const Num:double):TPOCAUInt32;
 function POCAHashObj(const Obj:TPOCAPointer):TPOCAUInt32;
 
@@ -5528,6 +5567,260 @@ end;
 
 procedure TPOCAStringHashMap.SetValue(const Key:TPOCARawByteString;const Value:TPOCAInt64);
 var Item:PPOCAStringHashMapItem;
+begin
+ Item:=GetKey(Key);
+ if not assigned(Item) then begin
+  Item:=NewKey(Key,true);
+ end;
+ if assigned(Item) then begin
+  Item^.Value:=Value;
+ end;
+end;
+
+constructor TPOCAUInt64HashMap.Create(AOptimize:TPOCABool32);
+var Hash:TPOCAUInt32;
+begin
+ inherited Create;
+ FillChar(HashBuckets,sizeof(TPOCAUInt64HashMapHashBuckets),#0);
+ First:=nil;
+ Last:=nil;
+ HashSize:=256;
+ HashSizeMask:=HashSize-1;
+ HashedItems:=0;
+ HashBucketsUsed:=0;
+ HashBuckets:=nil;
+ SetLength(HashBuckets,HashSize);
+ for Hash:=0 to HashSizeMask do begin
+  HashBuckets[Hash].HashFirst:=nil;
+  HashBuckets[Hash].HashLast:=nil;
+ end;
+ LastUsedItem:=nil;
+ Optimize:=AOptimize;
+end;
+
+destructor TPOCAUInt64HashMap.Destroy;
+begin
+ Clear;
+ SetLength(HashBuckets,0);
+ inherited Destroy;
+end;
+
+procedure TPOCAUInt64HashMap.Clear;
+var Hash:TPOCAUInt32;
+    Item,NextItem:PPOCAUInt64HashMapItem;
+begin
+ Item:=First;
+ while assigned(Item) do begin
+  NextItem:=Item^.Next;
+  Item^.Next:=nil;
+  Item^.Key:=0;
+  Item^.Value:=0;
+  Dispose(Item);
+  Item:=NextItem;
+ end;
+ First:=nil;
+ Last:=nil;
+ LastUsedItem:=nil;
+ HashSize:=256;
+ HashSizeMask:=HashSize-1;
+ HashedItems:=0;
+ HashBucketsUsed:=0;
+ SetLength(HashBuckets,HashSize);
+ for Hash:=0 to HashSizeMask do begin
+  HashBuckets[Hash].HashFirst:=nil;
+  HashBuckets[Hash].HashLast:=nil;
+ end;
+end;
+
+procedure TPOCAUInt64HashMap.GrowAndRehashIfNeeded;
+var Hash:TPOCAUInt32;
+    Item:PPOCAUInt64HashMapItem;
+begin
+ if (HashSize<POCAHashMapMaxSize) and (HashedItems>=(HashBucketsUsed*POCAHashMapItemsPerBucketsThreshold)) then begin
+  LastUsedItem:=nil;
+  for Hash:=0 to HashSizeMask do begin
+   HashBuckets[Hash].HashFirst:=nil;
+   HashBuckets[Hash].HashLast:=nil;
+  end;
+  inc(HashSize,HashSize);
+  if HashSize>POCAHashMapMaxSize then begin
+   HashSize:=POCAHashMapMaxSize;
+  end;
+  HashSizeMask:=HashSize-1;
+  SetLength(HashBuckets,HashSize);
+  for Hash:=0 to HashSizeMask do begin
+   HashBuckets[Hash].HashFirst:=nil;
+   HashBuckets[Hash].HashLast:=nil;
+  end;
+  HashedItems:=0;
+  Item:=First;
+  while assigned(Item) do begin
+   inc(HashedItems);
+   Item^.HashPrevious:=nil;
+   Item^.HashNext:=nil;
+   Item:=Item^.Next;
+  end;
+  HashBucketsUsed:=0;
+  Item:=First;
+  while assigned(Item) do begin
+   Hash:=POCAHashUInt64(Item^.Key) and HashSizeMask;
+   Item^.Hash:=Hash;
+   if assigned(HashBuckets[Hash].HashLast) then begin
+    HashBuckets[Hash].HashLast^.HashNext:=Item;
+    Item^.HashPrevious:=HashBuckets[Hash].HashLast;
+    HashBuckets[Hash].HashLast:=Item;
+    Item^.HashNext:=nil;
+   end else begin
+    inc(HashBucketsUsed);
+    HashBuckets[Hash].HashFirst:=Item;
+    HashBuckets[Hash].HashLast:=Item;
+    Item^.HashPrevious:=nil;
+    Item^.HashNext:=nil;
+   end;
+   Item:=Item^.Next;
+  end;
+ end;
+end;
+
+function TPOCAUInt64HashMap.GetKey(const Key:TPOCAUInt64):PPOCAUInt64HashMapItem;
+var Hash:TPOCAUInt32;
+begin
+ if assigned(LastUsedItem) and (LastUsedItem^.Key=Key) then begin
+  result:=LastUsedItem;
+  Hash:=result^.Hash;
+ end else begin
+  Hash:=POCAHashUInt64(Key) and HashSizeMask;
+  result:=HashBuckets[Hash].HashFirst;
+  while assigned(result) and (result^.Key<>Key) do begin
+   result:=result^.HashNext;
+  end;
+ end;
+ if Optimize and assigned(result) then begin
+  LastUsedItem:=result;
+  if HashBuckets[Hash].HashFirst<>result then begin
+   if assigned(result^.HashPrevious) then begin
+    result^.HashPrevious^.HashNext:=result^.HashNext;
+   end;
+   if assigned(result^.HashNext) then begin
+    result^.HashNext^.HashPrevious:=result^.HashPrevious;
+   end else if HashBuckets[Hash].HashLast=result then begin
+    HashBuckets[Hash].HashLast:=result^.HashPrevious;
+   end;
+   HashBuckets[Hash].HashFirst^.HashPrevious:=result;
+   result^.HashNext:=HashBuckets[Hash].HashFirst;
+   result^.HashPrevious:=nil;
+   HashBuckets[Hash].HashFirst:=result;
+  end;
+ end;
+end;
+
+function TPOCAUInt64HashMap.NewKey(const Key:TPOCAUInt64;Force:boolean=false):PPOCAUInt64HashMapItem;
+var Hash:TPOCAUInt32;
+begin
+ if Force then begin
+  result:=nil;
+  Hash:=POCAHashUInt64(Key) and HashSizeMask;
+ end else if assigned(LastUsedItem) and (LastUsedItem^.Key=Key) then begin
+  result:=LastUsedItem;
+  Hash:=result^.Hash;
+ end else begin
+  Hash:=POCAHashUInt64(Key) and HashSizeMask;
+  result:=HashBuckets[Hash].HashFirst;
+  if not assigned(result) then begin
+   inc(HashBucketsUsed);
+  end;
+  while assigned(result) and (result^.Key<>Key) do begin
+   result:=result^.HashNext;
+  end;
+ end;
+ if not assigned(result) then begin
+  inc(HashedItems);
+  New(result);
+  fillchar(result^,sizeof(TPOCAUInt64HashMapItem),#0);
+  result^.Hash:=Hash;
+  result^.Key:=Key;
+  if assigned(HashBuckets[Hash].HashLast) then begin
+   HashBuckets[Hash].HashLast^.HashNext:=result;
+   result^.HashPrevious:=HashBuckets[Hash].HashLast;
+   result^.HashNext:=nil;
+   HashBuckets[Hash].HashLast:=result;
+  end else begin
+   HashBuckets[Hash].HashFirst:=result;
+   HashBuckets[Hash].HashLast:=result;
+   result^.HashPrevious:=nil;
+   result^.HashNext:=nil;
+  end;
+  if assigned(Last) then begin
+   Last^.Next:=result;
+   result^.Previous:=Last;
+   result^.Next:=nil;
+   Last:=result;
+  end else begin
+   First:=result;
+   Last:=result;
+   result^.Previous:=nil;
+   result^.Next:=nil;
+  end;
+  LastUsedItem:=result;
+ end;
+ GrowAndRehashIfNeeded;
+end;
+
+function TPOCAUInt64HashMap.DeleteKey(const Item:PPOCAUInt64HashMapItem):boolean;
+begin
+ result:=assigned(Item);
+ if result then begin
+  if LastUsedItem=Item then begin
+   if assigned(Item^.Next) then begin
+    LastUsedItem:=Item^.Next;
+   end else begin
+    LastUsedItem:=Item^.Previous;
+   end;
+  end;
+  if assigned(Item^.Previous) then begin
+   Item^.Previous^.Next:=Item^.Next;
+  end else if First=Item then begin
+   First:=Item^.Next;
+  end;
+  if assigned(Item^.Next) then begin
+   Item^.Next^.Previous:=Item^.Previous;
+  end else if Last=Item then begin
+   Last:=Item^.Previous;
+  end;
+  Item^.Next:=nil;
+  Item^.Previous:=nil;
+  if assigned(Item^.HashPrevious) then begin
+   Item^.HashPrevious^.HashNext:=Item^.HashNext;
+  end else if HashBuckets[Item^.Hash].HashFirst=Item then begin
+   HashBuckets[Item^.Hash].HashFirst:=Item^.HashNext;
+  end;
+  if assigned(Item^.HashNext) then begin
+   Item^.HashNext^.HashPrevious:=Item^.HashPrevious;
+  end else if HashBuckets[Item^.Hash].HashLast=Item then begin
+   HashBuckets[Item^.Hash].HashLast:=Item^.HashPrevious;
+  end;
+  Item^.HashNext:=nil;
+  Item^.HashPrevious:=nil;
+  Item^.Key:=0;
+  Item^.Value:=0;
+  Dispose(Item);
+  dec(HashedItems);
+ end;
+end;
+
+function TPOCAUInt64HashMap.GetValue(const Key:TPOCAUInt64):TPOCAInt64;
+var Item:PPOCAUInt64HashMapItem;
+begin
+ Item:=GetKey(Key);
+ if assigned(Item) then begin
+  result:=Item^.Value;
+ end else begin
+  result:=-1;
+ end;
+end;
+
+procedure TPOCAUInt64HashMap.SetValue(const Key:TPOCAUInt64;const Value:TPOCAInt64);
+var Item:PPOCAUInt64HashMapItem;
 begin
  Item:=GetKey(Key);
  if not assigned(Item) then begin
@@ -10217,6 +10510,33 @@ begin
 end;
 {$endif}
 
+function POCAHashUInt64(const Value:TPOCAUInt64):TPOCAUInt32;
+var h,k:TPOCAUInt32;
+    p:TPOCAUInt64;
+const m=TPOCAUInt32($57559429);
+      n=TPOCAUInt32($5052acdb);
+begin
+ // Hash the 64-bit value using a similar algorithm to POCAHashString
+ h:=8; // length of UInt64 in bytes
+ k:=h+n+1;
+ // Process low 32 bits
+ p:=TPOCAUInt32(Value and $ffffffff)*TPOCAUInt64(n);
+ h:=h xor TPOCAUInt32(p and $ffffffff);
+ k:=k xor TPOCAUInt32(p shr 32);
+ // Process high 32 bits
+ p:=TPOCAUInt32(Value shr 32)*TPOCAUInt64(m);
+ k:=k xor TPOCAUInt32(p and $ffffffff);
+ h:=h xor TPOCAUInt32(p shr 32);
+ // Final mixing
+ p:=(h xor (k+n))*TPOCAUInt64(n);
+ h:=h xor TPOCAUInt32(p and $ffffffff);
+ k:=k xor TPOCAUInt32(p shr 32);
+ result:=k xor h;
+ if result=0 then begin
+  result:=$ffffffff;
+ end;
+end;
+
 function POCAHashNumber(const Num:double):TPOCAUInt32;
 begin
  result:=TPOCAUInt32(TPOCAPointer(@Num)^) xor $2e63823a;
@@ -12999,9 +13319,11 @@ end;
 
 function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
 var OutputString:TPOCARawByteString;
+    AntiCircularHashMap:TPOCAUInt64HashMap;
  procedure DumpValue(const Value:TPOCAValue);
  var i:TPOCAInt32;
      Keys,Temp:TPOCAValue;
+     UInt64HashMapItem:PPOCAUInt64HashMapItem;
  begin
   case POCAGetValueType(Value) of
    pvtNULL:begin
@@ -13018,41 +13340,59 @@ var OutputString:TPOCARawByteString;
    end;
    pvtARRAY:begin
     OutputString:=OutputString+'[';
-    for i:=0 to POCAArraySize(Value)-1 do begin
-     if i>0 then begin
-      OutputString:=OutputString+',';
+    if not assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+     UInt64HashMapItem:=AntiCircularHashMap.NewKey(Value.CastedUInt64);
+     if assigned(UInt64HashMapItem) then begin
+      try
+       for i:=0 to POCAArraySize(Value)-1 do begin
+        if i>0 then begin
+         OutputString:=OutputString+',';
+        end;
+        DumpValue(POCAArrayGet(Value,i));
+       end;
+      finally
+       AntiCircularHashMap.DeleteKey(UInt64HashMapItem);
+      end;
      end;
-     DumpValue(POCAArrayGet(Value,i));
     end;
     OutputString:=OutputString+']';
    end;
    pvtHASH:begin
     OutputString:=OutputString+'{';
-    Keys:=POCANewArray(Context);
-    POCAHashKeys(Context,Keys,Value);
-//  POCAArraySort(Context,Keys);
-    if POCAIsValueArray(Keys) then begin
-     for i:=0 to POCAArraySize(Keys)-1 do begin
-      if i>0 then begin
-       OutputString:=OutputString+',';
-      end;
-      Temp:=POCAArrayGet(Keys,i);
-      if Temp.CastedUInt64<>Value.CastedUInt64 then begin
-       DumpValue(Temp);
-      end else begin
-       OutputString:=OutputString+'[self]';
-      end;
-      OutputString:=OutputString+':';
-      Temp.Num:=0;
-      POCAHashGet(Context,Value,POCAArrayGet(Keys,i),Temp);
-      if Temp.CastedUInt64<>Value.CastedUInt64 then begin
-       DumpValue(Temp);
-      end else begin
-       OutputString:=OutputString+'[self]';
+    if not assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+     UInt64HashMapItem:=AntiCircularHashMap.NewKey(Value.CastedUInt64);
+     if assigned(UInt64HashMapItem) then begin
+      try
+       Keys:=POCANewArray(Context);
+       POCAHashKeys(Context,Keys,Value);
+   //  POCAArraySort(Context,Keys);
+       if POCAIsValueArray(Keys) then begin
+        for i:=0 to POCAArraySize(Keys)-1 do begin
+         if i>0 then begin
+          OutputString:=OutputString+',';
+         end;
+         Temp:=POCAArrayGet(Keys,i);
+         if Temp.CastedUInt64<>Value.CastedUInt64 then begin
+          DumpValue(Temp);
+         end else begin
+          OutputString:=OutputString+'[self]';
+         end;
+         OutputString:=OutputString+':';
+         Temp.Num:=0;
+         POCAHashGet(Context,Value,POCAArrayGet(Keys,i),Temp);
+         if Temp.CastedUInt64<>Value.CastedUInt64 then begin
+          DumpValue(Temp);
+         end else begin
+          OutputString:=OutputString+'[self]';
+         end;
+        end;
+       end;
+      finally
+       AntiCircularHashMap.DeleteKey(UInt64HashMapItem);
       end;
      end;
-     OutputString:=OutputString+'}';
     end;
+    OutputString:=OutputString+'}';
    end;
    pvtFUNCTION:begin
     OutputString:=OutputString+'function';
@@ -13060,7 +13400,16 @@ var OutputString:TPOCARawByteString;
    pvtGHOST:begin
     OutputString:=OutputString+'ghost';
     if assigned(POCAGhostGetHash(Value)) then begin
-     DumpValue(POCAGhostGetHashValue(Value));
+     if not assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
+      UInt64HashMapItem:=AntiCircularHashMap.NewKey(Value.CastedUInt64);
+      if assigned(UInt64HashMapItem) then begin
+       try
+        DumpValue(POCAGhostGetHashValue(Value));
+       finally
+        AntiCircularHashMap.DeleteKey(UInt64HashMapItem);
+       end;
+      end;
+     end;
     end;
    end;
    pvtCODE:begin
@@ -13076,7 +13425,12 @@ var OutputString:TPOCARawByteString;
  end;
 begin
  OutputString:='';
- DumpValue(ToDumpValue);
+ AntiCircularHashMap:=TPOCAUInt64HashMap.Create(false);
+ try
+  DumpValue(ToDumpValue);
+ finally
+  FreeAndNil(AntiCircularHashMap);
+ end;
  result:=OutputString;
 end;
 
