@@ -7769,7 +7769,8 @@ etc.) as well as Unicode escape sequences (`\xXX`, `\uXXXX`,
 * *Return Value:* A new string with escape sequences converted back to
 their original characters.
 * *Example:*
-+[source,js]
++
+[source,js]
 ----
 let s = "The \\U0001F920 rides a \\U0001F40E!".unescape();
 puts(s); // Output: The 🤠 rides a 🐎!
