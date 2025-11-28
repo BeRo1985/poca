@@ -8250,7 +8250,9 @@ th.suspend();
 
 * *Description:* Suspends the execution of a running thread. On Windows
 systems, this is typically achieved by calling the appropriate system
-function to suspend the thread.
+function to suspend the thread. However, it is not supported on all 
+platforms. On non-supporting platforms, calling this function will be
+a no-op. So usage of this function should be done with caution. 
 * *Parameters:* None.
 * *Return Value:* The thread ghost object itself.
 * *Example:*
