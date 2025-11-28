@@ -15564,7 +15564,7 @@ begin
        POCAArraySet(v,0,POCANumber(POCAStringUTF8GetCodePoint(Context,Arguments^[0],Captures[i].Start)));
        POCAArraySet(v,1,POCANumber(PUCUUTF8Length(copy(s,Captures[i].Start,Captures[i].Length))));
        POCAArraySet(v,2,POCANewString(Context,copy(s,Captures[i].Start,Captures[i].Length)));
-       POCAHashSetString(Context,CapturesArray,TPOCAUTF8String(RegExp.NamedGroups[i+1]),v);
+       POCAHashSetString(Context,CapturesArray,TPOCAUTF8String(RegExp.NamedGroups[i]),v);
       end;
      end else begin
       CapturesArray:=POCANewArray(Context);
@@ -15575,7 +15575,7 @@ begin
        POCAArraySet(v,0,POCANumber(POCAStringUTF8GetCodePoint(Context,Arguments^[0],Captures[i].Start)));
        POCAArraySet(v,1,POCANumber(PUCUUTF8Length(copy(s,Captures[i].Start,Captures[i].Length))));
        POCAArraySet(v,2,POCANewString(Context,copy(s,Captures[i].Start,Captures[i].Length)));
-       POCAArraySet(v,3,POCANewString(Context,TPOCAUTF8String(RegExp.NamedGroups[i+1])));
+       POCAArraySet(v,3,POCANewString(Context,TPOCAUTF8String(RegExp.NamedGroups[i])));
        POCAArraySet(CapturesArray,i,v);
       end;
      end;
