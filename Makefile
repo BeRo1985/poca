@@ -14,7 +14,7 @@ all: $(TARGET)
 
 $(TARGET): $(SOURCES) $(LPI)
 	mkdir -p $(OUT_DIR)
-	~/fpcupdeluxe/lazarus/lazbuild -B -q --pcp="~/fpcupdeluxe/config_lazarus" --os=linux -B $(LPI)
+	~/fpcupdeluxe/lazarus/lazbuild -q --pcp="~/fpcupdeluxe/config_lazarus" --os=linux -B $(LPI)
 
 test:
 	$(TARGET) tests/run.poca
