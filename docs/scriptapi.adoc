@@ -7752,6 +7752,31 @@ puts(s3.escape()); // Output: Unicode: \u4F60\u597D
 
 '''''
 
+==== String.unescape
+
+*Usage:*
+
+[source,js]
+----
+let s = "The \\U0001F920 rides a \\U0001F40E!".unescape(); // Output: The 🤠 rides a 🐎!
+----
+
+* *Description:* Unescapes escape sequences in the string back to their
+original characters. Recognizes standard escape sequences (`\n`, `\t`,
+etc.) as well as Unicode escape sequences (`\xXX`, `\uXXXX`,
+`\UXXXXXXXX`).
+* *Parameters:* None.
+* *Return Value:* A new string with escape sequences converted back to
+their original characters.
+* *Example:*
++[source,js]
+----
+let s = "The \\U0001F920 rides a \\U0001F40E!".unescape();
+puts(s); // Output: The 🤠 rides a 🐎!
+----
+
+'''''
+
 ==== String.substr
 
 *Usage:*

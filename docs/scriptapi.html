@@ -972,6 +972,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_string_tolowercase">String.toLowerCase</a></li>
 <li><a href="#_string_touppercase">String.toUpperCase</a></li>
 <li><a href="#_string_escape">String.escape</a></li>
+<li><a href="#_string_unescape">String.unescape</a></li>
 <li><a href="#_string_substr">String.substr</a></li>
 <li><a href="#_string_tolatin1">String.toLatin1</a></li>
 <li><a href="#_string_islatin1">String.isLatin1</a></li>
@@ -14154,6 +14155,45 @@ puts(s3.escape()); // Output: Unicode: \u4F60\u597D</code></pre>
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_string_unescape">String.unescape</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let s = "The \\U0001F920 rides a \\U0001F40E!".unescape(); // Output: The 🤠 rides a 🐎!</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Unescapes escape sequences in the string back to their
+original characters. Recognizes standard escape sequences (<code>\n</code>, <code>\t</code>,
+etc.) as well as Unicode escape sequences (<code>\xXX</code>, <code>\uXXXX</code>,
+<code>\UXXXXXXXX</code>).</p>
+</li>
+<li>
+<p><strong>Parameters:</strong> None.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A new string with escape sequences converted back to
+their original characters.</p>
+</li>
+<li>
+<p><strong>Example:</strong>
++[source,js]</p>
+</li>
+</ul>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>let s = "The \\U0001F920 rides a \\U0001F40E!".unescape();
+puts(s); // Output: The 🤠 rides a 🐎!</pre>
+</div>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_string_substr">String.substr</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -15163,7 +15203,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-28 00:58:15 +0100
+Last updated 2025-11-28 01:32:25 +0100
 </div>
 </div>
 </body>

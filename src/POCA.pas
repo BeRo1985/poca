@@ -19728,7 +19728,7 @@ function POCAStringFunctionESCAPE(Context:PPOCAContext;const This:TPOCAValue;con
 var SourceString,EscapedString:TPOCARawByteString;
     StringPointer:PPOCAString;
     Index,CodeUnit:TPOCAInt32;
-    CurrentChar:ansichar;
+    CurrentChar:AnsiChar;
     CharValue:TPOCAUInt32;
 begin
  if not POCAIsValueString(This) then begin
@@ -19837,6 +19837,126 @@ begin
   end;
  end;
  result:=POCANewString(Context,EscapedString);
+end;
+
+function POCAStringFunctionUNESCAPE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var SourceString,UnescapedString:TPOCARawByteString;
+    StringPointer:PPOCAString;
+    Index:TPOCAInt32;
+    CurrentChar:AnsiChar;
+    HexValue,CharValue:TPOCAUInt32;
+ function ParseHexDigits(const aCount:TPOCAInt32;var aIndex:TPOCAInt32):TPOCAUInt32;
+ var CurrentIndex:TPOCAInt32;
+     CurrentChar:TPOCAUInt32;
+ begin
+  result:=0;
+  for CurrentIndex:=1 to aCount do begin
+   if aIndex<=length(SourceString) then begin
+    CurrentChar:=TPOCAUInt8(AnsiChar(SourceString[aIndex]));
+    inc(aIndex);
+    case CurrentChar of
+     ord('0')..ord('9'):begin
+      result:=(result shl 4) or (CurrentChar-ord('0'));
+     end;
+     ord('A')..ord('F'):begin
+      result:=(result shl 4) or ((CurrentChar-ord('A'))+10);
+     end;
+     ord('a')..ord('f'):begin
+      result:=(result shl 4) or ((CurrentChar-ord('a'))+10);
+     end;
+     else begin
+      dec(aIndex);
+      break;
+     end;
+    end;
+   end else begin
+    break;
+   end;  
+  end;
+ end;
+begin
+ if not POCAIsValueString(This) then begin
+  POCARuntimeError(Context,'Bad this value to "unescape"');
+ end;
+ StringPointer:=PPOCAString(POCAGetValueReferencePointer(This));
+ SourceString:=StringPointer^.Data;
+ UnescapedString:='';
+ Index:=1;
+ while Index<=length(SourceString) do begin
+  CurrentChar:=SourceString[Index];
+  inc(Index);
+  if CurrentChar='\' then begin
+   if Index<=length(SourceString) then begin
+    CurrentChar:=SourceString[Index];
+    inc(Index);
+    case CurrentChar of
+     '0':begin
+      UnescapedString:=UnescapedString+#0;
+     end;
+     'a':begin
+      UnescapedString:=UnescapedString+#7;
+     end;
+     'b':begin
+      UnescapedString:=UnescapedString+#8;
+     end;
+     't':begin
+      UnescapedString:=UnescapedString+#9;
+     end;
+     'n':begin
+      UnescapedString:=UnescapedString+#10;
+     end;
+     'v':begin
+      UnescapedString:=UnescapedString+#11;
+     end;
+     'f':begin
+      UnescapedString:=UnescapedString+#12;
+     end;
+     'r':begin
+      UnescapedString:=UnescapedString+#13;
+     end;
+     '"':begin
+      UnescapedString:=UnescapedString+'"';
+     end;
+     '''':begin
+      UnescapedString:=UnescapedString+'''';
+     end;
+     '\':begin
+      UnescapedString:=UnescapedString+'\';
+     end;
+     'x','X':begin
+      HexValue:=ParseHexDigits(2,Index);
+      if StringPointer^.UTF8=suISUTF8 then begin
+       UnescapedString:=UnescapedString+PUCUUTF32CharToUTF8(CharValue);
+      end else begin
+       UnescapedString:=UnescapedString+AnsiChar(TPOCAUInt8(HexValue));
+      end;
+     end;
+     'u','U':begin
+      if CurrentChar='u' then begin
+       CharValue:=ParseHexDigits(4,Index);
+      end else begin
+       CharValue:=ParseHexDigits(8,Index);
+      end;
+      if StringPointer^.UTF8=suISUTF8 then begin
+       UnescapedString:=UnescapedString+PUCUUTF32CharToUTF8(CharValue);
+      end else begin
+       if CharValue<=255 then begin
+        UnescapedString:=UnescapedString+AnsiChar(TPOCAUInt8(CharValue));
+       end else begin
+        UnescapedString:=UnescapedString+PUCUUTF32CharToUTF8(CharValue);
+       end; 
+      end;
+     end;
+     else begin
+      UnescapedString:=UnescapedString+CurrentChar;
+     end;
+    end;
+   end;
+  end else begin
+   UnescapedString:=UnescapedString+CurrentChar;
+  end;
+ end;
+ result:=POCANewString(Context,UnescapedString);
 end;
 
 function POCAStringFunctionSUBSTR(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -20399,6 +20519,7 @@ begin
  POCAAddNativeFunction(Context,result,'toLowerCase',POCAStringFunctionTOLOWERCASE);
  POCAAddNativeFunction(Context,result,'toUpperCase',POCAStringFunctionTOUPPERCASE);
  POCAAddNativeFunction(Context,result,'escape',POCAStringFunctionESCAPE);
+ POCAAddNativeFunction(Context,result,'unescape',POCAStringFunctionUNESCAPE);
  POCAAddNativeFunction(Context,result,'substr',POCAStringFunctionSUBSTR);
  POCAAddNativeFunction(Context,result,'toLatin1',POCAStringFunctionTOLATIN1);
  POCAAddNativeFunction(Context,result,'isLatin1',POCAStringFunctionISLATIN1);
