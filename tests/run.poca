@@ -12,8 +12,6 @@
 import Test from 'unit/base.poca';
 import TestRunner from 'runner.poca';
 
-import dump from 'tests/helper.poca';
-
 let align = function(s, col = 50) {
   const padding = Math.max(0, col - s.length);
   return ' '.repeat(padding);
@@ -47,7 +45,7 @@ if (test_files.empty()) {
 let total = 0, succeeded = 0, failed = 0;
 
 let results = {};
-let log = (quiet) ? (file, topic, args...) => {} : (file, topic, args...) => {
+let log = (file, topic, args...) => (quiet) ? {} : {
   if (!results.contains(file))
     results[file] = {};
 
