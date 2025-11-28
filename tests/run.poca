@@ -26,7 +26,7 @@ const WHITE  = "\x1b[37m";
 
 let test_files = [];
 
-const flags = arguments.map(arg => (/\-/.match(arg)) && arg);
+const flags = arguments.map(arg => (/^-([a-z]|-[a-z-]{3,})$/.match(arg)) && arg);
 const verbose = (flags.includes('-v') || flags.includes('--verbose')) && arguments.remove('-v').remove('--verbose');
 const quiet = (flags.includes('-q') || flags.includes('--quiet')) && arguments.remove('-q').remove('--quiet');
 const abort = (flags.includes('-s') || flags.includes('--stop-on-error')) && arguments.remove('-s').remove('--stop-on-error');
