@@ -13320,7 +13320,7 @@ end;
 function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
 var OutputString:TPOCARawByteString;
     AntiCircularHashMap:TPOCAUInt64HashMap;
- procedure DumpValue(const Value:TPOCAValue);
+ procedure DumpValue(const Value:TPOCAValue;const Level:TPOCAUInt32);
  var i:TPOCAInt32;
      Keys,Temp:TPOCAValue;
      UInt64HashMapItem:PPOCAUInt64HashMapItem;
@@ -13350,7 +13350,7 @@ var OutputString:TPOCARawByteString;
         if i>0 then begin
          OutputString:=OutputString+',';
         end;
-        DumpValue(POCAArrayGet(Value,i));
+        DumpValue(POCAArrayGet(Value,i),Level+1);
        end;
       finally
        AntiCircularHashMap.DeleteKey(UInt64HashMapItem);
@@ -13377,7 +13377,7 @@ var OutputString:TPOCARawByteString;
          end;
          Temp:=POCAArrayGet(Keys,i);
          if Temp.CastedUInt64<>Value.CastedUInt64 then begin
-          DumpValue(Temp);
+          DumpValue(Temp,Level+1);
          end else begin
           OutputString:=OutputString+'[self]';
          end;
@@ -13385,7 +13385,7 @@ var OutputString:TPOCARawByteString;
          Temp.Num:=0;
          POCAHashGet(Context,Value,POCAArrayGet(Keys,i),Temp);
          if Temp.CastedUInt64<>Value.CastedUInt64 then begin
-          DumpValue(Temp);
+          DumpValue(Temp,Level+1);
          end else begin
           OutputString:=OutputString+'[self]';
          end;
@@ -13403,14 +13403,14 @@ var OutputString:TPOCARawByteString;
    end;
    pvtGHOST:begin
     OutputString:=OutputString+'ghost';
-    if assigned(POCAGhostGetHash(Value)) then begin
+    if assigned(POCAGhostGetHash(Value)) and (Level=0) then begin
      if assigned(AntiCircularHashMap.GetKey(Value.CastedUInt64)) then begin
       OutputString:=OutputString+'(cycle)';
       end else begin
       UInt64HashMapItem:=AntiCircularHashMap.NewKey(Value.CastedUInt64);
       if assigned(UInt64HashMapItem) then begin
        try
-        DumpValue(POCAGhostGetHashValue(Value));
+        DumpValue(POCAGhostGetHashValue(Value),Level+1);
        finally
         AntiCircularHashMap.DeleteKey(UInt64HashMapItem);
        end;
@@ -13433,7 +13433,7 @@ begin
  OutputString:='';
  AntiCircularHashMap:=TPOCAUInt64HashMap.Create(false);
  try
-  DumpValue(ToDumpValue);
+  DumpValue(ToDumpValue,0);
  finally
   FreeAndNil(AntiCircularHashMap);
  end;
