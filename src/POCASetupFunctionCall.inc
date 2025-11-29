@@ -177,7 +177,7 @@ begin
       POCASetupFrameValues(Context,result,PPOCACode(ObjPtr));
 
       if PPOCACode(ObjPtr)^.HasArguments then begin
-{$ifdef POCASETUPFUNCTIONCALLNAMED}
+{$if defined(POCASETUPFUNCTIONCALLNAMED)}
        if PPOCACode(ObjPtr)^.HasArgumentLocals then begin
         POCASetupNamedArgumentsWithLocals(Context,result,PPOCACode(ObjPtr),Frame^.Registers[Operands^[ArgumentIndex]],result^.Locals);
        end else begin
@@ -194,7 +194,7 @@ begin
        POCASetupArguments(Context,result,PPOCACode(ObjPtr),@Frame^.Arguments[0],CountArguments,nil);
 {$else}
        POCASetupArguments(Context,result,PPOCACode(ObjPtr),@Frame^.Registers[0],CountArguments,@Operands^[ArgumentIndex]);
-{$endif}
+{$ifend}
       end;
      end;
 
