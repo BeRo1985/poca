@@ -2210,6 +2210,7 @@ function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCA
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 procedure POCAContextDestroy(Context:PPOCAContext);
 function POCAContextSub(Super:PPOCAContext):PPOCAContext;
+function POCAContextChildlessSub(Super:PPOCAContext):PPOCAContext;
 
 function POCAContextUserIOWrite(const aContext:PPOCAContext;const aString:TPOCAUTF8String):Boolean;
 function POCAContextUserIOWriteLn(const aContext:PPOCAContext;const aString:TPOCAUTF8String):Boolean;
@@ -13080,7 +13081,7 @@ begin
    POCAContextDestroy(Context^.CallChild);
    Context^.CallChild:=nil;
   end;
-  if assigned(Context^.CallParent) then begin
+  if assigned(Context^.CallParent) and (Context^.CallParent^.CallChild=Context) then begin
    Context^.CallParent^.CallChild:=nil;
   end;
   Context^.CallDepth:=0;
@@ -13309,11 +13310,23 @@ begin
  result^.CallDepth:=Super^.CallDepth+1;
  result^.CallParent:=Super;
  result^.UserData:=Super^.UserData;
- result^.UserIOWrite:=nil;//Super^.UserIOWrite;
- result^.UserIOWriteLn:=nil;//Super^.UserIOWriteLn;
- result^.UserIOReadLn:=nil;//Super^.UserIOReadLn;
- result^.UserIOFlush:=nil;//Super^.UserIOFlush;
+ result^.UserIOWrite:=Super^.UserIOWrite;
+ result^.UserIOWriteLn:=Super^.UserIOWriteLn;
+ result^.UserIOReadLn:=Super^.UserIOReadLn;
+ result^.UserIOFlush:=Super^.UserIOFlush;
  Super^.CallChild:=result;
+end;
+
+function POCAContextChildlessSub(Super:PPOCAContext):PPOCAContext;
+begin
+ result:=POCAContextCreate(Super^.Instance);
+ result^.CallDepth:=Super^.CallDepth+1;
+ result^.CallParent:=Super;
+ result^.UserData:=Super^.UserData;
+ result^.UserIOWrite:=Super^.UserIOWrite;
+ result^.UserIOWriteLn:=Super^.UserIOWriteLn;
+ result^.UserIOReadLn:=Super^.UserIOReadLn;
+ result^.UserIOFlush:=Super^.UserIOFlush;
 end;
 
 function POCAContextUserIOWrite(const aContext:PPOCAContext;const aString:TPOCAUTF8String):Boolean;
