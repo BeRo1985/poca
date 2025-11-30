@@ -2211,6 +2211,11 @@ function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 procedure POCAContextDestroy(Context:PPOCAContext);
 function POCAContextSub(Super:PPOCAContext):PPOCAContext;
 
+function POCAContextUserIOWrite(const aContext:PPOCAContext;const aString:TPOCAUTF8String):Boolean;
+function POCAContextUserIOWriteLn(const aContext:PPOCAContext;const aString:TPOCAUTF8String):Boolean;
+function POCAContextUserIOReadLn(const aContext:PPOCAContext;out aString:TPOCAUTF8String;out aNull:Boolean):Boolean;
+function POCAContextUserIOFlush(const aContext:PPOCAContext):Boolean;
+
 {$ifdef POCAThreadContextTracking}
 function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
 function POCAGetCurrentThreadContext:PPOCAContext;
@@ -3427,14 +3432,11 @@ begin
   aNull:=false;
   s:='';
   if length(aPrompt)>0 then begin
-   if assigned(aContext) and assigned(aContext^.UserIOWrite) then begin
-    aContext^.UserIOWrite(aContext,aPrompt);
-   end else begin
+   if not (assigned(aContext) and POCAContextUserIOWrite(aContext,aPrompt)) then begin
     System.Write(aPrompt);
    end;
   end;
-  if assigned(aContext) and assigned(aContext^.UserIOReadLn) then begin
-   aContext^.UserIOReadLn(aContext,t,aNull);
+  if assigned(aContext) and POCAContextUserIOReadLn(aContext,t,aNull) then begin
    s:=t;
   end else begin
    System.ReadLn(s);
@@ -3449,14 +3451,11 @@ begin
  aNull:=false;
  s:='';
  if length(aPrompt)>0 then begin
-  if assigned(aContext) and assigned(aContext^.UserIOWrite) then begin
-   aContext^.UserIOWrite(aContext,aPrompt);
-  end else begin
+  if not (assigned(aContext) and POCAContextUserIOWrite(aContext,aPrompt)) then begin
    System.Write(aPrompt);
   end;
  end;
- if assigned(aContext) and assigned(aContext^.UserIOReadLn) then begin
-  aContext^.UserIOReadLn(aContext,t,aNull);
+ if assigned(aContext) and POCAContextUserIOReadLn(aContext,t,aNull) then begin
   s:=t;
  end else begin
   System.ReadLn(s);
@@ -13310,11 +13309,73 @@ begin
  result^.CallDepth:=Super^.CallDepth+1;
  result^.CallParent:=Super;
  result^.UserData:=Super^.UserData;
- result^.UserIOWrite:=Super^.UserIOWrite;
- result^.UserIOWriteLn:=Super^.UserIOWriteLn;
- result^.UserIOReadLn:=Super^.UserIOReadLn;
- result^.UserIOFlush:=Super^.UserIOFlush;
+ result^.UserIOWrite:=nil;//Super^.UserIOWrite;
+ result^.UserIOWriteLn:=nil;//Super^.UserIOWriteLn;
+ result^.UserIOReadLn:=nil;//Super^.UserIOReadLn;
+ result^.UserIOFlush:=nil;//Super^.UserIOFlush;
  Super^.CallChild:=result;
+end;
+
+function POCAContextUserIOWrite(const aContext:PPOCAContext;const aString:TPOCAUTF8String):Boolean;
+var Context:PPOCAContext;
+begin
+ Context:=aContext;
+ while assigned(Context) do begin
+  if assigned(Context^.UserIOWrite) then begin
+   Context^.UserIOWrite(Context,aString);
+   result:=true;
+   exit;
+  end;
+  Context:=Context^.CallParent;
+ end;
+ result:=false;
+end;
+
+function POCAContextUserIOWriteLn(const aContext:PPOCAContext;const aString:TPOCAUTF8String):Boolean;
+var Context:PPOCAContext;
+begin
+ Context:=aContext;
+ while assigned(Context) do begin
+  if assigned(Context^.UserIOWriteLn) then begin
+   Context^.UserIOWriteLn(Context,aString);
+   result:=true;
+   exit;
+  end;
+  Context:=Context^.CallParent;
+ end;
+ result:=false;
+end;
+
+function POCAContextUserIOReadLn(const aContext:PPOCAContext;out aString:TPOCAUTF8String;out aNull:Boolean):Boolean;
+var Context:PPOCAContext;
+begin
+ Context:=aContext;
+ while assigned(Context) do begin
+  if assigned(Context^.UserIOReadLn) then begin
+   Context^.UserIOReadLn(Context,aString,aNull);
+   result:=true;
+   exit;
+  end;
+  Context:=Context^.CallParent;
+ end;
+ aString:='';
+ aNull:=true;
+ result:=false;
+end;
+
+function POCAContextUserIOFlush(const aContext:PPOCAContext):Boolean;
+var Context:PPOCAContext;
+begin
+ Context:=aContext;
+ while assigned(Context) do begin
+  if assigned(Context^.UserIOFlush) then begin
+   Context^.UserIOFlush(Context);
+   result:=true;
+   exit;
+  end;
+  Context:=Context^.CallParent;
+ end;
+ result:=false;
 end;
 
 function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
@@ -16889,25 +16950,19 @@ begin
   case POCAGetValueType(Value) of
    pvtNULL:begin
     s:='null';
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
    pvtSTRING:begin
     s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
    pvtNUMBER:begin
     s:=POCADoubleToString(Value.Num);
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
@@ -16916,13 +16971,11 @@ begin
    end;
   end;
  end;
- if assigned(Context) and assigned(Context^.UserIOWriteLn) then begin
-  Context^.UserIOWriteLn(Context,'');
- end else begin
+ if not (assigned(Context) and POCAContextUserIOWriteLn(Context,'')) then begin
   System.WriteLn('');
  end;
- if assigned(Context) and assigned(Context^.UserIOFlush) then begin
-  Context^.UserIOFlush(Context);
+ if not (assigned(Context) and POCAContextUserIOFlush(Context)) then begin
+  System.Flush(StdOut);
  end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -17893,25 +17946,19 @@ begin
   case POCAGetValueType(Value) of
    pvtNULL:begin
     s:='null';
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
    pvtSTRING:begin
     s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
    pvtNUMBER:begin
     s:=POCADoubleToString(Value.Num);
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
@@ -17920,8 +17967,8 @@ begin
    end;
   end;
  end;
- if assigned(Context) and assigned(Context^.UserIOFlush) then begin
-  Context^.UserIOFlush(Context);
+ if not (assigned(Context) and POCAContextUserIOFlush(Context)) then begin
+  System.Flush(StdOut);
  end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -17937,25 +17984,19 @@ begin
   case POCAGetValueType(Value) of
    pvtNULL:begin
     s:='null';
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
    pvtSTRING:begin
     s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
    pvtNUMBER:begin
     s:=POCADoubleToString(Value.Num);
-    if assigned(Context) and assigned(Context^.UserIOWrite) then begin
-     Context^.UserIOWrite(Context,s);
-    end else begin
+    if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
    end;
@@ -17964,13 +18005,11 @@ begin
    end;
   end;
  end;
- if assigned(Context) and assigned(Context^.UserIOWriteLn) then begin
-  Context^.UserIOWriteLn(Context,'');
- end else begin
+ if not (assigned(Context) and POCAContextUserIOWriteLn(Context,'')) then begin
   System.WriteLn('');
  end;
- if assigned(Context) and assigned(Context^.UserIOFlush) then begin
-  Context^.UserIOFlush(Context);
+ if not (assigned(Context) and POCAContextUserIOFlush(Context)) then begin
+  System.Flush(StdOut);
  end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
