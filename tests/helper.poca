@@ -117,30 +117,42 @@ function dump(root, output = true) {
   return s;
 }
 
-function assert_structure(actual, expected, deep = false) { // TODO: deep
-  if (actual === expected)
-    return true;
+function assert_structure(actual, expected) {
+  let stack = [ [ actual, expected ] ];
 
-  const type = typeof(actual);
+  while (stack.length > 0) {
+    const (a, b) = stack.pop();
+    if (a === b)
+      return continue;
 
-  if ((type !== 'Array' || type !== 'Hash') && type !== typeof(expected))
-    return false;
-
-  if (typeof(actual) === 'Array') {
-    if (actual.length != expected.length)
+    const (ta, tb) = (typeof(a), typeof(b));
+    if (ta !== tb)
       return false;
 
-    for (let i = 0; i < actual.length; ++i)
-      if (actual[i] !== expected[i])
+    if (ta === 'Array') {
+      if (a.length !== b.length)
         return false;
 
-  } else if (typeof(actual) === 'Hash') {
-    if (actual.rawKeys().length != expected.rawKeys().length)
-      return false;
+      for (let i = 0; i < a.length; ++i) {
+        if (typeof(a[i]) !== typeof(b[i]))
+          return false;
 
-    forkey (let k in actual)
-      if (!expected.contains(k) || actual[k] !== expected[k])
+        stack.push([ a[i], b[i] ]);
+      }
+    } else if (ta === 'Hash') {
+      if (a.rawKeys().length !== b.rawKeys().length)
         return false;
+
+      foreach (let k in a.rawKeys()) { // NOTE: doesn't check order
+        if (!b.contains(k) || typeof(a[k]) !== typeof(b[k]))
+          return false;
+
+        stack.push([ a[k], b[k] ]);
+      }
+    } else { // String, Number, Null, HashGhost, Function, Class, Module
+      if (a !== b)
+        return false;
+    }
   }
 
   return true;
