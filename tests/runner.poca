@@ -12,7 +12,7 @@ let TestRunner = {
     while (!coro.terminated())
       coro.resume(coro.data());
 
-    return coro.data().tests;
+    return coro.data()?.tests;
   }
 };
 
