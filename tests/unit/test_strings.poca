@@ -47,7 +47,23 @@
       }
     ],
 
-    split_string_is_correct: [
+    string_comparison: [
+      () => Test.assertEqual('abc', "abc"),
+      () => Test.assertEqual(`abc`, "abc"),
+
+      () => Test.assertUnlike('abc', 'abc '),
+      () => Test.assertUnlike('abc', ' abc'),
+      () => Test.assertUnlike('abc', ' abc '),
+
+      () => { let abc = 'abc'; Test.assertEqual(abc, 'abc') },
+      () => { let abc = 'abc'; Test.assertEqual(abc, abc) },
+
+      () => Test.assertLike('1', 1),
+      () => Test.assertUnequal('1', 1)
+    ],
+
+
+    string_split: [
       () => {
         let s = 'foo bar baz';
         let a = s.split(' ');
@@ -93,19 +109,46 @@
       }
     ],
 
-    string_comparison: [
-      () => Test.assertEqual('abc', "abc"),
-      () => Test.assertEqual(`abc`, "abc"),
+    string_split_by_regex: [
+      () => {
+        const s = 'foo   bar baz ';
 
-      () => Test.assertUnlike('abc', 'abc '),
-      () => Test.assertUnlike('abc', ' abc'),
-      () => Test.assertUnlike('abc', ' abc '),
+        Test.assertLength(/./.split(s), 15);
 
-      () => { let abc = 'abc'; Test.assertEqual(abc, 'abc') },
-      () => { let abc = 'abc'; Test.assertEqual(abc, abc) },
+        Test.assertStructure(
+          /\s/.split(s),
+          [ 'foo', '', '', 'bar', 'baz', '' ]
+        );
 
-      () => Test.assertLike('1', 1),
-      () => Test.assertUnequal('1', 1)
+        Test.assertStructure(
+          /\s+/.split(s),
+          [ 'foo', 'bar', 'baz', '' ]
+        );
+
+        Test.assertStructure(
+          / /.split(s),
+          [ 'foo', '', '', 'bar', 'baz', '' ]
+        );
+
+        Test.assertStructure(
+          /\s+bar\s+/.split(s),
+          [ 'foo', 'baz ' ]
+        );
+
+        Test.assertStructure(
+          /  /.split(s),
+          [ 'foo', ' bar baz ' ]
+        );
+      },
+
+      () => {
+        let rx = new RegExp("/😀/");
+
+        Test.assertStructure(
+          rx.split('Hello 😀 my 😀 friend! 👋'),
+          [ 'Hello ', ' my ', ' friend! 👋' ]
+        );
+      }
     ],
 
     string_repeat: [
@@ -116,7 +159,8 @@
       () => Test.assertEqual(' '.repeat(5), '     '),
       () => Test.assertEqual('  '.repeat(1), '  '),
       () => Test.assertEqual('  '.repeat(3), '      ')
-    ]
+    ],
+
   };
 
 })();
