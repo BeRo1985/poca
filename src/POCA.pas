@@ -15655,12 +15655,142 @@ begin
  end;
 end;
 
-
+function POCAJSONFunctionStringify(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+type TStackItem=record
+      ArrayIndex:TPOCAInt32;
+      HashKey:TPOCARawByteString;
+      POCAValue:TPOCAValue;
+      JSONParent:TPasJSONItem;
+     end;
+     PStackItem=^TStackItem;
+     TStackItems=array of TStackItem;
+var Index,StackCounter,ValueType:TPOCAInt32;
+    JSONItem,JSONValue:TPasJSONItem;
+    StackItems:TStackItems;
+    StackItem:PStackItem;
+    CurrentStackItem:TStackItem;
+    POCAValue:TPOCAValue;
+    Hash:PPOCAHash;
+    HashEntity:PPOCAHashEntity;
+    ArrayData:PPOCAArray;
+begin
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
+ if CountArguments>0 then begin
+  try
+   JSONItem:=nil;
+   try
+    StackItems:=nil;
+    try
+     StackCounter:=0;
+     if length(StackItems)<=StackCounter then begin
+      SetLength(StackItems,(StackCounter+1)*2);
+     end;
+     StackItem:=@StackItems[StackCounter];
+     inc(StackCounter);
+     StackItem^.ArrayIndex:=-1;
+     StackItem^.HashKey:='';
+     StackItem^.POCAValue:=Arguments^[0];
+     StackItem^.JSONParent:=nil;
+     while StackCounter>0 do begin
+      dec(StackCounter);
+      CurrentStackItem:=StackItems[StackCounter];
+      JSONValue:=nil;
+      ValueType:=POCAGetValueType(CurrentStackItem.POCAValue);
+      case ValueType of
+       pvtNULL:begin
+        JSONValue:=TPasJSONItemNull.Create;
+       end;
+       pvtNUMBER:begin
+        JSONValue:=TPasJSONItemNumber.Create(CurrentStackItem.POCAValue.Num);
+       end;
+       pvtSTRING:begin
+        JSONValue:=TPasJSONItemString.Create(POCAGetStringValue(Context,CurrentStackItem.POCAValue));
+       end;
+       pvtHASH:begin
+        JSONValue:=TPasJSONItemObject.Create;
+        Hash:=PPOCAHash(POCAGetValueReferencePointer(CurrentStackItem.POCAValue));
+        if assigned(Hash) and assigned(Hash^.HashRecord) then begin
+         for Index:=Hash^.HashRecord^.Size-1 downto 0 do begin
+          HashEntity:=@Hash^.HashRecord^.Entities^[Index];
+          if length(StackItems)<=StackCounter then begin
+           SetLength(StackItems,(StackCounter+1)*2);
+          end;
+          StackItem:=@StackItems[StackCounter];
+          inc(StackCounter);
+          StackItem^.ArrayIndex:=-1;
+          StackItem^.HashKey:=POCAGetStringValue(Context,HashEntity^.Key);
+          StackItem^.POCAValue:=HashEntity^.Value;
+          StackItem^.JSONParent:=JSONValue;
+         end;
+        end;
+       end;
+       pvtARRAY:begin
+        JSONValue:=TPasJSONItemArray.Create;
+        ArrayData:=PPOCAArray(POCAGetValueReferencePointer(CurrentStackItem.POCAValue));
+        if assigned(ArrayData) and assigned(ArrayData^.ArrayRecord) then begin
+         for Index:=0 to ArrayData^.ArrayRecord^.Size-1 do begin
+          TPasJSONItemArray(JSONValue).Add(nil);
+         end;
+         for Index:=ArrayData^.ArrayRecord^.Size-1 downto 0 do begin
+          if length(StackItems)<=StackCounter then begin
+           SetLength(StackItems,(StackCounter+1)*2);
+          end;
+          StackItem:=@StackItems[StackCounter];
+          inc(StackCounter);
+          StackItem^.ArrayIndex:=Index;
+          StackItem^.HashKey:='';
+          StackItem^.POCAValue:=ArrayData^.ArrayRecord^.Data[Index];
+          StackItem^.JSONParent:=JSONValue;
+         end;
+        end;
+       end;
+       else begin
+        JSONValue:=TPasJSONItemNull.Create;
+       end;
+      end;
+      if assigned(JSONValue) then begin
+       if assigned(CurrentStackItem.JSONParent) then begin
+        case CurrentStackItem.JSONParent.ItemType of
+         TPasJSONItemType.Object_:begin
+          TPasJSONItemObject(CurrentStackItem.JSONParent).Add(CurrentStackItem.HashKey,JSONValue);
+         end;
+         TPasJSONItemType.Array_:begin
+          TPasJSONItemArray(CurrentStackItem.JSONParent).Items[CurrentStackItem.ArrayIndex]:=JSONValue;
+         end;
+         else begin
+          FreeAndNil(JSONValue);
+          POCARuntimeError(Context,'JSON stringify error at undefined behavior');
+         end;
+        end;
+       end else begin
+        JSONItem:=JSONValue;
+       end;
+      end else begin
+       POCARuntimeError(Context,'JSON stringify error at undefined behavior');
+      end;
+     end;
+     if assigned(JSONItem) then begin
+      result:=POCANewString(Context,TPasJSON.Stringify(JSONItem,false,[],0));
+     end;
+    finally
+     StackItems:=nil;
+    end;
+   finally
+    FreeAndNil(JSONItem);
+   end;
+  except
+   on e:Exception do begin
+    POCARuntimeError(Context,'JSON stringify error: '+e.Message);
+   end;
+  end;
+ end;
+end;
 
 function POCAInitJSONNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
  POCAAddNativeFunction(Context,result,'parse',POCAJSONFunctionPARSE);
+ POCAAddNativeFunction(Context,result,'stringify',POCAJSONFunctionStringify);
 end;
 
 //////////
