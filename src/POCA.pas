@@ -15647,13 +15647,15 @@ begin
    end;
   except
    on e:EPasJSONSyntaxError do begin
-    POCARuntimeError(Context,'JSON parsing error at '+IntToStr(Max(0,e.Position-1))+': '+e.Message);
+    POCARuntimeError(Context,'JSON parsing error at string position '+IntToStr(Max(0,e.Position-1))+': '+e.Message);
    end;
   end;
  end else begin
   result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
+
+
 
 function POCAInitJSONNamespace(Context:PPOCAContext):TPOCAValue;
 begin
