@@ -351,7 +351,7 @@
 
 interface
 
-uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasMP;
+uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
 const POCAVersion='2025-11-22-06-55-0000';
 
@@ -15536,6 +15536,133 @@ end;
 
 //////////
 
+function POCAJSONFunctionPARSE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+type TStackItem=record
+      ArrayIndex:TPOCAInt32;
+      HashKey:TPOCARawByteString;
+      POCAParent:TPOCAValue;
+      JSONItem:TPasJSONItem;
+     end;
+     PStackItem=^TStackItem;
+     TStackItems=array of TStackItem;
+var Index,StackCounter:TPOCAInt32;
+    RawJSON:TPOCARawByteString;
+    JSONItem:TPasJSONItem;
+    StackItems:TStackItems;
+    StackItem:PStackItem;
+    CurrentStackItem:TStackItem;
+    POCAValue:TPOCAValue;
+begin
+ if CountArguments>0 then begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+  RawJSON:=POCAGetStringValue(Context,Arguments^[0]);
+  try
+   JSONItem:=TPasJSON.Parse(RawJSON);
+   if assigned(JSONItem) then begin
+    try
+     StackItems:=nil;
+     try
+      StackCounter:=0;
+      if length(StackItems)<=StackCounter then begin
+       SetLength(StackItems,(StackCounter+1)*2);
+      end;
+      StackItem:=@StackItems[StackCounter];
+      inc(StackCounter);
+      StackItem^.ArrayIndex:=0;
+      StackItem^.HashKey:='';
+      StackItem^.POCAParent.CastedUInt64:=POCAValueNullCastedUInt64;
+      StackItem^.JSONItem:=JSONItem;
+      while StackCounter>0 do begin
+       dec(StackCounter);
+       CurrentStackItem:=StackItems[StackCounter];
+       if assigned(CurrentStackItem.JSONItem) then begin
+        case CurrentStackItem.JSONItem.ItemType of
+         TPasJSONItemType.Null:begin
+          POCAValue.CastedUInt64:=POCAValueNullCastedUInt64;
+         end;
+         TPasJSONItemType.Boolean_:begin
+          POCAValue.Num:=ord(TPasJSONItemBoolean(CurrentStackItem.JSONItem).Value) and 1;
+         end;
+         TPasJSONItemType.Number:begin
+          POCAValue.Num:=TPasJSONItemNumber(CurrentStackItem.JSONItem).Value;
+         end;
+         TPasJSONItemType.String_:begin
+          POCAValue:=POCANewString(Context,TPasJSONItemString(CurrentStackItem.JSONItem).Value);
+         end;
+         TPasJSONItemType.Object_:begin
+          POCAValue:=POCANewHash(Context);
+          for Index:=TPasJSONItemObject(CurrentStackItem.JSONItem).Count-1 downto 0 do begin
+           if length(StackItems)<=StackCounter then begin
+            SetLength(StackItems,(StackCounter+1)*2);
+           end;
+           StackItem:=@StackItems[StackCounter];
+           inc(StackCounter);
+           StackItem^.ArrayIndex:=0;
+           StackItem^.HashKey:=TPasJSONItemObject(CurrentStackItem.JSONItem).Keys[Index];
+           StackItem^.POCAParent:=POCAValue;
+           StackItem^.JSONItem:=TPasJSONItemObject(CurrentStackItem.JSONItem).Values[Index];
+          end;
+         end;
+         TPasJSONItemType.Array_:begin
+          POCAValue:=POCANewArray(Context);
+          POCAArraySetSize(POCAValue,TPasJSONItemArray(CurrentStackItem.JSONItem).Count);
+          for Index:=TPasJSONItemArray(CurrentStackItem.JSONItem).Count-1 downto 0 do begin
+           if length(StackItems)<=StackCounter then begin
+            SetLength(StackItems,(StackCounter+1)*2);
+           end;
+           StackItem:=@StackItems[StackCounter];
+           inc(StackCounter);
+           StackItem^.ArrayIndex:=Index;
+           StackItem^.HashKey:='';
+           StackItem^.POCAParent:=POCAValue;
+           StackItem^.JSONItem:=TPasJSONItemArray(CurrentStackItem.JSONItem).Items[Index];
+          end;
+         end;
+         else begin
+          POCAValue.CastedUInt64:=POCAValueNullCastedUInt64;
+         end;
+        end;
+        case POCAGetValueType(CurrentStackItem.POCAParent) of
+         pvtNULL:begin
+          result:=POCAValue;
+         end;
+         pvtARRAY:begin
+          POCAArraySet(CurrentStackItem.POCAParent,CurrentStackItem.ArrayIndex,POCAValue);
+         end;
+         pvtHASH:begin
+          POCAHashSetString(Context,CurrentStackItem.POCAParent,CurrentStackItem.HashKey,POCAValue);
+         end;
+         else begin
+          POCARuntimeError(Context,'JSON parsing error at undefined behavior');
+         end;
+        end;
+       end;
+      end;
+     finally
+      StackItems:=nil;
+     end;
+    finally
+     FreeAndNil(JSONItem);
+    end;
+   end;
+  except
+   on e:EPasJSONSyntaxError do begin
+    POCARuntimeError(Context,'JSON parsing error at '+IntToStr(Max(0,e.Position-1))+': '+e.Message);
+   end;
+  end;
+ end else begin
+  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ end;
+end;
+
+function POCAInitJSONNamespace(Context:PPOCAContext):TPOCAValue;
+begin
+ result:=POCANewHash(Context);
+ POCAAddNativeFunction(Context,result,'parse',POCAJSONFunctionPARSE);
+end;
+
+//////////
+
 procedure POCARegExpGhostDestroy(const Ghost:PPOCAGhost);
 begin
  if assigned(Ghost) and assigned(Ghost^.Ptr) then begin
@@ -15562,7 +15689,6 @@ begin
   end;
   result:=POCANewString(Context,TPOCARawByteString(b));
  end else begin
-//result:=POCAValueNull;
   result.CastedUInt64:=POCAValueNullCastedUInt64;
  end;
 end;
@@ -18656,6 +18782,7 @@ begin
  POCAHashSetString(Context,result,'Math',POCAInitMathNamespace(Context));
  POCAHashSetString(Context,result,'IO',POCAInitIONamespace(Context));
  POCAHashSetString(Context,result,'Path',POCAInitPathNamespace(Context));
+ POCAHashSetString(Context,result,'JSON',POCAInitJSONNamespace(Context));
  POCAHashSetString(Context,result,'RegExp',POCAInitRegExpNamespace(Context));
  POCAHashSetString(Context,result,'Coroutine',POCAInitCoroutineNamespace(Context));
  POCAHashSetString(Context,result,'Thread',POCAInitThreadNamespace(Context));
