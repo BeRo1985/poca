@@ -4387,6 +4387,216 @@ file access precisely.
 This documentation should help you integrate file I/O in your POCA
 projects using a simple, dynamic approach.
 
+== JSON
+
+=== Overview
+
+The POCA JSON API provides functions for parsing JSON strings into POCA
+values and serializing POCA values into JSON strings. The API follows
+the familiar JavaScript JSON interface, offering `JSON.parse()` and
+`JSON.stringify()` functions. JSON values are converted to their
+corresponding POCA types: objects become hashes, arrays remain arrays,
+strings remain strings, numbers remain numbers, booleans are represented
+as numbers (0 or 1), and null remains null.
+
+'''''
+
+=== Global JSON Object
+
+The global *JSON* object serves as a namespace for JSON operations. It
+provides functions to parse JSON strings and serialize POCA values.
+
+'''''
+
+==== JSON.parse
+
+*Usage:*
+
+[source,js]
+----
+let obj = JSON.parse(jsonString);
+----
+
+* *Description:* Parses a JSON string and converts it to a POCA value.
+The function uses an iterative stack-based algorithm to handle deeply
+nested JSON structures without recursion limits. JSON types are mapped
+to POCA types as follows:
+** JSON objects → POCA hashes
+** JSON arrays → POCA arrays
+** JSON strings → POCA strings
+** JSON numbers → POCA numbers
+** JSON booleans → POCA numbers (0 for false, 1 for true)
+** JSON null → POCA null
+* *Parameters:*
+** `+jsonString+` (string): A valid JSON string to parse.
+* *Return Value:* A POCA value representing the parsed JSON. Returns
+null if the argument is missing or parsing fails.
+* *Errors:* Raises a runtime error if the JSON syntax is invalid,
+including the position of the error in the string.
+* *Example:*
++
+[source,js]
+----
+// Parse a simple JSON object
+let obj = JSON.parse('{"name": "John", "age": 30, "active": true}');
+puts("Name: " ~ obj.name);
+puts("Age: " ~ obj.age);
+puts("Active: " ~ obj.active); // Will be 1 (true)
+
+// Parse a JSON array
+let arr = JSON.parse('[1, 2, 3, 4, 5]');
+puts("First element: " ~ arr[0]);
+puts("Array length: " ~ arr.length);
+
+// Parse nested structures
+let data = JSON.parse('{"users": [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]}');
+puts("First user: " ~ data.users[0].name);
+
+// Handle null
+let value = JSON.parse('null');
+if (value === null) {
+    puts("Value is null");
+}
+----
+
+'''''
+
+==== JSON.stringify
+
+*Usage:*
+
+[source,js]
+----
+let jsonString = JSON.stringify(value);
+----
+
+* *Description:* Converts a POCA value to a JSON string representation.
+The function uses an iterative stack-based algorithm to handle deeply
+nested structures efficiently. POCA types are mapped to JSON as follows:
+** POCA null → JSON null
+** POCA numbers → JSON numbers
+** POCA strings → JSON strings (properly escaped)
+** POCA hashes → JSON objects (with string keys)
+** POCA arrays → JSON arrays
+** Other types → JSON null
++
+Note: POCA does not have a separate boolean type; numbers are used.
+Values are serialized as JSON numbers.
+* *Parameters:*
+** `+value+` (any): The POCA value to serialize to JSON.
+* *Return Value:* A string containing the JSON representation of the
+value. Returns null if no argument is provided.
+* *Errors:* Raises a runtime error if serialization fails.
+* *Example:*
++
+[source,js]
+----
+// Stringify a hash (object)
+let obj = {name: "John", age: 30, active: 1};
+let json = JSON.stringify(obj);
+puts(json); // Outputs: {"name":"John","age":30,"active":1}
+
+// Stringify an array
+let arr = [1, 2, 3, 4, 5];
+json = JSON.stringify(arr);
+puts(json); // Outputs: [1,2,3,4,5]
+
+// Stringify nested structures
+let data = {
+    users: [
+        {id: 1, name: "Alice"},
+        {id: 2, name: "Bob"}
+    ],
+    total: 2
+};
+json = JSON.stringify(data);
+puts(json); // Outputs: {"users":[{"id":1,"name":"Alice"},{"id":2,"name":"Bob"}],"total":2}
+
+// Stringify primitive values
+puts(JSON.stringify(42));      // Outputs: 42
+puts(JSON.stringify("hello")); // Outputs: "hello"
+puts(JSON.stringify(null));    // Outputs: null
+----
+
+'''''
+
+=== Implementation Notes
+
+* *Stack-Based Algorithm:* Both `JSON.parse()` and `JSON.stringify()`
+use iterative stack-based implementations rather than recursion. This
+allows them to handle arbitrarily deep nesting without hitting call
+stack limits, making them suitable for processing deeply nested JSON
+structures.
+
+* *Memory Management:* All created POCA values (strings, arrays, hashes)
+are automatically managed by POCA's garbage collector. The JSON parsing
+and serialization processes properly integrate with the GC to ensure
+memory safety.
+
+* *Type Conversions:*
+** When parsing JSON booleans, they are converted to POCA numbers (0 or
+1) since POCA uses numbers for boolean values.
+** When stringifying POCA values, all numbers are serialized as JSON
+numbers (not booleans), maintaining consistency with POCA's type system.
+** Hash keys are always converted to strings when stringifying to JSON
+objects.
+
+* *Error Handling:* Parse errors include position information to help
+identify the location of syntax errors in the JSON string. Stringify
+errors are reported with descriptive messages.
+
+'''''
+
+=== Round-Trip Example
+
+[source,js]
+----
+// Create a POCA data structure
+let original = {
+    name: "Alice",
+    scores: [95, 87, 92],
+    metadata: {
+        timestamp: 1234567890,
+        active: 1
+    }
+};
+
+// Serialize to JSON
+let jsonStr = JSON.stringify(original);
+puts("JSON: " ~ jsonStr);
+
+// Parse back to POCA
+let restored = JSON.parse(jsonStr);
+
+// Access the restored data
+puts("Name: " ~ restored.name);
+puts("First score: " ~ restored.scores[0]);
+puts("Timestamp: " ~ restored.metadata.timestamp);
+puts("Active: " ~ restored.metadata.active);
+----
+
+'''''
+
+=== Summary
+
+* *Global Object:* The JSON object provides a namespace for JSON
+operations with two main functions:
+** *parse:* Converts JSON strings to POCA values
+** *stringify:* Converts POCA values to JSON strings
+* *Type Mapping:*
+** JSON objects ↔ POCA hashes
+** JSON arrays ↔ POCA arrays
+** JSON strings ↔ POCA strings
+** JSON numbers ↔ POCA numbers
+** JSON booleans → POCA numbers (parsing only)
+** JSON null ↔ POCA null
+* *Performance:* Both functions use iterative stack-based algorithms
+that can handle deeply nested structures efficiently without recursion
+limits.
+* *Usage:* This API enables seamless JSON integration in POCA scripts,
+supporting data interchange with external systems, configuration files,
+and web APIs using the familiar JavaScript JSON interface.
+
 == Lock
 
 === Overview
