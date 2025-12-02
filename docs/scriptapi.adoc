@@ -7048,7 +7048,13 @@ objects that offer the same methods for regex operations.
 
 Once you have a RegExp ghost object (for example, from
 `+RegExp.create+`, `+RegExp.compile+`, or literal syntax), you can use
-its methods to perform various regex operations on strings.
+its methods to perform various regex operations on strings. A RegExp ghost
+object is stateless and not stateful like in JS. Each method call is 
+independent, thread-safe, and does not modify the object's internal state, 
+since it is designed to be used in POCA's environment which supports
+Threading and Coroutines. So there is no /g or /y flags or lastIndex property.
+
+'''''
 
 ==== RegExp.exec
 
