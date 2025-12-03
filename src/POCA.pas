@@ -4427,11 +4427,11 @@ begin
  end;
 end;
 
-{$ifdef Windows}
+{$if defined(Windows)}
 {$define UseFibersForCoroutines}
-{$else}
+{$elseif not defined(Linux)}
 {$define UseThreadsForCoroutines}
-{$endif}
+{$ifend}
 
 {$undef HasPOCAInitCPU}
 
