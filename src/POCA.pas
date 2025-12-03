@@ -4985,12 +4985,14 @@ begin
   FillChar(result^.Stack^,StackSize,#0);
   POCACoroutineContextSetJmp(@result^.JmpBuf);
 {$ifdef win64}
-  // With shadow space
-  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(48-8)); // must be 16-byte aligned after longjmp!
+  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(8));
+  TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP)))^):=0;  
+  dec(result^.JmpBuf.RegRSP,32); // reserve shadow space
+  TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;  
 {$else}  
   result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(32-8)); // must be 16-byte aligned after longjmp!
-{$endif}  
   TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;
+{$endif}  
 {$ifdef win64}
   result^.JmpBuf.RegRCX:={$ifdef fpc}TPOCAPtrUInt{$else}{$endif}(Parameter);
 {$else}
