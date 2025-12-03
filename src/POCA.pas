@@ -4443,26 +4443,22 @@ function ConvertThreadToFiber(lpParameter:TPOCAPointer):TPOCAPointer; stdcall; e
 
 function GetCurrentFiber:TPOCAPointer; assembler; register;
 asm
-{$ifdef cpu386}
+{$if defined(cpu386)}
  mov eax,dword ptr fs:[$10] // $1016
-{$else}
-{$ifdef cpuamd64}
+{$elseif defined(cpuamd64)}
  mov rax,qword ptr gs:[$20]
-{$endif}
-{$endif}
+{$ifend}
 end;
 
 function GetFiberData:TPOCAPointer; assembler; register;
 asm
-{$ifdef cpu386}
+{$if defined(cpu386)}
  mov eax,dword ptr fs:[$10] // $1016
  mov eax,dword ptr [eax]
-{$else}
-{$ifdef cpuamd64}
+{$elseif defined(cpuamd64)}
  mov rax,qword ptr gs:[$20]
  mov rax,qword ptr [rax]
-{$endif}
-{$endif}
+{$ifend}
 end;
 {$elseif not defined(UseThreadsForCoroutines)}
 {$if defined(cpu386) or defined(cpuamd64)}
