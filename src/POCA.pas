@@ -4990,6 +4990,7 @@ begin
   TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP)))^):=0;  
 //TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;  
 {$else}  
+  // Stack is 64‑aligned, subtract full call frame: 8 (ret)
   result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(8)); // keeps RSP mod16 = 8
 //TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;
 {$endif}  
