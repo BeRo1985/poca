@@ -353,7 +353,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2025-12-02-04-11-0000';
+const POCAVersion='2025-12-03-19-14-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1041,7 +1041,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCACoroutineEntrypoint=procedure(Coroutine:PPOCACoroutine);
 
      TPOCACoroutine=record
-      Fiber,Back:TPOCAPointer;
+      Fiber:TPOCAPointer;
+      Back:TPOCAPointer;
 {$ifdef windows}
       FiberFPUCW,BackFPUCW:TPOCAUInt32;
 {$endif}
@@ -4432,6 +4433,8 @@ end;
 {$define UseThreadsForCoroutines}
 {$endif}
 
+{$undef HasPOCAInitCPU}
+
 {$if defined(UseFibersForCoroutines)}
 function CreateFiber(dwStackSize:TPOCAUInt32;lpStartAddress,lpParameter:TPOCAPointer):TPOCAPointer; stdcall; external 'kernel32.dll' name 'CreateFiber';
 procedure DeleteFiber(lpFiber:TPOCAPointer); stdcall; external 'kernel32.dll' name 'DeleteFiber';
@@ -4462,15 +4465,160 @@ asm
 {$endif}
 end;
 {$elseif not defined(UseThreadsForCoroutines)}
+{$if defined(cpu386) or defined(cpuamd64)}
+var POCAHasXSAVE:TPOCAUInt8=0;
+    POCAHasAVX:TPOCAUInt8=0;
+    POCAXSaveMaskLo:TPOCAUInt32=0;
+    POCAXSaveMaskHi:TPOCAUInt32=0;
+
+{$define HasPOCAInitCPU}
+type TPOCACPUIDData=record
+      case TPOCAUInt32 of
+       0:(
+        Data:array[0..3] of TPOCAUInt32;
+       );
+       1:(
+        EAX,EBX,EDX,ECX:TPOCAUInt32;
+       );
+       2:(
+        String_:array[0..15] of AnsiChar;
+       );
+      end;
+      PPOCACPUIDData=^TPOCACPUIDData;
+
+      TPOCAXGETBVData=record
+      case TPOCAUInt32 of
+       0:(
+        Data:array[0..1] of TPOCAUInt32;
+       );
+       1:(
+        Lo,Hi:TPOCAUInt32;
+       ); 
+      end;
+      PPOCAXGETBVData=^TPOCAXGETBVData;
+
+procedure POCAGetCPUID(Value:TPOCAUInt32;out Data:TPOCACPUIDData); assembler;
+asm
+{$if defined(cpuamd64) or defined(cpux86_64) or defined(cpux64)}
+ push rbx
+{$if defined(Windows) or defined(Win32) or defined(Win64)}
+ // Win64 ABI (rcx, rdx, ...)
+ mov eax,ecx
+ mov r8,rdx
+{$else}
+ // SysV x64 ABI (rdi, rsi, ...)
+ mov eax,edi
+ mov r8,rsi
+{$ifend}
+{$else}
+ // register (eax, edx, ...)
+ push ebx
+ push edi
+ mov edi,edx
+{$ifend}
+ cpuid
+{$if defined(cpuamd64) or defined(cpux86_64) or defined(cpux64)}
+ mov dword ptr [r8+0],eax
+ mov dword ptr [r8+4],ebx
+ mov dword ptr [r8+8],edx
+ mov dword ptr [r8+12],ecx
+ pop rbx
+{$else}
+ mov dword ptr [edi+0],eax
+ mov dword ptr [edi+4],ebx
+ mov dword ptr [edi+8],edx
+ mov dword ptr [edi+12],ecx
+ pop edi
+ pop ebx
+{$ifend}
+end;
+
+procedure POCAGetXGETBV(Value:TPOCAUInt32;out Data:TPOCAXGETBVData); assembler;
+asm
+{$if defined(cpuamd64) or defined(cpux86_64) or defined(cpux64)}
+{$if defined(Windows) or defined(Win32) or defined(Win64)}
+ // Win64 ABI: RCX=Value, RDX=@Data
+ // XGETBV expects index in ECX
+ // No mov ecx,ecx since it would be a no-op here 
+ mov r8,rdx        // r8 = @Data
+{$else}
+ // SysV x64 ABI: RDI=Value, RSI=@Data
+ mov ecx,edi       // index => ECX
+ mov r8,rsi        // r8 = @Data
+{$ifend}
+{$else}
+ // 32-bit x86, register callconv: EAX=Value, EDX=@Data
+ mov ecx,eax       // index => ECX
+ mov edi,edx       // edi = @Data
+{$ifend}
+
+ // XGETBV with index in ECX => EDX:EAX
+ db $0f,$01,$d0
+
+ // Store Lo,Hi
+{$if defined(cpuamd64) or defined(cpux86_64) or defined(cpux64)}
+ mov dword ptr [r8+0],eax
+ mov dword ptr [r8+4],edx
+{$else}
+ mov dword ptr [edi+0],eax
+ mov dword ptr [edi+4],edx
+{$ifend}
+end;
+
+procedure POCAInitCPU;
+var CPUIDData:TPOCACPUIDData;
+    XGETBVData:TPOCAXGETBVData;
+begin
+ 
+ // Initialize to null values
+ POCAHasXSAVE:=0;
+ POCAHasAVX:=0;
+ POCAXSaveMaskLo:=0;
+ POCAXSaveMaskHi:=0;
+
+ // CPUID(1)
+ POCAGetCPUID(1,CPUIDData);
+ 
+ // XSAVE
+ if (CPUIDData.ECX and (TPOCAUInt32(1) shl 26))<>0 then begin  
+
+  // OSXSAVE 
+  if (CPUIDData.ECX and (TPOCAUInt32(1) shl 27))<>0 then begin 
+  
+   // XGETBV(0)
+   POCAGetXGETBV(0,XGETBVData);
+   
+   // x87 (bit0) + SSE (bit1) required for XSAVE usage
+   if (XGETBVData.Lo and 3)=3 then begin
+    
+    POCAHasXSAVE:=1;
+
+    POCAXSaveMaskLo:=XGETBVData.Lo;
+    POCAXSaveMaskHi:=XGETBVData.Hi;
+    
+    // AVX state present if bit 2 set:
+    POCAHasAVX:=ord((XGETBVData.Lo and (1 shl 2))<>0) and 1;
+ 
+   end;
+
+  end;
+
+ end;
+
+end;
+
+{$ifend}
 {$if defined(cpu386)}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
-     TPOCACoroutineContextJmpBuf=record
+     TPOCACoroutineContextJmpBuf=packed record
+      FPUSIMDState:array[0..4095] of TPOCAUInt8;
       RegEBX,RegESI,RegEDI,RegESP,RegEBP,RegEIP:TPOCAUInt32;
       FPUCW:TPOCAUInt16;
+      ReservedFPU:TPOCAUInt16;
      end;
 
      PPOCACoroutineContext=^TPOCACoroutineContext;
-     TPOCACoroutineContext=record
+     TPOCACoroutineContext=packed record
       JmpBuf:TPOCACoroutineContextJmpBuf;
       Stack:TPOCAPointer;
       StackSize:TPOCAInt32;
@@ -4478,40 +4626,98 @@ type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
 
 function POCACoroutineContextSetJmp(JmpBuf:PPOCACoroutineContextJmpBuf):TPOCAInt32; assembler; register; {$ifdef fpc}nostackframe;{$endif}
 asm
+ 
+ // Save scalar CW too (nice for quick reads)
  fstcw word ptr [eax+TPOCACoroutineContextJmpBuf.FPUCW]
+
+ // Decide XSAVE vs FXSAVE (branch on global flag)
+ cmp byte ptr [POCAHasXSAVE],0
+ je @UseFXSAVE
+
+ // XSAVE path: EAX/EDX = mask, arg1 = mem
+ push eax
+ mov ecx,eax // keep pointer in ECX
+ mov eax,dword ptr [POCAXSaveMaskLo]
+ mov edx,dword ptr [POCAXSaveMaskHi]
+ xsave [ecx+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+ pop eax
+ jmp @SavedFP
+
+@UseFXSAVE:
+ fxsave [eax+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+
+@SavedFP:
+ 
+ // Now save GPRs
+ 
  mov dword ptr [eax+TPOCACoroutineContextJmpBuf.RegEBX],ebx
  mov dword ptr [eax+TPOCACoroutineContextJmpBuf.RegESI],esi
  mov dword ptr [eax+TPOCACoroutineContextJmpBuf.RegEDI],edi
  mov dword ptr [eax+TPOCACoroutineContextJmpBuf.RegEBP],ebp
+ 
  lea edx,dword ptr [esp+4]
  mov dword ptr [eax+TPOCACoroutineContextJmpBuf.RegESP],edx
+ 
  mov edx,dword ptr [esp]
  mov dword ptr [eax+TPOCACoroutineContextJmpBuf.RegEIP],edx
+ 
  xor eax,eax
+
 end;
 
 procedure POCACoroutineContextLongJmp(JmpBuf:PPOCACoroutineContextJmpBuf;ResultValue:TPOCAInt32); assembler; register; {$ifdef fpc}nostackframe;{$endif}
 asm
+
  xchg edx,eax
+
+ // Restore FP/SIMD state
+ cmp byte ptr [POCAHasXSAVE],0
+ je @UseFXRSTOR 
+
+ // XSAVE restore
+ push eax
+ push edx
+ mov ecx,edx
+ mov eax,dword ptr [POCAXSaveMaskLo]
+ mov edx,dword ptr [POCAXSaveMaskHi]
+ xrstor [ecx+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+ pop edx 
+ pop eax 
+ jmp @RestoredFP
+
+@UseFXRSTOR:
+ fxrstor [edx+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+
+@RestoredFP:
+
+ // Restore CW (even although XSAVE already includes it)
  fldcw word ptr [edx+TPOCACoroutineContextJmpBuf.FPUCW]
+
+ // Handle ResultValue like setjmp/longjmp (0 -> 1)
+ test eax,eax
+ mov ebx,1
+ cmove eax,ebx
+
+// Restore GPRs + stack + jump
  mov ebx,dword ptr [edx+TPOCACoroutineContextJmpBuf.RegEBX]
  mov esi,dword ptr [edx+TPOCACoroutineContextJmpBuf.RegESI]
  mov edi,dword ptr [edx+TPOCACoroutineContextJmpBuf.RegEDI]
  mov ebp,dword ptr [edx+TPOCACoroutineContextJmpBuf.RegEBP]
  mov esp,dword ptr [edx+TPOCACoroutineContextJmpBuf.RegESP]
+
  jmp dword ptr [edx+TPOCACoroutineContextJmpBuf.RegEIP]
 end;
 
 function POCACoroutineContextCreate(StackSize:TPOCAInt32;Entrypoint,Parameter:TPOCAPointer):PPOCACoroutineContext;
 begin
- New(result);
+ GetMemAligned(result,SizeOf(TPOCACoroutineContext),64);
  FillChar(result^,sizeof(TPOCACoroutineContext),#0);
  if assigned(Entrypoint) then begin
   result^.StackSize:=StackSize;
-  GetMem(result^.Stack,StackSize);
+  GetMemAligned(result^.Stack,StackSize,64);
   FillChar(result^.Stack^,StackSize,#0);
   POCACoroutineContextSetJmp(@result^.JmpBuf);
-  result^.JmpBuf.RegESP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(result^.Stack)+TPOCAUInt32(StackSize-TPOCAInt32(sizeof(TPOCAPointer)*2));
+  result^.JmpBuf.RegESP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(result^.Stack)+TPOCAUInt32(StackSize-{TPOCAInt32(sizeof(TPOCAPointer)*2)}(16-4)); // must be 16-byte aligned after longjmp!
   TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(result^.JmpBuf.RegESP+sizeof(TPOCAPointer))))^):=Parameter;
   result^.JmpBuf.RegEBP:=0;
   result^.JmpBuf.RegEIP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(Entrypoint);
@@ -4522,10 +4728,10 @@ procedure POCACoroutineContextDestroy(Context:PPOCACoroutineContext);
 begin
  if assigned(Context) then begin
   if assigned(Context^.Stack) then begin
-   FreeMem(Context^.Stack);
+   FreeMemAligned(Context^.Stack);
    Context^.Stack:=nil;
   end;
-  Dispose(Context);
+  FreeMemAligned(Context);
   Context:=nil;
  end;
 end;
@@ -4543,12 +4749,16 @@ begin
 end;
 {$elseif defined(cpuamd64)}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
-     TPOCACoroutineContextJmpBuf=record
+     TPOCACoroutineContextJmpBuf=packed record
+      FPUSIMDState:array[0..4095] of TPOCAUInt8;
       RegRBX{$ifdef win64},RegRCX{$endif},RegRBP,RegR12,RegR13,RegR14,RegR15,RegRSP,RegRIP{$ifdef win64},RegRSI,RegRDI{$else},RegRDI{$endif}:TPOCAUInt64;
+      FPUCW:TPOCAUInt16;
+      ReservedFPU:TPOCAUInt16;
+      Reserved2:TPOCAUInt32;
      end;
 
      PPOCACoroutineContext=^TPOCACoroutineContext;
-     TPOCACoroutineContext=record
+     TPOCACoroutineContext=packed record
       JmpBuf:TPOCACoroutineContextJmpBuf;
       Stack:TPOCAPointer;
       StackSize:TPOCAInt32;
@@ -4556,7 +4766,36 @@ type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
 
 function POCACoroutineContextSetJmp(JmpBuf:PPOCACoroutineContextJmpBuf):TPOCAInt32; assembler; register; {$ifdef fpc}nostackframe;{$endif}
 asm
+{$ifndef fpc}
+ .noframe
+{$endif}
 {$ifdef win64}
+ // RCX = JmpBuf
+
+ // Save scalar FPU control word 
+ fstcw word ptr [rcx+TPOCACoroutineContextJmpBuf.FPUCW]
+
+ // Save full FP/SIMD state: XSAVE if available, else FXSAVE
+ cmp byte ptr [rip+POCAHasXSAVE],0
+ je @UseFXSAVE
+
+ // XSAVE path: EAX/EDX = mask, mem = RCX+FPUSIMDState
+ push rcx
+ push rdx
+ mov r8,rcx // keep base in r8
+ mov eax,dword ptr [rip+POCAXSaveMaskLo]
+ mov edx,dword ptr [rip+POCAXSaveMaskHi]
+ xsave [r8+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+ pop rdx
+ pop rcx
+ jmp @SavedFP
+
+@UseFXSAVE:
+ fxsave [rcx+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+
+@SavedFP:
+
+ // Save callee-saved GPRs + extra fields
  mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRBX],rbx
  mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRCX],rcx
  mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRBP],rbp
@@ -4566,12 +4805,46 @@ asm
  mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegR15],r15
  mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRSI],rsi
  mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRDI],rdi
- lea rdx,qword ptr [rsp+8]
- mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRSP],rdx
- mov r8,qword ptr [rsp+0]
- mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRIP],r8
+
+ // Save stack pointer
+ lea rax,qword ptr [rsp+8]
+ mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRSP],rax
+ 
+ // Save return address
+ mov rax,qword ptr [rsp+0]
+ mov qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRIP],rax
+
  xor rax,rax
+
 {$else}
+ // RDI = JmpBuf
+
+ // Save scalar FPU control word 
+ fstcw word ptr [rdi+TPOCACoroutineContextJmpBuf.FPUCW]
+
+ // Save full FP/SIMD state: XSAVE if available, else FXSAVE
+ cmp byte ptr [rip+POCAHasXSAVE],0
+ je @UseFXSAVE
+
+ // XSAVE path: EAX/EDX = mask, mem = JmpBuf^.FPUSIMDState
+ push rdi
+ push rdx
+ mov rcx,rdi
+ mov eax,dword ptr [rip+POCAXSaveMaskLo]
+ mov edx,dword ptr [rip+POCAXSaveMaskHi]
+ xsave [rcx+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+ pop rdx
+ pop rdi
+ jmp @SavedFP
+
+@UseFXSAVE:
+
+ // Fallback: save x87 + SSE state only
+ fxsave [rdi+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+
+@SavedFP:
+
+ // Save callee-saved GPRs + extra fields
  mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRBX],rbx
  mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRBP],rbp
  mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegR12],r12
@@ -4579,64 +4852,145 @@ asm
  mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegR14],r14
  mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegR15],r15
  mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRDI],rdi
- lea rdx,qword ptr [rsp+8]
- mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRSP],rdx
- mov rsi,qword ptr [rsp+0]
- mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRIP],rsi
+
+ // Save stack pointer
+ lea rax,qword ptr [rsp+8]
+ mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRSP],rax
+
+ // Save return address
+ mov rax,qword ptr [rsp+0]
+ mov qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRIP],rax
+
  xor rax,rax
+
 {$endif}
 end;
 
 procedure POCACoroutineContextLongJmp(JmpBuf:PPOCACoroutineContextJmpBuf;ResultValue:TPOCAInt32); assembler; register; {$ifdef fpc}nostackframe;{$endif}
 asm
+{$ifndef fpc}
+ .noframe
+{$endif}
 {$ifdef win64}
+ // RCX = JmpBuf, EDX = ResultValue
+
+ // Restore full FP/SIMD state: XSAVE if available, else FXSAVE
+ cmp byte ptr [rip+POCAHasXSAVE],0
+ je @UseFXRSTOR
+
+ // XSAVE restore: EAX/EDX = mask, mem = RCX+FPUSIMDState
+ push rcx
+ mov r8,rcx
+ mov eax,dword ptr [rip+POCAXSaveMaskLo]
+ mov edx,dword ptr [rip+POCAXSaveMaskHi]
+ xrstor [r8+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+ pop rcx
+ jmp @RestoredFP
+
+@UseFXRSTOR:
+
+ // Fallback: restore x87 + SSE state only
+ fxrstor [rcx+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+
+@RestoredFP:
+ // Restore scalar FPU control word
+ fldcw word ptr [rcx+TPOCACoroutineContextJmpBuf.FPUCW]
+
+ // Restore callee-saved GPRs + extra fields
  mov rbx,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRBX]
  mov rbp,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRBP]
  mov r12,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegR12]
  mov r13,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegR13]
  mov r14,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegR14]
  mov r15,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegR15]
+ 
+ // Handle ResultValue like setjmp/longjmp (0 -> 1)
  test edx,edx
  mov eax,1
  cmove edx,eax
  mov eax,edx
+ 
+ // Restore stack pointer
  mov rsp,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRSP]
+
+ // Restore return address in RDX
  mov rdx,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRIP]
+
+ // Restore RSI of that context
  mov rsi,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRSI]
+
+ // Restore saved RCX of that context
  push qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRCX]
  mov rdi,qword ptr [rcx+TPOCACoroutineContextJmpBuf.RegRDI]
  pop rcx
+
  jmp rdx
 {$else}
+ // RDI = JmpBuf, ESI = ResultValue
+
+ // Restore full FP/SIMD state: XSAVE if available, else FXSAVE
+ cmp byte ptr [rip+POCAHasXSAVE],0
+ je @UseFXRSTOR
+
+ // XSAVE restore: EAX/EDX = mask, mem = RDI+FPUSIMDState
+ push rdi
+ mov rcx,rdi
+ mov eax,dword ptr [rip+POCAXSaveMaskLo]
+ mov edx,dword ptr [rip+POCAXSaveMaskHi]
+ xrstor [rcx+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+ pop rdi
+ jmp @RestoredFP
+
+@UseFXRSTOR:
+ // Fallback: restore x87 + SSE state only
+ fxrstor [rdi+TPOCACoroutineContextJmpBuf.FPUSIMDState]
+
+@RestoredFP:
+ // Restore scalar FPU control word
+ fldcw word ptr [rdi+TPOCACoroutineContextJmpBuf.FPUCW]
+
+ // Restore callee-saved GPRs + extra fields
  mov rbx,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRBX]
  mov rbp,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRBP]
  mov r12,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegR12]
  mov r13,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegR13]
  mov r14,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegR14]
  mov r15,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegR15]
+
+ // Handle ResultValue like setjmp/longjmp (0 -> 1)
  test esi,esi
  mov eax,1
  cmove esi,eax
  mov eax,esi
+
+ // Restore stack pointer
  mov rsp,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRSP]
+
+ // Restore return address in RDX
  push qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRDI]
- mov rdx,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRIP]
+ mov rdx,qword ptr [rdi+TPOCACoroutineContextJmpBuf.RegRIP] 
  pop rdi
+
  jmp rdx
 {$endif}
 end;
 
 function POCACoroutineContextCreate(StackSize:TPOCAInt32;Entrypoint,Parameter:TPOCAPointer):PPOCACoroutineContext;
 begin
- New(result);
+ GetMemAligned(result,SizeOf(TPOCACoroutineContext),64);
  FillChar(result^,sizeof(TPOCACoroutineContext),#0);
  if assigned(Entrypoint) then begin
   result^.StackSize:=StackSize;
-  GetMem(result^.Stack,StackSize);
+  GetMemAligned(result^.Stack,StackSize,64);
   FillChar(result^.Stack^,StackSize,#0);
   POCACoroutineContextSetJmp(@result^.JmpBuf);
-  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(sizeof(TPOCAPointer)*2));
-  TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;
+{$ifdef win64}
+  // With shadow space
+  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(40-8)); // must be 16-byte aligned after longjmp!
+{$else}  
+  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(32-8)); // must be 16-byte aligned after longjmp!
+{$endif}  
+  TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;
 {$ifdef win64}
   result^.JmpBuf.RegRCX:={$ifdef fpc}TPOCAPtrUInt{$else}{$endif}(Parameter);
 {$else}
@@ -4651,10 +5005,10 @@ procedure POCACoroutineContextDestroy(Context:PPOCACoroutineContext);
 begin
  if assigned(Context) then begin
   if assigned(Context^.Stack) then begin
-   FreeMem(Context^.Stack);
+   FreeMemAligned(Context^.Stack);
    Context^.Stack:=nil;
   end;
-  Dispose(Context);
+  FreeMemAligned(Context);
   Context:=nil;
  end;
 end;
@@ -46683,6 +47037,9 @@ initialization
  OriginalTerm.c_line:=#0;
  TCGetAttr(0,OriginalTerm);
 {$ifend}
+{$ifdef HasPOCAInitCPU}
+ POCAInitCPU;
+{$endif}
  InitializePOCA;
 finalization
  FinalizePOCA;
