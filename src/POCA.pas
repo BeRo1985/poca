@@ -4535,7 +4535,7 @@ asm
 {$if defined(Windows) or defined(Win32) or defined(Win64)}
  // Win64 ABI: RCX=Value, RDX=@Data
  // XGETBV expects index in ECX
- // No mov ecx,ecx since it would be a no-op here 
+ mov ecx,ecx       // index => ECX with zero extends in the higher rcx 32-bits
  mov r8,rdx        // r8 = @Data
 {$else}
  // SysV x64 ABI: RDI=Value, RSI=@Data
@@ -4713,10 +4713,10 @@ begin
   GetMemAligned(result^.Stack,StackSize,64);
   FillChar(result^.Stack^,StackSize,#0);
   POCACoroutineContextSetJmp(@result^.JmpBuf);
-  result^.JmpBuf.RegESP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(result^.Stack)+TPOCAUInt32(StackSize-{TPOCAInt32(sizeof(TPOCAPointer)*2)}(16-4)); // must be 16-byte aligned after longjmp!
-  TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(result^.JmpBuf.RegESP+sizeof(TPOCAPointer))))^):=Parameter;
+  result^.JmpBuf.RegESP:=TPOCAPtrUInt(result^.Stack)+TPOCAUInt32(StackSize-{TPOCAInt32(sizeof(TPOCAPointer)*2)}(16-4)); // must be 16-byte aligned after longjmp!
+  TPOCAPointer(TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(result^.JmpBuf.RegESP+sizeof(TPOCAPointer))))^):=Parameter;
   result^.JmpBuf.RegEBP:=0;
-  result^.JmpBuf.RegEIP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt32{$endif}(Entrypoint);
+  result^.JmpBuf.RegEIP:=TPOCAPtrUInt(Entrypoint);
  end;
 end;
 
@@ -4982,21 +4982,21 @@ begin
   POCACoroutineContextSetJmp(@result^.JmpBuf);
 {$ifdef win64}
   // Stack is 64‑aligned, subtract full call frame: 8 (ret) + 32 (shadow)
-  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(40)); // keeps RSP mod16 = 8
-  TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP)))^):=0;  
-//TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;  
+  result^.JmpBuf.RegRSP:=TPOCAPtrUInt(result^.Stack)+TPOCAPtrUInt(StackSize-TPOCAPtrInt(40)); // keeps RSP mod16 = 8
+  TPOCAPointer(TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(result^.JmpBuf.RegRSP)))^):=0;  
+//TPOCAPointer(TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;  
 {$else}  
   // Stack is 64‑aligned, subtract full call frame: 8 (ret)
-  result^.JmpBuf.RegRSP:={$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.Stack)+{$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(StackSize-{$ifdef fpc}TPOCAPtrInt{$else}TPOCAInt64{$endif}(8)); // keeps RSP mod16 = 8
-//TPOCAPointer(TPOCAPointer({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAUInt64{$endif}({$ifdef fpc}TPOCAPtrUInt{$else}TPOCAInt64{$endif}(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;
+  result^.JmpBuf.RegRSP:=TPOCAPtrUInt(result^.Stack)+TPOCAPtrUInt(StackSize-TPOCAPtrInt(8)); // keeps RSP mod16 = 8
+//TPOCAPointer(TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(result^.JmpBuf.RegRSP+sizeof(TPOCAPointer))))^):=Parameter;
 {$endif}  
 {$ifdef win64}
-  result^.JmpBuf.RegRCX:={$ifdef fpc}TPOCAPtrUInt{$else}{$endif}(Parameter);
+  result^.JmpBuf.RegRCX:=TPOCAPtrUInt(Parameter);
 {$else}
-  result^.JmpBuf.RegRDI:={$ifdef fpc}TPOCAPtrUInt{$else}{$endif}(Parameter);
+  result^.JmpBuf.RegRDI:=TPOCAPtrUInt(Parameter);
 {$endif}
   result^.JmpBuf.RegRBP:=0;
-  result^.JmpBuf.RegRIP:={$ifdef fpc}TPOCAPtrUInt{$else}{$endif}(Entrypoint);
+  result^.JmpBuf.RegRIP:=TPOCAPtrUInt(Entrypoint);
  end;
 end;
 
