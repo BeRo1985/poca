@@ -4611,7 +4611,7 @@ end;
 {$if defined(cpu386)}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
      TPOCACoroutineContextJmpBuf=packed record
-      FPUSIMDState:array[0..4095] of TPOCAUInt8;
+      FPUSIMDState:array[0..65535] of TPOCAUInt8;
       RegEBX,RegESI,RegEDI,RegESP,RegEBP,RegEIP:TPOCAUInt32;
       FPUCW:TPOCAUInt16;
       ReservedFPU:TPOCAUInt16;
@@ -4750,7 +4750,7 @@ end;
 {$elseif defined(cpuamd64)}
 type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
      TPOCACoroutineContextJmpBuf=packed record
-      FPUSIMDState:array[0..4095] of TPOCAUInt8;
+      FPUSIMDState:array[0..65535] of TPOCAUInt8;
       RegRBX{$ifdef win64},RegRCX{$endif},RegRBP,RegR12,RegR13,RegR14,RegR15,RegRSP,RegRIP{$ifdef win64},RegRSI,RegRDI{$else},RegRDI{$endif}:TPOCAUInt64;
       FPUCW:TPOCAUInt16;
       ReservedFPU:TPOCAUInt16;
