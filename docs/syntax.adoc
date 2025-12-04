@@ -459,6 +459,11 @@ However, POCA provides the optional chaining operator (`?.`) and nullish coalesc
 
 This approach minimizes confusion by providing a single representation for "no value" scenarios and aligns with POCA's design philosophy of keeping the language straightforward and easy to use.
 
+=== Classes
+
+POCA supports class-based object-oriented programming (OOP) with the `class` keyword, which allows you to define classes, constructors, methods, and inheritance. These are just syntactic sugar over POCA's 
+prototype-based OOP model with the `Hash` data type, making it easier to work with objects in a familiar way. See the other documentation sections for more details on classes and OOP in POCA.
+
 == A quick tour
 
 === How to declare variables
