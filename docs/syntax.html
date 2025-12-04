@@ -1033,13 +1033,16 @@ object values</p>
 <div class="sect3">
 <h4 id="_why_no_separate_boolean_type">Why No Separate Boolean Type?</h4>
 <div class="paragraph">
-<p>You might wonder why there&#8217;s no dedicated <code>Boolean</code> type. In POCA, boolean values are represented using the <code>Number</code> type, where <code>0</code> is considered <code>false</code> and any non-zero value is considered <code>true</code>. While this may seem unusual, this approach simplifies the type system and allows for more flexible operations, similar to how some other scripting languages handle boolean logic. It also simplifies type coercion rules in expressions and the instruction set architecture.</p>
+<p>You might wonder why there&#8217;s no dedicated <code>Boolean</code> type. In POCA, boolean values are represented using the <code>Number</code> type, where <code>0</code> is considered <code>false</code> and any non-zero value is considered <code>true</code>. For convenience, POCA provides <code>false</code> and <code>true</code> as predefined constants (aliases for <code>0</code> and <code>1</code> respectively), allowing you to write idiomatic boolean logic while maintaining the simplicity of a unified numeric type.</p>
+</div>
+<div class="paragraph">
+<p>While this may seem unusual, this approach simplifies the type system and allows for more flexible operations, similar to how some other scripting languages handle boolean logic. It also simplifies type coercion rules in expressions and the instruction set architecture.</p>
 </div>
 </div>
 <div class="sect3">
 <h4 id="_why_no_separate_integer_type">Why No Separate Integer Type?</h4>
 <div class="paragraph">
-<p>All numbers are represented as double-precision floating point values. This design choice simplifies the language and avoids complications arising from having multiple numeric types, while still allowing for integer-like operations when needed.</p>
+<p>All numbers are represented as double-precision floating point values. This design choice simplifies the language and avoids complications arising from having multiple numeric types, while still allowing for integer-like operations when needed, such as bitwise operations and integer division, although these are limited to the 53-bit integer range due to the IEEE 754 representation of the mantissa.</p>
 </div>
 </div>
 <div class="sect3">
@@ -2183,7 +2186,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-12-04 21:27:24 +0100
+Last updated 2025-12-04 21:33:38 +0100
 </div>
 </div>
 </body>

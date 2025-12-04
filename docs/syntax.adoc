@@ -440,11 +440,13 @@ and some additional types on the internal engine level, such as:
 
 ==== Why No Separate Boolean Type?
 
-You might wonder why there's no dedicated `Boolean` type. In POCA, boolean values are represented using the `Number` type, where `0` is considered `false` and any non-zero value is considered `true`. While this may seem unusual, this approach simplifies the type system and allows for more flexible operations, similar to how some other scripting languages handle boolean logic. It also simplifies type coercion rules in expressions and the instruction set architecture.
+You might wonder why there's no dedicated `Boolean` type. In POCA, boolean values are represented using the `Number` type, where `0` is considered `false` and any non-zero value is considered `true`. For convenience, POCA provides `false` and `true` as predefined constants (aliases for `0` and `1` respectively), allowing you to write idiomatic boolean logic while maintaining the simplicity of a unified numeric type.
+
+While this may seem unusual, this approach simplifies the type system and allows for more flexible operations, similar to how some other scripting languages handle boolean logic. It also simplifies type coercion rules in expressions and the instruction set architecture.
 
 ==== Why No Separate Integer Type?
 
-All numbers are represented as double-precision floating point values. This design choice simplifies the language and avoids complications arising from having multiple numeric types, while still allowing for integer-like operations when needed.
+All numbers are represented as double-precision floating point values. This design choice simplifies the language and avoids complications arising from having multiple numeric types, while still allowing for integer-like operations when needed, such as bitwise operations and integer division, although these are limited to the 53-bit integer range due to the IEEE 754 representation of the mantissa.
 
 ==== Why No Separate Undefined Type?
 
