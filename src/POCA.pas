@@ -7441,6 +7441,7 @@ var HashRec:PPOCAHashRecord;
     i:TPOCAInt32;
     j:TPOCAInt32;
     mo:TPOCAMetaOp;
+    ChildHash:PPOCAHash;
 begin
  result:=false;
  HashRec:=Obj^.HashRecord;
@@ -7479,6 +7480,18 @@ begin
   if MarkObjectAsGray(TPOCAPointer(Obj^.Ghost)) then begin
    result:=true;
   end;
+ end;
+ if assigned(Obj^.Constructor_) then begin
+  if MarkObjectAsGray(TPOCAPointer(Obj^.Constructor_)) then begin
+   result:=true;
+  end;
+ end;
+ ChildHash:=Obj^.Children.First;
+ while assigned(ChildHash) do begin
+  if MarkObjectAsGray(TPOCAPointer(ChildHash)) then begin
+   result:=true;
+  end;
+  ChildHash:=ChildHash^.Children.Next;
  end;
 end;
 
@@ -7563,6 +7576,7 @@ var ArrayRecord:PPOCAArrayRecord;
     ArrayIndex,CellIndex,EntityIndex:TPOCAInt32;
     MetaOperation:TPOCAMetaOp;
     ClosureIndex,ClosureValueIndex:TPOCAInt32;
+    ChildHash:PPOCAHash;
 begin
  result:=false;
  
@@ -7665,6 +7679,26 @@ begin
      result:=true;
      exit;
     end;
+   end;
+   
+   // Check constructor object
+   if assigned(PPOCAHash(TPOCAPointer(CurrentObject))^.Constructor_) then begin
+    ChildObject:=PPOCAObject(TPOCAPointer(PPOCAHash(TPOCAPointer(CurrentObject))^.Constructor_));
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+   
+   // Check children list (for class inheritance)
+   ChildHash:=PPOCAHash(TPOCAPointer(CurrentObject))^.Children.First;
+   while assigned(ChildHash) do begin
+    ChildObject:=PPOCAObject(TPOCAPointer(ChildHash));
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+    ChildHash:=ChildHash^.Children.Next;
    end;
 
   end;
@@ -11795,6 +11829,7 @@ end;
 
 function POCAHashSetConstructor(Context:PPOCAContext;const Hash:TPOCAValue;const Constructor_:PPOCAObject):TPOCABool32;
 var HashInstance:PPOCAHash;
+    ConstructorValue:TPOCAValue;
 begin
  result:=POCAIsValueHash(Hash);
  if result then begin
@@ -11804,6 +11839,11 @@ begin
    try
     TPasMPInterlocked.Exchange(TPOCAPointer(HashInstance^.Constructor_),TPOCAPointer(Constructor_));
     POCAHashInvalidate(HashInstance);
+    // Write barrier: notify GC about old => young pointer if needed
+    if assigned(Constructor_) then begin
+     POCASetValueReferencePointer(ConstructorValue,Constructor_);
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(HashInstance),ConstructorValue);
+    end;
    finally
     POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
    end;
