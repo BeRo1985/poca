@@ -353,7 +353,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2025-12-03-19-14-0000';
+const POCAVersion='2025-12-04-11-25-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1122,7 +1122,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       class procedure Remove(Obj:PPOCAObject); static; //{$ifdef caninline}inline;{$endif}
       function TakeOver(const Obj:PPOCAObject):boolean;
       function TakeOverAppend(const aSourceList:PPOCAGarbageCollectorLinkedList):boolean;
-      function TakeOverAppendMark(const aSourceList:PPOCAGarbageCollectorLinkedList;const aBitsToAdd:TPOCAUInt32):boolean;
+      function TakeOverAppendMark(const aSourceList:PPOCAGarbageCollectorLinkedList;const aBitsToAdd,aBitsToRemove:TPOCAUInt32):boolean;
       class function Swap(var aList,aWithList:PPOCAGarbageCollectorLinkedList):boolean; static;
      end;
 
@@ -1555,6 +1555,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       function MarkGhostAsGray(Obj:PPOCAGhost):boolean;
 
       procedure TryMarkGhostAsGray(Obj:PPOCAObject);
+
+      function HasEphemeralReferences(CurrentObject:PPOCAObject):boolean;
 
       function MarkObjectContent(Obj:PPOCAObject):boolean;
 
@@ -7120,7 +7122,7 @@ begin
  end;
 end;
 
-function TPOCAGarbageCollectorLinkedList.TakeOverAppendMark(const aSourceList:PPOCAGarbageCollectorLinkedList;const aBitsToAdd:TPOCAUInt32):boolean;
+function TPOCAGarbageCollectorLinkedList.TakeOverAppendMark(const aSourceList:PPOCAGarbageCollectorLinkedList;const aBitsToAdd,aBitsToRemove:TPOCAUInt32):boolean;
 var Node:PPOCAGarbageCollectorLinkedListItem;
 begin
  result:=(aSourceList<>@self) and assigned(aSourceList) and assigned(@self) and aSourceList^.Filled;
@@ -7130,7 +7132,7 @@ begin
    while assigned(Node) do begin
     Assert(Node^.List=aSourceList,'Inconsistent garbage collector linked list object ownership');
     Node^.List:=@self;
-    PPOCAObject(Node)^.Header.GarbageCollector.State:=(PPOCAObject(Node)^.Header.GarbageCollector.State and not pgcbLIST) or aBitsToAdd;
+    PPOCAObject(Node)^.Header.GarbageCollector.State:=(PPOCAObject(Node)^.Header.GarbageCollector.State and not (pgcbLIST or aBitsToRemove)) or aBitsToAdd;
     Node:=Node^.Next;
    end;
    if assigned(Last) then begin
@@ -7152,7 +7154,7 @@ begin
   Obj:=nil;
   while aSourceList^.PopFromFront(Obj) do begin
    Push(Obj);
-   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or aBitsToAdd;
+   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or aBitsToRemove)) or aBitsToAdd;
   end;
  end;
 end;//}
@@ -7549,6 +7551,232 @@ begin
  end;
 end;
 
+// Check if a persistent object has any references to ephemeral (non-persistent) objects.
+// Used by MarkPersistents to accurately maintain the remembered set (PersistentRootLists).
+// Returns true if the object references any ephemeral objects, false if all references are to persistent objects.
+// This is more accurate than using MarkObjectContent's return value, which only indicates if children were marked gray.
+function TPOCAGarbageCollector.HasEphemeralReferences(CurrentObject:PPOCAObject):boolean;
+var ArrayRecord:PPOCAArrayRecord;
+    HashRecord:PPOCAHashRecord;
+    HashEntity:PPOCAHashEntity;
+    ChildObject:PPOCAObject;
+    ArrayIndex,CellIndex,EntityIndex:TPOCAInt32;
+    MetaOperation:TPOCAMetaOp;
+    ClosureIndex,ClosureValueIndex:TPOCAInt32;
+begin
+ result:=false;
+ 
+ case CurrentObject^.Header.ValueType of
+
+  pvtARRAY:begin
+ 
+   // Check all array elements for ephemeral references
+ 
+   ArrayRecord:=PPOCAArray(TPOCAPointer(CurrentObject))^.ArrayRecord;
+   if assigned(ArrayRecord) then begin
+
+    for ArrayIndex:=0 to ArrayRecord^.Size-1 do begin
+     if POCAIsValueObjectAndGetReferencePointer(ArrayRecord^.Data[ArrayIndex],ChildObject) then begin
+   
+      // Check if child is ephemeral (no persistent flags set)
+      if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+       result:=true;
+       exit;
+      end;
+     end;
+
+    end;
+
+   end;
+
+  end;
+  
+  pvtHASH:begin
+   
+   // Check hash keys, values, event handlers, prototype, events object, and ghost
+
+   HashRecord:=PPOCAHash(TPOCAPointer(CurrentObject))^.HashRecord;
+   if assigned(HashRecord) then begin
+
+    // Check all key-value pairs
+   
+    for CellIndex:=0 to (2 shl HashRecord^.LogSize)-1 do begin
+   
+     EntityIndex:=HashRecord^.CellToEntityIndex^[CellIndex];
+     if EntityIndex>=0 then begin
+
+      HashEntity:=@HashRecord^.Entities^[EntityIndex];
+     
+      // Check key
+      if POCAIsValueObjectAndGetReferencePointer(HashEntity^.Key,ChildObject) then begin
+       if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+        result:=true;
+        exit;
+       end;
+      end;
+
+      // Check value
+      if POCAIsValueObjectAndGetReferencePointer(HashEntity^.Value,ChildObject) then begin
+       if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+        result:=true;
+        exit;
+       end;
+      end;
+
+     end;
+
+    end;
+
+    // Check event handlers (operator overloads like __add, __get, etc.)
+    if assigned(HashRecord^.Events) then begin
+     for MetaOperation:=low(TPOCAHashEvents) to high(TPOCAHashEvents) do begin
+      if POCAIsValueObjectAndGetReferencePointer(HashRecord^.Events[MetaOperation],ChildObject) then begin
+       if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+        result:=true;
+        exit;
+       end;
+      end;
+     end;
+    end;
+   end;
+
+   // Check prototype chain
+   if assigned(PPOCAHash(TPOCAPointer(CurrentObject))^.Prototype) then begin
+    ChildObject:=PPOCAObject(TPOCAPointer(PPOCAHash(TPOCAPointer(CurrentObject))^.Prototype));
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+
+   // Check events hash object
+   if assigned(PPOCAHash(TPOCAPointer(CurrentObject))^.Events) then begin
+    ChildObject:=PPOCAObject(TPOCAPointer(PPOCAHash(TPOCAPointer(CurrentObject))^.Events));
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+
+   // Check associated ghost object
+   if assigned(PPOCAHash(TPOCAPointer(CurrentObject))^.Ghost) then begin
+    ChildObject:=PPOCAObject(TPOCAPointer(PPOCAHash(TPOCAPointer(CurrentObject))^.Ghost));
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+
+  end;
+  
+  pvtCODE:begin
+
+   // Check code constants
+   for ArrayIndex:=0 to PPOCACode(TPOCAPointer(CurrentObject))^.ConstantCount-1 do begin
+    if POCAIsValueObjectAndGetReferencePointer(PPOCACode(TPOCAPointer(CurrentObject))^.Constants^[ArrayIndex],ChildObject) then begin
+     if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+      result:=true;
+      exit;
+     end;
+    end;
+   end;
+
+   // Check regular expressions
+   for ArrayIndex:=0 to PPOCACode(TPOCAPointer(CurrentObject))^.CountRegExps-1 do begin
+    if POCAIsValueObjectAndGetReferencePointer(PPOCACode(TPOCAPointer(CurrentObject))^.RegExps^[ArrayIndex],ChildObject) then begin
+     if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+      result:=true;
+      exit;
+     end;
+    end;
+   end;
+
+  end;
+  
+  pvtFUNCTION:begin
+
+   // Check function's code object
+   if POCAIsValueObjectAndGetReferencePointer(PPOCAFunction(TPOCAPointer(CurrentObject))^.Code,ChildObject) then begin
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+
+   // Check function's namespace
+   if POCAIsValueObjectAndGetReferencePointer(PPOCAFunction(TPOCAPointer(CurrentObject))^.Namespace,ChildObject) then begin
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+
+   // Check function's bound object (for methods)
+   if POCAIsValueObjectAndGetReferencePointer(PPOCAFunction(TPOCAPointer(CurrentObject))^.Obj,ChildObject) then begin
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+
+{$ifdef POCAClosureArrayValues}
+   // Closure values stored as single array
+   if POCAIsValueObjectAndGetReferencePointer(PPOCAFunction(TPOCAPointer(CurrentObject))^.ClosureValues,ChildObject) then begin
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+{$else}
+   // Closure values stored as nested arrays (per scope level)
+   for ClosureIndex:=0 to length(PPOCAFunction(TPOCAPointer(CurrentObject))^.ClosureValues)-1 do begin
+    for ClosureValueIndex:=0 to length(PPOCAFunction(TPOCAPointer(CurrentObject))^.ClosureValues[ClosureIndex])-1 do begin
+     if POCAIsValueObjectAndGetReferencePointer(PPOCAFunction(TPOCAPointer(CurrentObject))^.ClosureValues[ClosureIndex][ClosureValueIndex],ChildObject) then begin
+      if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+       result:=true;
+       exit;
+      end;
+     end;
+    end;
+   end;
+{$endif}
+
+   // Check next function in linked list
+   if POCAIsValueObjectAndGetReferencePointer(PPOCAFunction(TPOCAPointer(CurrentObject))^.Next,ChildObject) then begin
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+  end;
+  
+  pvtGHOST:begin
+
+   // Check ghost's associated hash object
+   if assigned(PPOCAGhost(TPOCAPointer(CurrentObject))^.Hash) then begin
+    ChildObject:=PPOCAObject(TPOCAPointer(PPOCAGhost(TPOCAPointer(CurrentObject))^.Hash));
+    if (ChildObject^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))=0 then begin
+     result:=true;
+     exit;
+    end;
+   end;
+   
+   // Conservatively assume ghosts with Mark hooks might reference young objects
+   // We can't inspect what the Mark hook will mark, so keep them in remembered set
+   if assigned(PPOCAGhost(TPOCAPointer(CurrentObject))^.Ptr) then begin
+    if assigned(PPOCAGhost(TPOCAPointer(CurrentObject))^.GhostType) and 
+       assigned(addr(PPOCAGhost(TPOCAPointer(CurrentObject))^.GhostType^.Mark)) then begin
+     result:=true;
+     exit;
+    end;
+   end;
+
+  end;
+  
+ end;
+
+end;
+
 function TPOCAGarbageCollector.MarkObjectContent(Obj:PPOCAObject):boolean;
 begin
  case Obj^.Header.ValueType of
@@ -7587,21 +7815,38 @@ begin
  if Generational then begin
   case Obj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT or pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT) of
    pgcbWASPERSISTENT:begin
+    // Was persistent (non-root) during full collection, restore to persistent list
     PersistentLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
     Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENT;
     MarkObjectContent(Obj);
    end;
    pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT,pgcbWASPERSISTENTROOT:begin
+    // Was persistent root during full collection, restore to persistent root list
     PersistentRootLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
     Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or pgcbPERSISTENTROOT;
     MarkObjectContent(Obj);
    end;
+   pgcbPERSISTENT:begin
+    // Already persistent (non-root), keep in persistent list
+    PersistentLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENT;
+    MarkObjectContent(Obj);
+   end;
+   pgcbPERSISTENTROOT,pgcbPERSISTENT or pgcbPERSISTENTROOT:begin
+    // Already persistent root, keep in persistent root list
+    PersistentRootLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENTROOT;
+    MarkObjectContent(Obj);
+   end;
    0:begin
+    // Ephemeral object - check if it should be promoted to persistent generation
     if PersistentThreshold>0 then begin
      if TPOCAPtrUInt(Obj^.Header.GarbageCollector.State shr 8)>=TPOCAPtrUInt(PersistentThreshold) then begin
-      PersistentLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
-      Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbPERSISTENT;
+      // Survival counter reached threshold, promote to persistent root list
+      PersistentRootLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
+      Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not pgcbLIST)) or pgcbPERSISTENTROOT;
      end else begin
+      // Stay ephemeral, increment survival counter
       if (Obj^.Header.GarbageCollector.State shr pgcscSHIFT)<pgcscMAX then begin
        inc(Obj^.Header.GarbageCollector.State,pgcscONE);
       end;
@@ -7609,6 +7854,7 @@ begin
       Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or BlackMask;
      end;
     end else begin
+     // No persistent threshold, stay ephemeral in black list
      BlackLists[Obj^.Header.ValueType=pvtGHOST]^.TakeOver(Obj);
      Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or BlackMask;
     end;
@@ -7616,6 +7862,7 @@ begin
    end;
   end;
  end else begin
+  // Non-generational mode: all objects go to black list
   BlackLists[Obj^.Header.ValueType=pvtGHOST]^.TakeOver(Obj);
   Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or BlackMask;
   MarkObjectContent(Obj);
@@ -7765,12 +8012,24 @@ begin
   Obj:=TPOCAPointer(List^.First);
   while assigned(Obj) do begin
    NextObj:=TPOCAPointer(Obj^.Header.GarbageCollector.LinkedList.Next);
+{$ifdef POCAGarbageCollectorNoAccurateRememberedSet}
    if not MarkObjectContent(Obj) then begin
     // No more references to ephemeral generation objects, so move from the
     // persistent root list to the persistent list
     PersistentLists[Ghost].TakeOver(Obj);
     Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENT;
    end;
+{$else}
+   if HasEphemeralReferences(Obj) then begin
+    // Keep in PersistentRootLists - has ephemeral refs
+    MarkObjectContent(Obj);  // Still need to mark the children
+   end else begin
+    // Move to PersistentLists - only persistent refs
+    PersistentLists[Ghost].TakeOver(Obj);
+    Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbPERSISTENT;
+    MarkObjectContent(Obj);  // Still mark to update children states
+   end;
+{$endif}
    Obj:=NextObj;
   end;
  end;
@@ -7835,16 +8094,16 @@ begin
    PersistentForceScan:=false;
    PersistentCycleCounter:=0;
    for Ghost:=false to true do begin
-    WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentLists[Ghost],WhiteMask or pgcbWASPERSISTENT);
-    WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentRootLists[Ghost],WhiteMask or pgcbWASPERSISTENTROOT);
+    WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentLists[Ghost],WhiteMask or pgcbWASPERSISTENT,pgcbPERSISTENT or pgcbPERSISTENTROOT);
+    WhiteLists[Ghost]^.TakeOverAppendMark(@PersistentRootLists[Ghost],WhiteMask or pgcbWASPERSISTENTROOT,pgcbPERSISTENT or pgcbPERSISTENTROOT);
    end;
   end;
  end else begin
   PersistentForceScan:=false;
   PersistentCycleCounter:=0;
   for Ghost:=false to true do begin
-   GrayList.TakeOverAppendMark(@PersistentLists[Ghost],pgcbGRAY);
-   GrayList.TakeOverAppendMark(@PersistentRootLists[Ghost],pgcbGRAY);
+   GrayList.TakeOverAppendMark(@PersistentLists[Ghost],pgcbGRAY,0);
+   GrayList.TakeOverAppendMark(@PersistentRootLists[Ghost],pgcbGRAY,0);
   end;
  end;
 end;
@@ -7979,7 +8238,12 @@ begin
          WhiteGhostList.TakeOverAppend(WhiteLists[Ghost]);
          State:=pgcsMARKWHITEGHOSTS;
         end else begin
-         SweepLists[Ghost].TakeOverAppendMark(WhiteLists[Ghost],0);
+         // Clear WAS* flags from unmarked white objects before sweeping
+         if Generational then begin
+          SweepLists[Ghost].TakeOverAppendMark(WhiteLists[Ghost],0,pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT);
+         end else begin
+          SweepLists[Ghost].TakeOverAppendMark(WhiteLists[Ghost],0,0);
+         end;
          if State=pgcsFLIP then begin
           State:=pgcsSWEEP;
          end;
@@ -8019,7 +8283,12 @@ begin
          Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
         end else begin
          SweepLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
-         Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not pgcbLIST;
+         // Clear WAS* flags before sweeping
+         if Generational then begin
+          Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not (pgcbLIST or pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT);
+         end else begin
+          Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not pgcbLIST;
+         end;
          TryMarkGhostAsGray(Obj);
         end;
        end else begin
@@ -8028,7 +8297,12 @@ begin
        end;
       end else begin
        SweepLists[Obj^.Header.ValueType=pvtGHOST].TakeOver(Obj);
-       Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not pgcbLIST;
+       // Clear WAS* flags before sweeping
+       if Generational then begin
+        Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not (pgcbLIST or pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT);
+       end else begin
+        Obj^.Header.GarbageCollector.State:=Obj^.Header.GarbageCollector.State and not pgcbLIST;
+       end;
        TryMarkGhostAsGray(Obj);
       end;
      end;
@@ -11286,6 +11560,7 @@ end;
 
 function POCAHashSetPrototype(Context:PPOCAContext;const Hash:TPOCAValue;const Prototype:PPOCAHash):TPOCABool32;
 var HashPtr,HashInstance,OldPrototype,Previous,Next,First,Last:PPOCAHash;
+    PrototypeValue:TPOCAValue;
 begin
  result:=POCAIsValueHash(Hash);
  if result then begin
@@ -11347,6 +11622,9 @@ begin
      end;
      TPasMPInterlocked.Exchange(TPOCAPointer(HashInstance^.Prototype),TPOCAPointer(Prototype));
      if assigned(Prototype) then begin
+      // Record cross-generation reference (persistent hash -> new prototype)
+      POCASetValueReferencePointer(PrototypeValue,Prototype);
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),PrototypeValue);
       POCAMRSWLockWriteLock(@Prototype^.Cache.MRSWLock);
       try
        First:=Prototype^.Children.First;
@@ -11652,6 +11930,7 @@ end;
 
 function POCAHashSetHashEvents(Context:PPOCAContext;const ToHash,FromHash:TPOCAValue):TPOCABool32;
 var Hashs:array[0..1] of PPOCAHash;
+    EventsValue:TPOCAValue;
 begin
  result:=false;
  if POCAIsValueHash(ToHash) then begin
@@ -11663,6 +11942,9 @@ begin
    end;
    POCAHashLockInvalidate(Hashs[0]);
    TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),TPOCAPointer(Hashs[1]));
+   // Remember cross-generation link (persistent hash -> events hash)
+   POCASetValueReferencePointer(EventsValue,Hashs[1]);
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hashs[0])),EventsValue);
    result:=true;
   end else if POCAIsValueNull(FromHash) then begin
    POCAHashLockInvalidate(Hashs[0]);
@@ -11859,6 +12141,8 @@ begin
     end;
     if assigned(HashRec^.Events) then begin
      HashRec^.Events[TPOCAMetaOp(Op)]:=Value;
+     // Ensure young handler stays alive when attached to persistent hash
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
     end;
    end;
    POCAHashLockInvalidate(Hash);
