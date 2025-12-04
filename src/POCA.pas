@@ -14441,12 +14441,11 @@ begin
  if Old<>New then begin
   POCALockEnter(Context^.Instance^.Globals.GarbageCollector.Lock);
   try
-    Old:=Context^.Instance^.Globals.GarbageCollector.Generational;
-    if Old<>New then begin
-     Context^.Instance^.Globals.GarbageCollector.Reset;
-     Context^.Instance^.Globals.GarbageCollector.State:=pgcsRESET;
-     Context^.Instance^.Globals.GarbageCollector.Generational:=New;
-    end; 
+   Old:=Context^.Instance^.Globals.GarbageCollector.Generational;
+   if Old<>New then begin
+    Context^.Instance^.Globals.GarbageCollector.Reset;
+    Context^.Instance^.Globals.GarbageCollector.State:=pgcsRESET;
+    Context^.Instance^.Globals.GarbageCollector.Generational:=New;
    end;
   finally
    POCALockLeave(Context^.Instance^.Globals.GarbageCollector.Lock);
