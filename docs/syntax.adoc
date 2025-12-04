@@ -415,6 +415,47 @@ static resolution (`let`/`const`) and runtime dynamic resolution (`var`). This m
 `var` more flexible for dynamic programming patterns, while `let`/`const` enable better 
 compile-time optimization.
 
+== Data types
+
+=== Which data types?
+
+POCA has the following data types on the language level:
+
+- `null`: Special null value
+- `Number`: Double-precision floating point numbers (64 bit IEEE 754)
+- `String`: Immutable sequences of characters, ASCII and UTF-8 supported together with code
+  point and code unit operations
+- `Hash`: Hash tables with support for meta tables (similar to Lua), equivalent to JavaScript objects
+- `Array`: Ordered collections of values
+- `Ghost`: Special type for external types, objects, and resources, for example,
+  native primitives such as Locks, Threads, RegExps, etc.
+- `Function`: First-class functions, closures, and lambdas, linked to `Code` or `NativeCode` 
+  object values 
+- `Code`: Bytecode-compiled code objects, including JIT-compiled native code
+- `NativeCode`: Native code objects, such as native functions wrapped for POCA
+
+and some additional types on the internal engine level, such as:
+
+- `Reference`
+
+==== Why No Separate Boolean Type?
+
+You might wonder why there's no dedicated `Boolean` type. In POCA, boolean values are represented using the `Number` type, where `0` is considered `false` and any non-zero value is considered `true`. While this may seem unusual, this approach simplifies the type system and allows for more flexible operations, similar to how some other scripting languages handle boolean logic. It also simplifies type coercion rules in expressions and the instruction set architecture.
+
+==== Why No Separate Integer Type?
+
+All numbers are represented as double-precision floating point values. This design choice simplifies the language and avoids complications arising from having multiple numeric types, while still allowing for integer-like operations when needed.
+
+==== Why No Separate Undefined Type?
+
+Instead of having both `null` and `undefined`, POCA uses the single special value `null` to represent both concepts. This unification simplifies the type system and reduces complexity when dealing with absent or uninitialized values.
+
+By default, read accesses to undefined hash table keys, array indices, or out-of-bounds array accesses throw exceptions rather than returning `undefined`. This design choice enhances code reliability and helps catch errors early, as developers are immediately alerted to attempts to access non-existent properties or indices that might otherwise lead to silent failures.
+
+However, POCA provides the optional chaining operator (`?.`) and nullish coalescing operator (`??`) for cases where you want to safely handle potentially missing values. These operators treat missing properties or out-of-bounds accesses as `null` without throwing exceptions, allowing for graceful fallback handling (see <<nullish-coalescing-operator>> for details).
+
+This approach minimizes confusion by providing a single representation for "no value" scenarios and aligns with POCA's design philosophy of keeping the language straightforward and easy to use.
+
 == A quick tour
 
 === How to declare variables

@@ -458,6 +458,11 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_scoping">Scoping</a></li>
 </ul>
 </li>
+<li><a href="#_data_types">Data types</a>
+<ul class="sectlevel2">
+<li><a href="#_which_data_types">Which data types?</a></li>
+</ul>
+</li>
 <li><a href="#_a_quick_tour">A quick tour</a>
 <ul class="sectlevel2">
 <li><a href="#_how_to_declare_variables">How to declare variables</a></li>
@@ -968,6 +973,88 @@ keywords using lexical scoping, while POCA fundamentally distinguishes between c
 static resolution (<code>let</code>/<code>const</code>) and runtime dynamic resolution (<code>var</code>). This makes POCA&#8217;s
 <code>var</code> more flexible for dynamic programming patterns, while <code>let</code>/<code>const</code> enable better
 compile-time optimization.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_data_types">Data types</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_which_data_types">Which data types?</h3>
+<div class="paragraph">
+<p>POCA has the following data types on the language level:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>null</code>: Special null value</p>
+</li>
+<li>
+<p><code>Number</code>: Double-precision floating point numbers (64 bit IEEE 754)</p>
+</li>
+<li>
+<p><code>String</code>: Immutable sequences of characters, ASCII and UTF-8 supported together with code
+point and code unit operations</p>
+</li>
+<li>
+<p><code>Hash</code>: Hash tables with support for meta tables (similar to Lua), equivalent to JavaScript objects</p>
+</li>
+<li>
+<p><code>Array</code>: Ordered collections of values</p>
+</li>
+<li>
+<p><code>Ghost</code>: Special type for external types, objects, and resources, for example,
+native primitives such as Locks, Threads, RegExps, etc.</p>
+</li>
+<li>
+<p><code>Function</code>: First-class functions, closures, and lambdas, linked to <code>Code</code> or <code>NativeCode</code>
+object values</p>
+</li>
+<li>
+<p><code>Code</code>: Bytecode-compiled code objects, including JIT-compiled native code</p>
+</li>
+<li>
+<p><code>NativeCode</code>: Native code objects, such as native functions wrapped for POCA</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>and some additional types on the internal engine level, such as:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>Reference</code></p>
+</li>
+</ul>
+</div>
+<div class="sect3">
+<h4 id="_why_no_separate_boolean_type">Why No Separate Boolean Type?</h4>
+<div class="paragraph">
+<p>You might wonder why there&#8217;s no dedicated <code>Boolean</code> type. In POCA, boolean values are represented using the <code>Number</code> type, where <code>0</code> is considered <code>false</code> and any non-zero value is considered <code>true</code>. While this may seem unusual, this approach simplifies the type system and allows for more flexible operations, similar to how some other scripting languages handle boolean logic. It also simplifies type coercion rules in expressions and the instruction set architecture.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_why_no_separate_integer_type">Why No Separate Integer Type?</h4>
+<div class="paragraph">
+<p>All numbers are represented as double-precision floating point values. This design choice simplifies the language and avoids complications arising from having multiple numeric types, while still allowing for integer-like operations when needed.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_why_no_separate_undefined_type">Why No Separate Undefined Type?</h4>
+<div class="paragraph">
+<p>Instead of having both <code>null</code> and <code>undefined</code>, POCA uses the single special value <code>null</code> to represent both concepts. This unification simplifies the type system and reduces complexity when dealing with absent or uninitialized values.</p>
+</div>
+<div class="paragraph">
+<p>By default, read accesses to undefined hash table keys, array indices, or out-of-bounds array accesses throw exceptions rather than returning <code>undefined</code>. This design choice enhances code reliability and helps catch errors early, as developers are immediately alerted to attempts to access non-existent properties or indices that might otherwise lead to silent failures.</p>
+</div>
+<div class="paragraph">
+<p>However, POCA provides the optional chaining operator (<code>?.</code>) and nullish coalescing operator (<code>??</code>) for cases where you want to safely handle potentially missing values. These operators treat missing properties or out-of-bounds accesses as <code>null</code> without throwing exceptions, allowing for graceful fallback handling (see <a href="#nullish-coalescing-operator">[nullish-coalescing-operator]</a> for details).</p>
+</div>
+<div class="paragraph">
+<p>This approach minimizes confusion by providing a single representation for "no value" scenarios and aligns with POCA&#8217;s design philosophy of keeping the language straightforward and easy to use.</p>
 </div>
 </div>
 </div>
@@ -2096,7 +2183,7 @@ switch(aValue){
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-11-05 23:33:59 +0100
+Last updated 2025-12-04 21:27:24 +0100
 </div>
 </div>
 </body>
