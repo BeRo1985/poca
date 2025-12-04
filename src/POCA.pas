@@ -8917,6 +8917,7 @@ end;
 
 function POCAIsValueTrue(Context:PPOCAContext;const Value:TPOCAValue):boolean; {$ifdef UseRegister}register;{$endif}
 var Num:double;
+    OK:TPasDblStrUtilsBoolean;
 begin
  case POCAGetValueType(Value) of
   pvtNULL:begin
@@ -8926,14 +8927,23 @@ begin
    result:=Value.Num<>0;
   end;
   pvtSTRING:begin
-   result:=true;
+   if length(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)=0 then begin
+    result:=false;
+   end else begin
+    Num:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(Value))^.Data,rmNearest,@OK);
+    if OK then begin
+     result:=Num<>0;
+    end else begin
+     result:=length(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)>0;
+    end;
+   end;
   end;
   else begin
    Num:=0;
    if POCAConvertToNumberEvent(Context,Value,Num) then begin
     result:=Num<>0;
    end else begin
-    result:=false;
+    result:=true;
    end;
   end;
  end;
@@ -14400,7 +14410,7 @@ begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setExhaustionCollect"');
  end;
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.ExhaustionCollect) and 1;
- TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.ExhaustionCollect),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
+ TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.ExhaustionCollect),TPOCAInt32(TPOCABool32(ord(POCAGetBooleanValue(Context,Arguments^[0])) and 1)));
 end;
 
 function POCAGarbageCollectorFunctionSETEXHAUSIONINCREMENTALFULLCYCLETHRESHOLD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -14418,7 +14428,7 @@ begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setActive"');
  end;
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Active) and 1;
- TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.Active),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
+ TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.Active),TPOCAInt32(TPOCABool32(ord(POCAGetBooleanValue(Context,Arguments^[0])) and 1)));
 end;
 
 function POCAGarbageCollectorFunctionSETINCREMENTAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -14427,7 +14437,7 @@ begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setIncremental"');
  end;
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Incremental) and 1;
- TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.Incremental),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
+ TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.Incremental),TPOCAInt32(TPOCABool32(ord(POCAGetBooleanValue(Context,Arguments^[0])) and 1)));
 end;
 
 function POCAGarbageCollectorFunctionSETGENERATIONAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
