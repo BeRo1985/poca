@@ -3738,11 +3738,11 @@ begin
 end;
 
 procedure GetMemAligned(var p;Size:TPOCAPtrInt;Align:TPOCAPtrUInt=16);
-{$ifdef DelphiXE2AndUp}
+(*{$ifdef DelphiXE2AndUp}
 begin
  GetMem(TPOCAPointer(p),Size);
 end;
-{$else}
+{$else}*)
 var Original,Aligned:TPOCAPointer;
     Temp:PPOCAPointer;
     Mask:TPOCAPtrUInt;
@@ -3772,14 +3772,14 @@ begin
  Temp:=TPOCAPointer(@p);
  Temp^:=Aligned;
 end;
-{$endif}
+//{$endif}
 
 procedure FreeMemAligned(const p);
-{$ifdef DelphiXE2AndUp}
+(*{$ifdef DelphiXE2AndUp}
 begin
  FreeMem(TPOCAPointer(p));
 end;
-{$else}
+{$else}*)
 var pp:TPOCAPointer;
 begin
  pp:=TPOCAPointer(TPOCAPointer(@p)^);
@@ -3788,7 +3788,7 @@ begin
   FreeMem(pp);
  end;
 end;
-{$endif}
+//{$endif}
 
 {$ifdef POCAHasJIT}
 procedure POCANativeCodeMemoryManagerFreeBlockContainer(NativeCodeMemoryManager:PPOCANativeCodeMemoryManager;BlockContainer:PPOCANativeCodeMemoryManagerBlockContainer); forward;
