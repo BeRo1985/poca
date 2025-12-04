@@ -10295,6 +10295,13 @@ begin
  PPOCAArray(POCAGetValueReferencePointer(ArrayObject))^.ArrayRecord^.Data[i]:=Value;
 end;
 
+procedure POCAArrayFastSetWithBarrier(const ArrayObject:TPOCAValue;i:TPOCAInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
+begin
+ PPOCAArray(POCAGetValueReferencePointer(ArrayObject))^.ArrayRecord^.Data[i]:=Value;
+ // Write barrier: record cross-generation reference (persistent array => young value)
+ TPOCAGarbageCollector.WriteBarrier(PPOCAObject(POCAGetValueReferencePointer(ArrayObject)),Value);
+end;
+
 function POCAArrayGet(const ArrayObject:TPOCAValue;i:TPOCAInt32):TPOCAValue;
 var ArrayRecord:PPOCAArrayRecord;
 begin
@@ -37585,9 +37592,9 @@ begin
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
      if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      POCAArrayFastSet(Frame^.LocalValues,Code^.ArgumentLocals[Index].Index,Value);
+      POCAArrayFastSetWithBarrier(Frame^.LocalValues,Code^.ArgumentLocals[Index].Index,Value);
      end else begin
-      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[Index].Level),Code^.ArgumentLocals[Index].Index,Value);
+      POCAArrayFastSetWithBarrier(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[Index].Level),Code^.ArgumentLocals[Index].Index,Value);
      end;
 {$else}
      if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
@@ -45233,7 +45240,7 @@ begin
    end;
    popSETLOCALVALUE:begin
 {$ifdef POCAClosureArrayValues}
-    POCAArrayFastSet(Frame^.LocalValues,Operands^[0],Registers^[Operands^[1]]);
+    POCAArrayFastSetWithBarrier(Frame^.LocalValues,Operands^[0],Registers^[Operands^[1]]);
 {$else}
     Frame^.LocalValues[Operands^[0]]:=Registers^[Operands^[1]];
 {$endif}
@@ -45247,7 +45254,7 @@ begin
    end;
    popSETOUTERVALUE:begin
 {$ifdef POCAClosureArrayValues}
-    POCAArrayFastSet(POCAArrayFastGet(Frame^.OuterValueLevels,Operands^[0]),Operands^[1],Registers^[Operands^[2]]);
+    POCAArrayFastSetWithBarrier(POCAArrayFastGet(Frame^.OuterValueLevels,Operands^[0]),Operands^[1],Registers^[Operands^[2]]);
 {$else}
     Frame^.OuterValueLevels[Operands^[0]][Operands^[1]]:=Registers^[Operands^[2]];
 {$endif}
