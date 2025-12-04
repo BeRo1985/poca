@@ -436,7 +436,8 @@ POCA has the following data types on the language level:
 
 and some additional types on the internal engine level, such as:
 
-- `Reference`
+- `Reference`: Internal reference type for objects, so just ignore this type 
+  when programming in POCA, as it's not exposed on the language level.
 
 ==== Why No Separate Boolean Type?
 
