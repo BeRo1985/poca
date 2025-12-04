@@ -590,6 +590,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_garbagecollector_getsweepfactor">GarbageCollector.getSweepFactor</a></li>
 <li><a href="#_garbagecollector_getpersistentinterval">GarbageCollector.getPersistentInterval</a></li>
 <li><a href="#_garbagecollector_getpersistentthreshold">GarbageCollector.getPersistentThreshold</a></li>
+<li><a href="#_garbagecollector_getpersistentdefaultinterval">GarbageCollector.getPersistentDefaultInterval</a></li>
 <li><a href="#_garbagecollector_getexhaustioncollect">GarbageCollector.getExhaustionCollect</a></li>
 <li><a href="#_garbagecollector_getexhaustionincrementalfullcyclethreshold">GarbageCollector.getExhaustionIncrementalFullCycleThreshold</a></li>
 <li><a href="#_garbagecollector_getactive">GarbageCollector.getActive</a></li>
@@ -610,6 +611,7 @@ body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-b
 <li><a href="#_garbagecollector_setsweepfactor">GarbageCollector.setSweepFactor</a></li>
 <li><a href="#_garbagecollector_setpersistentinterval">GarbageCollector.setPersistentInterval</a></li>
 <li><a href="#_garbagecollector_setpersistentthreshold">GarbageCollector.setPersistentThreshold</a></li>
+<li><a href="#_garbagecollector_setpersistentdefaultinterval">GarbageCollector.setPersistentDefaultInterval</a></li>
 <li><a href="#_garbagecollector_setexhaustioncollect">GarbageCollector.setExhaustionCollect</a></li>
 <li><a href="#_garbagecollector_setexhaustionincrementalfullcyclethreshold">GarbageCollector.setExhaustionIncrementalFullCycleThreshold</a></li>
 <li><a href="#_garbagecollector_setactive">GarbageCollector.setActive</a></li>
@@ -4346,6 +4348,30 @@ can survive GC before it is considered &#8220;persistent.&#8221;</p>
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_garbagecollector_getpersistentdefaultinterval">GarbageCollector.getPersistentDefaultInterval</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let defaultInterval = GarbageCollector.getPersistentDefaultInterval();</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Returns the default interval for full generation scans
+when PersistentInterval is 0. This prevents the old generation from
+becoming immortal by ensuring periodic full scans.</p>
+</li>
+<li>
+<p><strong>Return Value:</strong> A numeric value (integer). Default is 10.</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_garbagecollector_getexhaustioncollect">GarbageCollector.getExhaustionCollect</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -5009,6 +5035,41 @@ it’s considered persistent (long-lived).</p>
 <hr>
 </div>
 <div class="sect3">
+<h4 id="_garbagecollector_setpersistentdefaultinterval">GarbageCollector.setPersistentDefaultInterval</h4>
+<div class="paragraph">
+<p><strong>Usage:</strong></p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlight"><code class="language-js" data-lang="js">let old = GarbageCollector.setPersistentDefaultInterval(20);</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Description:</strong> Sets the default interval for triggering full scans of
+the persistent generation when <code>PersistentInterval</code> is set to 0. This
+prevents the old generation from becoming immortal by ensuring periodic
+full scans even when no explicit interval is configured. Default is 10.</p>
+</li>
+<li>
+<p><strong>Parameters:</strong></p>
+<div class="ulist">
+<ul>
+<li>
+<p><em>newDefaultInterval</em> (number)</p>
+</li>
+</ul>
+</div>
+</li>
+<li>
+<p><strong>Return Value:</strong> The old default interval value.</p>
+</li>
+</ul>
+</div>
+<hr>
+</div>
+<div class="sect3">
 <h4 id="_garbagecollector_setexhaustioncollect">GarbageCollector.setExhaustionCollect</h4>
 <div class="paragraph">
 <p><strong>Usage:</strong></p>
@@ -5502,6 +5563,10 @@ plus persistent objects are handled.</p>
 <li>
 <p><code>GarbageCollector.getPersistentThreshold</code>,
 <code>GarbageCollector.setPersistentThreshold</code></p>
+</li>
+<li>
+<p><code>GarbageCollector.getPersistentDefaultInterval</code>,
+<code>GarbageCollector.setPersistentDefaultInterval</code></p>
 </li>
 <li>
 <p><code>GarbageCollector.getExhaustionCollect</code>,
@@ -15571,7 +15636,7 @@ POCA projects, providing flexible control over concurrent execution.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2025-12-02 04:10:12 +0100
+Last updated 2025-12-04 14:05:33 +0100
 </div>
 </div>
 </body>

@@ -2062,6 +2062,22 @@ can survive GC before it is considered "`persistent.`"
 
 '''''
 
+==== GarbageCollector.getPersistentDefaultInterval
+
+*Usage:*
+
+[source,js]
+----
+let defaultInterval = GarbageCollector.getPersistentDefaultInterval();
+----
+
+* *Description:* Returns the default interval for full generation scans
+when PersistentInterval is 0. This prevents the old generation from
+becoming immortal by ensuring periodic full scans.
+* *Return Value:* A numeric value (integer). Default is 10.
+
+'''''
+
 ==== GarbageCollector.getExhaustionCollect
 
 *Usage:*
@@ -2462,6 +2478,25 @@ it’s considered persistent (long-lived).
 
 '''''
 
+==== GarbageCollector.setPersistentDefaultInterval
+
+*Usage:*
+
+[source,js]
+----
+let old = GarbageCollector.setPersistentDefaultInterval(20);
+----
+
+* *Description:* Sets the default interval for triggering full scans of 
+the persistent generation when `PersistentInterval` is set to 0. This 
+prevents the old generation from becoming immortal by ensuring periodic 
+full scans even when no explicit interval is configured. Default is 10.
+* *Parameters:*
+** _newDefaultInterval_ (number)
+* *Return Value:* The old default interval value.
+
+'''''
+
 ==== GarbageCollector.setExhaustionCollect
 
 *Usage:*
@@ -2751,6 +2786,8 @@ plus persistent objects are handled.
 `+GarbageCollector.setPersistentInterval+`
 ** `+GarbageCollector.getPersistentThreshold+`,
 `+GarbageCollector.setPersistentThreshold+`
+** `+GarbageCollector.getPersistentDefaultInterval+`,
+`+GarbageCollector.setPersistentDefaultInterval+`
 ** `+GarbageCollector.getExhaustionCollect+`,
 `+GarbageCollector.setExhaustionCollect+`
 ** `+GarbageCollector.getActive+`,

@@ -1516,6 +1516,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       SweepFactor:TPOCAInt32;
       PersistentThreshold:TPOCAInt32;
       PersistentInterval:TPOCAInt32;
+      PersistentDefaultInterval:TPOCAInt32;
       ExhaustionCollect:TPOCABool32;
       ExhaustionIncrementalFullCycleThreshold:TPOCAInt32;
       ExhaustionIncrementalFullCycleCounter:TPOCAInt32;
@@ -7347,8 +7348,9 @@ begin
  // Pre-check before locking
  if IsWhite(Obj) then begin
   if assigned(ParentObj) then begin
-   if IsBlack(ParentObj) then begin
-    // The parent holder object is in the black object list, so mark our to-store-object gray
+   if IsBlack(ParentObj) or ((ParentObj^.Header.GarbageCollector.State and (pgcbPERSISTENT or pgcbPERSISTENTROOT))<>0) then begin
+    // The parent holder object is in the black object list OR is persistent, so mark our to-store-object gray
+    // Persistent objects need to shade white children to maintain tri-color invariant in incremental mode
     WriteBarrierMark(Obj);
    end else if IsWhite(ParentObj) then begin
     // The parent holder object is in the white object list, so mark the parent holder object gray
@@ -8122,7 +8124,12 @@ begin
   if PersistentInterval>0 then begin
    inc(PersistentCycleCounter);
   end else begin
-   PersistentCycleCounter:=0;
+   // When PersistentInterval=0, still trigger full scans periodically to prevent old generation from becoming immortal
+   // Use PersistentDefaultInterval as fallback
+   inc(PersistentCycleCounter);
+   if PersistentCycleCounter>=PersistentDefaultInterval then begin
+    PersistentForceScan:=true;
+   end;
   end;
   if PersistentForceScan or ((PersistentInterval>0) and (PersistentCycleCounter>=PersistentInterval)) or (Instance^.Globals.RequestGarbageCollection=prgcFULL) then begin
    PersistentForceScan:=false;
@@ -14261,6 +14268,11 @@ begin
  result.Num:=Context^.Instance^.Globals.GarbageCollector.PersistentThreshold;
 end;
 
+function POCAGarbageCollectorFunctionGETPERSISTENTDEFAULTINTERVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ result.Num:=Context^.Instance^.Globals.GarbageCollector.PersistentDefaultInterval;
+end;
+
 function POCAGarbageCollectorFunctionGETEXHAUSTIONCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 begin
  result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.ExhaustionCollect) and 1;
@@ -14371,6 +14383,15 @@ begin
  end;
  result.Num:=Context^.Instance^.Globals.GarbageCollector.PersistentThreshold;
  TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.PersistentThreshold,trunc(POCAGetNumberValue(Context,Arguments^[0])));
+end;
+
+function POCAGarbageCollectorFunctionSETPERSISTENTDEFAULTINTERVAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setPersistentDefaultInterval"');
+ end;
+ result.Num:=Context^.Instance^.Globals.GarbageCollector.PersistentDefaultInterval;
+ TPasMPInterlocked.Exchange(Context^.Instance^.Globals.GarbageCollector.PersistentDefaultInterval,trunc(POCAGetNumberValue(Context,Arguments^[0])));
 end;
 
 function POCAGarbageCollectorFunctionSETEXHAUSIONCOLLECT(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
@@ -14485,6 +14506,7 @@ begin
  POCAAddNativeFunction(Context,result,'getSweepFactor',POCAGarbageCollectorFunctionGETSWEEPFACTOR);
  POCAAddNativeFunction(Context,result,'getPersistentInterval',POCAGarbageCollectorFunctionGETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'getPersistentThreshold',POCAGarbageCollectorFunctionGETPERSISTENTTHRESHOLD);
+ POCAAddNativeFunction(Context,result,'getPersistentDefaultInterval',POCAGarbageCollectorFunctionGETPERSISTENTDEFAULTINTERVAL);
  POCAAddNativeFunction(Context,result,'getExhaustionCollect',POCAGarbageCollectorFunctionGETEXHAUSTIONCOLLECT);
  POCAAddNativeFunction(Context,result,'getExhaustionIncrementalFullCycleThreshold',POCAGarbageCollectorFunctionGETEXHAUSTIONINCREMENTALFULLCYCLETHRESHOLD);
  POCAAddNativeFunction(Context,result,'getActive',POCAGarbageCollectorFunctionGETACTIVE);
@@ -14501,6 +14523,7 @@ begin
  POCAAddNativeFunction(Context,result,'setSweepFactor',POCAGarbageCollectorFunctionSETSWEEPFACTOR);
  POCAAddNativeFunction(Context,result,'setPersistentInterval',POCAGarbageCollectorFunctionSETPERSISTENTINTERVAL);
  POCAAddNativeFunction(Context,result,'setPersistentThreshold',POCAGarbageCollectorFunctionSETPERSISTENTTHRESHOLD);
+ POCAAddNativeFunction(Context,result,'setPersistentDefaultInterval',POCAGarbageCollectorFunctionSETPERSISTENTDEFAULTINTERVAL);
  POCAAddNativeFunction(Context,result,'setExhaustionCollect',POCAGarbageCollectorFunctionSETEXHAUSIONCOLLECT);
  POCAAddNativeFunction(Context,result,'setExhaustionIncrementalFullCycleThreshold',POCAGarbageCollectorFunctionSETEXHAUSIONINCREMENTALFULLCYCLETHRESHOLD);
  POCAAddNativeFunction(Context,result,'setActive',POCAGarbageCollectorFunctionSETACTIVE);
@@ -22018,6 +22041,7 @@ begin
   result^.Globals.GarbageCollector.SweepFactor:=64;
   result^.Globals.GarbageCollector.PersistentThreshold:=16;
   result^.Globals.GarbageCollector.PersistentInterval:=0;
+  result^.Globals.GarbageCollector.PersistentDefaultInterval:=10;
   result^.Globals.GarbageCollector.ExhaustionCollect:=false;
   result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleThreshold:=0;
   result^.Globals.GarbageCollector.ExhaustionIncrementalFullCycleCounter:=0;
