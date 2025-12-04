@@ -14431,12 +14431,24 @@ begin
 end;
 
 function POCAGarbageCollectorFunctionSETGENERATIONAL(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Old,New:TPOCABool32;
 begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setGenerational"');
  end;
- result.Num:=ord(Context^.Instance^.Globals.GarbageCollector.Generational) and 1;
- TPasMPInterlocked.Exchange(TPOCAInt32(Context^.Instance^.Globals.GarbageCollector.Generational),TPOCAInt32(TPOCABool32(ord(trunc(POCAGetNumberValue(Context,Arguments^[0]))<>0) and 1)));
+ POCALockEnter(Context^.Instance^.Globals.GarbageCollector.Lock);
+ try
+  Old:=Context^.Instance^.Globals.GarbageCollector.Generational;
+  New:=POCAGetBooleanValue(Context,Arguments^[0]);
+  if Old<>New then begin
+   Context^.Instance^.Globals.GarbageCollector.Reset;
+   Context^.Instance^.Globals.GarbageCollector.State:=pgcsRESET;
+   Context^.Instance^.Globals.GarbageCollector.Generational:=New;
+  end;
+ finally
+  POCALockLeave(Context^.Instance^.Globals.GarbageCollector.Lock);
+ end; 
+ result.Num:=ord(Old) and 1;
 end;
 
 function POCAGarbageCollectorFunctionSETLOCALCONTEXTPOOLSIZE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
