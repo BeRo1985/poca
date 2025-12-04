@@ -421,7 +421,7 @@ compile-time optimization.
 
 POCA has the following data types on the language level:
 
-- `null`: Special null value
+- `Null`: Special null value
 - `Number`: Double-precision floating point numbers (64 bit IEEE 754)
 - `String`: Immutable sequences of characters, ASCII and UTF-8 supported together with code
   point and code unit operations
