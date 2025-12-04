@@ -446,7 +446,7 @@ While this may seem unusual, this approach simplifies the type system and allows
 
 ==== Why No Separate Integer Type?
 
-All numbers are represented as double-precision floating point values. This design choice simplifies the language and avoids complications arising from having multiple numeric types, while still allowing for integer-like operations when needed, such as bitwise operations and integer division, although these are limited to the 53-bit integer range due to the IEEE 754 representation of the mantissa.
+All numbers are represented as double-precision floating point values. This design choice simplifies the language and avoids complications arising from having multiple numeric types, while still allowing for integer-like operations when needed, such as bitwise operations and integer division, although these are limited to the 53-bit integer range due to the IEEE 754 representation of the mantissa in 64-bit double-precision floats.
 
 ==== Why No Separate Undefined Type?
 
