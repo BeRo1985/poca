@@ -7900,7 +7900,7 @@ begin
  end else begin
   // Non-generational mode: all objects go to black list
   BlackLists[Obj^.Header.ValueType=pvtGHOST]^.TakeOver(Obj);
-  Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT))) or BlackMask;
+  Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and (pgcbBITS and not (pgcbLIST or (pgcbWASPERSISTENT or pgcbWASPERSISTENTROOT)))) or BlackMask;
   MarkObjectContent(Obj);
  end;
 end;
@@ -8143,8 +8143,8 @@ begin
   PersistentForceScan:=false;
   PersistentCycleCounter:=0;
   for Ghost:=false to true do begin
-   GrayList.TakeOverAppendMark(@PersistentLists[Ghost],pgcbGRAY,0);
-   GrayList.TakeOverAppendMark(@PersistentRootLists[Ghost],pgcbGRAY,0);
+   GrayList.TakeOverAppendMark(@PersistentLists[Ghost],pgcbGRAY,pgcbPERSISTENT or pgcbPERSISTENTROOT);
+   GrayList.TakeOverAppendMark(@PersistentRootLists[Ghost],pgcbGRAY,pgcbPERSISTENT or pgcbPERSISTENTROOT);
   end;
  end;
 end;
