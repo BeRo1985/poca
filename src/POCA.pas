@@ -9883,18 +9883,32 @@ begin
 end;
 
 function POCAGhostSetHash(const r:TPOCAValue;const h:PPOCAHash):boolean; {$ifdef caninline}inline;{$endif}
+var GhostPtr:PPOCAGhost;
+    HashValue:TPOCAValue;
 begin
  result:=POCAIsValueGhost(r);
  if result then begin
-  PPOCAGhost(POCAGetValueReferencePointer(r))^.Hash:=h;
+  GhostPtr:=PPOCAGhost(POCAGetValueReferencePointer(r));
+  GhostPtr^.Hash:=h;
+  // Write barrier: record cross-generation reference (persistent ghost => young hash)
+  if assigned(h) then begin
+   POCASetValueReferencePointer(HashValue,h);
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(GhostPtr)),HashValue);
+  end;
  end;
 end;
 
 function POCAGhostSetHashValue(const r,h:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
+var GhostPtr:PPOCAGhost;
+    HashPtr:PPOCAHash;
 begin
  result:=POCAIsValueGhost(r) and POCAIsValueHash(h);
  if result then begin
-  PPOCAGhost(POCAGetValueReferencePointer(r))^.Hash:=PPOCAHash(POCAGetValueReferencePointer(h));
+  GhostPtr:=PPOCAGhost(POCAGetValueReferencePointer(r));
+  HashPtr:=PPOCAHash(POCAGetValueReferencePointer(h));
+  GhostPtr^.Hash:=HashPtr;
+  // Write barrier: record cross-generation reference (persistent ghost => young hash)
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(GhostPtr)),h);
  end;
 end;
 
@@ -11680,6 +11694,9 @@ begin
          end;
          HashInstance^.Children.Next:=nil;
          Prototype^.Children.Last:=HashInstance;
+         // Write barrier: record cross-generation reference (persistent prototype -> young child)
+         POCASetValueReferencePointer(PrototypeValue,HashInstance);
+         TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Prototype)),PrototypeValue);
         finally
          if assigned(Last) and (First<>Last) then begin
           POCAMRSWLockWriteUnlock(@Last^.Cache.MRSWLock);
@@ -12100,11 +12117,17 @@ end;
 
 function POCAHashSetGhost(Context:PPOCAContext;const Hash:TPOCAValue;Ghost:PPOCAGhost):TPOCABool32;
 var HashPtr:PPOCAHash;
+    GhostValue:TPOCAValue;
 begin
  result:=POCAIsValueHash(Hash);
  if result then begin
   HashPtr:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   TPasMPInterlocked.Exchange(TPOCAPointer(HashPtr^.Ghost),TPOCAPointer(Ghost));
+  // Write barrier: record cross-generation reference (persistent hash => young ghost)
+  if assigned(Ghost) then begin
+   POCASetValueReferencePointer(GhostValue,Ghost);
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashPtr)),GhostValue);
+  end;
   POCAHashLockInvalidate(HashPtr);
  end;
 end;
