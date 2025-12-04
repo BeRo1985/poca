@@ -14436,17 +14436,21 @@ begin
  if CountArguments=0 then begin
   POCARuntimeError(Context,'Bad arguments to "GarbageCollector.setGenerational"');
  end;
- POCALockEnter(Context^.Instance^.Globals.GarbageCollector.Lock);
- try
-  Old:=Context^.Instance^.Globals.GarbageCollector.Generational;
-  New:=POCAGetBooleanValue(Context,Arguments^[0]);
-  if Old<>New then begin
-   Context^.Instance^.Globals.GarbageCollector.Reset;
-   Context^.Instance^.Globals.GarbageCollector.State:=pgcsRESET;
-   Context^.Instance^.Globals.GarbageCollector.Generational:=New;
-  end;
- finally
-  POCALockLeave(Context^.Instance^.Globals.GarbageCollector.Lock);
+ Old:=Context^.Instance^.Globals.GarbageCollector.Generational;
+ New:=POCAGetBooleanValue(Context,Arguments^[0]);
+ if Old<>New then begin
+  POCALockEnter(Context^.Instance^.Globals.GarbageCollector.Lock);
+  try
+    Old:=Context^.Instance^.Globals.GarbageCollector.Generational;
+    if Old<>New then begin
+     Context^.Instance^.Globals.GarbageCollector.Reset;
+     Context^.Instance^.Globals.GarbageCollector.State:=pgcsRESET;
+     Context^.Instance^.Globals.GarbageCollector.Generational:=New;
+    end; 
+   end;
+  finally
+   POCALockLeave(Context^.Instance^.Globals.GarbageCollector.Lock);
+  end; 
  end; 
  result.Num:=ord(Old) and 1;
 end;
