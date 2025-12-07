@@ -18306,7 +18306,9 @@ begin
   System.WriteLn('');
  end;
  if not (assigned(Context) and POCAContextUserIOFlush(Context)) then begin
+{$if defined(fpc) and declared(Flush) and declared(StdOut)}
   System.Flush(StdOut);
+{$ifend}
  end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -19299,7 +19301,9 @@ begin
   end;
  end;
  if not (assigned(Context) and POCAContextUserIOFlush(Context)) then begin
+{$if defined(fpc) and declared(Flush) and declared(StdOut)}
   System.Flush(StdOut);
+{$ifend}
  end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -19340,7 +19344,9 @@ begin
   System.WriteLn('');
  end;
  if not (assigned(Context) and POCAContextUserIOFlush(Context)) then begin
+{$if defined(fpc) and declared(Flush) and declared(StdOut)}
   System.Flush(StdOut);
+{$ifend}
  end;
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
