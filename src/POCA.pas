@@ -646,6 +646,11 @@ type PPOCAInt8=^TPOCAInt8;
      TPOCANativeUInt=TPOCAPtrUInt;
      TPOCANativeInt=TPOCAPtrInt;
 
+     PPOCASizeUInt=^TPOCASizeUInt;
+     PPOCASizeInt=^TPOCASizeInt;
+     TPOCASizeUInt=TPOCAPtrUInt;
+     TPOCASizeInt=TPOCAPtrInt;
+
      PPOCAUInt8Array=^TPOCAUInt8Array;
      TPOCAUInt8Array=array[0..($7fffffff div sizeof(TPOCAUInt8))-1] of TPOCAUInt8;
 
@@ -1411,6 +1416,43 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Ptr:TPOCAPointer;
       Hash:PPOCAHash;
      end;
+
+     // Pool block for external data pool - these blocks are never moved/reallocated for pointer stability
+     PPOCADataPoolBlock=^TPOCADataPoolBlock;
+     TPOCADataPoolBlock=record
+      Next:PPOCADataPoolBlock;       // Linked list of blocks
+      Data:Pointer;                          // Pointer to element data storage
+      ElementCount:TPOCASizeInt;             // Number of elements in this block
+     end;
+
+     // Free list node stored at the beginning of each free element (intrusive free list)
+     PPOCADataPoolFreeNode=^TPOCADataPoolFreeNode;
+     TPOCADataPoolFreeNode=record
+      Next:PPOCADataPoolFreeNode;    // Next free element in lock-free stack
+     end;
+
+     // Tagged pointer for ABA-safe lock-free stack operations using double-width CAS
+     // Uses 64-bit CAS on 32-bit targets (pointer + 32-bit tag)
+     // Uses 128-bit CAS on 64-bit targets (pointer + 64-bit tag)
+     PPOCADataPoolTaggedPtr=^TPOCADataPoolTaggedPtr;
+     TPOCADataPoolTaggedPtr=record
+      case Integer of
+       0:(Value:{$ifdef CPU64}TPasMPInt128Record{$else}TPasMPInt64Record{$endif});
+       1:(Ptr:PPOCADataPoolFreeNode;  // Pointer to free node
+          Tag:TPOCAPtrUInt);                  // ABA counter (same size as pointer for proper alignment)
+     end;
+
+     TPOCADataPool=record
+      Lock:TPasMPInt32;                       // Lock for block allocation only
+      Padding0:TPasMPInt32;                   // Alignment padding
+      ElementSize:TPOCASizeInt;               // Size of each element (must be >= SizeOf(Pointer))
+      BlockElementCount:TPOCASizeInt;         // Number of elements per block
+      FirstBlock:PPOCADataPoolBlock;  // Linked list of allocated blocks (for cleanup)
+      FreeHead:TPOCADataPoolTaggedPtr;// Tagged head of lock-free free list stack (aligned for double-width CAS)
+      TotalAllocated:TPOCASizeInt;            // Total elements allocated across all blocks
+      TotalFree:TPOCASizeInt;                 // Current count of free elements (approximate, for stats)
+     end;
+     PPOCADataPool=^TPOCADataPool;
 
 {$ifdef POCAMemoryPools}
 
@@ -2210,6 +2252,11 @@ procedure POCAHashClear(Context:PPOCAContext;const Hash:TPOCAValue);
 
 function POCAObjectInstanceOf(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
 function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCABool32; {$ifdef caninline}inline;{$endif}
+
+function POCADataPoolCreate(const aElementSize:TPOCASizeInt;const aInitialCount:TPOCASizeInt=4096):PPOCADataPool;
+procedure POCADataPoolDestroy(const aDataPool:PPOCADataPool);
+function POCADataPoolAllocateElement(const aDataPool:PPOCADataPool):Pointer;
+procedure POCADataPoolReleaseElement(const aDataPool:PPOCADataPool;const aElement:Pointer);
 
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 procedure POCAContextDestroy(Context:PPOCAContext);
@@ -13651,6 +13698,237 @@ begin
 {$if defined(fpc) and declared(Flush) and declared(StdOut)}
  System.Flush(StdOut);
 {$ifend}
+end;
+
+function POCADataPoolCreate(const aElementSize:TPOCASizeInt;const aInitialCount:TPOCASizeInt):PPOCADataPool;
+var Block:PPOCADataPoolBlock;
+    Index:TPOCASizeInt;
+    ElementPtr:Pointer;
+    FreeNode:PPOCADataPoolFreeNode;
+    ActualElementSize,BlockCount:TPOCASizeInt;
+begin
+
+ // Allocate the pool structure (aligned for double-width CAS)
+ GetMem(result,SizeOf(TPOCADataPool));
+ FillChar(result^,SizeOf(TPOCADataPool),#0);
+ 
+ // Initialize pool fields
+ result^.Lock:=0;
+ result^.Padding0:=0;
+ 
+ // Element size must be at least SizeOf(Pointer) for intrusive free list
+ ActualElementSize:=aElementSize;
+ if ActualElementSize<SizeOf(PPOCADataPoolFreeNode) then begin
+  ActualElementSize:=SizeOf(PPOCADataPoolFreeNode);
+ end;
+ result^.ElementSize:=ActualElementSize;
+ 
+ // Determine block size
+ if aInitialCount>0 then begin
+  BlockCount:=aInitialCount;
+ end else begin
+  BlockCount:=4096;
+ end;
+ result^.BlockElementCount:=BlockCount;
+ 
+ // Initialize tagged free list head (ptr=nil, tag=0)
+ result^.FreeHead.Ptr:=nil;
+ result^.FreeHead.Tag:=0;
+ result^.FirstBlock:=nil;
+ result^.TotalAllocated:=0;
+ result^.TotalFree:=0;
+ 
+ // Allocate initial block if requested
+ if aInitialCount>0 then begin
+
+  // Allocate block structure
+  GetMem(Block,SizeOf(TPOCADataPoolBlock));
+  Block^.Next:=nil;
+  Block^.ElementCount:=BlockCount;
+  
+  // Allocate data for elements
+  GetMem(Block^.Data,ActualElementSize*BlockCount);
+  FillChar(Block^.Data^,ActualElementSize*BlockCount,#0);
+  
+  // Link block into pool
+  Block^.Next:=result^.FirstBlock;
+  result^.FirstBlock:=Block;
+  result^.TotalAllocated:=BlockCount;
+  
+  // Initialize free list - push all elements onto the stack
+  // Build the list in reverse order so allocation order matches index order
+  // No need for atomic ops here since pool is not yet shared
+  for Index:=BlockCount-1 downto 0 do begin
+   ElementPtr:=Pointer(TPOCAPtrUInt(TPOCAPtrUInt(Block^.Data)+TPOCAPtrUInt(Index*ActualElementSize)));
+   FreeNode:=PPOCADataPoolFreeNode(ElementPtr);
+   FreeNode^.Next:=result^.FreeHead.Ptr;
+   result^.FreeHead.Ptr:=FreeNode;
+  end;
+ 
+  result^.TotalFree:=BlockCount;
+
+ end;
+
+end;
+
+procedure POCADataPoolDestroy(const aDataPool:PPOCADataPool);
+var Block,NextBlock:PPOCADataPoolBlock;
+begin
+ if assigned(aDataPool) then begin
+  // Free all blocks
+  Block:=aDataPool^.FirstBlock;
+  while assigned(Block) do begin
+   NextBlock:=Block^.Next;
+   if assigned(Block^.Data) then begin
+    FreeMem(Block^.Data);
+   end;
+   FreeMem(Block);
+   Block:=NextBlock;
+  end;
+  aDataPool^.FirstBlock:=nil;
+  aDataPool^.FreeHead.Ptr:=nil;
+  aDataPool^.FreeHead.Tag:=0;
+  FreeMem(aDataPool);
+ end;
+end;
+
+// Internal helper to allocate a new block - must be called with lock held
+procedure POCADataPoolAllocateBlock(const aDataPool:PPOCADataPool);
+var Block:PPOCADataPoolBlock;
+    Index:TPOCASizeInt;
+    ElementPtr:Pointer;
+    FreeNode,ChainHead,ChainTail:PPOCADataPoolFreeNode;
+    BlockCount,ElementSize:TPOCASizeInt;
+    OldTagged,NewTagged,ResultTagged:TPOCADataPoolTaggedPtr;
+begin
+
+ // Get block parameters
+ BlockCount:=aDataPool^.BlockElementCount;
+ ElementSize:=aDataPool^.ElementSize;
+ 
+ // Allocate new block structure
+ GetMem(Block,SizeOf(TPOCADataPoolBlock));
+ Block^.ElementCount:=BlockCount;
+ 
+ // Allocate data for elements
+ GetMem(Block^.Data,ElementSize*BlockCount);
+ FillChar(Block^.Data^,ElementSize*BlockCount,#0);
+ 
+ // Link block into pool's block list (for cleanup)
+ Block^.Next:=aDataPool^.FirstBlock;
+ aDataPool^.FirstBlock:=Block;
+ TPasMPInterlocked.Add(aDataPool^.TotalAllocated,BlockCount);
+ 
+ // Build a local free list chain for the new block
+ // Chain elements together locally first, then atomically splice onto global free list
+ ChainHead:=nil;
+ ChainTail:=nil;
+ for Index:=BlockCount-1 downto 0 do begin
+  ElementPtr:=Pointer(TPOCAPtrUInt(TPOCAPtrUInt(Block^.Data)+TPOCAPtrUInt(Index*ElementSize)));
+  FreeNode:=PPOCADataPoolFreeNode(ElementPtr);
+  FreeNode^.Next:=ChainHead;
+  ChainHead:=FreeNode;
+  if not assigned(ChainTail) then begin
+   ChainTail:=FreeNode;
+  end;
+ end;
+ 
+ // Atomically splice the new chain onto the front of the free list using double-width CAS
+ repeat
+  // Read current tagged pointer atomically (128-bit on 64-bit, 64-bit on 32-bit)
+  OldTagged.Value:=TPasMPInterlocked.Read(aDataPool^.FreeHead.Value);
+  
+  // Link tail of our new chain to the current head
+  ChainTail^.Next:=OldTagged.Ptr;
+  
+  // Prepare new tagged pointer with incremented tag (ABA prevention)
+  NewTagged.Ptr:=ChainHead;
+  NewTagged.Tag:=OldTagged.Tag+1;
+  
+  // Double-width CAS: 64-bit on 32-bit targets, 128-bit on 64-bit targets
+  ResultTagged.Value:=TPasMPInterlocked.CompareExchange(aDataPool^.FreeHead.Value,NewTagged.Value,OldTagged.Value);
+ until (ResultTagged.Ptr=OldTagged.Ptr) and (ResultTagged.Tag=OldTagged.Tag);
+ 
+ TPasMPInterlocked.Add(aDataPool^.TotalFree,BlockCount);
+end;
+
+function POCADataPoolAllocateElement(const aDataPool:PPOCADataPool):Pointer;
+var OldTagged,NewTagged,ResultTagged:TPOCADataPoolTaggedPtr;
+begin
+
+ // Lock-free pop from free list stack using double-width CAS for ABA prevention
+
+ repeat
+
+  // Read current tagged pointer atomically
+  OldTagged.Value:=TPasMPInterlocked.Read(aDataPool^.FreeHead.Value);
+  
+  if not assigned(OldTagged.Ptr) then begin
+
+   // Free list is empty, need to allocate a new block
+   // Take the lock for block allocation only
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(aDataPool^.Lock);
+   try
+    // Double-check that free list is still empty (another thread may have allocated)
+    OldTagged.Value:=TPasMPInterlocked.Read(aDataPool^.FreeHead.Value);
+    if not assigned(OldTagged.Ptr) then begin
+     POCADataPoolAllocateBlock(aDataPool);
+    end;
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(aDataPool^.Lock);
+   end;
+
+   // Retry the pop operation
+   continue;
+
+  end;
+  
+  // Prepare new tagged pointer: advance to next element, increment tag
+  NewTagged.Ptr:=OldTagged.Ptr^.Next;
+  NewTagged.Tag:=OldTagged.Tag+1;
+  
+  // Double-width CAS: 64-bit on 32-bit targets, 128-bit on 64-bit targets
+  ResultTagged.Value:=TPasMPInterlocked.CompareExchange(aDataPool^.FreeHead.Value,NewTagged.Value,OldTagged.Value);
+ until (ResultTagged.Ptr=OldTagged.Ptr) and (ResultTagged.Tag=OldTagged.Tag);
+ 
+ // Successfully popped an element
+ result:=Pointer(OldTagged.Ptr);
+ TPasMPInterlocked.Decrement(aDataPool^.TotalFree);
+ 
+ // Clear the free list pointer stored in the element (optional, for cleanliness)
+ PPOCADataPoolFreeNode(result)^.Next:=nil;
+end;
+
+procedure POCADataPoolReleaseElement(const aDataPool:PPOCADataPool;const aElement:Pointer);
+var FreeNode:PPOCADataPoolFreeNode;
+    OldTagged,NewTagged,ResultTagged:TPOCADataPoolTaggedPtr;
+begin
+
+ // Check if element is not null
+ if assigned(aElement) then begin
+
+  // Lock-free push onto free list stack using double-width CAS for ABA prevention
+  FreeNode:=PPOCADataPoolFreeNode(aElement);
+  
+  repeat
+   // Read current tagged pointer atomically
+   OldTagged.Value:=TPasMPInterlocked.Read(aDataPool^.FreeHead.Value);
+   
+   // Link new element to current head
+   FreeNode^.Next:=OldTagged.Ptr;
+   
+   // Prepare new tagged pointer: new element becomes head, increment tag
+   NewTagged.Ptr:=FreeNode;
+   NewTagged.Tag:=OldTagged.Tag+1;
+   
+   // Double-width CAS: 64-bit on 32-bit targets, 128-bit on 64-bit targets
+   ResultTagged.Value:=TPasMPInterlocked.CompareExchange(aDataPool^.FreeHead.Value,NewTagged.Value,OldTagged.Value);
+  until (ResultTagged.Ptr=OldTagged.Ptr) and (ResultTagged.Tag=OldTagged.Tag);
+  
+  TPasMPInterlocked.Increment(aDataPool^.TotalFree);
+
+ end;
+
 end;
 
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
