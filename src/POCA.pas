@@ -1419,15 +1419,15 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      // Pool block for external data pool - these blocks are never moved/reallocated for pointer stability
      PPOCADataPoolBlock=^TPOCADataPoolBlock;
-     TPOCADataPoolBlock=record
-      Next:PPOCADataPoolBlock;       // Linked list of blocks
+     TPOCADataPoolBlock=packed record
+      Next:PPOCADataPoolBlock;               // Linked list of blocks
       Data:Pointer;                          // Pointer to element data storage
       ElementCount:TPOCASizeInt;             // Number of elements in this block
      end;
 
      // Free list node stored at the beginning of each free element (intrusive free list)
      PPOCADataPoolFreeNode=^TPOCADataPoolFreeNode;
-     TPOCADataPoolFreeNode=record
+     TPOCADataPoolFreeNode=packed record
       Next:PPOCADataPoolFreeNode;    // Next free element in lock-free stack
      end;
 
@@ -1435,20 +1435,24 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      // Uses 64-bit CAS on 32-bit targets (pointer + 32-bit tag)
      // Uses 128-bit CAS on 64-bit targets (pointer + 64-bit tag)
      PPOCADataPoolTaggedPtr=^TPOCADataPoolTaggedPtr;
-     TPOCADataPoolTaggedPtr=record
-      case Integer of
-       0:(Value:{$ifdef CPU64}TPasMPInt128Record{$else}TPasMPInt64Record{$endif});
-       1:(Ptr:PPOCADataPoolFreeNode;  // Pointer to free node
-          Tag:TPOCAPtrUInt);                  // ABA counter (same size as pointer for proper alignment)
+     TPOCADataPoolTaggedPtr=packed record
+      case TPOCAUInt32 of
+       0:(
+        Value:{$ifdef CPU64}TPasMPInt128Record{$else}TPasMPInt64Record{$endif};
+       );
+       1:(
+        Ptr:PPOCADataPoolFreeNode;  // Pointer to free node
+        Tag:TPOCAPtrUInt;           // ABA counter (same size as pointer for proper alignment)
+       );                  
      end;
 
-     TPOCADataPool=record
+     TPOCADataPool=packed record
+      FreeHead:TPOCADataPoolTaggedPtr;        // Tagged head of lock-free free list stack (aligned for double-width CAS), at the beginning of the record for to ensure 16-byte alignment
       Lock:TPasMPInt32;                       // Lock for block allocation only
-      Padding0:TPasMPInt32;                   // Alignment padding
+      Padding0:TPasMPInt32;                   // Alignment
       ElementSize:TPOCASizeInt;               // Size of each element (must be >= SizeOf(Pointer))
       BlockElementCount:TPOCASizeInt;         // Number of elements per block
-      FirstBlock:PPOCADataPoolBlock;  // Linked list of allocated blocks (for cleanup)
-      FreeHead:TPOCADataPoolTaggedPtr;// Tagged head of lock-free free list stack (aligned for double-width CAS)
+      FirstBlock:PPOCADataPoolBlock;          // Linked list of allocated blocks (for cleanup)
       TotalAllocated:TPOCASizeInt;            // Total elements allocated across all blocks
       TotalFree:TPOCASizeInt;                 // Current count of free elements (approximate, for stats)
      end;
@@ -13709,17 +13713,20 @@ var Block:PPOCADataPoolBlock;
 begin
 
  // Allocate the pool structure (aligned for double-width CAS)
- GetMem(result,SizeOf(TPOCADataPool));
+ GetMemAligned(result,SizeOf(TPOCADataPool),16);
  FillChar(result^,SizeOf(TPOCADataPool),#0);
  
  // Initialize pool fields
  result^.Lock:=0;
  result^.Padding0:=0;
  
- // Element size must be at least SizeOf(Pointer) for intrusive free list
+ // Element size must be at least SizeOf(Pointer) for intrusive free list and 16-byte aligned
  ActualElementSize:=aElementSize;
  if ActualElementSize<SizeOf(PPOCADataPoolFreeNode) then begin
   ActualElementSize:=SizeOf(PPOCADataPoolFreeNode);
+ end;
+ if (ActualElementSize and 15)<>0 then begin
+  ActualElementSize:=(ActualElementSize+15) and not TPOCASizeInt(15);
  end;
  result^.ElementSize:=ActualElementSize;
  
@@ -13742,12 +13749,12 @@ begin
  if aInitialCount>0 then begin
 
   // Allocate block structure
-  GetMem(Block,SizeOf(TPOCADataPoolBlock));
+  GetMemAligned(Block,SizeOf(TPOCADataPoolBlock),16);
   Block^.Next:=nil;
   Block^.ElementCount:=BlockCount;
   
   // Allocate data for elements
-  GetMem(Block^.Data,ActualElementSize*BlockCount);
+  GetMemAligned(Block^.Data,ActualElementSize*BlockCount,16);
   FillChar(Block^.Data^,ActualElementSize*BlockCount,#0);
   
   // Link block into pool
@@ -13780,15 +13787,15 @@ begin
   while assigned(Block) do begin
    NextBlock:=Block^.Next;
    if assigned(Block^.Data) then begin
-    FreeMem(Block^.Data);
+    FreeMemAligned(Block^.Data);
    end;
-   FreeMem(Block);
+   FreeMemAligned(Block);
    Block:=NextBlock;
   end;
   aDataPool^.FirstBlock:=nil;
   aDataPool^.FreeHead.Ptr:=nil;
   aDataPool^.FreeHead.Tag:=0;
-  FreeMem(aDataPool);
+  FreeMemAligned(aDataPool);
  end;
 end;
 
@@ -13807,11 +13814,11 @@ begin
  ElementSize:=aDataPool^.ElementSize;
  
  // Allocate new block structure
- GetMem(Block,SizeOf(TPOCADataPoolBlock));
+ GetMemAligned(Block,SizeOf(TPOCADataPoolBlock),16);
  Block^.ElementCount:=BlockCount;
  
  // Allocate data for elements
- GetMem(Block^.Data,ElementSize*BlockCount);
+ GetMemAligned(Block^.Data,ElementSize*BlockCount,16);
  FillChar(Block^.Data^,ElementSize*BlockCount,#0);
  
  // Link block into pool's block list (for cleanup)
