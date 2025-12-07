@@ -13736,6 +13736,26 @@ begin
 end;
 {$ifend}
 
+function POCAContextHasInUsageObjectPools(Context:PPOCAContext):Boolean;
+{$if defined(POCAMemoryPools)}
+var i:TPOCAInt32;
+    ContextObjectPool:PPOCAContextObjectPool;
+begin
+ for i:=0 to pvtCOUNT-1 do begin
+  ContextObjectPool:=@Context^.ContextObjectPools[i];
+  if assigned(ContextObjectPool^.Objects) and (ContextObjectPool^.Count>0) then begin
+   result:=true;
+   exit;
+  end;
+ end;
+ result:=false;
+end;
+{$else}
+begin
+ result:=false;
+end; 
+{$ifend}
+
 procedure POCAContextFree(Context:PPOCAContext);
 var i:TPOCAInt32;
 {$if defined(POCAMemoryPools)}
