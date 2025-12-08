@@ -324,7 +324,7 @@
  {$ifdef POCANoJIT}
   {$undef POCAHasJIT}
  {$else}
-  {$define POCAHasJIT}
+  {-$define POCAHasJIT}
  {$endif}
  {$define UseRegister}
  {$undef x8664JITUseRIP} // Use RIP-relative addressing (disable if code allocated beyond ±2GB)
@@ -33613,9 +33613,10 @@ var TokenList:PPOCAToken;
        Reg2:=GenerateExpression(t^.Left,-1,true);
       end;
       if IsSafeMethod then begin
+       EmitOpcode(popDEBUGGER);
        Registers:=GetRegisters;
        JumpNull:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJIFFALSE,0,Reg1);
+       EmitOpcode(popJIFNULL,0,Reg1);
       end else begin
        JumpNull:=0;
       end;
