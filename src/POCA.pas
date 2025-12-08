@@ -353,7 +353,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2025-12-04-11-25-0000';
+const POCAVersion='2025-12-08-21-28-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -529,7 +529,8 @@ const POCAVersion='2025-12-04-11-25-0000';
       popMTAILCALLA=164;
       popARRAYCOMBINE=165;
       popHASHCOMBINE=166;
-      popCOUNT=167;
+      popDEBUGGER=167;
+      popCOUNT=168;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -848,6 +849,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ptCOLONCOLON,
       ptCONSTRUCTOR,
       ptBREAKPOINT,
+      ptDEBUGGER,
       ptIMPORT,
       ptEXPORT,
       ptAUTOSEMI,
@@ -4516,6 +4518,31 @@ asm
 end;
 {$elseif not defined(UseThreadsForCoroutines)}
 {$if defined(cpu386) or defined(cpuamd64)}
+
+{$ifdef fpc}
+// FPC exception handling state - needed for coroutine context switching
+// These are internal FPC threadvars that we need to save/restore to prevent
+// exception stack corruption when switching between coroutine contexts.
+// The issue is that FPC's exception handling uses a linked list stored in
+// thread-local storage. When we context-switch coroutines on the same thread,
+// we need to save/restore this state to prevent orphaned exception frames.
+type PPOCAFPCExceptAddr=^TPOCAFPCExceptAddr;
+     TPOCAFPCExceptAddr=record
+      Buf:PJmp_Buf;
+      Next:PPOCAFPCExceptAddr;
+      FrameType:LongInt;
+     end;
+     
+     PPOCAFPCExceptObject=^TPOCAFPCExceptObject;
+     TPOCAFPCExceptObject=record
+      Next:PPOCAFPCExceptObject;
+      // Other fields exist but we only need the pointer for save/restore
+     end;
+
+var POCAExceptAddrStack:PPOCAFPCExceptAddr external name 'U_$SYSTEM_$$_EXCEPTADDRSTACK';
+    POCAExceptObjectStack:PPOCAFPCExceptObject external name 'U_$SYSTEM_$$_EXCEPTOBJECTSTACK';
+{$endif}
+
 var POCAHasXSAVE:TPOCAUInt8=0;
     POCAHasAVX:TPOCAUInt8=0;
     POCAXSaveMaskLo:TPOCAUInt32=0;
@@ -4672,6 +4699,11 @@ type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
       JmpBuf:TPOCACoroutineContextJmpBuf;
       Stack:TPOCAPointer;
       StackSize:TPOCAInt32;
+{$ifdef fpc}
+      // FPC exception state - saved/restored during context switch
+      ExceptAddrStack:PPOCAFPCExceptAddr;
+      ExceptObjectStack:PPOCAFPCExceptObject;
+{$endif}
      end;
 
 function POCACoroutineContextSetJmp(JmpBuf:PPOCACoroutineContextJmpBuf):TPOCAInt32; assembler; register; {$ifdef fpc}nostackframe;{$endif}
@@ -4789,6 +4821,14 @@ end;
 procedure POCACoroutineContextSwitch(FromContext,ToContext:PPOCACoroutineContext);
 begin
  if POCACoroutineContextSetJmp(@FromContext^.JmpBuf)=0 then begin
+{$ifdef fpc}
+  // Save current FPC exception state to FromContext
+  FromContext^.ExceptAddrStack:=POCAExceptAddrStack;
+  FromContext^.ExceptObjectStack:=POCAExceptObjectStack;
+  // Restore FPC exception state from ToContext
+  POCAExceptAddrStack:=ToContext^.ExceptAddrStack;
+  POCAExceptObjectStack:=ToContext^.ExceptObjectStack;
+{$endif}
   POCACoroutineContextLongJmp(@ToContext^.JmpBuf,1);
  end;
 end;
@@ -4812,6 +4852,11 @@ type PPOCACoroutineContextJmpBuf=^TPOCACoroutineContextJmpBuf;
       JmpBuf:TPOCACoroutineContextJmpBuf;
       Stack:TPOCAPointer;
       StackSize:TPOCAInt32;
+{$ifdef fpc}
+      // FPC exception state - saved/restored during context switch
+      ExceptAddrStack:PPOCAFPCExceptAddr;
+      ExceptObjectStack:PPOCAFPCExceptObject;
+{$endif}
      end;
 
 function POCACoroutineContextSetJmp(JmpBuf:PPOCACoroutineContextJmpBuf):TPOCAInt32; assembler; register; {$ifdef fpc}nostackframe;{$endif}
@@ -5069,6 +5114,14 @@ end;
 procedure POCACoroutineContextSwitch(FromContext,ToContext:PPOCACoroutineContext);
 begin
  if POCACoroutineContextSetJmp(@FromContext^.JmpBuf)=0 then begin
+{$ifdef fpc}
+  // Save current FPC exception state to FromContext
+  FromContext^.ExceptAddrStack:=POCAExceptAddrStack;
+  FromContext^.ExceptObjectStack:=POCAExceptObjectStack;
+  // Restore FPC exception state from ToContext
+  POCAExceptAddrStack:=ToContext^.ExceptAddrStack;
+  POCAExceptObjectStack:=ToContext^.ExceptObjectStack;
+{$endif}
   POCACoroutineContextLongJmp(@ToContext^.JmpBuf,1);
  end;
 end;
@@ -22633,7 +22686,7 @@ const POCATokenPrecedences:array[0..32] of TPOCATokenPrecedence=((Tokens:[ptSEMI
                                                                  (Tokens:[ptPREELLIPSIS];Rule:prPREFIX),
                                                                  (Tokens:[ptPOSTELLIPSIS];Rule:prSUFFIX),
                                                                  (Tokens:[ptREGEXP];Rule:prPREFIX),
-                                                                 (Tokens:[ptRETURN,ptBREAK,ptCONTINUE,ptTHROW,ptBREAKPOINT,ptDELETE];Rule:prPREFIX),
+                                                                 (Tokens:[ptRETURN,ptBREAK,ptCONTINUE,ptTHROW,ptBREAKPOINT,ptDEBUGGER,ptDELETE];Rule:prPREFIX),
                                                                  (Tokens:[ptASSIGN,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMODEQ,ptPOWEQ,ptLOGICALOREQ,ptNULLISHEQ,ptLOGICALANDEQ];Rule:prREVERSE),
                                                                  (Tokens:[ptCOLON,ptQUESTION];Rule:prREVERSE),
                                                                  (Tokens:[ptINSTANCEOF,ptIN,ptIS];Rule:prBINARY),
@@ -25731,6 +25784,9 @@ var TokenList:PPOCAToken;
     ptBREAKPOINT:begin
      DumpIt(' breakpoint ');
     end;
+    ptDEBUGGER:begin
+     DumpIt(' debugger ');
+    end;
     ptIMPORT:begin
      DumpIt(' import ');
     end;
@@ -25961,7 +26017,7 @@ var TokenList:PPOCAToken;
       ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
       ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
-      ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptLOGICALOREQ,ptSYMBOLNAME,
+      ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptDEBUGGER,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptLOGICALOREQ,ptSYMBOLNAME,
       ptNULLISHOR,ptNULLISHEQ,ptLOGICALANDEQ])) then begin
     AddToken(ptAUTOSEMI,'',0);
    end;
@@ -36985,6 +37041,21 @@ var TokenList:PPOCAToken;
         EmitOpcode(popBREAKPOINT);
        end;
       end;
+      ptDEBUGGER:begin
+       if DoNeedResult then begin
+        if OutReg<0 then begin
+         result:=GetRegister(true,false);
+        end else begin
+         result:=OutReg;
+        end;
+        EmitOpcode(popLOADNULL,result);
+        SetRegisterTypeKind(result,tkNULL);
+        EmitOpcode(popDEBUGGER);
+       end else begin
+        result:=OutReg;
+        EmitOpcode(popDEBUGGER);
+       end;
+      end;
       ptDELETE:begin
        result:=GenerateDelete(t,OutReg);
       end;
@@ -42845,7 +42916,13 @@ begin
     popMTAILCALLA:begin
      DoItByVMOpcodeDispatcher;
     end;
-    popARRAYAPPEND:begin
+    popARRAYCOMBINE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popHASHCOMBINE:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+    popDEBUGGER:begin
      DoItByVMOpcodeDispatcher;
     end;
     else begin
@@ -45005,6 +45082,10 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
 
+    popDEBUGGER:begin
+     DoItByVMOpcodeDispatcher;
+    end;
+
     else begin
      // For now, all other opcodes fall back to VM interpreter
      DoItByVMOpcodeDispatcher;
@@ -46326,6 +46407,10 @@ begin
    popHASHCOMBINE:begin
     POCAHashCombine(Context,Registers^[Operands^[0]],Registers^[Operands^[1]]);
    end;
+   popDEBUGGER:begin
+    if (Opcode and $ff)=popDEBUGGER then begin
+    end;
+   end;
    popCOUNT..255:begin
     POCARuntimeError(Context,'Invalid unknown opcode instruction');
    end;
@@ -47578,6 +47663,7 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
   AddKeywordToken(ptGHOSTTYPEOF,'ghosttypeof');
   AddKeywordToken(ptCONSTRUCTOR,'constructor');
   AddKeywordToken(ptBREAKPOINT,'breakpoint');
+  AddKeywordToken(ptDEBUGGER,'debugger');
   AddKeywordToken(ptIMPORT,'import');
   AddKeywordToken(ptEXPORT,'export');
  end;

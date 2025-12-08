@@ -32,4 +32,5 @@ begin
    halt(1);
   end;
  end;
+ halt(0);
 end.
