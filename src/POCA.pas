@@ -34451,7 +34451,7 @@ var TokenList:PPOCAToken;
     end;
     function GenerateWhile(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Test,Body,LabelToken:PPOCAToken;
-        Len,JumpNext,JumpOver,BreakPos,ContinuePos,Start:TPOCAInt32;
+        Len,JumpOver,BreakPos,ContinuePos,Start:TPOCAInt32;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
     begin
      ScopeStart;
@@ -34478,50 +34478,44 @@ var TokenList:PPOCAToken;
       end;
       Start:=CodeGenerator^.ByteCodeSize;
       begin
-       Registers[0]:=GetRegisters;
+       Registers[0]:=GetRegisters; // Registers before loop 
        StartLoop(LabelToken,false);
-       JumpOver:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJMP,0);
-       JumpNext:=CodeGenerator^.ByteCodeSize;
+       ContinuePos:=CodeGenerator^.ByteCodeSize;
+       Registers[1]:=GetRegisters; // Registers before test and at continue label
+       JumpOver:=GenerateTest(Test,true,true,-1);
+       Registers[2]:=GetRegisters; // Registers after test and before code block
        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
-       begin
-        ContinuePos:=CodeGenerator^.ByteCodeSize;
-        FixTargetImmediate(JumpOver);
-        Registers[1]:=GetRegisters;
-        Registers[4]:=GetRegisters;
-        GenerateTest(Test,true,false,JumpNext);
-        Registers[2]:=GetRegisters;
-        Registers[3]:=GetRegisters;
-       end;
+       Registers[3]:=GetRegisters; // Registers after code block
+       Registers[4]:=GetRegisters; // Registers after loop
+       EmitOpcode(popJMP,ContinuePos);
        BreakPos:=CodeGenerator^.ByteCodeSize;
-       EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+       FixTargetImmediate(JumpOver);
+       EndLoop(BreakPos,ContinuePos,Registers[2],Registers[4]);
       end;
       if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
-              AreRegistersEqual(Registers[4],Registers[1],false,false) and
               AreRegistersEqual(Registers[1],Registers[2],false,false) and
-              AreRegistersEqual(Registers[4],Registers[2],false,false)) then begin
+              AreRegistersEqual(Registers[2],Registers[3],false,false) and
+              AreRegistersEqual(Registers[4],Registers[3],false,false)) then begin
        ScopeReset;
        CodeGenerator^.ByteCodeSize:=Start;
        SetRegisters(Registers[0]);
        CombineCurrentRegisters(Registers[1]);
+       CombineCurrentRegisters(Registers[3]);
        CombineCurrentRegisters(Registers[4]);
        StartLoop(LabelToken,false);
-       JumpOver:=CodeGenerator^.ByteCodeSize+1;
-       EmitOpcode(popJMP,0);
-       JumpNext:=CodeGenerator^.ByteCodeSize;
-       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
-       begin
-        CombineCurrentRegisters(Registers[0]);
-        CombineCurrentRegisters(Registers[1]);
-        CombineCurrentRegisters(Registers[4]);
-        ContinuePos:=CodeGenerator^.ByteCodeSize;
-        FixTargetImmediate(JumpOver);
-        GenerateTest(Test,true,false,JumpNext);
-       end;
-       BreakPos:=CodeGenerator^.ByteCodeSize;
+       ContinuePos:=CodeGenerator^.ByteCodeSize;
+       JumpOver:=GenerateTest(Test,true,true,-1);
        CombineCurrentRegisters(Registers[2]);
+       result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
+       CombineCurrentRegisters(Registers[0]);
+       CombineCurrentRegisters(Registers[1]);
        CombineCurrentRegisters(Registers[3]);
-       EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+       CombineCurrentRegisters(Registers[4]);
+       EmitOpcode(popJMP,ContinuePos);
+       BreakPos:=CodeGenerator^.ByteCodeSize;
+       FixTargetImmediate(JumpOver);
+       CombineCurrentRegisters(Registers[2]);
+       EndLoop(BreakPos,ContinuePos,Registers[2],Registers[4]);
       end;
      finally
       SetLength(Registers[0],0);
