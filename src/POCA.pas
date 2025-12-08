@@ -324,7 +324,7 @@
  {$ifdef POCANoJIT}
   {$undef POCAHasJIT}
  {$else}
-  {-$define POCAHasJIT}
+  {$define POCAHasJIT}
  {$endif}
  {$define UseRegister}
  {$undef x8664JITUseRIP} // Use RIP-relative addressing (disable if code allocated beyond ±2GB)
@@ -33575,7 +33575,11 @@ var TokenList:PPOCAToken;
         end else if assigned(t^.Left^.Right) and (t^.Left^.Right^.Token=ptHASHKIND) then begin
          EmitOpcode(popGETHASHKIND,Reg2,Reg3);
         end else begin
-         EmitGetMember(Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+         if IsSafeMethod then begin
+          EmitSafeGetMember(Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+         end else begin
+          EmitGetMember(Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+         end;
         end;
         FreeRegister(Reg3);
        end else begin
@@ -33588,7 +33592,11 @@ var TokenList:PPOCAToken;
         end else if assigned(t^.Left^.Right) and (t^.Left^.Right^.Token=ptHASHKIND) then begin
          EmitOpcode(popGETHASHKIND,Reg2,Reg1);
         end else begin
-         EmitGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+         if IsSafeMethod then begin
+          EmitSafeGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+         end else begin
+          EmitGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+         end;
         end;
        end;
       end else if assigned(t^.Left) and (t^.Left^.Token=ptATDOT) and assigned(t^.Left^.Left) and (t^.Left^.Left^.Token=ptSUPERTHAT) then begin
@@ -33613,7 +33621,6 @@ var TokenList:PPOCAToken;
        Reg2:=GenerateExpression(t^.Left,-1,true);
       end;
       if IsSafeMethod then begin
-       EmitOpcode(popDEBUGGER);
        Registers:=GetRegisters;
        JumpNull:=CodeGenerator^.ByteCodeSize+1;
        EmitOpcode(popJIFNULL,0,Reg1);
@@ -33625,7 +33632,11 @@ var TokenList:PPOCAToken;
        ConstantIndex:=InternConstant(POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,InjectedMember)));
        Reg1:=Reg2;
        Reg2:=GetRegister(true,false);
-       EmitGetMember(Reg2,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       if IsSafeMethod then begin
+        EmitSafeGetMember(Reg2,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       end else begin
+        EmitGetMember(Reg2,Reg1,ConstantIndex,$ffffffff,$ffffffff);
+       end;
       end;
       if IsHashCall(t^.Right) then begin
        if HasSpreadOperator(t^.Right) then begin
@@ -35948,7 +35959,7 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         if Safe then begin
-         EmitOpcode(popSAFEGETMEMBER,result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
+         EmitSafeGetMember(result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
         end else begin
          EmitGetMember(result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
         end;
