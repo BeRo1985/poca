@@ -30111,7 +30111,7 @@ var TokenList:PPOCAToken;
      result:=nil;
     end;
    end;
-   function FindConstantIndex(t:PPOCAToken;const ForScope:Boolean;const Value:PPOCAValue=nil):TPOCAInt32;
+   function FindConstantIndex(t:PPOCAToken;const ForScope:Boolean;const Value:PPOCAValue=nil;const ForArguments:Boolean=false):TPOCAInt32;
    var c:TPOCAValue;
    begin
     case t^.Token of
@@ -30123,10 +30123,18 @@ var TokenList:PPOCAToken;
       c:=POCANewUniqueString(Parser.Context,t^.Str);
      end;
      ptSYMBOL:begin
-      if ForScope then begin
-       c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,GetSymbolName(t)));
+      if ForArguments then begin
+       if ForScope then begin
+        c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,GetSymbolName(t)));
+       end else begin
+        c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,t^.Str));
+       end;
       end else begin
-       c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,t^.Str));
+       if ForScope then begin
+        c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,GetSymbolName(t)));
+       end else begin
+        c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,t^.Str));
+       end;
       end;
      end;
      ptSUPERCODESYMBOL:begin
@@ -30172,7 +30180,7 @@ var TokenList:PPOCAToken;
      end else if (t^.Token in [ptPLUS,ptNUM]) and (assigned(t^.Right) and (t^.Right^.Token=ptLITERALNUM)) then begin
       result:=DefineArgument(t^.Right);
      end else begin
-      result:=FindConstantIndex(t,true);
+      result:=FindConstantIndex(t,true,nil,true);
      end;
     end;
    end;
@@ -30351,7 +30359,7 @@ var TokenList:PPOCAToken;
      end;
     end;
     Value.CastedUInt64:=POCAValueNullCastedUInt64;
-    i:=FindConstantIndex(t,true,@Value);
+    i:=FindConstantIndex(t,true,@Value,false);
     if POCAIsValueCode(Value) then begin
      EmitOpcode(popLOADCODE,result,i);
      SetRegisterTypeKind(result,tkCODE);
@@ -31487,7 +31495,7 @@ var TokenList:PPOCAToken;
         Reg1:=Symbol^.Register;
         result:=popCOPY;
        end else begin
-        ConstantIndex:=FindConstantIndex(t,true);
+        ConstantIndex:=FindConstantIndex(t,true,nil,false);
         result:=popSETSYM;
        end;
        exit;
@@ -31504,7 +31512,7 @@ var TokenList:PPOCAToken;
        end else if assigned(t^.Right) and (t^.Right^.Token=ptHASHKIND) then begin
         result:=popSETHASHKIND;
        end else begin
-        ConstantIndex:=FindConstantIndex(t^.Right,false);
+        ConstantIndex:=FindConstantIndex(t^.Right,false,nil,false);
         result:=popSETMEMBER;
        end;
        exit;
@@ -31519,7 +31527,7 @@ var TokenList:PPOCAToken;
         end else if assigned(t^.Right) and (t^.Right^.Token=ptHASHKIND) then begin
          result:=popSETHASHKIND;
         end else begin
-         ConstantIndex:=FindConstantIndex(t^.Right,false);
+         ConstantIndex:=FindConstantIndex(t^.Right,false,nil,false);
          result:=popSAFESETMEMBER;
         end;
         exit;
@@ -31593,7 +31601,7 @@ var TokenList:PPOCAToken;
            result:=popSETOUTERVALUE;
           end;
          end else begin
-          ConstantIndex:=FindConstantIndex(t,true);
+          ConstantIndex:=FindConstantIndex(t,true,nil,false);
           if Token=ptCONST then begin
            result:=popSETCONSTLOCAL;
           end else begin
@@ -33602,9 +33610,9 @@ var TokenList:PPOCAToken;
          EmitOpcode(popGETHASHKIND,Reg2,Reg3);
         end else begin
          if IsSafeMethod then begin
-          EmitSafeGetMember(Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+          EmitSafeGetMember(Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
          end else begin
-          EmitGetMember(Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+          EmitGetMember(Reg2,Reg3,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
          end;
         end;
         FreeRegister(Reg3);
@@ -33619,9 +33627,9 @@ var TokenList:PPOCAToken;
          EmitOpcode(popGETHASHKIND,Reg2,Reg1);
         end else begin
          if IsSafeMethod then begin
-          EmitSafeGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+          EmitSafeGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
          end else begin
-          EmitGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+          EmitGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
          end;
         end;
        end;
@@ -33632,14 +33640,14 @@ var TokenList:PPOCAToken;
        EmitOpcode(popLOADTHAT,Reg1);
        SetRegisterTypeKind(Reg1,tkUNKNOWN);
        Reg2:=GetRegister(true,false);
-       EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+       EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
        EmitOpcode(popLOADTHIS,Reg1);
       end else if assigned(t^.Left) and (t^.Left^.Token=ptATDOT) then begin
        IsSafeMethod:=false;
        IsMethod:=true;
        Reg1:=GenerateExpression(t^.Left^.Left,-1,true);
        Reg2:=GetRegister(true,false);
-       EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false),$ffffffff,$ffffffff);
+       EmitOpcode(popINHERITEDGETMEMBER,Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
       end else begin
        IsSafeMethod:=false;
        IsMethod:=false;
@@ -35110,9 +35118,9 @@ var TokenList:PPOCAToken;
           end;
           Symbol^.TypeKind:=GetRegisterTypeKind(Reg);
          end else if Variable=vCONST then begin
-          EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
+          EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t,true,nil,false),Reg,$ffffffff);
          end else begin
-          EmitOpcode(popSETLOCAL,FindConstantIndex(t,true),Reg,$ffffffff);
+          EmitOpcode(popSETLOCAL,FindConstantIndex(t,true,nil,false),Reg,$ffffffff);
          end;
          exit;
         end;
@@ -35996,9 +36004,9 @@ var TokenList:PPOCAToken;
          result:=OutReg;
         end;
         if Safe then begin
-         EmitSafeGetMember(result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
+         EmitSafeGetMember(result,Reg,FindConstantIndex(t^.Right,false,nil,false),$ffffffff,$ffffffff);
         end else begin
-         EmitGetMember(result,Reg,FindConstantIndex(t^.Right,false),$ffffffff,$ffffffff);
+         EmitGetMember(result,Reg,FindConstantIndex(t^.Right,false,nil,false),$ffffffff,$ffffffff);
         end;
        end;
        else begin
@@ -36069,7 +36077,7 @@ var TokenList:PPOCAToken;
           end;
           case t^.Right^.Right^.Token of
            ptSYMBOL:begin
-            ConstantIndex:=FindConstantIndex(t^.Right^.Right,false);
+            ConstantIndex:=FindConstantIndex(t^.Right^.Right,false,nil,false);
             Reg1:=GenerateExpression(t^.Right^.Left,-1,true);
             EmitOpcode(popDEFINED,result,Reg1,ConstantIndex);
             FreeRegister(Reg1);
@@ -36296,7 +36304,7 @@ var TokenList:PPOCAToken;
        end;
        case t^.Right^.Right^.Token of
         ptSYMBOL:begin
-         ConstantIndex:=FindConstantIndex(t^.Right^.Right,false);
+         ConstantIndex:=FindConstantIndex(t^.Right^.Right,false,nil,false);
          Reg1:=GenerateExpression(t^.Right^.Left,-1,true);
          EmitOpcode(popDELETE,result,Reg1,ConstantIndex);
          FreeRegister(Reg1);
@@ -36351,7 +36359,7 @@ var TokenList:PPOCAToken;
        end else begin
         Reg1:=GetRegister(true,false);
         EmitOpcode(popLOADLOCAL,Reg1);
-        ConstantIndex:=FindConstantIndex(t^.Right,true);
+        ConstantIndex:=FindConstantIndex(t^.Right,true,nil,false);
         EmitOpcode(popDELETE,result,Reg1,ConstantIndex);
         FreeRegister(Reg1);
        end;
@@ -36530,7 +36538,7 @@ var TokenList:PPOCAToken;
         end else begin
          result:=OutReg;
         end;
-        EmitOpcode(popGETLOCAL,result,FindConstantIndex(t,true),$ffffffff);
+        EmitOpcode(popGETLOCAL,result,FindConstantIndex(t,true,nil,false),$ffffffff);
         SetRegisterTypeKind(result,tkUNKNOWN);
        end;
       end;
@@ -36615,9 +36623,9 @@ var TokenList:PPOCAToken;
           end;
           Symbol^.TypeKind:=GetRegisterTypeKind(result);
          end else if Token=ptCONST then begin
-          EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
+          EmitOpcode(popSETCONSTLOCAL,FindConstantIndex(t^.Right,true,nil,false),result,$ffffffff);
          end else begin
-          EmitOpcode(popSETLOCAL,FindConstantIndex(t^.Right,true),result,$ffffffff);
+          EmitOpcode(popSETLOCAL,FindConstantIndex(t^.Right,true,nil,false),result,$ffffffff);
          end;
          exit;
         end;
@@ -37262,7 +37270,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCACodeArgument));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
-          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right,true);
+          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right,true,nil,false);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           CodeGenerator^.OptionalArgumentValues[Code^.CountOptionalArguments]:=DefineArgument(t^.Right);
           inc(Code^.CountOptionalArguments);
@@ -37278,7 +37286,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCACodeArgument));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
-          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right,true);
+          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left^.Right,true,nil,false);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           CodeGenerator^.OptionalArgumentValues[Code^.CountOptionalArguments]:=DefineArgument(t^.Right);
           inc(Code^.CountOptionalArguments);
@@ -37293,7 +37301,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.OptionalArgumentLocals,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCACodeArgument));
            ReallocMem(CodeGenerator^.OptionalArgumentValues,CodeGenerator^.OptionalArgumentAllocated*sizeof(TPOCAInt32));
           end;
-          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left,true);
+          CodeGenerator^.OptionalArgumentSymbols[Code^.CountOptionalArguments]:=FindConstantIndex(t^.Left,true,nil,false);
           CodeGenerator^.OptionalArgumentLocals[Code^.CountOptionalArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           CodeGenerator^.OptionalArgumentValues[Code^.CountOptionalArguments]:=DefineArgument(t^.Right);
           inc(Code^.CountOptionalArguments);
@@ -37312,7 +37320,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
            ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCACodeArgument));
           end;
-          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right,true);
+          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right,true,nil,false);
           CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           inc(Code^.CountArguments);
           Code^.HasArgumentLocals:=true;
@@ -37331,7 +37339,7 @@ var TokenList:PPOCAToken;
            ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
            ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCACodeArgument));
           end;
-          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right,true);
+          CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t^.Right,true,nil,false);
           CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
           inc(Code^.CountArguments);
          end;
@@ -37346,7 +37354,7 @@ var TokenList:PPOCAToken;
           ReallocMem(CodeGenerator^.ArgumentSymbols,CodeGenerator^.ArgAllocated*sizeof(TPOCAInt32));
           ReallocMem(CodeGenerator^.ArgumentLocals,CodeGenerator^.ArgAllocated*sizeof(TPOCACodeArgument));
          end;
-         CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t,true);
+         CodeGenerator^.ArgumentSymbols[Code^.CountArguments]:=FindConstantIndex(t,true,nil,false);
          CodeGenerator^.ArgumentLocals[Code^.CountArguments]:=CodeGenerator^.LocalArguments[CodeGenerator^.LocalArgumentIndex];
          inc(Code^.CountArguments);
          Code^.HasArgumentLocals:=true;
