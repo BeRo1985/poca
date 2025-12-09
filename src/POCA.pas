@@ -22735,6 +22735,7 @@ type PPPOCAToken=^PPOCAToken;
       Str:TPOCARawByteString;
       Rule:TPOCATokenPrecedenceRule;
       Num:double;
+      MayBeLabel:Boolean;
       TokenListNext,Parent,Next,Previous:PPOCAToken;
       case TPOCAUInt8 of
        0:(Children,LastChild:PPOCAToken;);
@@ -25840,7 +25841,7 @@ var TokenList:PPOCAToken;
     Parser.Tree.LastChild:=Token^.Previous;
    end;
   end;
-  procedure AddToken(Token:TPOCATokenType;const Str:TPOCARawByteString;Num:double);
+  procedure AddToken(Token:TPOCATokenType;const Str:TPOCARawByteString;Num:double;const MayBeLabel:Boolean=false);
   var NewToken:PPOCAToken;
       i,j:TPOCAInt32;
   begin
@@ -25858,12 +25859,14 @@ var TokenList:PPOCAToken;
      end;
     end;
     ptWHILE,ptDO,ptFOR,ptFOREACH,ptFORINDEX,ptFORKEY:begin
-     if assigned(Parser.Tree.LastChild) and (Parser.Tree.LastChild^.Token=ptCOLON) then begin
-      if assigned(Parser.Tree.LastChild^.Previous) and (Parser.Tree.LastChild^.Previous^.Token=ptSYMBOL) then begin
-       Parser.Tree.LastChild^.Previous^.Token:=Token;
-       RemoveToken(Parser.Tree.LastChild);
-       exit;
-      end;
+     if assigned(Parser.Tree.LastChild) and
+        (Parser.Tree.LastChild^.Token=ptCOLON) and
+        (assigned(Parser.Tree.LastChild^.Previous) and
+         ((Parser.Tree.LastChild^.Previous^.Token=ptSYMBOL) and
+          Parser.Tree.LastChild^.Previous^.MayBeLabel)) then begin
+      Parser.Tree.LastChild^.Previous^.Token:=Token;
+      RemoveToken(Parser.Tree.LastChild);
+      exit;
      end;
     end;
     ptSYMBOL,ptTHIS,ptTHAT,ptLOCAL,ptSELF,ptIMPORT:begin
@@ -25958,6 +25961,7 @@ var TokenList:PPOCAToken;
    end;
    NewToken^.Str:=Str;
    NewToken^.Num:=Num;
+   NewToken^.MayBeLabel:=MayBeLabel;
    NewToken^.Next:=nil;
    NewToken^.Previous:=Parser.Tree.LastChild;
    NewToken^.Children:=nil;
@@ -27190,7 +27194,7 @@ var TokenList:PPOCAToken;
              break;
             end;           
            end;
-           AddToken(ptSYMBOL,PUCUUTF8Correct(copy(Source,LastSourcePosition,SourcePosition-LastSourcePosition)),0);
+           AddToken(ptSYMBOL,PUCUUTF8Correct(copy(Source,LastSourcePosition,SourcePosition-LastSourcePosition)),0,(SourcePosition<=SourceLength) and (Source[SourcePosition]=':'));
           end else if PUCUUnicodeIsWhiteSpace(CharValue) then begin
            while SourcePosition<=SourceLength do begin
             Last:=SourcePosition;
