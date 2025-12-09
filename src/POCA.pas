@@ -29518,6 +29518,7 @@ var TokenList:PPOCAToken;
        Kind:TPOCACodeGeneratorScopeSymbolKind;
        TypeKind:TTypeKind;
        Constant:Boolean;
+       ConstantIndex:TPOCAInt32;
        Freeable:Boolean;
        Register:TPOCAInt32;
        FrameValueLevel:TPOCAInt32;
@@ -30105,6 +30106,7 @@ var TokenList:PPOCAToken;
       result^.Kind:=Kind;
       result^.TypeKind:=tkUNKNOWN;
       result^.Constant:=aConstant;
+      result^.ConstantIndex:=-1;
       result^.Register:=aRegister;
      end;
     end else begin
@@ -30113,6 +30115,7 @@ var TokenList:PPOCAToken;
    end;
    function FindConstantIndex(t:PPOCAToken;const ForScope:Boolean;const Value:PPOCAValue=nil;const ForArguments:Boolean=false):TPOCAInt32;
    var c:TPOCAValue;
+       Symbol:PPOCACodeGeneratorScopeSymbol;
    begin
     case t^.Token of
      ptNULL:begin
@@ -30124,10 +30127,18 @@ var TokenList:PPOCAToken;
      end;
      ptSYMBOL:begin
       if ForArguments then begin
-       if ForScope then begin
-        c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,GetSymbolName(t)));
+       Symbol:=FindScopeSymbol(t,false,true,false);
+       if assigned(Symbol) then begin
+        if Symbol^.Constant and (Symbol^.ConstantIndex>=0) then begin
+         result:=Symbol^.ConstantIndex;
+         exit;
+        end else begin
+         c.CastedUInt64:=POCAValueNullCastedUInt64;
+         SyntaxError('Symbol "'+t^.Str+'" not a constant',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+        end;
        end else begin
-        c:=POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,t^.Str));
+        c.CastedUInt64:=POCAValueNullCastedUInt64;
+        SyntaxError('Symbol "'+t^.Str+'" not found',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end;
       end else begin
        if ForScope then begin
@@ -30427,6 +30438,7 @@ var TokenList:PPOCAToken;
         r:=Symbol^.Register;
         Symbol^.Name:='';
         Symbol^.Constant:=false;
+        Symbol^.ConstantIndex:=-1;
         Symbol^.Freeable:=false;
         Symbol^.Register:=-1;
         HashMap.DeleteKey(Item);

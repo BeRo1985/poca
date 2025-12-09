@@ -104,6 +104,9 @@
       <Item>
         <Name Value="EPOCACoroutineTerminated"/>
       </Item>
+      <Item>
+        <Name Value="EPOCASyntaxError"/>
+      </Item>
     </Exceptions>
   </Debugging>
 </CONFIG>
