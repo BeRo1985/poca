@@ -29519,6 +29519,7 @@ var TokenList:PPOCAToken;
        TypeKind:TTypeKind;
        Constant:Boolean;
        ConstantIndex:TPOCAInt32;
+       ConstantValue:TPOCAValue;
        Freeable:Boolean;
        Register:TPOCAInt32;
        FrameValueLevel:TPOCAInt32;
@@ -30107,6 +30108,7 @@ var TokenList:PPOCAToken;
       result^.TypeKind:=tkUNKNOWN;
       result^.Constant:=aConstant;
       result^.ConstantIndex:=-1;
+      result^.ConstantValue.CastedUInt64:=POCAValueNullCastedUInt64;
       result^.Register:=aRegister;
      end;
     end else begin
@@ -30130,8 +30132,7 @@ var TokenList:PPOCAToken;
        Symbol:=FindScopeSymbol(t,false,true,false);
        if assigned(Symbol) then begin
         if Symbol^.Constant and (Symbol^.ConstantIndex>=0) then begin
-         result:=Symbol^.ConstantIndex;
-         exit;
+         c:=Symbol^.ConstantValue;
         end else begin
          c.CastedUInt64:=POCAValueNullCastedUInt64;
          SyntaxError('Symbol "'+t^.Str+'" not a constant',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -30439,6 +30440,7 @@ var TokenList:PPOCAToken;
         Symbol^.Name:='';
         Symbol^.Constant:=false;
         Symbol^.ConstantIndex:=-1;
+        Symbol^.ConstantValue.CastedUInt64:=POCAValueNullCastedUInt64;
         Symbol^.Freeable:=false;
         Symbol^.Register:=-1;
         HashMap.DeleteKey(Item);
@@ -30627,6 +30629,7 @@ var TokenList:PPOCAToken;
       end;
      end;
     var n:double;
+        Symbol:PPOCACodeGeneratorScopeSymbol;
     begin
      if assigned(t) and not t^.Visited then begin
       t^.Visited:=true;
@@ -31143,6 +31146,28 @@ var TokenList:PPOCAToken;
           ScanToken(t^.Children,t,false);
           ScanToken(t^.LastChild,t,false);
           ScanToken(t^.Next,t,false);
+         end;
+        end;
+       end;
+       ptSYMBOL:begin
+        ScanToken(t^.Children,t,false);
+        ScanToken(t^.LastChild,t,false);
+        ScanToken(t^.Next,t,false);
+        if length(t^.Str)>0 then begin
+         Symbol:=FindScopeSymbol(t,false,true,false);
+         if assigned(Symbol) and Symbol^.Constant and (Symbol^.ConstantIndex>=0) then begin
+          case POCAGetValueType(Symbol^.ConstantValue) of
+           pvtNUMBER:begin
+            t^.Token:=ptLITERALNUM;
+            t^.Num:=Symbol^.ConstantValue.Num;
+           end;
+           pvtSTRING:begin
+            t^.Token:=ptLITERALSTR;
+            t^.Str:=POCAGetStringValue(Context,Symbol^.ConstantValue);
+           end;
+           else begin
+           end;
+          end;
          end;
         end;
        end;
@@ -35405,6 +35430,8 @@ var TokenList:PPOCAToken;
        SetLength(Regs,0);
       end;
      end;
+    var Symbol:PPOCACodeGeneratorScopeSymbol;
+        SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
     begin
      lv:=t^.Left;
      rv:=t^.Right;
@@ -35431,6 +35458,9 @@ var TokenList:PPOCAToken;
         lv:=lv^.Right;
         Variable:=vCONST;
        end;
+       else begin
+        SyntaxError('Internal error 2025120913380000',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+       end;
       end;
       if (rv^.Token=ptLPAR) and not (Binary(rv) or not assigned(rv^.Right)) then begin
        if Len<>ParameterListLen(rv) then begin
@@ -35450,6 +35480,20 @@ var TokenList:PPOCAToken;
       end else begin
        result:=GenerateExpression(rv,OutReg,true);
        GenerateLeftValue(lv,result);
+      end;
+      if assigned(lv) and (lv^.Token=ptCONST) then begin
+//     ProcessConstantFolding(rv);
+       if assigned(rv) and (rv^.Token in [ptNULL,ptLITERALNUM,ptLITERALSTR]) then begin
+        Symbol:=FindScopeSymbol(lv^.Right,false,true,false);
+        if assigned(Symbol) and Symbol^.Constant then begin
+         Symbol^.ConstantIndex:=FindConstantIndex(rv,true,nil,false);
+         if Symbol^.ConstantIndex>=0 then begin
+          Symbol^.ConstantValue:=POCAArrayGet(CodeGenerator^.Consts,Symbol^.ConstantIndex);
+         end else begin
+          Symbol^.ConstantValue.CastedUInt64:=POCAValueNullCastedUInt64;
+         end;
+        end;
+       end;
       end;
      end;
     end;
