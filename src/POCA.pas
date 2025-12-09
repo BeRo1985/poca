@@ -25827,6 +25827,19 @@ var TokenList:PPOCAToken;
  procedure ProcessLexer(var Parser:TPOCAParser;const Source:TPOCARawByteString);
  var SourcePosition,SourceLength,SourceLine,SourceColumn,LastPragma,LastOutputInfo:TPOCAInt32;
      AutomaticSemicolonInsertion:boolean;
+  procedure RemoveToken(Token:PPOCAToken);
+  begin
+   if assigned(Token^.Previous) then begin
+    Token^.Previous^.Next:=Token^.Next;
+   end else if Parser.Tree.Children=Token then begin
+    Parser.Tree.Children:=Token^.Next;
+   end;
+   if assigned(Token^.Next) then begin
+    Token^.Next^.Previous:=Token^.Previous;
+   end else if Parser.Tree.LastChild=Token then begin
+    Parser.Tree.LastChild:=Token^.Previous;
+   end;
+  end;
   procedure AddToken(Token:TPOCATokenType;const Str:TPOCARawByteString;Num:double);
   var NewToken:PPOCAToken;
       i,j:TPOCAInt32;
@@ -25842,6 +25855,15 @@ var TokenList:PPOCAToken;
      if assigned(Parser.Tree.LastChild) and (Parser.Tree.LastChild^.Token=ptELSE) then begin
       Parser.Tree.LastChild^.Token:=ptELSEIF;
       exit;
+     end;
+    end;
+    ptWHILE,ptDO,ptFOR,ptFOREACH,ptFORINDEX,ptFORKEY:begin
+     if assigned(Parser.Tree.LastChild) and (Parser.Tree.LastChild^.Token=ptCOLON) then begin
+      if assigned(Parser.Tree.LastChild^.Previous) and (Parser.Tree.LastChild^.Previous^.Token=ptSYMBOL) then begin
+       Parser.Tree.LastChild^.Previous^.Token:=Token;
+       RemoveToken(Parser.Tree.LastChild);
+       exit;
+      end;
      end;
     end;
     ptSYMBOL,ptTHIS,ptTHAT,ptLOCAL,ptSELF,ptIMPORT:begin
@@ -27166,7 +27188,7 @@ var TokenList:PPOCAToken;
             end else begin
              SourcePosition:=Last;
              break;
-            end;
+            end;           
            end;
            AddToken(ptSYMBOL,PUCUUTF8Correct(copy(Source,LastSourcePosition,SourcePosition-LastSourcePosition)),0);
           end else if PUCUUnicodeIsWhiteSpace(CharValue) then begin
@@ -34465,13 +34487,16 @@ var TokenList:PPOCAToken;
        Test:=t^.Left^.Children;
        LabelToken:=nil;
        Len:=CountList(Test,[ptSEMI,ptAUTOSEMI]);
-       if Len=2 then begin
+       if length(t^.Str)>0 then begin
+        LabelToken:=t;
+       end;
+      {if Len=2 then begin
         LabelToken:=Test^.Right;
         if (not assigned(LabelToken)) or (LabelToken^.Token<>ptSYMBOL) then begin
          SyntaxError('Bad loop label',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
         Test:=Test^.Left;
-       end else if Len<>1 then begin
+       end else}if Len<>1 then begin
         SyntaxError('Too many semicolons in list',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end;
        Body:=t^.Right^.Left;
@@ -34548,13 +34573,16 @@ var TokenList:PPOCAToken;
        Test:=t^.Children^.Next^.Next^.Children;
        LabelToken:=nil;
        Len:=CountList(Test,[ptSEMI,ptAUTOSEMI]);
-       if Len=2 then begin
+       if length(t^.Str)>0 then begin
+        LabelToken:=t;
+       end;
+      {if Len=2 then begin
         LabelToken:=Test^.Right;
         if (not assigned(LabelToken)) or (LabelToken^.Token<>ptSYMBOL) then begin
          SyntaxError('Bad loop label',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
         Test:=Test^.Left;
-       end else if Len<>1 then begin
+       end else}if Len<>1 then begin
         SyntaxError('Too many semicolons in list',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end;
       end;
@@ -34624,13 +34652,16 @@ var TokenList:PPOCAToken;
        Init:=h^.Left;
        Test:=h^.Right^.Left;
        Update:=h^.Right^.Right;
-       if Len=4 then begin
+       if length(t^.Str)>0 then begin
+        LabelToken:=t;
+       end; 
+      {if Len=4 then begin
         LabelToken:=Update^.Right;
         if (not assigned(LabelToken)) or (LabelToken^.Token<>ptSYMBOL) then begin
          SyntaxError('Bad loop label',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
         end;
         Update:=Update^.Left;
-       end else if Len<>3 then begin
+       end else}if Len<>3 then begin
         SyntaxError('Wrong count of terms in for header',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end;
        Body:=t^.Right^.Children;
@@ -34731,14 +34762,17 @@ var TokenList:PPOCAToken;
       LabelToken:=nil;
       h:=t^.Left^.Left;
       Len:=CountList(h,[ptSEMI,ptAUTOSEMI]);
-      if (Len=3) and assigned(h^.Right) then begin
+      if length(t^.Str)>0 then begin
+       LabelToken:=t;
+      end;
+{     if (Len=3) and assigned(h^.Right) then begin
        LabelToken:=h^.Right^.Right;
        if (not assigned(LabelToken)) or (LabelToken^.Token<>ptSYMBOL) then begin
         SyntaxError('Bad loop label',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end;
        Element:=h^.Left;
        ArrayInstance:=h^.Right^.Left;
-      end else if Len=2 then begin
+      end else}if Len=2 then begin
        Element:=h^.Left;
        ArrayInstance:=h^.Right;
       end else begin
