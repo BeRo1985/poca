@@ -35495,7 +35495,7 @@ var TokenList:PPOCAToken;
         Variable:=vCONST;
        end;
        else begin
-        SyntaxError('Internal error 2025120913380000',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
+//      SyntaxError('Internal error 2025120913380000',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
        end;
       end;
       if (rv^.Token=ptLPAR) and not (Binary(rv) or not assigned(rv^.Right)) then begin
