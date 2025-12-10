@@ -353,7 +353,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2025-12-08-21-28-0000';
+const POCAVersion='2025-12-10-01-07-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -22730,7 +22730,7 @@ type PPPOCAToken=^PPOCAToken;
      PPOCAToken=^TPOCAToken;
      TPOCAToken=packed record
       Token:TPOCATokenType;
-      Visited:boolean;
+      VisitedGeneration:TPOCAUInt32;
       SourceFile,SourceLine,SourceColumn:TPOCAInt32;
       Str:TPOCARawByteString;
       Rule:TPOCATokenPrecedenceRule;
@@ -22785,15 +22785,11 @@ type PPPOCAToken=^PPOCAToken;
       Line:TPOCAInt32;
      end;
 var TokenList:PPOCAToken;
+    TokenListVisitedGeneration:TPOCAUInt32;
     PreprocessorInstance:TPOCAPreprocessorInstance;
- procedure ResetTokenVisited;
- var CurrentToken:PPOCAToken;
+ procedure IncrementTokenListVisitedGeneration;
  begin
-  CurrentToken:=TokenList;
-  while assigned(CurrentToken) do begin
-   CurrentToken^.Visited:=false;
-   CurrentToken:=CurrentToken^.TokenListNext;
-  end;
+  inc(TokenListVisitedGeneration);
  end;
  procedure SyntaxError(const AMessage:TPOCAUTF8String;SourceFile,SourceLine,SourceColumn:TPOCAInt32);
  begin
@@ -25943,7 +25939,7 @@ var TokenList:PPOCAToken;
    NewToken^.TokenListNext:=TokenList;
    TokenList:=NewToken;
    NewToken^.Token:=Token;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=Parser.SourceFile;
    NewToken^.SourceLine:=SourceLine;
    NewToken^.SourceColumn:=SourceColumn;
@@ -27358,7 +27354,7 @@ var TokenList:PPOCAToken;
    result^.TokenListNext:=TokenList;
    TokenList:=result;
    result^.Token:=Token;
-   result^.Visited:=false;
+   result^.VisitedGeneration:=High(TPOCAUInt32);
    result^.Rule:=prNONE;
    result^.SourceFile:=WhereToken^.SourceFile;
    result^.SourceLine:=WhereToken^.SourceLine;
@@ -27372,7 +27368,7 @@ var TokenList:PPOCAToken;
    NewToken^.TokenListNext:=TokenList;
    TokenList:=NewToken;
    NewToken^.Token:=Token;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -27396,7 +27392,7 @@ var TokenList:PPOCAToken;
    TokenList:=NewToken;
    NewToken^.Token:=ptLITERALNUM;
    NewToken^.Num:=Value;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -27420,7 +27416,7 @@ var TokenList:PPOCAToken;
    TokenList:=NewToken;
    NewToken^.Token:=ptSYMBOL;
    NewToken^.Str:=Value;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -27444,7 +27440,7 @@ var TokenList:PPOCAToken;
    TokenList:=NewToken;
    NewToken^.Token:=ptLITERALSTR;
    NewToken^.Str:=Value;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -27468,7 +27464,7 @@ var TokenList:PPOCAToken;
    TokenList:=NewToken;
    NewToken^.Token:=ptSYMBOLNAME;
    NewToken^.Str:=Value;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -27491,7 +27487,7 @@ var TokenList:PPOCAToken;
    NewToken^.TokenListNext:=TokenList;
    TokenList:=NewToken;
    NewToken^.Token:=Token;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -27520,7 +27516,7 @@ var TokenList:PPOCAToken;
    TokenList:=NewToken;
    NewToken^.Token:=ptLITERALNUM;
    NewToken^.Num:=Value;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -27549,7 +27545,7 @@ var TokenList:PPOCAToken;
    TokenList:=NewToken;
    NewToken^.Token:=ptSYMBOL;
    NewToken^.Str:=Value;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -27578,7 +27574,7 @@ var TokenList:PPOCAToken;
    TokenList:=NewToken;
    NewToken^.Token:=ptSYMBOLNAME;
    NewToken^.Str:=Value;
-   NewToken^.Visited:=false;
+   NewToken^.VisitedGeneration:=High(TPOCAUInt32);
    NewToken^.SourceFile:=WhereToken^.SourceFile;
    NewToken^.SourceLine:=WhereToken^.SourceLine;
    NewToken^.SourceColumn:=WhereToken^.SourceColumn;
@@ -28661,7 +28657,7 @@ var TokenList:PPOCAToken;
    end;
   end;
  begin
-  ResetTokenVisited;
+  IncrementTokenListVisitedGeneration;
   TransformAtThis;
   TransformLambdaFunction;
   TransformBlock(Parser.Tree.Children,[],false);
@@ -28675,7 +28671,7 @@ var TokenList:PPOCAToken;
    result^.TokenListNext:=TokenList;
    TokenList:=result;
    result^.Token:=Token;
-   result^.Visited:=false;
+   result^.VisitedGeneration:=High(TPOCAUInt32);
    result^.Rule:=prNONE;
    result^.SourceFile:=t^.SourceFile;
    result^.SourceLine:=t^.SourceLine;
@@ -29199,7 +29195,7 @@ var TokenList:PPOCAToken;
     result^.TokenListNext:=TokenList;
     TokenList:=result;
     result^.Token:=ptEMPTY;
-    result^.Visited:=false;
+    result^.VisitedGeneration:=High(TPOCAUInt32);
     result^.SourceFile:=Parser.SourceFile;
     result^.SourceLine:=-1;
     result^.SourceColumn:=-1;
@@ -29518,6 +29514,7 @@ var TokenList:PPOCAToken;
        Kind:TPOCACodeGeneratorScopeSymbolKind;
        TypeKind:TTypeKind;
        Constant:Boolean;
+       ConstantValid:Boolean;
        ConstantIndex:TPOCAInt32;
        ConstantValue:TPOCAValue;
        Freeable:Boolean;
@@ -30107,6 +30104,7 @@ var TokenList:PPOCAToken;
       result^.Kind:=Kind;
       result^.TypeKind:=tkUNKNOWN;
       result^.Constant:=aConstant;
+      result^.ConstantValid:=false;
       result^.ConstantIndex:=-1;
       result^.ConstantValue.CastedUInt64:=POCAValueNullCastedUInt64;
       result^.Register:=aRegister;
@@ -30131,7 +30129,7 @@ var TokenList:PPOCAToken;
       if ForArguments then begin
        Symbol:=FindScopeSymbol(t,false,true,false);
        if assigned(Symbol) then begin
-        if Symbol^.Constant and (Symbol^.ConstantIndex>=0) then begin
+        if Symbol^.Constant and Symbol^.ConstantValid then begin
          c:=Symbol^.ConstantValue;
         end else begin
          c.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -30440,6 +30438,7 @@ var TokenList:PPOCAToken;
         Symbol^.Name:='';
         Symbol^.Constant:=false;
         Symbol^.ConstantIndex:=-1;
+        Symbol^.ConstantValid:=false;
         Symbol^.ConstantValue.CastedUInt64:=POCAValueNullCastedUInt64;
         Symbol^.Freeable:=false;
         Symbol^.Register:=-1;
@@ -30508,8 +30507,8 @@ var TokenList:PPOCAToken;
    procedure CollectConstants(t:PPOCAToken);
     procedure ScanToken(t,p:PPOCAToken);
     begin
-     if assigned(t) and not t^.Visited then begin
-      t^.Visited:=true;
+     if assigned(t) and (t^.VisitedGeneration<>TokenListVisitedGeneration) then begin
+      t^.VisitedGeneration:=TokenListVisitedGeneration;
       case t^.Token of
        ptLITERALNUM,ptLITERALSTR:begin
         if (not assigned(p)) or (p^.Token<>ptASSIGN) then begin
@@ -30537,7 +30536,7 @@ var TokenList:PPOCAToken;
     end;
    begin
     if assigned(t) then begin
-     ResetTokenVisited;
+     IncrementTokenListVisitedGeneration;
      ScanToken(t,nil);
     end;
    end;
@@ -30572,8 +30571,8 @@ var TokenList:PPOCAToken;
    procedure ScanForNestedFunctions(ta,tb:PPOCAToken);
     procedure ScanToken(t:PPOCAToken);
     begin
-     if (not CodeGenerator^.HasNestedFunctions) and (assigned(t) and not t^.Visited) then begin
-      t^.Visited:=true;
+     if (not CodeGenerator^.HasNestedFunctions) and (assigned(t) and (t^.VisitedGeneration<>TokenListVisitedGeneration)) then begin
+      t^.VisitedGeneration:=TokenListVisitedGeneration;
       case t^.Token of
        ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin
         CodeGenerator^.HasNestedFunctions:=true;
@@ -30589,7 +30588,7 @@ var TokenList:PPOCAToken;
      end;
     end;
    begin
-    ResetTokenVisited;
+    IncrementTokenListVisitedGeneration;
     ScanToken(ta);
     ScanToken(tb);
    end;
@@ -30631,8 +30630,8 @@ var TokenList:PPOCAToken;
     var n:double;
         Symbol:PPOCACodeGeneratorScopeSymbol;
     begin
-     if assigned(t) and not t^.Visited then begin
-      t^.Visited:=true;
+     if assigned(t) and (t^.VisitedGeneration<>TokenListVisitedGeneration) then begin
+      t^.VisitedGeneration:=TokenListVisitedGeneration;
       if assigned(p) then begin
       end;
       case t^.Token of
@@ -31155,8 +31154,11 @@ var TokenList:PPOCAToken;
         ScanToken(t^.Next,t,false);
         if length(t^.Str)>0 then begin
          Symbol:=FindScopeSymbol(t,false,true,false);
-         if assigned(Symbol) and Symbol^.Constant and (Symbol^.ConstantIndex>=0) then begin
+         if assigned(Symbol) and Symbol^.Constant and Symbol^.ConstantValid then begin
           case POCAGetValueType(Symbol^.ConstantValue) of
+           pvtNULL:begin
+            t^.Token:=ptNULL;
+           end;
            pvtNUMBER:begin
             t^.Token:=ptLITERALNUM;
             t^.Num:=Symbol^.ConstantValue.Num;
@@ -31173,6 +31175,8 @@ var TokenList:PPOCAToken;
        end;
        else begin
         if not (t^.Token in [ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION]) then begin
+         ScanToken(t^.Left,t,false);
+         ScanToken(t^.Right,t,false);
          ScanToken(t^.Children,t,false);
          ScanToken(t^.LastChild,t,false);
          ScanToken(t^.Next,t,false);
@@ -31182,7 +31186,7 @@ var TokenList:PPOCAToken;
      end;
     end;
    begin
-    ResetTokenVisited;
+    IncrementTokenListVisitedGeneration;
     ScanToken(t,nil,false);
    end;
    procedure FixTargetImmediate(Position:TPOCAInt32);
@@ -31203,6 +31207,7 @@ var TokenList:PPOCAToken;
       if t^.Token in [ptSEMI,ptAUTOSEMI] then begin
        Expression:=t^.Left;
        if assigned(Expression) and ((DoNeedResult and (result<0)) or (Expression^.Token<>ptEMPTY)) then begin
+        ProcessConstantFolding(Expression);
         Reg:=GenerateExpression(Expression,OutReg,DoNeedResult);
         if Reg>=0 then begin
          result:=Reg;
@@ -31215,6 +31220,7 @@ var TokenList:PPOCAToken;
        end;
       end else begin
        if (DoNeedResult and (result<0)) or (t^.Token<>ptEMPTY) then begin
+        ProcessConstantFolding(t);
         Reg:=GenerateExpression(t,OutReg,DoNeedResult);
         if Reg>=0 then begin
          result:=Reg;
@@ -31242,6 +31248,7 @@ var TokenList:PPOCAToken;
       if t^.Token=ptCOMMA then begin
        Expression:=t^.Left;
        if assigned(Expression) and ((DoNeedResult and (result<0)) or (Expression^.Token<>ptEMPTY)) then begin
+        ProcessConstantFolding(Expression);
         Reg:=GenerateExpression(Expression,OutReg,DoNeedResult);
         if Reg>=0 then begin
          result:=Reg;
@@ -31254,6 +31261,7 @@ var TokenList:PPOCAToken;
        end;
       end else begin
        if (DoNeedResult and (result<0)) or (t^.Token<>ptEMPTY) then begin
+        ProcessConstantFolding(t);
         Reg:=GenerateExpression(t,OutReg,DoNeedResult);
         if Reg>=0 then begin
          result:=Reg;
@@ -35102,6 +35110,30 @@ var TokenList:PPOCAToken;
           vVAR=1;
           vLET=2;
           vCONST=3;
+     procedure SaveConstant(const lv,rv:PPOCAToken);
+      var Symbol:PPOCACodeGeneratorScopeSymbol;
+//       SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
+     begin
+      if assigned(lv) and ((lv^.Token=ptCONST) or (lv^.Token=ptSYMBOL)) then begin
+       ProcessConstantFolding(rv);
+       if assigned(rv) and (rv^.Token in [ptNULL,ptLITERALNUM,ptLITERALSTR]) then begin
+        if lv^.Token=ptSYMBOL then begin
+         Symbol:=FindScopeSymbol(lv,false,true,false);
+        end else begin
+         Symbol:=FindScopeSymbol(lv^.Right,false,true,false);
+        end;
+        if assigned(Symbol) and Symbol^.Constant then begin
+         Symbol^.ConstantIndex:=FindConstantIndex(rv,true,nil,false);
+         Symbol^.ConstantValid:=Symbol^.ConstantIndex>=0;
+         if Symbol^.ConstantValid then begin
+          Symbol^.ConstantValue:=POCAArrayGet(CodeGenerator^.Consts,Symbol^.ConstantIndex);
+         end else begin
+          Symbol^.ConstantValue.CastedUInt64:=POCAValueNullCastedUInt64;
+         end;
+        end;
+       end;
+      end;
+     end;
     var lv,rv:PPOCAToken;
         Len,Variable:TPOCAInt32;
      procedure EmitMultiLeftValue(t:PPOCAToken;Variable,Reg:TPOCAInt32);
@@ -35240,6 +35272,9 @@ var TokenList:PPOCAToken;
            EmitMultiLeftValue(at^.Left,Variable,Reg);
            FreeRegister(Reg);
           end;
+          if (Variable=vCONST) and assigned(at^.Left) and assigned(pt^.Left) then begin
+           SaveConstant(at^.Left,pt^.Left);
+          end;
          end;
          at:=at^.Right;
          pt:=pt^.Right;
@@ -35295,6 +35330,9 @@ var TokenList:PPOCAToken;
           end else begin
            result:=GenerateExpression(pt,OutReg,true);
            EmitMultiLeftValue(at,Variable,result);
+          end;
+          if (Variable=vCONST) and assigned(at) and assigned(pt) then begin
+           SaveConstant(at,pt);
           end;
          end;
         end;
@@ -35430,8 +35468,6 @@ var TokenList:PPOCAToken;
        SetLength(Regs,0);
       end;
      end;
-    var Symbol:PPOCACodeGeneratorScopeSymbol;
-        SymbolKind:TPOCACodeGeneratorScopeSymbolKind;
     begin
      lv:=t^.Left;
      rv:=t^.Right;
@@ -35482,18 +35518,7 @@ var TokenList:PPOCAToken;
        GenerateLeftValue(lv,result);
       end;
       if assigned(lv) and (lv^.Token=ptCONST) then begin
-//     ProcessConstantFolding(rv);
-       if assigned(rv) and (rv^.Token in [ptNULL,ptLITERALNUM,ptLITERALSTR]) then begin
-        Symbol:=FindScopeSymbol(lv^.Right,false,true,false);
-        if assigned(Symbol) and Symbol^.Constant then begin
-         Symbol^.ConstantIndex:=FindConstantIndex(rv,true,nil,false);
-         if Symbol^.ConstantIndex>=0 then begin
-          Symbol^.ConstantValue:=POCAArrayGet(CodeGenerator^.Consts,Symbol^.ConstantIndex);
-         end else begin
-          Symbol^.ConstantValue.CastedUInt64:=POCAValueNullCastedUInt64;
-         end;
-        end;
-       end;
+       SaveConstant(lv,rv);
       end;
      end;
     end;
@@ -37695,6 +37720,7 @@ begin
    SetPrecisionMode(FPUPrecisionMode);
   end;
   TokenList:=nil;
+  TokenListVisitedGeneration:=0;
   FillChar(Parser,sizeof(TPOCAParser),#0);
   FillChar(PreprocessorInstance,SizeOf(TPOCAPreprocessorInstance),#0);
   try
