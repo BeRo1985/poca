@@ -22788,8 +22788,18 @@ var TokenList:PPOCAToken;
     TokenListVisitedGeneration:TPOCAUInt32;
     PreprocessorInstance:TPOCAPreprocessorInstance;
  procedure IncrementTokenListVisitedGeneration;
+ var CurrentToken:PPOCAToken;
  begin
   inc(TokenListVisitedGeneration);
+  if TokenListVisitedGeneration=High(TPOCAUInt32) then begin
+   // Handle overflow by resetting all tokens' visited generation to max value and starting over with 0 again
+   TokenListVisitedGeneration:=0;
+   CurrentToken:=TokenList;
+   while assigned(CurrentToken) do begin
+    CurrentToken^.VisitedGeneration:=High(TPOCAUInt32);
+    CurrentToken:=CurrentToken^.Next;
+   end;
+  end;
  end;
  procedure SyntaxError(const AMessage:TPOCAUTF8String;SourceFile,SourceLine,SourceColumn:TPOCAInt32);
  begin
