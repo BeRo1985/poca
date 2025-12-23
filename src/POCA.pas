@@ -353,7 +353,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2025-12-23-02-06-0000';
+const POCAVersion='2025-12-23-03-16-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -31182,6 +31182,9 @@ var TokenList:PPOCAToken;
           end;
          end;
         end;
+       end;
+       ptDOT:begin
+        // Do nothing
        end;
        else begin
         if not (t^.Token in [ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION]) then begin
