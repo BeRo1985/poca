@@ -353,7 +353,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2025-12-10-01-07-0000';
+const POCAVersion='2025-12-23-02-06-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -26041,7 +26041,7 @@ var TokenList:PPOCAToken;
   procedure DoAutomaticSemicolonInsertion;
   begin
    if AutomaticSemicolonInsertion and (assigned(Parser.Tree.LastChild) and not (Parser.Tree.LastChild^.Token in
-     [ptAND,ptOR,ptNOT,ptLPAR,ptRPAR,ptLBRA,ptRBRA,ptLCURL,ptMUL,ptPLUS,ptMINUS,ptNEG,ptDIV,ptNUM,ptCOLON,ptDOT,ptCOMMA,ptSEMI,
+     [ptAND,ptOR,ptNOT,ptLPAR,ptLBRA,ptLCURL,ptMUL,ptPLUS,ptMINUS,ptNEG,ptDIV,ptNUM,ptCOLON,ptDOT,ptCOMMA,ptSEMI,
       ptASSIGN,ptLT,ptLTEQ,ptEQ,ptNEQ,ptGT,ptGTEQ,ptCMP,ptIF,ptELSEIF,ptELSE,ptFOR,ptFOREACH,ptWHILE,ptFUNCTION,ptEMPTY,
       ptNULL,ptPREELLIPSIS,ptPOSTELLIPSIS,ptQUESTION,ptVAR,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptFORINDEX,ptLAND,ptLOR,ptTRY,
       ptCATCH,ptFINALLY,ptTHROW,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptPOSTDEC,ptPOSTINC,ptPREDEC,ptPREINC,ptBAND,ptBOR,ptBXOR,ptBNOT,
