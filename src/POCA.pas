@@ -31162,7 +31162,7 @@ var TokenList:PPOCAToken;
         ScanToken(t^.Children,t,false);
         ScanToken(t^.LastChild,t,false);
         ScanToken(t^.Next,t,false);
-        if length(t^.Str)>0 then begin
+        if IsExpression and (length(t^.Str)>0) then begin
          Symbol:=FindScopeSymbol(t,false,true,false);
          if assigned(Symbol) and Symbol^.Constant and Symbol^.ConstantValid then begin
           case POCAGetValueType(Symbol^.ConstantValue) of
@@ -31184,7 +31184,17 @@ var TokenList:PPOCAToken;
         end;
        end;
        ptDOT,ptSAFEDOT:begin
-        // Do nothing
+        case t^.Rule of
+         prBINARY:begin
+          ScanToken(t^.Left,t,false);
+          ScanToken(t^.Right,t,false);
+         end;
+         else begin
+          ScanToken(t^.Children,t,false);
+          ScanToken(t^.Left,t,false);
+          ScanToken(t^.Right,t,false);
+         end;
+        end;
        end;
        else begin
         if not (t^.Token in [ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION]) then begin
