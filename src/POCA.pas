@@ -31183,7 +31183,7 @@ var TokenList:PPOCAToken;
          end;
         end;
        end;
-       ptDOT:begin
+       ptDOT,ptSAFEDOT:begin
         // Do nothing
        end;
        else begin
