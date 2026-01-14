@@ -31487,9 +31487,9 @@ var TokenList:PPOCAToken;
         t:=t^.Left;
        end;
        if assigned(t) and (t^.Token=ptSYMBOL) then begin
-        if IsScopeSymbolConstant(t,false,false) then begin
+{       if IsScopeSymbolConstant(t,false,false) then begin
          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-        end;
+        end;}
         case Token of
          ptVAR:begin
           SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
@@ -31625,9 +31625,9 @@ var TokenList:PPOCAToken;
         t:=t^.Left;
        end;
        if assigned(t) and (t^.Token=ptSYMBOL) then begin
-        if IsScopeSymbolConstant(t,false,false) then begin
+{       if IsScopeSymbolConstant(t,false,false) then begin
          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-        end;
+        end;}
         case Token of
          ptVAR:begin
           SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
@@ -36670,9 +36670,9 @@ var TokenList:PPOCAToken;
       ptVAR,ptLET,ptCONST:begin
        Token:=t^.Token;
        if assigned(t^.Right) and (t^.Right^.Token=ptSYMBOL) then begin
-        if IsScopeSymbolConstant(t^.Right,false,false) then begin
+{       if IsScopeSymbolConstant(t^.Right,false,false) then begin
          SyntaxError('Constants are read-only',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
-        end;
+        end;}
         case Token of
          ptVAR:begin
           SymbolKind:=TPOCACodeGeneratorScopeSymbolKind.sskVAR;
