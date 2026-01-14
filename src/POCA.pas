@@ -31197,7 +31197,7 @@ var TokenList:PPOCAToken;
         end;
        end;
        else begin
-        if not (t^.Token in [ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION]) then begin
+        if not (t^.Token in [ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION,ptLCURL,ptSCOPE]) then begin
          ScanToken(t^.Left,t,false);
          ScanToken(t^.Right,t,false);
          ScanToken(t^.Children,t,false);
