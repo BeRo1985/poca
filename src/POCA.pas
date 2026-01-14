@@ -37537,7 +37537,7 @@ var TokenList:PPOCAToken;
      ProcessConstantFolding(ArgumentList);
      PreprocessArgumentList(ArgumentList);
      if assigned(Block) and not (((Block^.Token=ptEMPTY) and not (assigned(Block^.Left) or assigned(Block^.Right))) or ((Block^.Token=ptTOP) and ((not assigned(Block^.Left)) or (((Block^.Left^.Token=ptEMPTY) and not (assigned(Block^.Left^.Left) or assigned(Block^.Left^.Right))))))) then begin
-      ProcessConstantFolding(Block);
+    //ProcessConstantFolding(Block); // <= PROBLEMATIC HERE!!! Because it messes up with scope symbols, where nested variables are ignored, when they actually should shadow outer variables. 
       CollectConstants(Block);
       ScopeStart;
       i:=GenerateBlock(Block,-1,true,true);
