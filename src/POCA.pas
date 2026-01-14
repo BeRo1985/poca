@@ -38027,7 +38027,7 @@ begin
   else begin
    result:=false;
    if Throw then begin
-    POCARuntimeError(Context,'Non-objects have no members');
+    POCARuntimeError(Context,'Non-objects have no members at getting member: '+POCAGetStringValue(Context,Field));
    end;
   end;
 
@@ -38081,7 +38081,7 @@ begin
   else begin
    result:=false;
    if Throw then begin
-    POCARuntimeError(Context,'Non-objects have no members');
+    POCARuntimeError(Context,'Non-objects have no member at setting member: '+POCAGetStringValue(Context,Field));
    end;
   end;
  end;
