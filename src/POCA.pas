@@ -17188,13 +17188,21 @@ begin
  //result:=POCAValueNull;
    result.CastedUInt64:=POCAValueNullCastedUInt64;
    s:=POCAGetStringValue(Context,Arguments^[0]);
-   if RegExp.Split(s,Strings,StartCodeUnit,Limit) then begin
+   RegExp.Split(s,Strings,StartCodeUnit,Limit);
+   // Always return an array - if no matches, Strings will contain the original string
+   // or be empty. If Strings is empty and the input is not empty, return the original string.
+   if length(Strings)>0 then begin
+    result:=POCANewArray(Context);
     for i:=0 to length(Strings)-1 do begin
-     if POCAIsValueNull(result) then begin
-      result:=POCANewArray(Context);
-     end;
      POCAArrayPush(result,POCANewString(Context,Strings[i]));
     end;
+   end else if length(s)>0 then begin
+    // No matches and non-empty input: return array with original string (JS behavior)
+    result:=POCANewArray(Context);
+    POCAArrayPush(result,POCANewString(Context,s));
+   end else begin
+    // Empty input with no matches: return empty array
+    result:=POCANewArray(Context);
    end;
   finally
    SetLength(Strings,0);
