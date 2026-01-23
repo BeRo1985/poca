@@ -20694,6 +20694,41 @@ begin
  end;
 end;
 
+function POCAArrayFunctionFILTER(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var i,Size:TPOCAInt32;
+    FilterFunction:TPOCAValue;
+    CallArguments:array[0..2] of TPOCAValue;
+    SubContext:PPOCAContext;
+    TestResult:TPOCAValue;
+begin
+ if CountArguments=0 then begin
+  POCARuntimeError(Context,'Bad arguments to "filter"');
+ end;
+ if not POCAIsValueArray(This) then begin
+  POCARuntimeError(Context,'Bad this value to "filter"');
+ end;
+ FilterFunction:=Arguments^[0];
+ if not POCAIsValueFunctionOrNativeCode(FilterFunction) then begin
+  POCARuntimeError(Context,'First argument to "filter" must be a function');
+ end;
+ Size:=POCAArraySize(This);
+ result:=POCANewArray(Context);
+ SubContext:=POCAContextSub(Context);
+ try
+  for i:=0 to Size-1 do begin
+   CallArguments[0]:=POCAArrayGet(This,i);
+   CallArguments[1].Num:=i;
+   CallArguments[2]:=This;
+   TestResult:=POCACall(SubContext,FilterFunction,@CallArguments,3,POCAValueNull,POCAValueNull);
+   if POCAGetBooleanValue(Context,TestResult) then begin
+    POCAArrayPush(result,CallArguments[0]);
+   end;
+  end;
+ finally
+  POCAContextDestroy(SubContext);
+ end;
+end;
+
 function POCAArrayFunctionREDUCE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var i,Size,StartIndex:TPOCAInt32;
     ReduceFunction:TPOCAValue;
@@ -20816,6 +20851,7 @@ begin
  POCAAddNativeFunction(Context,result,'shift',POCAArrayFunctionSHIFT);
  POCAAddNativeFunction(Context,result,'unshift',POCAArrayFunctionUNSHIFT);
  POCAAddNativeFunction(Context,result,'map',POCAArrayFunctionMAP);
+ POCAAddNativeFunction(Context,result,'filter',POCAArrayFunctionFILTER);
  POCAAddNativeFunction(Context,result,'reduce',POCAArrayFunctionREDUCE);
  POCAAddNativeFunction(Context,result,'reduceRight',POCAArrayFunctionREDUCERIGHT);
 end;
