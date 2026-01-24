@@ -28233,7 +28233,8 @@ var TokenList:PPOCAToken;
         SyntaxError('Missed closed parenthesis brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
        end;
       end else begin
-       result:=result^.Next;
+       SyntaxError('Missed open parenthesis brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
+//     result:=result^.Next;
       end;
      end;
      ptFASTFUNCTION,ptFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin
