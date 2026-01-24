@@ -815,7 +815,6 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ptDOTDOT,
       ptSAFEDOT,
       ptSAFELBRA,
-      ptSAFERBRA,
       ptFORKEY,
       ptINSTANCEOF,
       ptSEQ,
@@ -25731,10 +25730,7 @@ var TokenList:PPOCAToken;
      DumpIt(' ?. ');
     end;
     ptSAFELBRA:begin
-     DumpIt(' [? ');
-    end;
-    ptSAFERBRA:begin
-     DumpIt(' ?] ');
+     DumpIt(' ?[ ');
     end;
     ptFORKEY:begin
      DumpIt(' forkey ');
@@ -26090,7 +26086,7 @@ var TokenList:PPOCAToken;
       ptNULL,ptPREELLIPSIS,ptPOSTELLIPSIS,ptQUESTION,ptVAR,ptPLUSEQ,ptMINUSEQ,ptMULEQ,ptDIVEQ,ptCATEQ,ptFORINDEX,ptLAND,ptLOR,ptTRY,
       ptCATCH,ptFINALLY,ptTHROW,ptDO,ptWHEN,ptSWITCH,ptCASE,ptDEFAULT,ptPOSTDEC,ptPOSTINC,ptPREDEC,ptPREINC,ptBAND,ptBOR,ptBXOR,ptBNOT,
       ptBSHL,ptBSHR,ptBUSHR,ptBANDEQ,ptBOREQ,ptBXOREQ,ptBSHLEQ,ptBSHREQ,ptBUSHREQ,ptMOD,ptMODEQ,ptPOW,ptPOWEQ,ptSCOPE,ptCODE,
-      ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptSAFERBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
+      ptLOCAL,ptDEFINED,ptNEW,ptFASTFUNCTION,ptAT,ptATDOT,ptDOTDOT,ptSAFEDOT,ptSAFELBRA,ptFORKEY,ptINSTANCEOF,ptSEQ,
       ptSNEQ,ptIN,ptIS,ptCAT,ptREGEXP,ptREGEXPEQ,ptREGEXPNEQ,ptDELETE,ptCLASS,ptMODULE,ptEXTENDS,ptLAMBDA,ptFASTLAMBDA,
       ptCLASSFUNCTION,ptMODULEFUNCTION,ptLET,ptCONST,ptFUNC,ptFASTFUNC,ptHASHKIND,ptTYPEOF,ptIDOF,ptGHOSTTYPEOF,
       ptCOLONCOLON,ptCONSTRUCTOR,ptBREAKPOINT,ptDEBUGGER,ptIMPORT,ptEXPORT,ptAUTOSEMI,ptSUPER,ptELVIS,ptLOGICALOREQ,ptSYMBOLNAME,
@@ -26210,12 +26206,7 @@ var TokenList:PPOCAToken;
       end;
       '[':begin
        inc(SourcePosition);
-       if (SourcePosition<=SourceLength) and (Source[SourcePosition]='?') then begin
-        inc(SourcePosition);
-        AddToken(ptSAFELBRA,'',0);
-       end else begin
-        AddToken(ptLBRA,'',0);
-       end;
+       AddToken(ptLBRA,'',0);
       end;
       ']':begin
        inc(SourcePosition);
@@ -26239,11 +26230,17 @@ var TokenList:PPOCAToken;
          end;
          '.':begin
           inc(SourcePosition);
-          AddToken(ptSAFEDOT,'',0);
+         {if (SourcePosition<=SourceLength) and (Source[SourcePosition]='[') then begin
+           // Accept JavaScript/ECMAScript ?.[ as ?[
+           inc(SourcePosition);
+           AddToken(ptSAFELBRA,'',0);
+          end else}begin
+           AddToken(ptSAFEDOT,'',0);
+          end;
          end;
-         ']':begin
+         '[':begin
           inc(SourcePosition);
-          AddToken(ptSAFERBRA,'',0);
+          AddToken(ptSAFELBRA,'',0);
          end;
          '?':begin
           inc(SourcePosition);
@@ -27327,7 +27324,7 @@ var TokenList:PPOCAToken;
      EndToken:=ptRCURL;
     end;
     else {ptSAFELBRA:}begin
-     EndToken:=ptSAFERBRA;
+     EndToken:=ptRBRA; 
     end;
    end;
    result:=Token^.Next;
@@ -27356,23 +27353,23 @@ var TokenList:PPOCAToken;
   end;
  end;
  function ScanBlockBackwards(Token:PPOCAToken):PPOCAToken;
- var BeginToken,EndToken:TPOCATokenType;
+ var BeginToken,EndToken,OtherEndToken:TPOCATokenType;
      NestedLevel:TPOCAInt32;
  begin
-  if assigned(Token) and (Token^.Token in [ptRPAR,ptRBRA,ptRCURL,ptSAFERBRA]) then begin
+  if assigned(Token) and (Token^.Token in [ptRPAR,ptRBRA,ptRCURL]) then begin
    BeginToken:=Token^.Token;
    case BeginToken of
     ptRPAR:begin
      EndToken:=ptLPAR;
+     OtherEndToken:=ptLPAR;
     end;
     ptRBRA:begin
      EndToken:=ptLBRA;
+     OtherEndToken:=ptSAFELBRA;
     end;
-    ptRCURL:begin
+    else {ptRCURL:}begin
      EndToken:=ptLCURL;
-    end;
-    else {ptSAFERBRA:}begin
-     EndToken:=ptSAFELBRA;
+     OtherEndToken:=ptLCURL;
     end;
    end;
    result:=Token^.Previous;
@@ -27380,7 +27377,7 @@ var TokenList:PPOCAToken;
    while assigned(result) do begin
     if result^.Token=BeginToken then begin
      inc(NestedLevel);
-    end else if result^.Token=EndToken then begin
+    end else if (result^.Token=EndToken) or (result^.Token=OtherEndToken) then begin
      dec(NestedLevel);
      if NestedLevel<=0 then begin
       break;
@@ -27393,7 +27390,7 @@ var TokenList:PPOCAToken;
     end;
     result:=result^.Previous;
    end;
-   if assigned(result) and (result^.Token<>EndToken) then begin
+   if assigned(result) and (result^.Token<>EndToken) and (result^.Token<>OtherEndToken) then begin
     result:=nil;
    end;
   end else begin
@@ -27834,8 +27831,8 @@ var TokenList:PPOCAToken;
       end;
      end;
      ptSAFELBRA:begin
-      CurrentToken:=TransformBlock(CurrentToken^.Next,[ptSAFERBRA],false);
-      if assigned(CurrentToken) and (CurrentToken^.Token=ptSAFERBRA) then begin
+      CurrentToken:=TransformBlock(CurrentToken^.Next,[ptRBRA],false);
+      if assigned(CurrentToken) and (CurrentToken^.Token in [ptRBRA]) then begin
        CurrentToken:=CurrentToken^.Next;
       end else begin
        SyntaxError('Missed safe closed brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
@@ -27897,8 +27894,8 @@ var TokenList:PPOCAToken;
       end;
      end;
      ptSAFELBRA:begin
-      result:=TransformBlock(result^.Next,[ptSAFERBRA],false);
-      if assigned(result) and (result^.Token=ptSAFERBRA) then begin
+      result:=TransformBlock(result^.Next,[ptRBRA],false);
+      if assigned(result) and (result^.Token in [ptRBRA]) then begin
        result:=result^.Next;
       end else begin
        SyntaxError('Missed safe closed brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
@@ -28278,8 +28275,8 @@ var TokenList:PPOCAToken;
            end;
           end;
           ptSAFELBRA:begin
-           NextToken:=TransformBlock(NextToken^.Next,[ptSAFERBRA],false);
-           if assigned(NextToken) and (NextToken^.Token=ptSAFERBRA) then begin
+           NextToken:=TransformBlock(NextToken^.Next,[ptRBRA],false);
+           if assigned(NextToken) and (NextToken^.Token in [ptRBRA]) then begin
             NextToken:=NextToken^.Next;
            end else begin
             SyntaxError('Missed safe closed brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
@@ -28407,8 +28404,8 @@ var TokenList:PPOCAToken;
           end;
          end;
          ptSAFELBRA:begin
-          result:=TransformBlock(result^.Next,[ptSAFERBRA],false);
-          if assigned(result) and (result^.Token=ptSAFERBRA) then begin
+          result:=TransformBlock(result^.Next,[ptRBRA],false);
+          if assigned(result) and (result^.Token in [ptRBRA]) then begin
            result:=result^.Next;
           end else begin
            SyntaxError('Missed safe closed brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
@@ -28463,8 +28460,8 @@ var TokenList:PPOCAToken;
              end;
             end;
             ptSAFELBRA:begin
-             NextToken:=TransformBlock(NextToken^.Next,[ptSAFERBRA],false);
-             if assigned(NextToken) and (NextToken^.Token=ptSAFERBRA) then begin
+             NextToken:=TransformBlock(NextToken^.Next,[ptRBRA],false);
+             if assigned(NextToken) and (NextToken^.Token in [ptRBRA]) then begin
               NextToken:=NextToken^.Next;
              end else begin
               SyntaxError('Missed safe closed brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
@@ -28657,8 +28654,8 @@ var TokenList:PPOCAToken;
           end;
          end;
          ptSAFELBRA:begin
-          result:=TransformBlock(result^.Next,[ptSAFERBRA],false);
-          if assigned(result) and (result^.Token=ptSAFERBRA) then begin
+          result:=TransformBlock(result^.Next,[ptRBRA],false);
+          if assigned(result) and (result^.Token in [ptRBRA]) then begin
            result:=result^.Next;
           end else begin
            SyntaxError('Missed safe closed brace',LastToken^.SourceFile,LastToken^.SourceLine,LastToken^.SourceColumn);
@@ -28857,7 +28854,7 @@ var TokenList:PPOCAToken;
        ParseBlock(t,ptRCURL,ptNONE,List,UntilIncludingToken);
       end;
       ptSAFELBRA:begin
-       ParseBlock(t,ptSAFERBRA,ptNONE,List,UntilIncludingToken);
+       ParseBlock(t,ptRBRA,ptNONE,List,UntilIncludingToken);
       end;
       ptSCOPE:begin
        ParseCurlyBraceBlock(false,true);
