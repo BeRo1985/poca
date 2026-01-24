@@ -668,6 +668,113 @@ This keeps the language simpler while still encouraging readable code through be
 * Always add parentheses when combining `??` with other logical operators for readability
 * Prefer clear, explicit grouping in complex expressions over relying on precedence rules
 
+=== Optional Chaining
+
+POCA provides optional chaining operators to safely access nested properties, array elements, and hash values without throwing exceptions when intermediate values are `null` or `undefined`.
+
+==== Safe Property Access (`?.`)
+
+The `?.` operator allows safe access to object properties. If the left operand is `null` or `undefined`, the entire expression returns `null` instead of throwing an exception:
+
+[source,javascript]
+----
+let name = user?.profile?.name;           // Safe nested access
+let email = config?.settings?.email;      // Returns null if any part is null
+
+// Traditional approach (verbose and error-prone)
+let oldWay = user && user.profile && user.profile.name;
+
+// With optional chaining (clean and safe)
+let newWay = user?.profile?.name;
+----
+
+==== Safe Bracket Access (`?[`)
+
+The `?[` operator provides safe access to array elements and hash table values. POCA uses `?[key]` syntax (without a dot), which aligns with C#, Kotlin, Swift, Dart, and Groovy. Note that JavaScript/TypeScript uses `?.[key]` (with a dot) instead:
+
+[source,javascript]
+----
+let value = array?[index];                // Safe array access
+let item = hash?[key];                    // Safe hash table access
+let nested = data?[prop]?[0]?[field];     // Chain safe bracket access
+
+// Practical example: word frequency counter
+let words = {};
+words[word] = words?[word] + 1;           // Safely handles missing keys
+
+// Returns null if:
+// - The array/hash is null or undefined
+// - The key doesn't exist (for hashes)
+// - The index is out of bounds (for arrays)
+----
+
+**Important:** POCA uses `?[key]` syntax (no dot), not `?[key?]`. While JavaScript/TypeScript use `?.[key]` (with a dot), most other languages use `?[key]` without the dot.
+
+==== Combining with Nullish Coalescing
+
+Optional chaining pairs perfectly with the nullish coalescing operator for default values:
+
+[source,javascript]
+----
+// Provide defaults for missing values
+let port = config?[env]?["port"] ?? 8080;
+let timeout = options?.timeout ?? 5000;
+let name = user?.profile?.name ?? "Anonymous";
+
+// Word counting with safe access and default
+let count = wordFrequency?[word] ?? 0;
+wordFrequency[word] = count + 1;
+----
+
+==== Short-Circuiting Behavior
+
+When the left operand of `?.` or `?[` is `null` or `undefined`, the entire expression short-circuits and immediately returns `null` without evaluating the rest:
+
+[source,javascript]
+----
+let result = null?.expensive?.computation?.here;  // Returns null immediately
+let data = undefined?[key]?[index];               // No array access attempted
+
+// This is safe and efficient:
+let value = maybeNull?.method()?.property?[0];
+// If maybeNull is null, method() is never called
+----
+
+==== Best Practices
+
+* Use `?.` for safe property access on objects that may be `null` or `undefined`
+* Use `?[` for safe array/hash access when keys or indices may not exist
+* Combine with `??` to provide default values for missing data
+* Don't overuse: if a value should always exist, use regular access (`.` or `[`) to catch errors early
+* Optional chaining is for genuinely optional values, not to hide bugs
+
+==== Comparison with Other Languages
+
+POCA's optional chaining syntax aligns with modern language standards. Note that JavaScript/TypeScript use `?.[` (with a dot) for bracket access, while most other languages use `?[` (without a dot):
+
+[cols="2,3"]
+|===
+|Language |Syntax
+
+|JavaScript/TypeScript
+|`obj?.prop` and `obj?.[key]` _(note: dot before bracket)_
+
+|C#
+|`obj?.prop` and `obj?[key]`
+
+|Kotlin
+|`obj?.prop` and `obj?[key]`
+
+|Swift
+|`obj?.prop` and `obj?[key]`
+
+|Dart
+|`obj?.prop` and `obj?[key]`
+
+|POCA
+|`obj?.prop` and `obj?[key]` _(follows C#/Kotlin/Swift/Dart)_
+|===
+
 === Keywords
 
 POCA keywords are used to identify actions to be performed.
