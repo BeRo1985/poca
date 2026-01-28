@@ -8422,7 +8422,10 @@ begin
       end;
       if Obj^.Header.ValueType=pvtGHOST then begin
        if assigned(PPOCAGhost(Obj)^.Ptr) then begin
-        if assigned(PPOCAGhost(Obj)^.GhostType) and assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy)) and not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj)) then begin
+        if assigned(PPOCAGhost(Obj)^.GhostType) and
+           ((assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy)) and
+             not PPOCAGhost(Obj)^.GhostType^.CanDestroy(PPOCAGhost(Obj))){or
+            not assigned(addr(PPOCAGhost(Obj)^.GhostType^.CanDestroy))}) then begin
          GrayList.TakeOver(Obj);
          Obj^.Header.GarbageCollector.State:=(Obj^.Header.GarbageCollector.State and not pgcbLIST) or pgcbGRAY;
         end else begin
