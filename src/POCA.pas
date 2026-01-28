@@ -46663,6 +46663,7 @@ var Index:TPOCAInt32;
     CodePointer:PPOCACode;
     HashEvents:PPOCAHashEvents;
     NativeCode:PPOCANativeCode;
+    FunctionObject:PPOCAFunction;
 begin
 {$ifdef POCAThreadContextTracking}
  POCAPushThreadContext(Context);
@@ -46703,8 +46704,18 @@ begin
    end else begin
     begin
      if POCAIsValueNull(Locals) then begin
-      if not PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Func))^.Code))^.FastFunction then begin
-       Locals:=POCANewHash(Context);
+      FunctionObject:=PPOCAFunction(POCAGetValueReferencePointer(Func));
+      if assigned(FunctionObject) then begin
+       CodePointer:=POCAGetValueReferencePointer(FunctionObject^.Code);
+       if assigned(CodePointer) then begin
+        if not CodePointer^.FastFunction then begin
+         Locals:=POCANewHash(Context);
+        end;
+       end else begin
+        POCARuntimeError(Context,'Function with no valid code');
+       end;
+      end else begin
+       POCARuntimeError(Context,'No valid function');
       end;
      end;
      if not POCAIsValueFunction(Func) then begin
