@@ -6799,7 +6799,7 @@ begin
     POCAGhostGCClean(TPOCAPointer(Obj));
    end;
   end;
-  if assigned(Obj^.Header.GarbageCollector.LinkedList.Previous) then begin
+  if assigned(Obj^.Header.GarbageCollector.LinkedList.List) then begin
    TPOCAGarbageCollectorLinkedList.Remove(Obj);
   end;
  end;
