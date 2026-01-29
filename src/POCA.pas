@@ -2260,6 +2260,7 @@ function POCAObjectIs(Context:PPOCAContext;const Value,OfValue:TPOCAValue):TPOCA
 
 function POCADataPoolCreate(const aElementSize:TPOCASizeInt;const aInitialCount:TPOCASizeInt=4096):PPOCADataPool;
 procedure POCADataPoolDestroy(const aDataPool:PPOCADataPool);
+procedure POCADataPoolFree(var aDataPool:PPOCADataPool);
 function POCADataPoolAllocateElement(const aDataPool:PPOCADataPool):Pointer;
 procedure POCADataPoolReleaseElement(const aDataPool:PPOCADataPool;const aElement:Pointer);
 
@@ -13851,6 +13852,17 @@ begin
   aDataPool^.FreeHead.Ptr:=nil;
   aDataPool^.FreeHead.Tag:=0;
   FreeMemAligned(aDataPool);
+ end;
+end;
+
+procedure POCADataPoolFree(var aDataPool:PPOCADataPool);
+begin
+ if assigned(aDataPool) then begin
+  try
+   POCADataPoolDestroy(aDataPool);
+  finally
+   aDataPool:=nil;
+  end;
  end;
 end;
 
