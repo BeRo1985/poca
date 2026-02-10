@@ -11584,12 +11584,12 @@ begin
   end;
   inc(i);
  end;
- POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
+ POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
  try
   POCAGarbageCollectorSwapFree(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@Hash^.HashRecord,result);
   POCAHashInvalidate(Hash);
  finally
-  POCAMRSWLockReadUnlock(@Hash^.Cache.MRSWLock);
+  POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
  end;
 end;
 
@@ -12501,12 +12501,12 @@ begin
    inc(i);
   end;
  end;
- POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
+ POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
  try
   POCAGarbageCollectorSwapFree(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@Hash^.HashRecord,result);
   POCAHashInvalidate(Hash);
  finally
-  POCAMRSWLockReadUnlock(@Hash^.Cache.MRSWLock);
+  POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
  end;
 end;
 
@@ -13689,12 +13689,12 @@ begin
    HashRec^.EntityToCellIndex^[1]:=CELL_EMPTY;
    HashRec^.EntityToCellIndex^[2]:=CELL_EMPTY;
    HashRec^.EntityToCellIndex^[3]:=CELL_EMPTY;
-   POCAMRSWLockReadLock(@HashInstance^.Cache.MRSWLock);
+   POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
    try
     POCAGarbageCollectorSwapFree(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@HashInstance^.HashRecord,HashRec);
     POCAHashInvalidate(HashInstance);
    finally
-    POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+    POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
    end;
   end;
  end;
