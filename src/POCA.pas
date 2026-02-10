@@ -6808,7 +6808,7 @@ end;
 
 {$ifdef POCAMemoryPools}
 procedure POCAPoolNewBlock(Pool:PPOCAPool;Size:TPOCAInt32); {$ifdef UseRegister}register;{$endif}
-var PoolBlockSize,BlockSize,i:TPOCAInt32;
+var PoolBlockSize,BlockSize,Count,Index:TPOCAInt32;
     Block:PPOCAPoolBlock;
     Obj:PPOCAObject;
 begin
@@ -6844,16 +6844,20 @@ begin
    TPasMPInterlocked.Add(Pool^.Size,Block^.Size);
   end;
   begin
-   if Pool^.FreeSize<Pool^.Size then begin
-    i:=POCARoundUpToPowerOfTwo(Pool^.Size);
-    ReallocMem(Pool^.FreeObjects,SizeOf(PPOCAObject)*i);
-    FillChar(Pool^.FreeObjects^[Pool^.FreeSize],SizeOf(PPOCAObject)*(i-Pool^.FreeSize),AnsiChar(#0));
-    Pool^.FreeSize:=i;
+   Count:=Pool^.FreeCount+Size;
+   if Count<Pool^.Size then begin
+    Count:=Pool^.Size;
+   end;
+   if Pool^.FreeSize<Count then begin
+    Count:=POCARoundUpToPowerOfTwo(Count);
+    ReallocMem(Pool^.FreeObjects,SizeOf(PPOCAObject)*Count);
+    FillChar(Pool^.FreeObjects^[Pool^.FreeSize],SizeOf(PPOCAObject)*(Count-Pool^.FreeSize),AnsiChar(#0));
+    Pool^.FreeSize:=Count;
    end;
   end;
   begin
-   for i:=0 to Size-1 do begin
-    Obj:=PPOCAObject(TPOCAPointer(@PPOCAUInt8Array(Block^.Data)^[i*Pool^.ElementSize]));
+   for Index:=0 to Size-1 do begin
+    Obj:=PPOCAObject(TPOCAPointer(@PPOCAUInt8Array(Block^.Data)^[Index*Pool^.ElementSize]));
     Obj^.Header.ValueType:=Pool^.ValueType;
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
     Obj^.Header.Instance:=Pool^.Instance;
