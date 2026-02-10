@@ -11591,7 +11591,7 @@ begin
  result^.CellToEntityIndex:=TPOCAPointer(@PPOCAUInt8Array(TPOCAPointer(result))^[sizeof(TPOCAHashRecord)]);
  result^.EntityToCellIndex:=TPOCAPointer(@result^.CellToEntityIndex^[2 shl HashRec^.LogSize]);
  result^.Entities:=TPOCAPointer(@result^.EntityToCellIndex^[2 shl HashRec^.LogSize]);
- result^.Events:=TPOCAPointer(@result^.Entities^[1 shl HashRec^.LogSize]);
+ result^.Events:=TPOCAPointer(@result^.Entities^[2 shl HashRec^.LogSize]);
  if (assigned(HashRec) and assigned(HashRec^.Events)) then begin
   result^.Events^:=HashRec^.Events^;
  end;
@@ -14180,41 +14180,50 @@ begin
  if POCAIsValueHash(Hash) then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   if assigned(HashInstance) then begin
-   HashRec:=HashInstance^.HashRecord;
-   Events:=assigned(HashRec) and assigned(HashRec^.Events);
-   LogSize:=1;
-   Size:=POCAHashRecordSize(LogSize,Events);
-   GetMem(HashRec,Size);
-   FillChar(HashRec^,Size,#0);
-   HashRec^.Size:=0;
-   HashRec^.RealSize:=0;
-   HashRec^.LogSize:=LogSize;
-   HashRec^.CellToEntityIndex:=TPOCAPointer(@PPOCAUInt8Array(TPOCAPointer(HashRec))^[sizeof(TPOCAHashRecord)]);
-   HashRec^.EntityToCellIndex:=TPOCAPointer(@HashRec^.CellToEntityIndex^[2 shl LogSize]);
-   HashRec^.Entities:=TPOCAPointer(@HashRec^.EntityToCellIndex^[2 shl LogSize]);
-   if Events then begin
-    HashRec^.Events:=TPOCAPointer(@HashRec^.Entities^[2 shl LogSize]);
-    if assigned(HashInstance^.HashRecord) and assigned(HashInstance^.HashRecord^.Events) then begin
-     HashRec^.Events^:=HashInstance^.HashRecord^.Events^;
-    end;
-   end else begin
-    HashRec^.Events:=nil;
-   end;
-   HashRec^.CellToEntityIndex^[0]:=ENT_EMPTY;
-   HashRec^.CellToEntityIndex^[1]:=ENT_EMPTY;
-   HashRec^.CellToEntityIndex^[2]:=ENT_EMPTY;
-   HashRec^.CellToEntityIndex^[3]:=ENT_EMPTY;
-   HashRec^.EntityToCellIndex^[0]:=CELL_EMPTY;
-   HashRec^.EntityToCellIndex^[1]:=CELL_EMPTY;
-   HashRec^.EntityToCellIndex^[2]:=CELL_EMPTY;
-   HashRec^.EntityToCellIndex^[3]:=CELL_EMPTY;
-   POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+{$ifdef POCAThreadSafeHash}  
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
    try
-    POCAGarbageCollectorSwapFree(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@HashInstance^.HashRecord,HashRec);
-    POCAHashInvalidate(HashInstance);
+{$endif}   
+    HashRec:=HashInstance^.HashRecord;
+    Events:=assigned(HashRec) and assigned(HashRec^.Events);
+    LogSize:=1;
+    Size:=POCAHashRecordSize(LogSize,Events);
+    GetMem(HashRec,Size);
+    FillChar(HashRec^,Size,#0);
+    HashRec^.Size:=0;
+    HashRec^.RealSize:=0;
+    HashRec^.LogSize:=LogSize;
+    HashRec^.CellToEntityIndex:=TPOCAPointer(@PPOCAUInt8Array(TPOCAPointer(HashRec))^[sizeof(TPOCAHashRecord)]);
+    HashRec^.EntityToCellIndex:=TPOCAPointer(@HashRec^.CellToEntityIndex^[2 shl LogSize]);
+    HashRec^.Entities:=TPOCAPointer(@HashRec^.EntityToCellIndex^[2 shl LogSize]);
+    if Events then begin
+     HashRec^.Events:=TPOCAPointer(@HashRec^.Entities^[2 shl LogSize]);
+     if assigned(HashInstance^.HashRecord) and assigned(HashInstance^.HashRecord^.Events) then begin
+      HashRec^.Events^:=HashInstance^.HashRecord^.Events^;
+     end;
+    end else begin
+     HashRec^.Events:=nil;
+    end;
+    HashRec^.CellToEntityIndex^[0]:=ENT_EMPTY;
+    HashRec^.CellToEntityIndex^[1]:=ENT_EMPTY;
+    HashRec^.CellToEntityIndex^[2]:=ENT_EMPTY;
+    HashRec^.CellToEntityIndex^[3]:=ENT_EMPTY;
+    HashRec^.EntityToCellIndex^[0]:=CELL_EMPTY;
+    HashRec^.EntityToCellIndex^[1]:=CELL_EMPTY;
+    HashRec^.EntityToCellIndex^[2]:=CELL_EMPTY;
+    HashRec^.EntityToCellIndex^[3]:=CELL_EMPTY;
+    POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+    try
+     POCAGarbageCollectorSwapFree(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@HashInstance^.HashRecord,HashRec);
+     POCAHashInvalidate(HashInstance);
+    finally
+     POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
+    end;
+{$ifdef POCAThreadSafeHash}  
    finally
-    POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
-   end;
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+   end; 
+{$endif}   
   end;
  end;
 end;
