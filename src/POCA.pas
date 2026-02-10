@@ -349,6 +349,8 @@
 
 {$undef POCAClosureArrayValues}
 
+{$define POCAThreadSafeHash}
+
 interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
@@ -1280,6 +1282,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Events:PPOCAHash;
       Ghost:PPOCAGhost;
       Kind:TPOCAInt32;
+{$ifdef POCAThreadSafeHash}
+      Lock:TPasMPInt32;
+{$endif}
       Cache:TPOCAHashCache;
      end;
 
@@ -12379,25 +12384,188 @@ begin
  end;
 end;
 
-function POCAHashGetPutEntity(const HashRec:PPOCAHashRecord):TPasMPInt32;
-var Size:TPasMPInt32;
+{$ifdef POCAThreadSafeHash}
+function POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean):Boolean;
+var Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
 begin
- result:=-1;
- repeat
-  Size:=HashRec^.Size;  
-  if Size<(2 shl HashRec^.LogSize) then begin
-   if TPasMPInterlocked.CompareExchange(HashRec^.Size,Size+1,Size)=Size then begin
-    result:=Size;
-    break;
+
+ result:=false;
+
+ TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hash^.Lock);
+ try
+
+  Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
+  if Cell<>CELL_INVALID then begin
+
+   Entity:=HashRec^.CellToEntityIndex^[Cell];
+   if Entity>=0 then begin
+   
+    HashRec^.Entities^[Entity].Value:=Value;
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+    if assigned(HashRec^.Events) then begin
+     POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+    end;
+   
+    result:=true;
+
    end else begin
-    continue;
-   end; 
-  end else begin
-   break;
-  end;
- until false;
+
+    Entity:=HashRec^.Size;
+    if Entity<(2 shl HashRec^.LogSize) then begin
+     TPasMPInterlocked.Increment(HashRec^.Size);
+     HashRec^.Entities^[Entity].Key:=Key;
+     HashRec^.Entities^[Entity].Value:=Value;
+     HashRec^.Entities^[Entity].Constant:=Constant;
+     TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
+     TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
+     TPasMPInterlocked.Increment(HashRec^.RealSize);
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+     if assigned(HashRec^.Events) then begin
+      POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+     end;
+     POCAHashLockInvalidate(Hash);
+   
+     result:=true;
+    
+    end;
+ 
+   end;
+
+  end; 
+  
+ finally
+  TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(Hash^.Lock);
+ end;
+
 end;
 
+function POCAHashRawPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean):Boolean;
+var Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
+begin
+
+ result:=false;
+
+ Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
+ if Cell<>CELL_INVALID then begin
+
+  Entity:=HashRec^.CellToEntityIndex^[Cell];
+  if Entity>=0 then begin
+  
+   HashRec^.Entities^[Entity].Value:=Value;
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+   if assigned(HashRec^.Events) then begin
+    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+   end;
+  
+   result:=true;
+
+  end else begin
+
+   Entity:=HashRec^.Size;
+   if Entity<(2 shl HashRec^.LogSize) then begin
+    TPasMPInterlocked.Increment(HashRec^.Size);
+    HashRec^.Entities^[Entity].Key:=Key;
+    HashRec^.Entities^[Entity].Value:=Value;
+    HashRec^.Entities^[Entity].Constant:=Constant;
+    TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
+    TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
+    TPasMPInterlocked.Increment(HashRec^.RealSize);
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+    if assigned(HashRec^.Events) then begin
+     POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+    end;
+    //POCAHashLockInvalidate(Hash);
+  
+    result:=true;
+   
+   end;
+
+  end;
+
+ end; 
+
+end;
+
+function POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):Boolean;
+var Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
+begin
+
+ result:=false;
+
+ TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hash^.Lock);
+
+ Entity:=CacheIndex;
+
+ if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
+
+  HashRec^.Entities^[Entity].Value:=Value;
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+  if assigned(HashRec^.Events) then begin
+   POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+  end;
+
+  result:=true;
+
+  TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(Hash^.Lock);
+
+ end else begin
+
+  try
+
+   Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
+   if Cell<>CELL_INVALID then begin
+
+    Entity:=HashRec^.CellToEntityIndex^[Cell];
+    if Entity>=0 then begin
+
+     TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
+     HashRec^.Entities^[Entity].Value:=Value;
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+     if assigned(HashRec^.Events) then begin
+      POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+     end;
+
+     result:=true;
+
+    end else begin
+
+     Entity:=HashRec^.Size;
+     if Entity<(2 shl HashRec^.LogSize) then begin
+
+      TPasMPInterlocked.Increment(HashRec^.Size);
+      HashRec^.Entities^[Entity].Key:=Key;
+      HashRec^.Entities^[Entity].Value:=Value;
+      HashRec^.Entities^[Entity].Constant:=Constant;
+      TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
+      TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
+      TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
+      TPasMPInterlocked.Increment(HashRec^.RealSize);
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+      if assigned(HashRec^.Events) then begin
+       POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+      end;
+      POCAHashLockInvalidate(Hash);
+
+      result:=true;
+
+     end;
+
+    end;
+
+   end;
+
+  finally
+   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(Hash^.Lock);
+  end;
+
+ end;
+
+end;
+
+{$else}
 function POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean):Boolean;
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
@@ -12420,27 +12588,27 @@ begin
   exit;
  end;
 
- Entity:=POCAHashGetPutEntity(HashRec);
- if Entity>=0 then begin
-  TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
-  TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
-  TPasMPInterlocked.Increment(HashRec^.RealSize);
+ Entity:=HashRec^.Size;
+ TPasMPInterlocked.Increment(HashRec^.Size);
+ if Entity<(2 shl HashRec^.LogSize) then begin
   HashRec^.Entities^[Entity].Key:=Key;
   HashRec^.Entities^[Entity].Value:=Value;
   HashRec^.Entities^[Entity].Constant:=Constant;
+  TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
+  TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
+  TPasMPInterlocked.Increment(HashRec^.RealSize);
   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
   POCAHashLockInvalidate(Hash);
-  result:=true;
- end else begin 
-  result:=false;
  end;
- 
+
+ result:=true;
+
 end;
 
-function POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):Boolean;
+procedure POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32);
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
@@ -12451,7 +12619,6 @@ begin
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
-  result:=true;
   exit;
  end;
  Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
@@ -12464,29 +12631,27 @@ begin
    if assigned(HashRec^.Events) then begin
     POCAHashPutHashEvents(Hash,HashRec,Key,Value);
    end;
-   result:=true;
    exit;
   end;
  end;
- Entity:=POCAHashGetPutEntity(HashRec);
- if Entity>=0 then begin
+ Entity:=HashRec^.Size;
+ TPasMPInterlocked.Increment(HashRec^.Size);
+ if Entity<(2 shl HashRec^.LogSize) then begin
   TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
-  TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
-  TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
-  TPasMPInterlocked.Increment(HashRec^.RealSize);
   HashRec^.Entities^[Entity].Key:=Key;
   HashRec^.Entities^[Entity].Value:=Value;
   HashRec^.Entities^[Entity].Constant:=Constant;
+  TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
+  TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
+  TPasMPInterlocked.Increment(HashRec^.RealSize);
   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
   POCAHashLockInvalidate(Hash);
-  result:=true;
- end else begin
-  result:=false; 
  end;
 end;
+{$endif}
 
 function POCAHashResize(Instance:PPOCAInstance;Hash:PPOCAHash;Events:TPOCABool32=false):PPOCAHashRecord;
 var HashRec:PPOCAHashRecord;
@@ -12545,7 +12710,11 @@ begin
    if Cell>=0 then begin
     Entity:=HashRec^.CellToEntityIndex^[Cell];
     if Entity>=0 then begin
+{$ifdef POCAThreadSafeHash}
+     POCAHashRawPut(Hash,result,HashRec^.Entities^[Entity].Key,HashRec^.Entities^[Entity].Value,HashRec^.Entities^[Entity].Constant);
+{$else}
      POCAHashPut(Hash,result,HashRec^.Entities^[Entity].Key,HashRec^.Entities^[Entity].Value,HashRec^.Entities^[Entity].Constant);
+{$endif}
     end;
    end;
    inc(i);
@@ -12630,6 +12799,84 @@ begin
  end;
 end;
 
+{$ifdef POCAThreadSafeHash}
+
+function POCAHashRawSet(const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
+var Iteration:TPOCAInt32;
+    HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+begin
+ result:=false;
+ if POCAIsValueHash(Hash) then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
+  HashRec:=HashInstance^.HashRecord;
+  if (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) then begin
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+   try
+    repeat
+     HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+    until assigned(HashRec) and (HashRec^.RealSize<(1 shl HashRec^.LogSize));
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+   end;
+  end; 
+  if assigned(HashRec) then begin
+   for Iteration:=0 to 1 do begin
+    if POCAHashPut(HashInstance,HashRec,Key,Value,Constant) then begin
+     result:=true;
+     break;
+    end else begin
+     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+     try
+      HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+     finally
+      TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+     end;
+    end;
+   end;
+  end;
+ end;
+end;
+
+function POCAHashRawDelete(const Hash,Key:TPOCAValue):boolean;
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    Cell:TPOCAUInt32;
+    Entity:TPOCAInt32;
+begin
+ result:=false;
+ if POCAIsValueHash(Hash) then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
+  HashRec:=HashInstance^.HashRecord;
+  if assigned(HashRec) then begin
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+   try
+    HashRec:=HashInstance^.HashRecord; // Re-read hash record after acquiring lock, as it could have been resized by another thread
+    Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
+    if Cell<>CELL_INVALID then begin
+     Entity:=HashRec^.CellToEntityIndex^[Cell];
+     if Entity>=0 then begin
+      TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],CELL_DELETED);
+      TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],ENT_DELETED);
+      TPasMPInterlocked.Decrement(HashRec^.RealSize);
+      if assigned(HashRec^.Events) then begin
+       POCAHashPutHashEvents(HashInstance,HashRec,Key,POCAValueNull);
+      end;
+      if (HashRec^.RealSize>0) and (HashRec^.RealSize<=(1 shl (HashRec^.LogSize-1))) then begin
+       POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+      end;
+      POCAHashLockInvalidate(HashInstance);
+      result:=true;
+     end;
+    end;
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+   end;  
+  end;
+ end;
+end;
+
+{$else}
 function POCAHashRawSet(const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
 var Iteration:TPOCAInt32;
     HashInstance:PPOCAHash;
@@ -12686,6 +12933,7 @@ begin
   end;
  end;
 end;
+{$endif}
 
 procedure POCAHashRawKeys(const Dst,Hash:TPOCAValue);
 var HashRec:PPOCAHashRecord;
@@ -12894,6 +13142,182 @@ begin
  end;
 end;
 
+{$ifdef POCAThreadSafeHash}
+function POCAHashNewSymbol(Instance:PPOCAInstance;Hash:PPOCAHash;const Key,Value:TPOCAValue;const Constant:Boolean):boolean;
+var HashRec:PPOCAHashRecord;
+    Mask,Step,Cell:TPOCAUInt32;
+    Entity:TPOCAInt32;
+    s:PPOCAString;
+    HashEntity:PPOCAHashEntity;
+begin
+ result:=false;
+
+ TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hash^.Lock);
+ try
+
+  HashRec:=Hash^.HashRecord;
+
+  s:=PPOCAString(POCAGetValueReferencePointer(Key));
+  if s^.HashCode=0 then begin
+   TPasMPInterlocked.Exchange(TPOCAInt32(s^.HashCode),POCAHashString(s^.Data));
+  end;
+
+  while (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) do begin
+   HashRec:=POCAHashResize(Instance,Hash,false);
+  end;
+
+  Mask:=(2 shl HashRec^.LogSize)-1;
+  Step:=((s^.HashCode shl 1)+1) and Mask;
+  if HashRec^.LogSize<>0 then begin
+   Cell:=s^.HashCode shr (32-HashRec^.LogSize);
+  end else begin
+   Cell:=0;
+  end;  
+  while HashRec^.CellToEntityIndex^[Cell]<>ENT_EMPTY do begin
+   Cell:=(Cell+Step) and Mask;
+  end;
+
+  Entity:=HashRec^.Size;
+  if Entity<(2 shl HashRec^.LogSize) then begin
+   TPasMPInterlocked.Increment(HashRec^.Size);
+   HashEntity:=@HashRec^.Entities^[Entity];
+   HashEntity^.Key:=Key;
+   HashEntity^.Value:=Value;
+   HashEntity^.Constant:=Constant;
+   TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
+   TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
+   TPasMPInterlocked.Increment(HashRec^.RealSize);
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+   if assigned(HashRec^.Events) then begin
+    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
+   end;
+   POCAHashLockInvalidate(Hash);
+   result:=true;
+  end;
+
+ finally
+  TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(Hash^.Lock);
+ end;  
+
+end;
+
+function POCAHashTrySet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    Cell:TPOCAUInt32;
+    Entity:TPOCAInt32;
+    SubContext:PPOCAContext;
+begin
+ result:=false;
+ if POCAIsValueHash(Hash) then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
+  if ((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events[pmoSET]) then begin
+   SubContext:=POCAContextSub(Context);
+   try
+    if POCAGetBooleanValue(SubContext,POCACall(SubContext,HashInstance^.Events^.HashRecord^.Events^[pmoEXIST],@Key,1,Hash,POCAValueNull)) then begin
+     result:=POCAHashSet(SubContext,Hash,Key,Value,Constant);
+    end;
+   finally
+    POCAContextDestroy(SubContext);
+   end;
+  end else begin
+   HashRec:=HashInstance^.HashRecord;
+   if assigned(HashRec) then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    try
+     HashRec:=HashInstance^.HashRecord; // Re-read hash record after acquiring lock, as it could have been resized by another thread
+     Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
+     if Cell<>CELL_INVALID then begin
+      Entity:=HashRec^.CellToEntityIndex^[Cell];
+      if Entity>=0 then begin
+       if HashRec^.Entities^[Entity].Constant then begin
+        POCARuntimeError(Context,'Constant write access attempt');
+       end else begin
+        HashRec^.Entities^[Entity].Value:=Value;
+        HashRec^.Entities^[Entity].Constant:=Constant;
+        TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+        if assigned(HashRec^.Events) then begin
+         POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+        end;
+        result:=true;
+       end;
+      end;
+     end;
+    finally
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    end; 
+   end;
+  end;
+ end;
+end;
+
+function POCAHashTrySetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):boolean;
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    Cell:TPOCAUInt32;
+    Entity:TPOCAInt32;
+    SubContext:PPOCAContext;
+begin
+ result:=false;
+ if POCAIsValueHash(Hash) then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
+  if ((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events[pmoSET]) then begin
+   SubContext:=POCAContextSub(Context);
+   try
+    if POCAGetBooleanValue(SubContext,POCACall(SubContext,HashInstance^.Events^.HashRecord^.Events^[pmoEXIST],@Key,1,Hash,POCAValueNull)) then begin
+     result:=POCAHashSet(SubContext,Hash,Key,Value,Constant);
+    end;
+   finally
+    POCAContextDestroy(SubContext);
+   end;
+  end else begin
+   HashRec:=HashInstance^.HashRecord;
+   if assigned(HashRec) then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    Entity:=CacheIndex;
+    if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and POCAEqual(HashRec^.Entities^[Entity].Key,Key) then begin
+     if HashRec^.Entities^[Entity].Constant then begin
+      POCARuntimeError(Context,'Constant write access attempt');
+     end else begin
+      HashRec^.Entities^[Entity].Value:=Value;
+      HashRec^.Entities^[Entity].Constant:=Constant;
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+      if assigned(HashRec^.Events) then begin
+       POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+      end;
+      result:=true;
+     end;
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    end else begin
+     try
+      HashRec:=HashInstance^.HashRecord; // Re-read hash record after acquiring lock, as it could have been resized by another thread
+      Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
+      if Cell<>CELL_INVALID then begin
+       Entity:=HashRec^.CellToEntityIndex^[Cell];
+       if Entity>=0 then begin
+        TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
+        if HashRec^.Entities^[Entity].Constant then begin
+         POCARuntimeError(Context,'Constant write access attempt');
+        end else begin
+         HashRec^.Entities^[Entity].Value:=Value;
+         HashRec^.Entities^[Entity].Constant:=Constant;
+         TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+         if assigned(HashRec^.Events) then begin
+          POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
+         end;
+         result:=true;
+        end;
+       end;
+      end;
+     finally
+      TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+     end;
+    end;
+   end;
+  end;
+ end;
+end;
+{$else}
 function POCAHashNewSymbol(Instance:PPOCAInstance;Hash:PPOCAHash;const Key,Value:TPOCAValue;const Constant:Boolean):boolean;
 var HashRec:PPOCAHashRecord;
     Mask,Step,Cell:TPOCAUInt32;
@@ -12920,8 +13344,9 @@ begin
  while HashRec^.CellToEntityIndex^[Cell]<>ENT_EMPTY do begin
   Cell:=(Cell+Step) and Mask;
  end;
- Entity:=POCAHashGetPutEntity(HashRec);
- if Entity>=0 then begin
+ Entity:=HashRec^.Size;
+ TPasMPInterlocked.Increment(HashRec^.Size);
+ if Entity<(2 shl HashRec^.LogSize) then begin
   TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
   TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
   TPasMPInterlocked.Increment(HashRec^.RealSize);
@@ -13041,6 +13466,7 @@ begin
   end;
  end;
 end;
+{$endif}
 
 function POCAHashSize(Context:PPOCAContext;const Hash:TPOCAValue):TPOCAInt32;
 var HashInstance:PPOCAHash;
@@ -13387,6 +13813,129 @@ begin
  end;
 end;
 
+{$ifdef POCAThreadSafeHash}
+function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
+var Iteration:TPOCAInt32;
+    HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+begin
+ result:=false;
+ if POCAIsValueHash(Hash) then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
+  if ((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoSET]) then begin
+   result:=POCAHashSetEvent(Context,HashInstance^.Events^.HashRecord^.Events^[pmoSET],Hash,Key,Value);
+  end else begin
+   HashRec:=HashInstance^.HashRecord;
+   if (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    try
+     repeat
+      HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+     until assigned(HashRec) and (HashRec^.RealSize<(1 shl HashRec^.LogSize));
+    finally
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    end;
+   end; 
+   if assigned(HashRec) then begin
+    for Iteration:=0 to 1 do begin
+     if POCAHashPut(HashInstance,HashRec,Key,Value,Constant) then begin
+      result:=true;
+      break;
+     end else begin
+      TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+      try
+       HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+      finally
+       TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+      end;
+     end;
+    end;
+   end;
+  end;
+ end;
+end;
+
+function POCAHashSetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):boolean;
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+begin
+ result:=false;
+ if POCAIsValueHash(Hash) then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
+  if ((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoSET]) then begin
+   result:=POCAHashSetEvent(Context,HashInstance^.Events^.HashRecord^.Events^[pmoSET],Hash,Key,Value);
+  end else begin
+   HashRec:=HashInstance^.HashRecord;
+   if (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    try
+     repeat
+      HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+     until assigned(HashRec) and (HashRec^.RealSize<(1 shl HashRec^.LogSize));
+    finally
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    end;
+   end; 
+   if assigned(HashRec) then begin
+    result:=POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
+   end;
+  end;
+ end;
+end;
+
+function POCAHashDeleteEvent(Context:PPOCAContext;const FuncDelete,Hash,Key:TPOCAValue):boolean;
+var SubContext:PPOCAContext;
+begin
+ SubContext:=POCAContextSub(Context);
+ try
+  result:=POCAGetBooleanValue(SubContext,POCACall(SubContext,FuncDelete,@Key,1,Hash,POCAValueNull));
+ finally
+  POCAContextDestroy(SubContext);
+ end;
+end;
+
+function POCAHashDelete(Context:PPOCAContext;const Hash,Key:TPOCAValue):boolean;
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    Entity:TPOCAInt32;
+    Cell:TPOCAUInt32;
+begin
+ result:=false;
+ if POCAIsValueHash(Hash) then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
+  if ((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoDELETE]) then begin
+   result:=POCAHashDeleteEvent(Context,HashInstance^.Events^.HashRecord^.Events^[pmoDELETE],Hash,Key);
+  end else begin
+   HashRec:=HashInstance^.HashRecord;
+   if assigned(HashRec) then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    try
+     Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
+     if Cell<>CELL_INVALID then begin
+      Entity:=HashRec^.CellToEntityIndex^[Cell];
+      if Entity>=0 then begin
+       TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],CELL_DELETED);
+       TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],ENT_DELETED);
+       TPasMPInterlocked.Decrement(HashRec^.RealSize);
+       if assigned(HashRec^.Events) then begin
+        POCAHashPutHashEvents(HashInstance,HashRec,Key,POCAValueNull);
+       end;
+       if (HashRec^.RealSize>0) and (HashRec^.RealSize<=(1 shl (HashRec^.LogSize-1))) then begin
+        POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+       end else begin
+        POCAHashLockInvalidate(HashInstance);
+       end;
+       result:=true;
+      end;
+     end;
+    finally
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    end;
+   end;
+  end;
+ end;
+end;
+{$else}
 function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean):boolean;
 var Iteration:TPOCAInt32;
     HashInstance:PPOCAHash;
@@ -13431,7 +13980,8 @@ begin
     HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
    end;
    if assigned(HashRec) then begin
-    result:=POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
+    POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
+    result:=true;
    end;
   end;
  end;
@@ -13484,6 +14034,7 @@ begin
   end;
  end;
 end;
+{$endif}
 
 procedure POCAHashOwnKeys(Context:PPOCAContext;const Dst,Hash:TPOCAValue);
 var HashInstance:PPOCAHash;
@@ -48138,4 +48689,3 @@ finalization
  TCSetAttr(0,TCSAFLUSH,OriginalTerm);
 {$ifend}
 end.
-
