@@ -12159,24 +12159,64 @@ end;
 function POCAHashSetHashEvents(Context:PPOCAContext;const ToHash,FromHash:TPOCAValue):TPOCABool32;
 var Hashs:array[0..1] of PPOCAHash;
     EventsValue:TPOCAValue;
+{$ifdef POCAThreadSafeHash}
+    FirstLockHash,SecondLockHash:PPOCAHash;
+{$endif}    
 begin
  result:=false;
  if POCAIsValueHash(ToHash) then begin
   Hashs[0]:=PPOCAHash(POCAGetValueReferencePointer(ToHash));
   if POCAIsValueHash(FromHash) then begin
    Hashs[1]:=PPOCAHash(POCAGetValueReferencePointer(FromHash));
-   if (not assigned(Hashs[1]^.HashRecord)) or not assigned(Hashs[1]^.HashRecord^.Events) then begin
-    POCAHashCreateEvents(Context^.Instance,Hashs[1]);
+{$ifdef POCAThreadSafeHash}
+   if Hashs[0]=Hashs[1] then begin
+    FirstLockHash:=Hashs[0];
+    SecondLockHash:=nil;
+   end else if TPOCAPtrUInt(TPOCAPointer(Hashs[0]))<TPOCAPtrUInt(TPOCAPointer(Hashs[1])) then begin
+    FirstLockHash:=Hashs[0];
+    SecondLockHash:=Hashs[1];
+   end else begin
+    FirstLockHash:=Hashs[1];
+    SecondLockHash:=Hashs[0];
    end;
-   POCAHashLockInvalidate(Hashs[0]);
-   TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),TPOCAPointer(Hashs[1]));
-   // Remember cross-generation link (persistent hash -> events hash)
-   POCASetValueReferencePointer(EventsValue,Hashs[1]);
-   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hashs[0])),EventsValue);
-   result:=true;
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(FirstLockHash^.Lock);
+   try
+    if assigned(SecondLockHash) then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(SecondLockHash^.Lock);
+    end;
+    try
+{$endif}   
+     if (not assigned(Hashs[1]^.HashRecord)) or not assigned(Hashs[1]^.HashRecord^.Events) then begin
+      POCAHashCreateEvents(Context^.Instance,Hashs[1]);
+     end;
+     POCAHashLockInvalidate(Hashs[0]);
+     TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),TPOCAPointer(Hashs[1]));
+     // Remember cross-generation link (persistent hash -> events hash)
+     POCASetValueReferencePointer(EventsValue,Hashs[1]);
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hashs[0])),EventsValue);
+     result:=true;
+{$ifdef POCAThreadSafeHash}
+    finally
+     if assigned(SecondLockHash) then begin
+      TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(SecondLockHash^.Lock);
+     end;
+    end;
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(FirstLockHash^.Lock);
+   end;
+{$endif}     
   end else if POCAIsValueNull(FromHash) then begin
-   POCAHashLockInvalidate(Hashs[0]);
-   TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),nil);
+{$ifdef POCAThreadSafeHash}
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hashs[0]^.Lock);
+   try
+{$endif}  
+    POCAHashLockInvalidate(Hashs[0]);
+    TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),nil);
+{$ifdef POCAThreadSafeHash}
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(Hashs[0]^.Lock);
+   end;
+{$endif}    
    result:=true;
   end;
  end;
