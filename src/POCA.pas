@@ -349,6 +349,8 @@
 
 {$undef POCAClosureArrayValues}
 
+{$define POCAThreadSafeArray}
+
 {$define POCAThreadSafeHash}
 
 interface
@@ -1184,6 +1186,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCAArray=packed record
       Header:TPOCAObjectHeader;
       ArrayRecord:PPOCAArrayRecord;
+{$ifdef POCAThreadSafeArray}
+      Lock:TPasMPInt32;
+{$endif}
      end;
 
      PPOCAHashRecord=^TPOCAHashRecord;
@@ -9897,6 +9902,9 @@ var Obj:PPOCAArray;
 begin
  result:=POCANew(Context,pvtARRAY,PPOCAObject(Obj));
  Obj^.ArrayRecord:=nil;
+{$ifdef POCAThreadSafeArray}
+ Obj^.Lock:=0;
+{$endif}
 end;
 
 function POCANewHash(Context:PPOCAContext):TPOCAValue;
@@ -10493,13 +10501,23 @@ begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
-   while i<0 do begin
-    inc(i,ArrayRecord^.Size);
+{$ifdef POCAThreadSafeArray}
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   try
+    ArrayRecord:=ArrayInstance^.ArrayRecord;
+{$endif}
+    while i<0 do begin
+     inc(i,ArrayRecord^.Size);
+    end;
+    if (i>=0) and (i<ArrayRecord^.Size) then begin
+     ArrayRecord^.Data[i]:=Value;
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+    end;
+{$ifdef POCAThreadSafeArray}
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
    end;
-   if (i>=0) and (i<ArrayRecord^.Size) then begin
-    ArrayRecord^.Data[i]:=Value;
-    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
-   end;
+{$endif}
   end;
  end;
 end;
@@ -10521,21 +10539,29 @@ function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOC
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
 begin
+ result:=0;
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
-  ArrayRecord:=ArrayInstance^.ArrayRecord;
-  while (not assigned(ArrayRecord)) or (ArrayRecord^.Allocated<=ArrayRecord^.Size) do begin
-   ArrayRecord:=POCAArrayResize(ArrayInstance);
+{$ifdef POCAThreadSafeArray}
+  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+  try
+{$endif}
+   ArrayRecord:=ArrayInstance^.ArrayRecord;
+   while (not assigned(ArrayRecord)) or (ArrayRecord^.Allocated<=ArrayRecord^.Size) do begin
+    ArrayRecord:=POCAArrayResize(ArrayInstance);
+   end;
+   if assigned(ArrayRecord) then begin
+    ArrayRecord^.Data[ArrayRecord^.Size]:=Value;
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+    result:=ArrayRecord^.Size;
+    TPasMPInterlocked.Increment(ArrayRecord^.Size);
+   end;
+{$ifdef POCAThreadSafeArray}
+  finally
+   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
   end;
-  if assigned(ArrayRecord) then begin
-   ArrayRecord^.Data[ArrayRecord^.Size]:=Value;
-   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
-   result:=ArrayRecord^.Size;
-   TPasMPInterlocked.Increment(ArrayRecord^.Size);
-   exit;
-  end;
+{$endif}
  end;
- result:=0;
 end;
 
 function POCAArrayRangePush(Context:PPOCAContext;const ArrayObject:TPOCAValue;const FromValue,ToValue:TPOCAValue):TPOCAUInt32;
@@ -10590,33 +10616,64 @@ function POCAArrayCombine(const ArrayObject:TPOCAValue;const WithArrayObject:TPO
 var Index:TPOCAInt32;
     TemporaryOldSize:TPOCAUInt32;
     ArrayInstance,WithArrayInstance:PPOCAArray;
+{$ifdef POCAThreadSafeArray}
+    FirstLockArray,SecondLockArray:PPOCAArray;
+{$endif}
     ArrayRecord,WithArrayRecord:PPOCAArrayRecord;
 begin
  result:=0;
  if POCAIsValueArray(ArrayObject) and POCAIsValueArray(WithArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   WithArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(WithArrayObject));
-  WithArrayRecord:=WithArrayInstance^.ArrayRecord;
-  if assigned(WithArrayRecord) and (WithArrayRecord^.Size>0) then begin
-   ArrayRecord:=ArrayInstance^.ArrayRecord;
-   if assigned(ArrayRecord) then begin
-    TemporaryOldSize:=ArrayRecord^.Size;
-   end else begin
-    TemporaryOldSize:=0;
-   end;
-   ArrayRecord:=POCAArrayGrowToSize(ArrayInstance,TemporaryOldSize+WithArrayRecord^.Size);
-   for Index:=0 to WithArrayRecord^.Size-1 do begin
-    ArrayRecord^.Data[TemporaryOldSize+Index]:=WithArrayRecord^.Data[Index];
-    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),WithArrayRecord^.Data[Index]);
-   end;
-   ArrayRecord^.Size:=TemporaryOldSize+WithArrayRecord^.Size;
-   result:=ArrayRecord^.Size;
+{$ifdef POCAThreadSafeArray}
+  if ArrayInstance=WithArrayInstance then begin
+   FirstLockArray:=ArrayInstance;
+   SecondLockArray:=nil;
+  end else if TPOCAPtrUInt(TPOCAPointer(ArrayInstance))<TPOCAPtrUInt(TPOCAPointer(WithArrayInstance)) then begin
+   FirstLockArray:=ArrayInstance;
+   SecondLockArray:=WithArrayInstance;
   end else begin
-   ArrayRecord:=ArrayInstance^.ArrayRecord;
-   if assigned(ArrayRecord) then begin
-    result:=ArrayRecord^.Size;
-   end;
+   FirstLockArray:=WithArrayInstance;
+   SecondLockArray:=ArrayInstance;
   end;
+  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(FirstLockArray^.Lock);
+  try
+   if assigned(SecondLockArray) then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(SecondLockArray^.Lock);
+   end;
+   try
+{$endif}
+    WithArrayRecord:=WithArrayInstance^.ArrayRecord;
+    if assigned(WithArrayRecord) and (WithArrayRecord^.Size>0) then begin
+     ArrayRecord:=ArrayInstance^.ArrayRecord;
+     if assigned(ArrayRecord) then begin
+      TemporaryOldSize:=ArrayRecord^.Size;
+     end else begin
+      TemporaryOldSize:=0;
+     end;
+     ArrayRecord:=POCAArrayGrowToSize(ArrayInstance,TemporaryOldSize+WithArrayRecord^.Size);
+     for Index:=0 to WithArrayRecord^.Size-1 do begin
+      ArrayRecord^.Data[TemporaryOldSize+Index]:=WithArrayRecord^.Data[Index];
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),WithArrayRecord^.Data[Index]);
+     end;
+     ArrayRecord^.Size:=TemporaryOldSize+WithArrayRecord^.Size;
+     result:=ArrayRecord^.Size;
+    end else begin
+     ArrayRecord:=ArrayInstance^.ArrayRecord;
+     if assigned(ArrayRecord) then begin
+      result:=ArrayRecord^.Size;
+     end;
+    end;
+{$ifdef POCAThreadSafeArray}
+   finally
+    if assigned(SecondLockArray) then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(SecondLockArray^.Lock);
+    end;
+   end;
+  finally
+   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(FirstLockArray^.Lock);
+  end;
+{$endif}
  end;
 end;
 
@@ -10629,21 +10686,31 @@ begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
-   i:=Index;
-   while i<0 do begin
-    inc(i,ArrayRecord^.Size);
-   end;
-   if (i>=0) and (i<ArrayRecord^.Size) then begin
-    if (i+1)<ArrayRecord^.Size then begin
-     for j:=(i+1) to ArrayRecord^.Size-1 do begin
-      ArrayRecord^.Data[j-1]:=ArrayRecord^.Data[j];
+{$ifdef POCAThreadSafeArray}
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   try
+    ArrayRecord:=ArrayInstance^.ArrayRecord;
+{$endif}
+    i:=Index;
+    while i<0 do begin
+     inc(i,ArrayRecord^.Size);
+    end;
+    if (i>=0) and (i<ArrayRecord^.Size) then begin
+     if (i+1)<ArrayRecord^.Size then begin
+      for j:=(i+1) to ArrayRecord^.Size-1 do begin
+       ArrayRecord^.Data[j-1]:=ArrayRecord^.Data[j];
+      end;
+     end;
+     TPasMPInterlocked.Decrement(ArrayRecord^.Size);
+     if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
+      POCAArrayResize(ArrayInstance);
      end;
     end;
-    TPasMPInterlocked.Decrement(ArrayRecord^.Size);
-    if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
-     POCAArrayResize(ArrayInstance);
-    end;
+{$ifdef POCAThreadSafeArray}
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
    end;
+{$endif}
   end;
  end;
  result:=0;
@@ -10658,25 +10725,35 @@ begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
-   i:=ArrayRecord^.Size-1;
-   while i>=0 do begin
-    if POCAEqual(ArrayRecord^.Data[i],Value) then begin
-     if (i+1)<ArrayRecord^.Size then begin
-      for j:=(i+1) to ArrayRecord^.Size-1 do begin
-       ArrayRecord^.Data[j-1]:=ArrayRecord^.Data[j];
+{$ifdef POCAThreadSafeArray}
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   try
+    ArrayRecord:=ArrayInstance^.ArrayRecord;
+{$endif}
+    i:=ArrayRecord^.Size-1;
+    while i>=0 do begin
+     if POCAEqual(ArrayRecord^.Data[i],Value) then begin
+      if (i+1)<ArrayRecord^.Size then begin
+       for j:=(i+1) to ArrayRecord^.Size-1 do begin
+        ArrayRecord^.Data[j-1]:=ArrayRecord^.Data[j];
+       end;
+       ArrayRecord^.Data[ArrayRecord^.Size-1].CastedUInt64:=POCAValueNullCastedUInt64;
+      end else begin
+       ArrayRecord^.Data[i].CastedUInt64:=POCAValueNullCastedUInt64;
       end;
-      ArrayRecord^.Data[ArrayRecord^.Size-1].CastedUInt64:=POCAValueNullCastedUInt64;
+      TPasMPInterlocked.Decrement(ArrayRecord^.Size);
+      if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
+       POCAArrayResize(ArrayInstance);
+      end;
      end else begin
-      ArrayRecord^.Data[i].CastedUInt64:=POCAValueNullCastedUInt64;
+      dec(i);
      end;
-     TPasMPInterlocked.Decrement(ArrayRecord^.Size);
-     if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
-      POCAArrayResize(ArrayInstance);
-     end;
-    end else begin
-     dec(i);
     end;
+{$ifdef POCAThreadSafeArray}
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
    end;
+{$endif}
   end;
  end;
  result:=0;
@@ -10733,27 +10810,36 @@ var ArrayInstance:PPOCAArray;
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
-  ArrayRecord:=ArrayInstance^.ArrayRecord;
-  GetMem(NewVecRec,sizeof(TPOCAArrayRecord)+(Size*sizeof(TPOCAValue)));
-  FillChar(NewVecRec^,sizeof(TPOCAArrayRecord)+(Size*sizeof(TPOCAValue)),#0);
-  NewVecRec^.Size:=Size;
-  NewVecRec^.Allocated:=Size;
-  if assigned(ArrayRecord) then begin
-   for i:=0 to Size-1 do begin
-    if i<ArrayRecord^.Size then begin
-     NewVecRec^.Data[i]:=ArrayRecord^.Data[i];
-    end else begin
-//   NewVecRec^.Data[i]:=POCAValueNull;
+{$ifdef POCAThreadSafeArray}
+  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+  try
+{$endif}
+   ArrayRecord:=ArrayInstance^.ArrayRecord;
+   GetMem(NewVecRec,sizeof(TPOCAArrayRecord)+(Size*sizeof(TPOCAValue)));
+   FillChar(NewVecRec^,sizeof(TPOCAArrayRecord)+(Size*sizeof(TPOCAValue)),#0);
+   NewVecRec^.Size:=Size;
+   NewVecRec^.Allocated:=Size;
+   if assigned(ArrayRecord) then begin
+    for i:=0 to Size-1 do begin
+     if i<ArrayRecord^.Size then begin
+      NewVecRec^.Data[i]:=ArrayRecord^.Data[i];
+     end else begin
+ //   NewVecRec^.Data[i]:=POCAValueNull;
+      NewVecRec^.Data[i].CastedUInt64:=POCAValueNullCastedUInt64;
+     end;
+    end;
+   end else begin
+    for i:=0 to Size-1 do begin
+ //  NewVecRec^.Data[i]:=POCAValueNull;
      NewVecRec^.Data[i].CastedUInt64:=POCAValueNullCastedUInt64;
     end;
    end;
-  end else begin
-   for i:=0 to Size-1 do begin
-//  NewVecRec^.Data[i]:=POCAValueNull;
-    NewVecRec^.Data[i].CastedUInt64:=POCAValueNullCastedUInt64;
-   end;
+   POCAGarbageCollectorSwapFree(ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@ArrayInstance^.ArrayRecord,NewVecRec);
+{$ifdef POCAThreadSafeArray}
+  finally
+   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
   end;
-  POCAGarbageCollectorSwapFree(ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@ArrayInstance^.ArrayRecord,NewVecRec);
+{$endif}
  end;
 end;
 
@@ -10761,23 +10847,32 @@ function POCAArrayPop(const ArrayObject:TPOCAValue):TPOCAValue;
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
 begin
+//result:=POCAValueNull;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
-   if ArrayRecord^.Size>0 then begin
-    result:=ArrayRecord^.Data[ArrayRecord^.Size-1];
-    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),result);
-    TPasMPInterlocked.Decrement(ArrayRecord^.Size);
-    if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
-     POCAArrayResize(ArrayInstance);
+{$ifdef POCAThreadSafeArray}
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   try
+    ArrayRecord:=ArrayInstance^.ArrayRecord;
+{$endif}
+    if ArrayRecord^.Size>0 then begin
+     result:=ArrayRecord^.Data[ArrayRecord^.Size-1];
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),result);
+     TPasMPInterlocked.Decrement(ArrayRecord^.Size);
+     if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
+      POCAArrayResize(ArrayInstance);
+     end;
     end;
-    exit;
+{$ifdef POCAThreadSafeArray}
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
    end;
+{$endif}
   end;
  end;
-//result:=POCAValueNull;
- result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
 procedure POCAArraySort(Context:PPOCAContext;const ArrayObject:TPOCAValue);
@@ -12185,7 +12280,7 @@ begin
      TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(SecondLockHash^.Lock);
     end;
     try
-{$endif}   
+{$endif}
      if (not assigned(Hashs[1]^.HashRecord)) or not assigned(Hashs[1]^.HashRecord^.Events) then begin
       POCAHashCreateEvents(Context^.Instance,Hashs[1]);
      end;
@@ -12204,7 +12299,7 @@ begin
    finally
     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(FirstLockHash^.Lock);
    end;
-{$endif}     
+{$endif}
   end else if POCAIsValueNull(FromHash) then begin
 {$ifdef POCAThreadSafeHash}
    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hashs[0]^.Lock);
