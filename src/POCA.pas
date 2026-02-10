@@ -6910,7 +6910,7 @@ begin
  if assigned(Block^.Next) then begin
   Block^.Next^.Previous:=Block^.Previous;
  end else if Pool^.LastBlock=Block then begin
-  Pool^.LastBlock:=Block^.Next;
+  Pool^.LastBlock:=Block^.Previous;
  end;
  TPasMPInterlocked.Add(Pool^.Size,-Block^.Size);
  FreeMemAligned(Block);
@@ -6934,6 +6934,10 @@ begin
  if TPasMPInterlocked.Decrement(Obj^.Header.PoolBlock^.ReferenceCounter)=0 then begin
   POCAPoolFreeBlock(Pool,Obj^.Header.PoolBlock);
  end else{$endif} begin
+  if Pool^.FreeSize<=Pool^.FreeCount then begin
+   Pool^.FreeSize:=POCARoundUpToPowerOfTwo(Pool^.FreeCount+1);
+   ReallocMem(Pool^.FreeObjects,SizeOf(PPOCAObject)*Pool^.FreeSize);
+  end;
   Pool^.FreeObjects^[Pool^.FreeCount]:=Obj;
   inc(Pool^.FreeCount);
   TPasMPInterlocked.Increment(Pool^.Instance^.Globals.GarbageCollector.FreeCount);
@@ -8115,7 +8119,7 @@ begin
 {$endif}
   end;
   if assigned(PPOCACoroutineData(Context^.CoroutineData)) and (assigned(PPOCACoroutineData(Context^.CoroutineData)^.Coroutine) and (PPOCACoroutineData(Context^.CoroutineData)^.Coroutine^.State<>pcsTERMINATED)) then begin
-   POCACoroutineGhostMarkEx(Context^.ThreadData);
+   POCACoroutineGhostMarkEx(Context^.CoroutineData);
   end;
   if assigned(PPOCAThreadData(Context^.ThreadData)) and not PPOCAThreadData(Context^.ThreadData)^.Terminated then begin
    POCAThreadGhostMarkEx(Context^.ThreadData);
@@ -10674,7 +10678,7 @@ begin
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
    i:=ArrayRecord^.Size;
-   while i>=0 do begin
+   while i>0 do begin
     dec(i);
     if POCAEqual(ArrayRecord^.Data[i],Value) then begin
      result:=i;
@@ -14066,6 +14070,10 @@ begin
      Pool:=@Context^.Instance^.Globals.Pools[ValueType];
      while ContextObjectPool^.Count>0 do begin
       dec(ContextObjectPool^.Count);
+      if Pool^.FreeSize<=Pool^.FreeCount then begin
+       Pool^.FreeSize:=POCARoundUpToPowerOfTwo(Pool^.FreeCount+1);
+       ReallocMem(Pool^.FreeObjects,SizeOf(PPOCAObject)*Pool^.FreeSize);
+      end;
       Pool^.FreeObjects^[Pool^.FreeCount]:=ContextObjectPool^.Objects^[ContextObjectPool^.Count];
       inc(Pool^.FreeCount);
      end;
@@ -14121,7 +14129,7 @@ begin
  end;
  if assigned(Context^.Next) then begin
   Context^.Next^.Previous:=Context^.Previous;
- end else if Context^.Instance^.Globals.FirstContext=Context then begin
+ end else if Context^.Instance^.Globals.LastContext=Context then begin
   Context^.Instance^.Globals.LastContext:=Context^.Previous;
  end;
  Context^.Previous:=nil;
@@ -22641,12 +22649,12 @@ begin
       if assigned(PPOCACoroutineData(CurrentContext^.CoroutineData)^.ExceptionHolder) then begin
        FreeAndNil(PPOCACoroutineData(CurrentContext^.CoroutineData)^.ExceptionHolder);
       end;
-      if POCAIsValueGhost(PPOCAThreadData(CurrentContext^.CoroutineData)^.Data) then begin
-       PPOCAGhost(POCAGetValueReferencePointer(PPOCAThreadData(CurrentContext^.CoroutineData)^.Data))^.Ptr:=nil;
+      if POCAIsValueGhost(PPOCACoroutineData(CurrentContext^.CoroutineData)^.Data) then begin
+       PPOCAGhost(POCAGetValueReferencePointer(PPOCACoroutineData(CurrentContext^.CoroutineData)^.Data))^.Ptr:=nil;
       end;
-      PPOCAThreadData(CurrentContext^.CoroutineData)^.Data.Num:=0;
+      PPOCACoroutineData(CurrentContext^.CoroutineData)^.Data.Num:=0;
       Finalize(PPOCACoroutineData(CurrentContext^.CoroutineData)^);
-      FillChar(PPOCAThreadData(CurrentContext^.CoroutineData)^,SizeOf(TPOCACoroutineData),#0);
+      FillChar(PPOCACoroutineData(CurrentContext^.CoroutineData)^,SizeOf(TPOCACoroutineData),#0);
       CurrentContext^.CoroutineData:=nil;
      end;
      CurrentContext:=CurrentContext^.Next;
