@@ -12399,8 +12399,7 @@ begin
 end;
 
 function POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean):Boolean;
-var Size:TPasMPInt32;
-    Entity:TPOCAInt32;
+var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
 
@@ -12441,7 +12440,7 @@ begin
  
 end;
 
-procedure POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32);
+function POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):Boolean;
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
@@ -12452,6 +12451,7 @@ begin
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
+  result:=true;
   exit;
  end;
  Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
@@ -12464,6 +12464,7 @@ begin
    if assigned(HashRec^.Events) then begin
     POCAHashPutHashEvents(Hash,HashRec,Key,Value);
    end;
+   result:=true;
    exit;
   end;
  end;
@@ -12481,6 +12482,9 @@ begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
   POCAHashLockInvalidate(Hash);
+  result:=true;
+ end else begin
+  result:=false; 
  end;
 end;
 
@@ -13427,8 +13431,7 @@ begin
     HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
    end;
    if assigned(HashRec) then begin
-    POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
-    result:=true;
+    result:=POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
    end;
   end;
  end;
