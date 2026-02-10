@@ -1577,6 +1577,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       MarkHookFirst:PPOCAGarbageCollectorMarkHook;
       MarkHookLast:PPOCAGarbageCollectorMarkHook;
+      MarkHookLock:TPasMPInt32;
 
       function AddMarkHook(const aFunction:TPOCAGarbageCollectorMarkHookFunction;const aData:Pointer=nil):PPOCAGarbageCollectorMarkHook; overload;
       function AddMarkHook(const aMethod:TPOCAGarbageCollectorMarkHookMethod;const aData:Pointer=nil):PPOCAGarbageCollectorMarkHook; overload;
@@ -7294,64 +7295,79 @@ end;
 
 function TPOCAGarbageCollector.AddMarkHook(const aFunction:TPOCAGarbageCollectorMarkHookFunction;const aData:Pointer):PPOCAGarbageCollectorMarkHook;
 begin
- GetMem(result,SizeOf(TPOCAGarbageCollectorMarkHook));
- FillChar(result^,SizeOf(TPOCAGarbageCollectorMarkHook),#0);
- result^.MarkHookFunction:=aFunction;
- result^.Data:=aData;
- if assigned(MarkHookLast) then begin
-  MarkHookLast^.Next:=result;
-  result^.Previous:=MarkHookLast;
- end else begin
-  MarkHookFirst:=result;
-  result^.Previous:=nil;
+ TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(MarkHookLock);
+ try
+  GetMem(result,SizeOf(TPOCAGarbageCollectorMarkHook));
+  FillChar(result^,SizeOf(TPOCAGarbageCollectorMarkHook),#0);
+  result^.MarkHookFunction:=aFunction;
+  result^.Data:=aData;
+  if assigned(MarkHookLast) then begin
+   MarkHookLast^.Next:=result;
+   result^.Previous:=MarkHookLast;
+  end else begin
+   MarkHookFirst:=result;
+   result^.Previous:=nil;
+  end;
+  result^.Next:=nil;
+  MarkHookLast:=result;
+ finally
+  TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(MarkHookLock);
  end;
- result^.Next:=nil;
- MarkHookLast:=result;
 end;
 
 function TPOCAGarbageCollector.AddMarkHook(const aMethod:TPOCAGarbageCollectorMarkHookMethod;const aData:Pointer):PPOCAGarbageCollectorMarkHook;
 begin
- GetMem(result,SizeOf(TPOCAGarbageCollectorMarkHook));
- FillChar(result^,SizeOf(TPOCAGarbageCollectorMarkHook),#0);
- result^.MarkHookMethod:=aMethod;
- result^.Data:=aData;
- if assigned(MarkHookLast) then begin
-  MarkHookLast^.Next:=result;
-  result^.Previous:=MarkHookLast;
- end else begin
-  MarkHookFirst:=result;
-  result^.Previous:=nil;
+ TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(MarkHookLock);
+ try
+  GetMem(result,SizeOf(TPOCAGarbageCollectorMarkHook));
+  FillChar(result^,SizeOf(TPOCAGarbageCollectorMarkHook),#0);
+  result^.MarkHookMethod:=aMethod;
+  result^.Data:=aData;
+  if assigned(MarkHookLast) then begin
+   MarkHookLast^.Next:=result;
+   result^.Previous:=MarkHookLast;
+  end else begin
+   MarkHookFirst:=result;
+   result^.Previous:=nil;
+  end;
+  result^.Next:=nil;
+  MarkHookLast:=result;
+ finally
+  TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(MarkHookLock);
  end;
- result^.Next:=nil;
- MarkHookLast:=result;
 end;
 
 function TPOCAGarbageCollector.RemoveMarkHook(const aMarkHook:PPOCAGarbageCollectorMarkHook):Boolean;
 var Current,Previous,Next:PPOCAGarbageCollectorMarkHook;
 begin
  if assigned(aMarkHook) then begin
-  Current:=MarkHookFirst;
-  Previous:=nil;
-  while assigned(Current) do begin
-   Next:=Current^.Next;
-   if Current=aMarkHook then begin
-    Previous:=Current^.Previous;
-    if assigned(Previous) then begin
-     Previous^.Next:=Next;
+  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(MarkHookLock);
+  try
+   Current:=MarkHookFirst;
+   Previous:=nil;
+   while assigned(Current) do begin
+    Next:=Current^.Next;
+    if Current=aMarkHook then begin
+     Previous:=Current^.Previous;
+     if assigned(Previous) then begin
+      Previous^.Next:=Next;
+     end else begin
+      MarkHookFirst:=Next;
+     end;
+     if assigned(Next) then begin
+      Next^.Previous:=Previous;
+     end else begin
+      MarkHookLast:=Previous;
+     end;
+     FreeMem(Current);
+     result:=true;
+     exit;
     end else begin
-     MarkHookFirst:=Next;
+     Current:=Next;
     end;
-    if assigned(Next) then begin
-     Next^.Previous:=Previous;
-    end else begin
-     MarkHookLast:=Previous;
-    end;
-    FreeMem(Current);
-    result:=true;
-    exit;
-   end else begin
-    Current:=Next;
    end;
+  finally
+   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(MarkHookLock);
   end;
  end;
  result:=false;
@@ -8075,16 +8091,27 @@ begin
 end;
 
 procedure TPOCAGarbageCollector.MarkHooks;
-var Current:PPOCAGarbageCollectorMarkHook;
+var Next,Current:PPOCAGarbageCollectorMarkHook;
 begin
- Current:=MarkHookFirst;
- while assigned(Current) do begin
-  if assigned(Current^.MarkHookFunction) then begin
-   Current^.MarkHookFunction(Instance,Current^.Data);
-  end else if assigned(Current^.MarkHookMethod) then begin
-   Current^.MarkHookMethod(Instance,Current^.Data);
+ TPasMPMultipleReaderSingleWriterSpinLock.AcquireRead(MarkHookLock);
+ try
+  Current:=MarkHookFirst;
+  while assigned(Current) do begin
+   Next:=Current^.Next;
+   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseRead(MarkHookLock);
+   try
+    if assigned(Current^.MarkHookFunction) then begin
+     Current^.MarkHookFunction(Instance,Current^.Data);
+    end else if assigned(Current^.MarkHookMethod) then begin
+     Current^.MarkHookMethod(Instance,Current^.Data);
+    end;
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireRead(MarkHookLock);
+   end;
+   Current:=Next;
   end;
-  Current:=Current^.Next;
+ finally
+  TPasMPMultipleReaderSingleWriterSpinLock.ReleaseRead(MarkHookLock);
  end;
 end;
 
@@ -22513,6 +22540,7 @@ begin
   result^.Globals.GarbageCollector.ScanContextGrays:=false;
   result^.Globals.GarbageCollector.MarkHookFirst:=nil;
   result^.Globals.GarbageCollector.MarkHookLast:=nil;
+  result^.Globals.GarbageCollector.MarkHookLock:=0;
  end;
  begin
   result^.Globals.DeadAllocationCount:=256;
@@ -22683,6 +22711,7 @@ begin
    end;
    Instance^.Globals.GarbageCollector.MarkHookFirst:=nil;
    Instance^.Globals.GarbageCollector.MarkHookLast:=nil;
+   Instance^.Globals.GarbageCollector.MarkHookLock:=0;
 
    for Ghost:=false to true do begin
     Instance^.Globals.GarbageCollector.WhiteLists[Ghost]^.Finalize;
