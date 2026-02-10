@@ -1252,7 +1252,7 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCAHashRecord=record
       RealSize:TPOCAInt32;
       LogSize:TPOCAInt32;
-      Size:TPOCAInt32;
+      Size:TPasMPInt32;
       CellToEntityIndex:PPOCAHashEntityIndex;
       EntityToCellIndex:PPOCAHashEntityIndex;
       Entities:PPOCAHashEntities;
@@ -12379,8 +12379,28 @@ begin
  end;
 end;
 
+function POCAHashGetPutEntity(const HashRec:PPOCAHashRecord):TPasMPInt32;
+var Size:TPasMPInt32;
+begin
+ result:=-1;
+ repeat
+  Size:=HashRec^.Size;  
+  if Size<(2 shl HashRec^.LogSize) then begin
+   if TPasMPInterlocked.CompareExchange(HashRec^.Size,Size+1,Size)=Size then begin
+    result:=Size;
+    break;
+   end else begin
+    continue;
+   end; 
+  end else begin
+   break;
+  end;
+ until false;
+end;
+
 function POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean):Boolean;
-var Entity:TPOCAInt32;
+var Size:TPasMPInt32;
+    Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
 
@@ -12401,9 +12421,8 @@ begin
   exit;
  end;
 
- Entity:=HashRec^.Size;
- TPasMPInterlocked.Increment(HashRec^.Size);
- if Entity<(2 shl HashRec^.LogSize) then begin
+ Entity:=POCAHashGetPutEntity(HashRec);
+ if Entity>=0 then begin
   TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
   TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
   TPasMPInterlocked.Increment(HashRec^.RealSize);
@@ -12415,10 +12434,11 @@ begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
   end;
   POCAHashLockInvalidate(Hash);
+  result:=true;
+ end else begin 
+  result:=false;
  end;
-
- result:=true;
-
+ 
 end;
 
 procedure POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32);
@@ -12447,9 +12467,8 @@ begin
    exit;
   end;
  end;
- Entity:=HashRec^.Size;
- TPasMPInterlocked.Increment(HashRec^.Size);
- if Entity<(2 shl HashRec^.LogSize) then begin
+ Entity:=POCAHashGetPutEntity(HashRec);
+ if Entity>=0 then begin
   TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
   TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
   TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
@@ -12897,9 +12916,8 @@ begin
  while HashRec^.CellToEntityIndex^[Cell]<>ENT_EMPTY do begin
   Cell:=(Cell+Step) and Mask;
  end;
- Entity:=HashRec^.Size;
- TPasMPInterlocked.Increment(HashRec^.Size);
- if Entity<(2 shl HashRec^.LogSize) then begin
+ Entity:=POCAHashGetPutEntity(HashRec);
+ if Entity>=0 then begin
   TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
   TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
   TPasMPInterlocked.Increment(HashRec^.RealSize);
