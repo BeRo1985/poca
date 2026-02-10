@@ -10744,6 +10744,7 @@ begin
       TPasMPInterlocked.Decrement(ArrayRecord^.Size);
       if ArrayRecord^.Size<(ArrayRecord^.Allocated shr 1) then begin
        POCAArrayResize(ArrayInstance);
+       ArrayRecord:=ArrayInstance^.ArrayRecord;
       end;
      end else begin
       dec(i);
