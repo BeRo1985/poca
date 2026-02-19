@@ -30,7 +30,7 @@ function gatherHandlers(hub) {
   for (let i = 0; i < 3; i++) {    
 #if 1
     // Capture loop variable by creating a new variable in the closure
-    // This is necessary in languages like JavaScript to avoid the common pitfall of closures capturing the loop variable, which would lead to 
+    // This is necessary to avoid the common pitfall of closures capturing the loop variable, which would lead to 
     // all handlers referencing the same variable (the last value of i).
     // Produces: items: [0], items: [0, 1], items: [0, 1, 2]
     (function(){
