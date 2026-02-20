@@ -1124,6 +1124,9 @@ http://www.gnu.org/software/src-highlite -->
 <div class="paragraph"><p>The pragma applies to <code>for</code>, <code>foreach</code>, <code>forindex</code>, <code>forkey</code>, <code>while</code>, and
 <code>do</code>/<code>while</code> loops. It only adds overhead in loops whose body actually contains
 nested function definitions (closures); loops without closures are unaffected.</p></div>
+<div class="paragraph"><p>Since per-iteration copying <em>can</em> have a performance cost (each iteration
+allocates a snapshot of the captured variables), the pragma is disabled by
+default. Enable it only where you actually need per-iteration capture semantics.</p></div>
 <div class="admonitionblock">
 <table><tr>
 <td class="icon">
@@ -2534,7 +2537,7 @@ http://www.gnu.org/software/src-highlite -->
 <div id="footer">
 <div id="footer-text">
 Last updated
- 2026-02-20 03:09:54 CET
+ 2026-02-20 03:12:34 CET
 </div>
 </div>
 </body>
