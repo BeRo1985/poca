@@ -349,6 +349,8 @@
 
 {$undef POCAClosureArrayValues}
 
+{$define POCAClosureCopyOnIteration}
+
 {$define POCAThreadSafeArray}
 
 {$define POCAThreadSafeHash}
@@ -534,7 +536,14 @@ const POCAVersion='2025-12-23-03-16-0000';
       popARRAYCOMBINE=165;
       popHASHCOMBINE=166;
       popDEBUGGER=167;
+{$ifdef POCAClosureCopyOnIteration}
+      popCLONELOCALVALUES=168;
+      popPUSHLOCALVALUELEVEL=169;
+      popPOPLOCALVALUELEVEL=170;
+      popCOUNT=171;
+{$else}
       popCOUNT=168;
+{$endif}
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -1822,6 +1831,9 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       SourceFiles:TStringList;
       IncludeDirectories:TStringList;
       AutomaticSemicolonInsertion:boolean;
+{$ifdef POCAClosureCopyOnIteration}
+      ClosureCopyOnIteration:boolean;
+{$endif}
      end;
 
      EPOCAError=class(Exception)
@@ -22746,6 +22758,9 @@ begin
  New(result);
  FillChar(result^,sizeof(TPOCAInstance),#0);
  result^.AutomaticSemicolonInsertion:=false;
+{$ifdef POCAClosureCopyOnIteration}
+ result^.ClosureCopyOnIteration:=false;
+{$endif}
  begin
   result^.Globals.Lock:=POCALockCreate;
   result^.Globals.Semaphore:=POCASemaphoreCreate;
@@ -26395,6 +26410,13 @@ var TokenList:PPOCAToken;
       s:=TPOCARawByteString(trim(String(copy(s,4,length(s)-3))));
       AutomaticSemicolonInsertion:=(s='on') or (s='1') or (s='true');
      end;
+{$ifdef POCAClosureCopyOnIteration}
+     if (s='closurecopyoniteration on') or (s='closurecopyoniteration 1') or (s='closurecopyoniteration true') then begin
+      Instance^.ClosureCopyOnIteration:=true;
+     end else if (s='closurecopyoniteration off') or (s='closurecopyoniteration 0') or (s='closurecopyoniteration false') then begin
+      Instance^.ClosureCopyOnIteration:=false;
+     end;
+{$endif}
      LastPragma:=i+1;
     end;
    end;
@@ -34918,6 +34940,10 @@ var TokenList:PPOCAToken;
     var Test,Body,LabelToken:PPOCAToken;
         Len,JumpOver,BreakPos,ContinuePos,Start:TPOCAInt32;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
+{$ifdef POCAClosureCopyOnIteration}
+        SavedLevel:TPOCAInt32;
+        NeedIterationLevel:Boolean;
+{$endif}
     begin
      ScopeStart;
      Registers[0]:=nil;
@@ -34945,9 +34971,23 @@ var TokenList:PPOCAToken;
        Body:=t^.Right^.Left;
       end;
       Start:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+      SavedLevel:=-1;
+      NeedIterationLevel:=false;
+      if Instance^.ClosureCopyOnIteration and CodeGenerator^.HasNestedFunctions then begin
+       SavedLevel:=CodeGenerator^.Level;
+       inc(CodeGenerator^.Level);
+       NeedIterationLevel:=true;
+      end;
+{$endif}
       begin
        Registers[0]:=GetRegisters; // Registers before loop 
        StartLoop(LabelToken,false);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPUSHLOCALVALUELEVEL);
+       end;
+{$endif}
        ContinuePos:=CodeGenerator^.ByteCodeSize;
        Registers[1]:=GetRegisters; // Registers before test and at continue label
        JumpOver:=GenerateTest(Test,true,true,-1);
@@ -34955,10 +34995,20 @@ var TokenList:PPOCAToken;
        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        Registers[3]:=GetRegisters; // Registers after code block
        Registers[4]:=GetRegisters; // Registers after loop
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popCLONELOCALVALUES);
+       end;
+{$endif}
        EmitOpcode(popJMP,ContinuePos);
        BreakPos:=CodeGenerator^.ByteCodeSize;
        FixTargetImmediate(JumpOver);
        EndLoop(BreakPos,ContinuePos,Registers[2],Registers[4]);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPOPLOCALVALUELEVEL);
+       end;
+{$endif}
       end;
       if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
               AreRegistersEqual(Registers[1],Registers[2],false,false) and
@@ -34972,6 +35022,11 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers[3]);
        CombineCurrentRegisters(Registers[4]);
        StartLoop(LabelToken,false);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPUSHLOCALVALUELEVEL);
+       end;
+{$endif}
        ContinuePos:=CodeGenerator^.ByteCodeSize;
        JumpOver:=GenerateTest(Test,true,true,-1);
        CombineCurrentRegisters(Registers[0]);
@@ -34985,10 +35040,20 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers[2]);
        CombineCurrentRegisters(Registers[3]);
        CombineCurrentRegisters(Registers[4]);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popCLONELOCALVALUES);
+       end;
+{$endif}
        EmitOpcode(popJMP,ContinuePos);
        BreakPos:=CodeGenerator^.ByteCodeSize;
        FixTargetImmediate(JumpOver);
        EndLoop(BreakPos,ContinuePos,Registers[2],Registers[4]);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPOPLOCALVALUELEVEL);
+       end;
+{$endif}
       end;
      finally
       SetLength(Registers[0],0);
@@ -34997,12 +35062,21 @@ var TokenList:PPOCAToken;
       SetLength(Registers[3],0);
       SetLength(Registers[4],0);
      end;
+{$ifdef POCAClosureCopyOnIteration}
+     if NeedIterationLevel then begin
+      CodeGenerator^.Level:=SavedLevel;
+     end;
+{$endif}
      ScopeEnd;
     end;
     function GenerateDoWhile(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Test,Body,LabelToken:PPOCAToken;
         Len,JumpNext,BreakPos,ContinuePos,Start:TPOCAInt32;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
+{$ifdef POCAClosureCopyOnIteration}
+        SavedLevel:TPOCAInt32;
+        NeedIterationLevel:Boolean;
+{$endif}
     begin
      ScopeStart;
      Registers[0]:=nil;
@@ -35030,19 +35104,43 @@ var TokenList:PPOCAToken;
        end;
       end;
       Start:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+      SavedLevel:=-1;
+      NeedIterationLevel:=false;
+      if Instance^.ClosureCopyOnIteration and CodeGenerator^.HasNestedFunctions then begin
+       SavedLevel:=CodeGenerator^.Level;
+       inc(CodeGenerator^.Level);
+       NeedIterationLevel:=true;
+      end;
+{$endif}
       begin
        Registers[0]:=GetRegisters;
        StartLoop(LabelToken,false);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPUSHLOCALVALUELEVEL);
+       end;
+{$endif}
        JumpNext:=CodeGenerator^.ByteCodeSize;
        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        Registers[1]:=GetRegisters;
        Registers[4]:=GetRegisters;
        ContinuePos:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popCLONELOCALVALUES);
+       end;
+{$endif}
        GenerateTest(Test,true,false,JumpNext);
        Registers[2]:=GetRegisters;
        Registers[3]:=GetRegisters;
        BreakPos:=CodeGenerator^.ByteCodeSize;
        EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPOPLOCALVALUELEVEL);
+       end;
+{$endif}
       end;
       if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
               AreRegistersEqual(Registers[4],Registers[1],false,false) and
@@ -35054,17 +35152,32 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers[1]);
        CombineCurrentRegisters(Registers[4]);
        StartLoop(LabelToken,false);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPUSHLOCALVALUELEVEL);
+       end;
+{$endif}
        JumpNext:=CodeGenerator^.ByteCodeSize;
        result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
        CombineCurrentRegisters(Registers[0]);
        CombineCurrentRegisters(Registers[1]);
        CombineCurrentRegisters(Registers[4]);
        ContinuePos:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popCLONELOCALVALUES);
+       end;
+{$endif}
        GenerateTest(Test,true,false,JumpNext);
        BreakPos:=CodeGenerator^.ByteCodeSize;
        CombineCurrentRegisters(Registers[2]);
        CombineCurrentRegisters(Registers[3]);
        EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPOPLOCALVALUELEVEL);
+       end;
+{$endif}
       end;
      finally
       SetLength(Registers[0],0);
@@ -35073,12 +35186,21 @@ var TokenList:PPOCAToken;
       SetLength(Registers[3],0);
       SetLength(Registers[4],0);
      end;
+{$ifdef POCAClosureCopyOnIteration}
+     if NeedIterationLevel then begin
+      CodeGenerator^.Level:=SavedLevel;
+     end;
+{$endif}
      ScopeEnd;
     end;
     function GenerateFor(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var Init,Test,Body,Update,LabelToken,h:PPOCAToken;
         Len,JumpNext,JumpOver,BreakPos,ContinuePos,Reg,Start,CountFrameValues:TPOCAInt32;
         Registers:array[0..5] of TPOCACodeGeneratorRegisters;
+{$ifdef POCAClosureCopyOnIteration}
+        SavedLevel:TPOCAInt32;
+        NeedIterationLevel:Boolean;
+{$endif}
     begin
      ScopeStart;
      Registers[0]:=nil;
@@ -35111,9 +35233,23 @@ var TokenList:PPOCAToken;
       end;
       Start:=CodeGenerator^.ByteCodeSize;
       CountFrameValues:=CodeGenerator^.CountFrameValues;
+{$ifdef POCAClosureCopyOnIteration}
+      SavedLevel:=-1;
+      NeedIterationLevel:=false;
+      if Instance^.ClosureCopyOnIteration and CodeGenerator^.HasNestedFunctions then begin
+       SavedLevel:=CodeGenerator^.Level;
+       inc(CodeGenerator^.Level);
+       NeedIterationLevel:=true;
+      end;
+{$endif}
       begin
        Registers[0]:=GetRegisters;
        StartLoop(LabelToken,false);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPUSHLOCALVALUELEVEL);
+       end;
+{$endif}
        if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
         Reg:=GenerateCommaBlock(Init,-1,false,false);
         FreeRegister(Reg);
@@ -35126,6 +35262,11 @@ var TokenList:PPOCAToken;
        Registers[2]:=GetRegisters;
        Registers[5]:=GetRegisters;
        ContinuePos:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popCLONELOCALVALUES);
+       end;
+{$endif}
        if assigned(Update) and (Update^.Token<>ptEMPTY) then begin
         Reg:=GenerateCommaBlock(Update,-1,false,false);
         FreeRegister(Reg);
@@ -35138,6 +35279,11 @@ var TokenList:PPOCAToken;
        Registers[4]:=GetRegisters;
        BreakPos:=CodeGenerator^.ByteCodeSize;
        EndLoop(BreakPos,ContinuePos,Registers[4],Registers[5]);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPOPLOCALVALUELEVEL);
+       end;
+{$endif}
       end;
       if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
               AreRegistersEqual(Registers[1],Registers[2],false,false) and
@@ -35149,6 +35295,11 @@ var TokenList:PPOCAToken;
        CodeGenerator^.ByteCodeSize:=Start;
        SetRegisters(Registers[0]);
        StartLoop(LabelToken,false);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPUSHLOCALVALUELEVEL);
+       end;
+{$endif}
        if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
         Reg:=GenerateCommaBlock(Init,-1,false,false);
         FreeRegister(Reg);
@@ -35164,6 +35315,11 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers[2]);
        CombineCurrentRegisters(Registers[5]);
        ContinuePos:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popCLONELOCALVALUES);
+       end;
+{$endif}
        if assigned(Update) and (Update^.Token<>ptEMPTY) then begin
         Reg:=GenerateCommaBlock(Update,-1,false,false);
 //      Reg:=GenerateExpression(Update,-1,false);
@@ -35177,6 +35333,11 @@ var TokenList:PPOCAToken;
        CombineCurrentRegisters(Registers[4]);
        BreakPos:=CodeGenerator^.ByteCodeSize;
        EndLoop(BreakPos,ContinuePos,Registers[4],Registers[5]);
+{$ifdef POCAClosureCopyOnIteration}
+       if NeedIterationLevel then begin
+        EmitOpcode(popPOPLOCALVALUELEVEL);
+       end;
+{$endif}
       end;
      finally
       SetLength(Registers[0],0);
@@ -35186,12 +35347,21 @@ var TokenList:PPOCAToken;
       SetLength(Registers[4],0);
       SetLength(Registers[5],0);
      end;
+{$ifdef POCAClosureCopyOnIteration}
+     if NeedIterationLevel then begin
+      CodeGenerator^.Level:=SavedLevel;
+     end;
+{$endif}
      ScopeEnd;
     end;
     function GenerateForEachForIndexForKey(t:PPOCAToken;OutReg:TPOCAInt32):TPOCAInt32;
     var JumpNext,JumpOver,BreakPos,ContinuePos,Reg1,Reg2,Reg3,Reg4,Len,Start:TPOCAInt32;
         Element,Body,ArrayInstance,LabelToken,h,StartElement:PPOCAToken;
         Registers:array[0..4] of TPOCACodeGeneratorRegisters;
+{$ifdef POCAClosureCopyOnIteration}
+        SavedLevel:TPOCAInt32;
+        NeedIterationLevel:Boolean;
+{$endif}
     begin
      ScopeStart;
      Registers[0]:=nil;
@@ -35235,7 +35405,21 @@ var TokenList:PPOCAToken;
       Body:=t^.Right^.Children;
       begin
        Start:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+       SavedLevel:=-1;
+       NeedIterationLevel:=false;
+       if Instance^.ClosureCopyOnIteration and CodeGenerator^.HasNestedFunctions then begin
+        SavedLevel:=CodeGenerator^.Level;
+        inc(CodeGenerator^.Level);
+        NeedIterationLevel:=true;
+       end;
+{$endif}
        begin
+{$ifdef POCAClosureCopyOnIteration}
+        if NeedIterationLevel then begin
+         EmitOpcode(popPUSHLOCALVALUELEVEL);
+        end;
+{$endif}
         Element:=StartElement;
         if assigned(Element) and (Element^.Token=ptASSIGN) and assigned(Element^.Left) then begin
          Reg1:=GenerateExpression(Element,-1,false);
@@ -35266,6 +35450,11 @@ var TokenList:PPOCAToken;
         GenerateLeftValue(Element,Reg3);
         result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
         ContinuePos:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+        if NeedIterationLevel then begin
+         EmitOpcode(popCLONELOCALVALUES);
+        end;
+{$endif}
         Registers[1]:=GetRegisters;
         Registers[4]:=GetRegisters;
         FixTargetImmediate(JumpOver);
@@ -35284,6 +35473,11 @@ var TokenList:PPOCAToken;
         Registers[3]:=GetRegisters;
         BreakPos:=CodeGenerator^.ByteCodeSize;
         EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+{$ifdef POCAClosureCopyOnIteration}
+        if NeedIterationLevel then begin
+         EmitOpcode(popPOPLOCALVALUELEVEL);
+        end;
+{$endif}
        end;
        if not (AreRegistersEqual(Registers[0],Registers[1],false,false) and
                AreRegistersEqual(Registers[4],Registers[1],false,false) and
@@ -35295,6 +35489,11 @@ var TokenList:PPOCAToken;
         FreeRegister(Reg4);
         ScopeReset;
         CodeGenerator^.ByteCodeSize:=Start;
+{$ifdef POCAClosureCopyOnIteration}
+        if NeedIterationLevel then begin
+         EmitOpcode(popPUSHLOCALVALUELEVEL);
+        end;
+{$endif}
         Element:=StartElement;
         if assigned(Element) and (Element^.Token=ptASSIGN) and assigned(Element^.Left) then begin
          Reg1:=GenerateExpression(Element,-1,false);
@@ -35330,6 +35529,11 @@ var TokenList:PPOCAToken;
         CombineCurrentRegisters(Registers[4]);
         result:=GenerateBlock(Body,OutReg,DoNeedResult,true);
         ContinuePos:=CodeGenerator^.ByteCodeSize;
+{$ifdef POCAClosureCopyOnIteration}
+        if NeedIterationLevel then begin
+         EmitOpcode(popCLONELOCALVALUES);
+        end;
+{$endif}
         CombineCurrentRegisters(Registers[0]);
         CombineCurrentRegisters(Registers[1]);
         CombineCurrentRegisters(Registers[4]);
@@ -35349,6 +35553,11 @@ var TokenList:PPOCAToken;
         CombineCurrentRegisters(Registers[3]);
         BreakPos:=CodeGenerator^.ByteCodeSize;
         EndLoop(BreakPos,ContinuePos,Registers[3],Registers[4]);
+{$ifdef POCAClosureCopyOnIteration}
+        if NeedIterationLevel then begin
+         EmitOpcode(popPOPLOCALVALUELEVEL);
+        end;
+{$endif}
        end;
        FreeRegister(Reg4);
        FreeRegister(Reg3);
@@ -35362,6 +35571,11 @@ var TokenList:PPOCAToken;
       SetLength(Registers[3],0);
       SetLength(Registers[4],0);
      end;
+{$ifdef POCAClosureCopyOnIteration}
+     if NeedIterationLevel then begin
+      CodeGenerator^.Level:=SavedLevel;
+     end;
+{$endif}
      ScopeEnd;
     end;
     procedure GenerateBreakContinue(t:PPOCAToken);
@@ -46936,6 +47150,59 @@ begin
     if (Opcode and $ff)=popDEBUGGER then begin
     end;
    end;
+{$ifdef POCAClosureCopyOnIteration}
+   popCLONELOCALVALUES:begin
+{$ifdef POCAClosureArrayValues}
+    begin
+     TempValue:=POCANewArray(Context);
+     TempInt:=POCAArraySize(Frame^.LocalValues);
+     POCAArraySetSize(TempValue,TempInt);
+     for TempInt2:=0 to TempInt-1 do begin
+      POCAArrayFastSet(TempValue,TempInt2,POCAArrayFastGet(Frame^.LocalValues,TempInt2));
+     end;
+     Frame^.LocalValues:=TempValue;
+    end;
+{$else}
+    Frame^.LocalValues:=Copy(Frame^.LocalValues);
+{$endif}
+   end;
+   popPUSHLOCALVALUELEVEL:begin
+{$ifdef POCAClosureArrayValues}
+    begin
+     TempValue:=POCANewArray(Context);
+     TempInt:=POCAArraySize(Frame^.OuterValueLevels);
+     POCAArraySetSize(TempValue,TempInt+1);
+     for TempInt2:=0 to TempInt-1 do begin
+      POCAArrayFastSet(TempValue,TempInt2,POCAArrayFastGet(Frame^.OuterValueLevels,TempInt2));
+     end;
+     POCAArrayFastSet(TempValue,TempInt,Frame^.LocalValues);
+     Frame^.OuterValueLevels:=TempValue;
+     inc(Frame^.CountOuterValueLevels);
+     TempValue:=POCANewArray(Context);
+     TempInt:=POCAArraySize(Frame^.LocalValues);
+     POCAArraySetSize(TempValue,TempInt);
+     for TempInt2:=0 to TempInt-1 do begin
+      POCAArrayFastSet(TempValue,TempInt2,POCAArrayFastGet(Frame^.LocalValues,TempInt2));
+     end;
+     Frame^.LocalValues:=TempValue;
+    end;
+{$else}
+    SetLength(Frame^.OuterValueLevels,Frame^.CountOuterValueLevels+1);
+    Frame^.OuterValueLevels[Frame^.CountOuterValueLevels]:=Frame^.LocalValues;
+    inc(Frame^.CountOuterValueLevels);
+    Frame^.LocalValues:=Copy(Frame^.LocalValues);
+{$endif}
+   end;
+   popPOPLOCALVALUELEVEL:begin
+    dec(Frame^.CountOuterValueLevels);
+{$ifdef POCAClosureArrayValues}
+    Frame^.LocalValues:=POCAArrayFastGet(Frame^.OuterValueLevels,Frame^.CountOuterValueLevels);
+{$else}
+    Frame^.LocalValues:=Frame^.OuterValueLevels[Frame^.CountOuterValueLevels];
+    Frame^.OuterValueLevels[Frame^.CountOuterValueLevels]:=nil;
+{$endif}
+   end;
+{$endif}
    popCOUNT..255:begin
     POCARuntimeError(Context,'Invalid unknown opcode instruction');
    end;
