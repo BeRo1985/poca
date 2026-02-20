@@ -26406,6 +26406,9 @@ var TokenList:PPOCAToken;
    for i:=LastPragma to PreprocessorInstance.Preprocessor.PragmaInfoCount-1 do begin
     if SourcePosition>=PreprocessorInstance.Preprocessor.PragmaInfo[i].CharPos then begin
      s:=TPOCARawByteString(lowercase(trim(String(PreprocessorInstance.Preprocessor.PragmaInfo[i].Pragma))));
+     if (length(s)>=4) and (s[1]='(') and (s[length(s)]=')') and (s[2] in ['"','''']) and (s[length(s)-1]=s[2]) then begin
+      s:=TPOCARawByteString(trim(String(copy(s,3,length(s)-4))));
+     end;
      if (length(s)>3) and (((s[1]='a') and (s[2]='s') and (s[3]='i')) and not (s[4] in ['a'..'z','0'..'9','_'])) then begin
       s:=TPOCARawByteString(trim(String(copy(s,4,length(s)-3))));
       AutomaticSemicolonInsertion:=(s='on') or (s='1') or (s='true');
