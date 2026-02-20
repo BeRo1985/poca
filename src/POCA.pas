@@ -26414,9 +26414,9 @@ var TokenList:PPOCAToken;
       AutomaticSemicolonInsertion:=(s='on') or (s='1') or (s='true');
      end;
 {$ifdef POCAClosureCopyOnIteration}
-     if (s='closurecopyoniteration on') or (s='closurecopyoniteration 1') or (s='closurecopyoniteration true') then begin
+     if (s='loopclosures on') or (s='loopclosures 1') or (s='loopclosures true') then begin
       Instance^.ClosureCopyOnIteration:=true;
-     end else if (s='closurecopyoniteration off') or (s='closurecopyoniteration 0') or (s='closurecopyoniteration false') then begin
+     end else if (s='loopclosures off') or (s='loopclosures 0') or (s='loopclosures false') then begin
       Instance^.ClosureCopyOnIteration:=false;
      end;
 {$endif}

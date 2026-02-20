@@ -1,4 +1,4 @@
-#pragma closurecopyoniteration on // if enabled, closures in loops capture per-iteration values; otherwise all iterations share the same binding
+#pragma loopclosures on // if enabled, closures in loops capture per-iteration values; otherwise all iterations share the same binding
 
 // Test 1: labeled break across nested loops with closures
 puts("Test 1: labeled break across nested for loops");
