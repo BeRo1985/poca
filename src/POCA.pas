@@ -29897,6 +29897,9 @@ var TokenList:PPOCAToken;
        BreakJumps,ContinueJumps:array of TPOCAUInt32;
        CountBreakJumps,CountContinueJumps:TPOCAInt32;
        BreakRegisters,ContinueRegisters:array of TPOCACodeGeneratorRegisters;
+{$ifdef POCAClosureCopyOnIteration}
+       HasPushLevel:boolean;
+{$endif}
       end;
       TPOCACodeGeneratorLoops=array of TPOCACodeGeneratorLoop;
       TPOCACodeGeneratorScopeSymbolKind=
@@ -34288,6 +34291,9 @@ var TokenList:PPOCAToken;
      l^.CountContinueJumps:=0;
      l^.BreakRegisters:=nil;
      l^.ContinueRegisters:=nil;
+{$ifdef POCAClosureCopyOnIteration}
+     l^.HasPushLevel:=false;
+{$endif}
      StartBreakContinueScope(bcskLOOP,CodeGenerator^.LoopTop);
      inc(CodeGenerator^.LoopTop);
      result:=CodeGenerator^.ByteCodeSize;
@@ -35015,6 +35021,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
        if NeedIterationLevel then begin
         EmitOpcode(popPUSHLOCALVALUELEVEL);
+        CodeGenerator^.Loops[CodeGenerator^.LoopTop-1].HasPushLevel:=true;
        end;
 {$endif}
        ContinuePos:=CodeGenerator^.ByteCodeSize;
@@ -35054,6 +35061,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
        if NeedIterationLevel then begin
         EmitOpcode(popPUSHLOCALVALUELEVEL);
+        CodeGenerator^.Loops[CodeGenerator^.LoopTop-1].HasPushLevel:=true;
        end;
 {$endif}
        ContinuePos:=CodeGenerator^.ByteCodeSize;
@@ -35148,6 +35156,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
        if NeedIterationLevel then begin
         EmitOpcode(popPUSHLOCALVALUELEVEL);
+        CodeGenerator^.Loops[CodeGenerator^.LoopTop-1].HasPushLevel:=true;
        end;
 {$endif}
        JumpNext:=CodeGenerator^.ByteCodeSize;
@@ -35184,6 +35193,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
        if NeedIterationLevel then begin
         EmitOpcode(popPUSHLOCALVALUELEVEL);
+        CodeGenerator^.Loops[CodeGenerator^.LoopTop-1].HasPushLevel:=true;
        end;
 {$endif}
        JumpNext:=CodeGenerator^.ByteCodeSize;
@@ -35277,6 +35287,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
        if NeedIterationLevel then begin
         EmitOpcode(popPUSHLOCALVALUELEVEL);
+        CodeGenerator^.Loops[CodeGenerator^.LoopTop-1].HasPushLevel:=true;
        end;
 {$endif}
        if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
@@ -35327,6 +35338,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
        if NeedIterationLevel then begin
         EmitOpcode(popPUSHLOCALVALUELEVEL);
+        CodeGenerator^.Loops[CodeGenerator^.LoopTop-1].HasPushLevel:=true;
        end;
 {$endif}
        if assigned(Init) and (Init^.Token<>ptEMPTY) then begin
@@ -35447,6 +35459,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
         if NeedIterationLevel then begin
          EmitOpcode(popPUSHLOCALVALUELEVEL);
+        CodeGenerator^.Loops[CodeGenerator^.LoopTop-1].HasPushLevel:=true;
         end;
 {$endif}
         Element:=StartElement;
@@ -35521,6 +35534,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
         if NeedIterationLevel then begin
          EmitOpcode(popPUSHLOCALVALUELEVEL);
+        CodeGenerator^.Loops[CodeGenerator^.LoopTop-1].HasPushLevel:=true;
         end;
 {$endif}
         Element:=StartElement;
@@ -35613,6 +35627,9 @@ var TokenList:PPOCAToken;
         LoopItem:PPOCACodeGeneratorLoop;
         SwitchItem:PPOCACodeGeneratorSwitch;
         BreakContinueScope,CurrentBreakContinueScope:PPOCACodeGeneratorBreakContinueScope;
+{$ifdef POCAClosureCopyOnIteration}
+        j:TPOCAInt32;
+{$endif}
     begin
      Levels:=1;
      Loop:=-1;
@@ -35696,6 +35713,15 @@ var TokenList:PPOCAToken;
      end;
      i:=CodeGenerator^.LoopTop-Levels;
      LoopItem:=@CodeGenerator^.Loops[i];
+{$ifdef POCAClosureCopyOnIteration}
+     // Emit POPs for all intermediate loops (between current innermost and target)
+     // that have a pushed local value level, so the OuterValueLevels stack stays balanced.
+     for j:=CodeGenerator^.LoopTop-1 downto i+1 do begin
+      if CodeGenerator^.Loops[j].HasPushLevel then begin
+       EmitOpcode(popPOPLOCALVALUELEVEL);
+      end;
+     end;
+{$endif}
      if t^.Token=ptBREAK then begin
       if LoopItem^.CountBreakJumps>=length(LoopItem^.BreakJumps) then begin
        if LoopItem^.CountBreakJumps=0 then begin
@@ -40254,8 +40280,23 @@ function POCARunByteCode(Context:PPOCAContext):TPOCAValue; forward;
 function POCARunTry(Context:PPOCAContext;Frame:PPOCAFrame;ResultReg,CatchReg,TryBlockPos,CatchBlockPos,FinallyBlockPos,EndPos:TPOCAUInt32):TPOCAUInt32;
 var FrameTop:TPOCAInt32;
     rv,v:TPOCAValue;
+{$ifdef POCAClosureCopyOnIteration}
+    SavedCountOuterValueLevels:TPOCAInt32;
+{$ifdef POCAClosureArrayValues}
+    SavedLocalValues:TPOCAValue;
+    SavedOuterValueLevels:TPOCAValue;
+{$else}
+    SavedLocalValues:TPOCAValueArray;
+    SavedOuterValueLevels:TPOCAValueArrayArray;
+{$endif}
+{$endif}
 begin
  FrameTop:=Context^.FrameTop;
+{$ifdef POCAClosureCopyOnIteration}
+ SavedCountOuterValueLevels:=Frame^.CountOuterValueLevels;
+ SavedLocalValues:=Frame^.LocalValues;
+ SavedOuterValueLevels:=Frame^.OuterValueLevels;
+{$endif}
  try
   try
    if TryBlockPos<>$ffffffff then begin
@@ -40276,6 +40317,11 @@ begin
     end else begin
      Context^.FrameTop:=FrameTop;
      Frame^.InstructionPointer:=CatchBlockPos;
+{$ifdef POCAClosureCopyOnIteration}
+     Frame^.CountOuterValueLevels:=SavedCountOuterValueLevels;
+     Frame^.LocalValues:=SavedLocalValues;
+     Frame^.OuterValueLevels:=SavedOuterValueLevels;
+{$endif}
      if CatchReg<>$ffffffff then begin
       if CurrentException is EPOCAError then begin
        if length(CurrentException.Message)>0 then begin
@@ -40318,6 +40364,11 @@ begin
   if FinallyBlockPos<>$ffffffff then begin
    Context^.FrameTop:=FrameTop;
    Frame^.InstructionPointer:=FinallyBlockPos;
+{$ifdef POCAClosureCopyOnIteration}
+   Frame^.CountOuterValueLevels:=SavedCountOuterValueLevels;
+   Frame^.LocalValues:=SavedLocalValues;
+   Frame^.OuterValueLevels:=SavedOuterValueLevels;
+{$endif}
    rv:=POCARunByteCode(Context);
   end;
   Context^.FrameTop:=FrameTop;
