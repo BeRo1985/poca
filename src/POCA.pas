@@ -25528,11 +25528,13 @@ var TokenList:PPOCAToken;
   begin
    s:='';
    repeat
-    i:=NextChar;
-    if (CurrentTokenChar<0) or (i in [0,10]) then begin
+    if GetToken=tNONE then begin
      break;
     end;
-    s:=s+PUCUUTF32CharToUTF8(i);
+    if (CurrentToken=tCHAR) and (CurrentTokenChar in [0,10]) then begin
+     break;
+    end;
+    s:=s+CurrentTokenString;
    until false;
    i:=ParserInstance.Preprocessor.PragmaInfoCount;
    inc(ParserInstance.Preprocessor.PragmaInfoCount);
