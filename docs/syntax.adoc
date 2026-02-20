@@ -342,6 +342,72 @@ The `scope` keyword creates a new scope, while the `code` keyword creates a new
 code block without introducing a new scope. This provides additional control over 
 variable visibility and lifetime.
 
+==== Loop closures pragma
+
+By default, POCA captures loop variables by reference, meaning all closures created 
+inside a loop share the same binding and see the final value of the loop variable 
+after the loop completes. This is the classic behavior described above.
+
+With the `loopclosures` pragma, POCA can instead give each loop iteration its own 
+copy of the captured variables. Closures created in different iterations then each 
+see the value from their own iteration, rather than all sharing the final value.
+
+**Without `loopclosures` (default behavior):**
+
+[source,javascript]
+----
+let fns = [];
+for (let i = 0; i < 3; i++) {
+  fns.push(() => i);
+}
+puts(fns[0]()); // 3
+puts(fns[1]()); // 3
+puts(fns[2]()); // 3
+----
+
+All three closures capture the same `i`, which ends up as 3 after the loop.
+
+**With `loopclosures on`:**
+
+[source,javascript]
+----
+#pragma loopclosures on
+let fns = [];
+for (let i = 0; i < 3; i++) {
+  fns.push(() => i);
+}
+puts(fns[0]()); // 0
+puts(fns[1]()); // 1
+puts(fns[2]()); // 2
+----
+
+Each iteration gets its own copy of `i`, so each closure remembers the value 
+from its iteration.
+
+The pragma can be toggled on and off at any point in the source:
+
+[source,javascript]
+----
+#pragma loopclosures on   // enable per-iteration capture
+#pragma loopclosures off  // disable (back to default shared capture)
+----
+
+It can also be used in the function-call form:
+
+[source,javascript]
+----
+#pragma("loopclosures on")
+----
+
+The pragma applies to `for`, `foreach`, `forindex`, `forkey`, `while`, and 
+`do`/`while` loops. It only adds overhead in loops whose body actually contains 
+nested function definitions (closures); loops without closures are unaffected.
+
+NOTE: Variables declared _outside_ the loop (e.g. a counter declared before a 
+`while` loop) are still shared across iterations, since they belong to the 
+enclosing scope. Only the loop's own iteration variables and body-scoped 
+`let`/`const` declarations get per-iteration copies.
+
 ==== Static vs Dynamic Scoping
 
 An important distinction in POCA is that `let` and `const` follow static scoping rules based 
