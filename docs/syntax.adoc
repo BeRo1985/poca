@@ -403,6 +403,10 @@ The pragma applies to `for`, `foreach`, `forindex`, `forkey`, `while`, and
 `do`/`while` loops. It only adds overhead in loops whose body actually contains 
 nested function definitions (closures); loops without closures are unaffected.
 
+Since per-iteration copying _can_ have a performance cost (each iteration 
+allocates a snapshot of the captured variables), the pragma is disabled by 
+default. Enable it only where you actually need per-iteration capture semantics.
+
 NOTE: Variables declared _outside_ the loop (e.g. a counter declared before a 
 `while` loop) are still shared across iterations, since they belong to the 
 enclosing scope. Only the loop's own iteration variables and body-scoped 
