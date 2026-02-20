@@ -30990,6 +30990,32 @@ var TokenList:PPOCAToken;
     ScanToken(ta);
     ScanToken(tb);
    end;
+{$ifdef POCAClosureCopyOnIteration}
+   function HasNestedFunctionsInTree(t:PPOCAToken):boolean;
+    procedure ScanToken(t:PPOCAToken);
+    begin
+     if (not result) and (assigned(t) and (t^.VisitedGeneration<>TokenListVisitedGeneration)) then begin
+      t^.VisitedGeneration:=TokenListVisitedGeneration;
+      case t^.Token of
+       ptFUNCTION,ptFASTFUNCTION,ptCLASSFUNCTION,ptMODULEFUNCTION:begin
+        result:=true;
+       end else begin
+        ScanToken(t^.Children);
+        ScanToken(t^.LastChild);
+        ScanToken(t^.Previous);
+        ScanToken(t^.Next);
+        ScanToken(t^.Left);
+        ScanToken(t^.Right);
+       end;
+      end;
+     end;
+    end;
+   begin
+    result:=false;
+    IncrementTokenListVisitedGeneration;
+    ScanToken(t);
+   end;
+{$endif}
    procedure ProcessConstantFolding(t:PPOCAToken);
     procedure ScanToken(t,p:PPOCAToken;IsExpression:boolean);
      function ToNum(l:PPOCAToken):double;
@@ -34977,7 +35003,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
       SavedLevel:=-1;
       NeedIterationLevel:=false;
-      if Instance^.ClosureCopyOnIteration and CodeGenerator^.HasNestedFunctions then begin
+      if Instance^.ClosureCopyOnIteration and HasNestedFunctionsInTree(Body) then begin
        SavedLevel:=CodeGenerator^.Level;
        inc(CodeGenerator^.Level);
        NeedIterationLevel:=true;
@@ -35110,7 +35136,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
       SavedLevel:=-1;
       NeedIterationLevel:=false;
-      if Instance^.ClosureCopyOnIteration and CodeGenerator^.HasNestedFunctions then begin
+      if Instance^.ClosureCopyOnIteration and HasNestedFunctionsInTree(Body) then begin
        SavedLevel:=CodeGenerator^.Level;
        inc(CodeGenerator^.Level);
        NeedIterationLevel:=true;
@@ -35239,7 +35265,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
       SavedLevel:=-1;
       NeedIterationLevel:=false;
-      if Instance^.ClosureCopyOnIteration and CodeGenerator^.HasNestedFunctions then begin
+      if Instance^.ClosureCopyOnIteration and HasNestedFunctionsInTree(Body) then begin
        SavedLevel:=CodeGenerator^.Level;
        inc(CodeGenerator^.Level);
        NeedIterationLevel:=true;
@@ -35411,7 +35437,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
        SavedLevel:=-1;
        NeedIterationLevel:=false;
-       if Instance^.ClosureCopyOnIteration and CodeGenerator^.HasNestedFunctions then begin
+       if Instance^.ClosureCopyOnIteration and HasNestedFunctionsInTree(Body) then begin
         SavedLevel:=CodeGenerator^.Level;
         inc(CodeGenerator^.Level);
         NeedIterationLevel:=true;
