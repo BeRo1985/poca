@@ -82,4 +82,5 @@ foreach (let fn in fns5) {
   puts(fn());
 }
 // Expected: 0,0 0,1 1,0 1,1 2,0 2,1
-// Note: j is while-body scoped, so j captures the value at iteration time
+// Note: k is while-body scoped, so k captures the value at iteration time of j
+
