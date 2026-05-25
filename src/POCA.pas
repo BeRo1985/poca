@@ -47447,12 +47447,12 @@ begin
  if Context^.NativeCallDepth>0 then begin
   SubContext:=POCAContextSub(Context);
   try
-   POCACall(SubContext,Func,Arguments,CountArguments,Obj,Locals);
+   result:=POCACall(SubContext,Func,Arguments,CountArguments,Obj,Locals);
   finally
    POCAContextDestroy(SubContext);
   end;
  end else begin
-  POCACall(Context,Func,Arguments,CountArguments,Obj,Locals);
+  result:=POCACall(Context,Func,Arguments,CountArguments,Obj,Locals);
  end;
 end;
 
@@ -47462,12 +47462,12 @@ begin
  if aContext^.NativeCallDepth>0 then begin
   SubContext:=POCAContextSub(aContext);
   try
-   POCACall(SubContext,aFunc,aArguments,aObj,aLocals);
+   result:=POCACall(SubContext,aFunc,aArguments,aObj,aLocals);
   finally
    POCAContextDestroy(SubContext);
   end;
  end else begin
-  POCACall(aContext,aFunc,aArguments,aObj,aLocals);
+  result:=POCACall(aContext,aFunc,aArguments,aObj,aLocals);
  end;
 end;
 
