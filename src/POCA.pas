@@ -359,7 +359,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2026-05-25-05-43-0000';
+const POCAVersion='2026-05-25-06-03-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -2333,6 +2333,9 @@ function POCABindToContext(Context:PPOCAContext;Code:TPOCAValue):TPOCAValue;
 
 function POCACall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue; overload;
 function POCACall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValue;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
+
+function POCASafeCall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue; overload;
+function POCASafeCall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValue;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
 
 procedure POCARuntimeError(Context:PPOCAContext;const Msg:TPOCAUTF8String);
 
@@ -47435,6 +47438,36 @@ begin
   result:=POCACall(aContext,aFunc,@aArguments[0],length(aArguments),aObj,aLocals);
  end else begin
   result:=POCACall(aContext,aFunc,nil,0,aObj,aLocals);
+ end;
+end;
+
+function POCASafeCall(Context:PPOCAContext;Func:TPOCAValue;Arguments:PPOCAValues;CountArguments:TPOCAInt32;Obj:TPOCAValue;Locals:TPOCAValue):TPOCAValue; overload;
+var SubContext:PPOCAContext;
+begin
+ if Context^.NativeCallDepth>0 then begin
+  SubContext:=POCAContextSub(Context);
+  try
+   POCACall(SubContext,Func,Arguments,CountArguments,Obj,Locals);
+  finally
+   POCAContextDestroy(SubContext);
+  end;
+ end else begin
+  POCACall(Context,Func,Arguments,CountArguments,Obj,Locals);
+ end;
+end;
+
+function POCASafeCall(const aContext:PPOCAContext;const aFunc:TPOCAValue;const aArguments:array of TPOCAValue;const aObj:TPOCAValue;const aLocals:TPOCAValue):TPOCAValue; overload;
+var SubContext:PPOCAContext;
+begin
+ if aContext^.NativeCallDepth>0 then begin
+  SubContext:=POCAContextSub(aContext);
+  try
+   POCACall(SubContext,aFunc,aArguments,aObj,aLocals);
+  finally
+   POCAContextDestroy(SubContext);
+  end;
+ end else begin
+  POCACall(aContext,aFunc,aArguments,aObj,aLocals);
  end;
 end;
 
