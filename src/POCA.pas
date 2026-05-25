@@ -6,7 +6,7 @@
  *                                zlib license                                *
  *============================================================================*
  *                                                                            *
- * Copyright (C) 2011-2025, Benjamin Rosseaux (benjamin@rosseaux.com)         *
+ * Copyright (C) 2011-2026, Benjamin Rosseaux (benjamin@rosseaux.com)         *
  *                                                                            *
  * This software is provided 'as-is', without any express or implied          *
  * warranty. In no event will the authors be held liable for any damages      *
@@ -359,7 +359,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2025-12-23-03-16-0000';
+const POCAVersion='2026-05-25-05-43-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1797,6 +1797,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       FrameStack:TPOCAFrameStack;
       FrameTop:TPOCAInt32;
+
+      NativeCallDepth:TPOCAInt32;
 
       TemporarySavedObjects:PPPOCAObjects;
       TemporarySavedObjectCount:TPOCAInt32;
@@ -14036,6 +14038,7 @@ procedure POCAContextInit(Context:PPOCAContext);
 begin
  Context^.Active:=true;
  Context^.FrameTop:=0;
+ Context^.NativeCallDepth:=0;
  if assigned(Context^.TemporarySavedObjects) and (Context^.TemporarySavedObjectSize>32) then begin
   FreeMem(Context^.TemporarySavedObjects);
   Context^.TemporarySavedObjects:=nil;
@@ -40280,7 +40283,7 @@ end;
 function POCARunByteCode(Context:PPOCAContext):TPOCAValue; forward;
 
 function POCARunTry(Context:PPOCAContext;Frame:PPOCAFrame;ResultReg,CatchReg,TryBlockPos,CatchBlockPos,FinallyBlockPos,EndPos:TPOCAUInt32):TPOCAUInt32;
-var FrameTop:TPOCAInt32;
+var FrameTop,NativeCallDepth:TPOCAInt32;
     rv,v:TPOCAValue;
 {$ifdef POCAClosureCopyOnIteration}
     SavedCountOuterValueLevels:TPOCAInt32;
@@ -40294,6 +40297,7 @@ var FrameTop:TPOCAInt32;
 {$endif}
 begin
  FrameTop:=Context^.FrameTop;
+ NativeCallDepth:=Context^.NativeCallDepth;
 {$ifdef POCAClosureCopyOnIteration}
  SavedCountOuterValueLevels:=Frame^.CountOuterValueLevels;
  SavedLocalValues:=Frame^.LocalValues;
@@ -40303,6 +40307,7 @@ begin
   try
    if TryBlockPos<>$ffffffff then begin
     Context^.FrameTop:=FrameTop;
+    Context^.NativeCallDepth:=NativeCallDepth;
     Frame^.InstructionPointer:=TryBlockPos;
     rv:=POCARunByteCode(Context);
    end else begin
@@ -40318,6 +40323,7 @@ begin
      raise;
     end else begin
      Context^.FrameTop:=FrameTop;
+     Context^.NativeCallDepth:=NativeCallDepth;
      Frame^.InstructionPointer:=CatchBlockPos;
 {$ifdef POCAClosureCopyOnIteration}
      Frame^.CountOuterValueLevels:=SavedCountOuterValueLevels;
@@ -40365,6 +40371,7 @@ begin
  finally
   if FinallyBlockPos<>$ffffffff then begin
    Context^.FrameTop:=FrameTop;
+   Context^.NativeCallDepth:=NativeCallDepth;
    Frame^.InstructionPointer:=FinallyBlockPos;
 {$ifdef POCAClosureCopyOnIteration}
    Frame^.CountOuterValueLevels:=SavedCountOuterValueLevels;
@@ -40374,6 +40381,7 @@ begin
    rv:=POCARunByteCode(Context);
   end;
   Context^.FrameTop:=FrameTop;
+  Context^.NativeCallDepth:=NativeCallDepth;
  end;
  result:=EndPos;
  Frame^.Registers[ResultReg]:=rv;
