@@ -359,7 +359,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2026-05-25-06-03-0000';
+const POCAVersion='2026-07-13-00-59-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1538,6 +1538,14 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       MarkHookMethod:TPOCAGarbageCollectorMarkHookMethod;
      end;
 
+     PPOCAGarbageCollectorThreadRegistration=^TPOCAGarbageCollectorThreadRegistration;
+     TPOCAGarbageCollectorThreadRegistration=record
+      ThreadID:TThreadID; // Thread ID as returned by POCAGetCurrentThreadID, 0 = empty hash table slot
+      Count:TPOCAInt32; // Count of active garbage collector safepoint registrations (lock/unlock brackets) of this thread at this instance
+     end;
+
+     TPOCAGarbageCollectorThreadRegistrations=array of TPOCAGarbageCollectorThreadRegistration;
+
      PPOCAGarbageCollector=^TPOCAGarbageCollector;
 
      { TPOCAGarbageCollector }
@@ -1688,6 +1696,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       ThreadCount:TPOCAInt32;
       WaitCount:TPOCAInt32;
+      ThreadRegistrations:TPOCAGarbageCollectorThreadRegistrations; // Per-thread safepoint registration counters of this instance, protected by Lock
+      CountThreadRegistrations:TPOCAInt32;
       RequestGarbageCollection:TPOCARequestGarbageCollection;
       Bottleneck:TPOCABool32;
       Lock:TPOCAPointer;
@@ -2299,8 +2309,9 @@ function POCAContextUserIOWriteLn(const aContext:PPOCAContext;const aString:TPOC
 function POCAContextUserIOReadLn(const aContext:PPOCAContext;out aString:TPOCAUTF8String;out aNull:Boolean):Boolean;
 function POCAContextUserIOFlush(const aContext:PPOCAContext):Boolean;
 
-{$ifdef POCAThreadContextTracking}
 function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
+
+{$ifdef POCAThreadContextTracking}
 function POCAGetCurrentThreadContext:PPOCAContext;
 procedure POCAPushThreadContext(const aContext:PPOCAContext);
 procedure POCAPopThreadContext;
@@ -8639,35 +8650,113 @@ begin
  end;
 end;
 
-procedure POCAGarbageCollectorBottleneck(Instance:PPOCAInstance); {$ifdef UseRegister}register;{$endif}
+// Looks up (and if needed creates) the safepoint registration counter slot of the current thread for the given instance, so that each
+// instance has its own per-thread registration view. The caller must hold Instance^.Globals.Lock, and the returned pointer is only
+// valid as long as this lock is still held, since the hash table can grow in the meantime otherwise.
+function POCAGarbageCollectorGetThreadRegistration(Instance:PPOCAInstance):PPOCAGarbageCollectorThreadRegistration; {$ifdef UseRegister}register;{$endif}
+var CurrentThreadID:TThreadID;
+    Index,Mask,OldIndex:TPOCAInt32;
+    OldThreadRegistrations:TPOCAGarbageCollectorThreadRegistrations;
 begin
- TPasMPInterlocked.Exchange(TPOCAInt32(Instance^.Globals.Bottleneck),TPOCAInt32(TPOCABool32(true)));
- while Instance^.Globals.Bottleneck and (Instance^.Globals.WaitCount<(Instance^.Globals.ThreadCount-1)) do begin
-  TPasMPInterlocked.Increment(Instance^.Globals.WaitCount);
-  POCALockLeave(Instance^.Globals.Lock);
-  try
-   POCASemaphoreDown(Instance^.Globals.Semaphore);
-  finally
-   POCALockEnter(Instance^.Globals.Lock);
-  end;
-  TPasMPInterlocked.Decrement(Instance^.Globals.WaitCount);
+ CurrentThreadID:=POCAGetCurrentThreadID;
+ if length(Instance^.Globals.ThreadRegistrations)=0 then begin
+  SetLength(Instance^.Globals.ThreadRegistrations,16);
+  Instance^.Globals.CountThreadRegistrations:=0;
  end;
- if Instance^.Globals.WaitCount>=(Instance^.Globals.ThreadCount-1) then begin
-  POCAFreeDead(Instance);
-  case Instance^.Globals.RequestGarbageCollection of
-   prgcCYCLE:begin
-    Instance^.Globals.GarbageCollector.CollectCycle;
+ repeat
+  Mask:=length(Instance^.Globals.ThreadRegistrations)-1;
+  Index:=TPOCAInt32(TPOCAPtrUInt(CurrentThreadID)) and Mask;
+  repeat
+   result:=@Instance^.Globals.ThreadRegistrations[Index];
+   if result^.ThreadID=CurrentThreadID then begin
+    exit;
+   end else if result^.ThreadID=0 then begin
+    break;
+   end else begin
+    // Linear probing
+    Index:=(Index+1) and Mask;
    end;
-   prgcFULLEPHEMERAL,prgcFULL:begin
-    Instance^.Globals.GarbageCollector.CollectAll;
+  until false;
+  if ((Instance^.Globals.CountThreadRegistrations+1) shl 1)<=length(Instance^.Globals.ThreadRegistrations) then begin
+   // Claim the found empty slot, entries are never removed again, so that no tombstones are needed
+   result^.ThreadID:=CurrentThreadID;
+   result^.Count:=0;
+   inc(Instance^.Globals.CountThreadRegistrations);
+   exit;
+  end else begin
+   // Grow and rehash at 50% load factor
+   OldThreadRegistrations:=Instance^.Globals.ThreadRegistrations;
+   Instance^.Globals.ThreadRegistrations:=nil;
+   SetLength(Instance^.Globals.ThreadRegistrations,length(OldThreadRegistrations) shl 1);
+   Mask:=length(Instance^.Globals.ThreadRegistrations)-1;
+   for OldIndex:=0 to length(OldThreadRegistrations)-1 do begin
+    if OldThreadRegistrations[OldIndex].ThreadID<>0 then begin
+     Index:=TPOCAInt32(TPOCAPtrUInt(OldThreadRegistrations[OldIndex].ThreadID)) and Mask;
+     while Instance^.Globals.ThreadRegistrations[Index].ThreadID<>0 do begin
+      Index:=(Index+1) and Mask;
+     end;
+     Instance^.Globals.ThreadRegistrations[Index]:=OldThreadRegistrations[OldIndex];
+    end;
    end;
-   else begin
+   OldThreadRegistrations:=nil;
+  end;
+ until false;
+end;
+
+procedure POCAGarbageCollectorBottleneck(Instance:PPOCAInstance); {$ifdef UseRegister}register;{$endif}
+var ThreadRegistration:PPOCAGarbageCollectorThreadRegistration;
+    TemporarilyRegistered:boolean;
+begin
+ // The WaitCount>=(ThreadCount-1) threshold assumes that the requesting thread is one of the ThreadCount registered threads. A thread
+ // outside of a lock/unlock safepoint bracket (for example a host thread which requests a garbage collection cycle) must therefore
+ // register itself temporarily, since the garbage collector would otherwise run concurrently to a single still running script thread.
+ ThreadRegistration:=POCAGarbageCollectorGetThreadRegistration(Instance);
+ TemporarilyRegistered:=ThreadRegistration^.Count=0;
+ if TemporarilyRegistered then begin
+  inc(ThreadRegistration^.Count);
+  TPasMPInterlocked.Increment(Instance^.Globals.ThreadCount);
+ end;
+ try
+  TPasMPInterlocked.Exchange(TPOCAInt32(Instance^.Globals.Bottleneck),TPOCAInt32(TPOCABool32(true)));
+  while Instance^.Globals.Bottleneck and (Instance^.Globals.WaitCount<(Instance^.Globals.ThreadCount-1)) do begin
+   TPasMPInterlocked.Increment(Instance^.Globals.WaitCount);
+   POCALockLeave(Instance^.Globals.Lock);
+   try
+    POCASemaphoreDown(Instance^.Globals.Semaphore);
+   finally
+    POCALockEnter(Instance^.Globals.Lock);
+   end;
+   TPasMPInterlocked.Decrement(Instance^.Globals.WaitCount);
+  end;
+  if Instance^.Globals.WaitCount>=(Instance^.Globals.ThreadCount-1) then begin
+   POCAFreeDead(Instance);
+   case Instance^.Globals.RequestGarbageCollection of
+    prgcCYCLE:begin
+     Instance^.Globals.GarbageCollector.CollectCycle;
+    end;
+    prgcFULLEPHEMERAL,prgcFULL:begin
+     Instance^.Globals.GarbageCollector.CollectAll;
+    end;
+    else begin
+    end;
+   end;
+   if Instance^.Globals.WaitCount<>0 then begin
+    POCASemaphoreUp(Instance^.Globals.Semaphore,Instance^.Globals.WaitCount);
+   end;
+   TPasMPInterlocked.Exchange(TPOCAInt32(Instance^.Globals.Bottleneck),TPOCAInt32(TPOCABool32(false)));
+  end;
+ finally
+  if TemporarilyRegistered then begin
+   // Look up the slot again, since the hash table can have grown while the wait loop had the lock temporarily released
+   ThreadRegistration:=POCAGarbageCollectorGetThreadRegistration(Instance);
+   if ThreadRegistration^.Count>0 then begin
+    dec(ThreadRegistration^.Count);
+   end;
+   TPasMPInterlocked.Decrement(Instance^.Globals.ThreadCount);
+   if (Instance^.Globals.WaitCount>0) and (Instance^.Globals.ThreadCount=Instance^.Globals.WaitCount) then begin
+    POCASemaphoreUp(Instance^.Globals.Semaphore,1);
    end;
   end;
-  if Instance^.Globals.WaitCount<>0 then begin
-   POCASemaphoreUp(Instance^.Globals.Semaphore,Instance^.Globals.WaitCount);
-  end;
-  TPasMPInterlocked.Exchange(TPOCAInt32(Instance^.Globals.Bottleneck),TPOCAInt32(TPOCABool32(false)));
  end;
 end;
 
@@ -8701,6 +8790,7 @@ begin
  try
   TPasMPInterlocked.Increment(Instance^.Globals.ThreadCount);
   TPasMPInterlocked.Increment(Context^.GarbageCollectorLockCount);
+  inc(POCAGarbageCollectorGetThreadRegistration(Instance)^.Count);
  finally
   POCALockLeave(Instance^.Globals.Lock);
  end;
@@ -8709,6 +8799,7 @@ end;
 
 procedure POCAGarbageCollectorUnlock(Context:PPOCAContext); {$ifdef UseRegister}register;{$endif}
 var Instance:PPOCAInstance;
+    ThreadRegistration:PPOCAGarbageCollectorThreadRegistration;
 begin
  if Context^.GarbageCollectorLockCount>0 then begin
   Instance:=Context^.Instance;
@@ -8716,6 +8807,10 @@ begin
   try
    TPasMPInterlocked.Decrement(Context^.GarbageCollectorLockCount);
    TPasMPInterlocked.Decrement(Instance^.Globals.ThreadCount);
+   ThreadRegistration:=POCAGarbageCollectorGetThreadRegistration(Instance);
+   if ThreadRegistration^.Count>0 then begin
+    dec(ThreadRegistration^.Count); // Guarded, since a context can be unlocked by another thread than the locking one (context destroy safety net)
+   end;
    if (Instance^.Globals.WaitCount>0) and (Instance^.Globals.ThreadCount=Instance^.Globals.WaitCount) then begin
     POCASemaphoreUp(Instance^.Globals.Semaphore,1);
    end;
@@ -12570,6 +12665,7 @@ begin
     TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
     TPasMPInterlocked.Increment(HashRec^.RealSize);
     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Key); // Shade also the new key, so that a white key object survives its insertion into an already black hash
     if assigned(HashRec^.Events) then begin
      POCAHashPutHashEvents(Hash,HashRec,Key,Value);
     end;
@@ -12638,6 +12734,7 @@ begin
      TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
      TPasMPInterlocked.Increment(HashRec^.RealSize);
      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Key); // Shade also the new key, so that a white key object survives its insertion into an already black hash
      if assigned(HashRec^.Events) then begin
       POCAHashPutHashEvents(Hash,HashRec,Key,Value);
      end;
@@ -13127,6 +13224,7 @@ begin
    TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
    TPasMPInterlocked.Increment(HashRec^.RealSize);
    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Key); // Shade also the new key, so that a white key object survives its insertion into an already black hash
    if assigned(HashRec^.Events) then begin
     POCAHashPutHashEvents(Hash,HashRec,Key,Value);
    end;
@@ -14521,8 +14619,6 @@ begin
  end;
 end;
 
-{$ifdef POCAThreadContextTracking}
-
 function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
 begin
 {$if defined(Windows)}
@@ -14535,6 +14631,8 @@ begin
  {$error Unsupported platform}
 {$ifend}
 end;
+
+{$ifdef POCAThreadContextTracking}
 
 function POCAGetThreadContextStack(const aThreadID:TThreadID;const aCreate:Boolean):PPOCAThreadContextStack;
 var Index,StartIndex,OldCapacity,NewIndex:TPOCAInt32;
@@ -38830,6 +38928,7 @@ begin
       POCAArrayFastSetWithBarrier(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[Index].Level),Code^.ArgumentLocals[Index].Index,Value);
      end;
 {$else}
+     TPOCAGarbageCollector.WriteBarrier(nil,Value); // Shade the stored value, since the target closure value array may be shared with already black closure function objects
      if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
       Frame^.LocalValues[Code^.ArgumentLocals[Index].Index]:=Value;
      end else begin
@@ -38882,6 +38981,7 @@ begin
       POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[Index].Level),Code^.OptionalArgumentLocals[Index].Index,Value);
      end;
 {$else}
+     TPOCAGarbageCollector.WriteBarrier(nil,Value); // Shade the stored value, since the target closure value array may be shared with already black closure function objects
      if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
       Frame^.LocalValues[Code^.OptionalArgumentLocals[Index].Index]:=Value;
      end else begin
@@ -39004,6 +39104,7 @@ begin
       POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[i].Level),Code^.ArgumentLocals[i].Index,Value);
      end;
 {$else}
+     TPOCAGarbageCollector.WriteBarrier(nil,Value); // Shade the stored value, since the target closure value array may be shared with already black closure function objects
      if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
       Frame^.LocalValues[Code^.ArgumentLocals[Index].Index]:=Value;
      end else begin
@@ -39043,6 +39144,7 @@ begin
      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[i].Level),Code^.OptionalArgumentLocals[i].Index,Value);
     end;
 {$else}
+    TPOCAGarbageCollector.WriteBarrier(nil,Value); // Shade the stored value, since the target closure value array may be shared with already black closure function objects
     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
      Frame^.LocalValues[Code^.OptionalArgumentLocals[Index].Index]:=Value;
     end else begin
@@ -44498,6 +44600,47 @@ begin
 {$else}
      // Frame^.LocalValues[Operands^[0]]:=Registers^[Operands^[1]];
 
+     // Inline garbage collector write barrier fast path: Plain values, null and non-white objects are stored directly, while white
+     // objects fall back to the interpreter opcode handler, which applies the write barrier for stores into the possibly
+     // closure-captured local value array.
+
+     Add(#$66#$81#$bb); // cmp word ptr [rbx+RegisterOfs+6],$ffff (POCAValueReferenceSignalMask check)
+     AddDWord((Operands^[1]*sizeof(TPOCAValue))+6);
+     Add(#$ff#$ff);
+
+     Add(#$75#$36); // jne +$36 (not a reference, jump to the plain store)
+
+     Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(TPOCAValue));
+
+     Add(#$48#$b9); // mov rcx,POCAValueReferenceMask
+     AddQWord(POCAValueReferenceMask);
+
+     Add(#$48#$21#$c1); // and rcx,rax (RCX = object pointer)
+
+     Add(#$74#$20); // jz +$20 (null, jump to the plain store)
+
+     Add(#$49#$8b#$84#$24); // mov rax,qword ptr [r12+TPOCAContext.Instance]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.Instance)));
+
+     Add(#$8b#$80); // mov eax,dword ptr [rax+TPOCAGarbageCollector.WhiteMask]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInstance(nil)^.Globals))+TPOCAPtrUInt(Pointer(@PPOCAGlobals(nil)^.GarbageCollector.WhiteMask)));
+
+     Add(#$85#$81); // test dword ptr [rcx+TPOCAGarbageCollectorHeader.State],eax
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAObject(nil)^.Header.GarbageCollector.State)));
+
+     Add(#$74#$0a); // jz +$0a (not white, jump to the plain store)
+
+     // White object, fall back to the interpreter opcode handler for the write barrier
+     Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],LastPC
+     AddDWord(LastPC);
+
+     Add(#$31#$c0); // xor eax,eax
+
+     Add(#$c3); // ret
+
+     // Plain store fast path continues here
+
      // Load value from Registers[Operands^[1]]
      Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
      AddDWord(Operands^[1]*sizeof(TPOCAValue));
@@ -44541,6 +44684,47 @@ begin
      DoItByVMOpcodeDispatcher;
 {$else}
      // Frame^.OuterValueLevels[Operands^[0]][Operands^[1]]:=Registers^[Operands^[2]];
+
+     // Inline garbage collector write barrier fast path: Plain values, null and non-white objects are stored directly, while white
+     // objects fall back to the interpreter opcode handler, which applies the write barrier for stores into the shared outer
+     // closure value arrays.
+
+     Add(#$66#$81#$bb); // cmp word ptr [rbx+RegisterOfs+6],$ffff (POCAValueReferenceSignalMask check)
+     AddDWord((Operands^[2]*sizeof(TPOCAValue))+6);
+     Add(#$ff#$ff);
+
+     Add(#$75#$36); // jne +$36 (not a reference, jump to the plain store)
+
+     Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[2]*sizeof(TPOCAValue));
+
+     Add(#$48#$b9); // mov rcx,POCAValueReferenceMask
+     AddQWord(POCAValueReferenceMask);
+
+     Add(#$48#$21#$c1); // and rcx,rax (RCX = object pointer)
+
+     Add(#$74#$20); // jz +$20 (null, jump to the plain store)
+
+     Add(#$49#$8b#$84#$24); // mov rax,qword ptr [r12+TPOCAContext.Instance]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.Instance)));
+
+     Add(#$8b#$80); // mov eax,dword ptr [rax+TPOCAGarbageCollector.WhiteMask]
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInstance(nil)^.Globals))+TPOCAPtrUInt(Pointer(@PPOCAGlobals(nil)^.GarbageCollector.WhiteMask)));
+
+     Add(#$85#$81); // test dword ptr [rcx+TPOCAGarbageCollectorHeader.State],eax
+     AddDWord(TPOCAPtrUInt(Pointer(@PPOCAObject(nil)^.Header.GarbageCollector.State)));
+
+     Add(#$74#$0a); // jz +$0a (not white, jump to the plain store)
+
+     // White object, fall back to the interpreter opcode handler for the write barrier
+     Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],LastPC
+     AddDWord(LastPC);
+
+     Add(#$31#$c0); // xor eax,eax
+
+     Add(#$c3); // ret
+
+     // Plain store fast path continues here
 
      // Load value from Registers[Operands^[2]]
      Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+RegisterOfs]
@@ -46515,6 +46699,7 @@ begin
 {$ifdef POCAClosureArrayValues}
     POCAArrayFastSetWithBarrier(Frame^.LocalValues,Operands^[0],Registers^[Operands^[1]]);
 {$else}
+    TPOCAGarbageCollector.WriteBarrier(nil,Registers^[Operands^[1]]); // Shade the stored value, since the local values array may be captured by already black closure function objects
     Frame^.LocalValues[Operands^[0]]:=Registers^[Operands^[1]];
 {$endif}
    end;
@@ -46529,6 +46714,7 @@ begin
 {$ifdef POCAClosureArrayValues}
     POCAArrayFastSetWithBarrier(POCAArrayFastGet(Frame^.OuterValueLevels,Operands^[0]),Operands^[1],Registers^[Operands^[2]]);
 {$else}
+    TPOCAGarbageCollector.WriteBarrier(nil,Registers^[Operands^[2]]); // Shade the stored value, since the outer value arrays are shared with closure function objects that may already be black
     Frame^.OuterValueLevels[Operands^[0]][Operands^[1]]:=Registers^[Operands^[2]];
 {$endif}
    end;
