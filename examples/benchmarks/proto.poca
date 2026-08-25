@@ -1,0 +1,15 @@
+// Property read on an object WITH a prototype, so that the lookup goes through
+// the prototype chain cache rather than the plain hash record path.
+
+let Base = { x: 0, y: 5 };
+let obj = { };
+obj.prototype = Base;
+
+let ta = DateTime.now();
+let s = 0;
+for (let i = 0; i <= 4999; i++)
+  for (let j = 0; j <= 4999; j++)
+    s = s + obj.y;
+
+puts("Time: ", Math.round(DateTime.milliseconds(DateTime.now() - ta)), "ms\n");
+puts("s=", s, "\n");

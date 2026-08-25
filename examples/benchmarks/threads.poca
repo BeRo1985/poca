@@ -1,0 +1,33 @@
+let ta = DateTime.now();
+
+let a = 0;
+let b = 0;
+
+function inc_a() {
+  let a1 = 0;
+  for (let i = 0; i <= 200000000; i++) {
+    a1 = a1 + 1;
+  }
+  a = a1
+}
+
+function inc_b() {
+  let b1 = 0;
+  for (let i = 0; i <= 200000000; i++) {
+    b1 = b1 + 1;
+  }
+  b = b1
+}
+
+var thread1 = new Thread(inc_a);
+var thread2 = new Thread(inc_b);
+
+thread1.start();
+thread2.start();
+
+thread1.wait();
+thread2.wait();
+
+let tb = DateTime.now();
+
+puts("\nFinished in: ", Math.round(DateTime.milliseconds(tb - ta)), "ms");

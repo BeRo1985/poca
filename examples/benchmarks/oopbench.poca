@@ -1,0 +1,62 @@
+// Class based benchmark: field access and method calls through the prototype
+// chain, which none of the other benchmarks here exercise. Deterministically
+// initialized, so that the checksum can be compared across builds.
+//
+// Note: the "@" shorthand does not carry across a chain, so "this.pos.x" has to
+// be spelled out rather than written as "@pos.x".
+
+const N = 1000;
+const STEPS = 3000;
+const W = 1024.0, H = 768.0, DT = 1.0 / 60.0;
+
+class Vec2 {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+  function addScaled(o, s) {
+    this.x = this.x + o.x * s;
+    this.y = this.y + o.y * s;
+    return this;
+  }
+  function lengthSquared() { return this.x * this.x + this.y * this.y; }
+}
+
+class Entity {
+  constructor(i) {
+    this.pos = new Vec2((i * 37) % 1024, (i * 53) % 768);
+    this.vel = new Vec2(((i * 17) % 200) - 100.0, ((i * 29) % 200) - 100.0);
+    this.radius = 4.0;
+    this.energy = 0.0;
+  }
+  function integrate(dt) {
+    this.pos.addScaled(this.vel, dt);
+    // wrap around the play field
+    if (this.pos.x < 0.0) this.pos.x = this.pos.x + W;
+    if (this.pos.x >= W) this.pos.x = this.pos.x - W;
+    if (this.pos.y < 0.0) this.pos.y = this.pos.y + H;
+    if (this.pos.y >= H) this.pos.y = this.pos.y - H;
+  }
+  function accumulate() {
+    this.energy = this.energy + this.vel.lengthSquared() * 0.5;
+  }
+}
+
+let list = new Array(N);
+for (let i = 0; i < N; i++) list[i] = new Entity(i);
+
+let ta = DateTime.now();
+for (let s = 0; s < STEPS; s++) {
+  for (let i = 0; i < N; i++) {
+    let e = list[i];
+    e.integrate(DT);
+    e.accumulate();
+  }
+}
+let tb = DateTime.now();
+
+let total = 0.0;
+for (let i = 0; i < N; i++) total = total + list[i].energy;
+
+puts("Time: ", Math.round(DateTime.milliseconds(tb - ta)), "ms\n");
+puts("checksum: ", Math.round(total), "\n");
