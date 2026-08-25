@@ -719,6 +719,10 @@ const POCAValueReferenceTag=TPOCAUInt32($7fff6789); // $7ff56789
 // single type check. A tag of zero means null, which matches pvtNULL.
 const POCAValueTypeTagMask=TPOCAPtrUInt(15);
 
+      // Below this, laying the bytes of a concatenation out right away is cheaper
+      // than the extra object and the walk that deferring it costs later on.
+      POCAStringConsThreshold=64;
+
 type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCADoubleHiLo=packed record
 {$ifdef BIG_ENDIAN}
@@ -739,7 +743,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCAUTF16String=TPUCUUTF16String;
 
-     TPOCARawByteString=TPUCURawByteString;
+     TPOCARawByteString=TPUCURawByteString;
+     PPOCARawByteString=^TPOCARawByteString;
 
      TPOCAUCS4Char=TPOCAInt32;
 
@@ -1203,7 +1208,17 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      PPOCAString=^TPOCAString;
      TPOCAString=packed record
       Header:TPOCAObjectHeader;
-      Data:TPOCARawByteString;
+      // Not to be read directly: while Left is assigned this string is a cons
+      // node, whose bytes have not been built yet. POCAStringRawData is the only
+      // sanctioned way in, which is enforced by the field not being called Data
+      // any more, so that a forgotten place is a compile error and not an empty
+      // string at run time.
+      RawData:TPOCARawByteString;
+      // The two halves of a deferred concatenation. Both assigned or both nil.
+      // DataLength and UTF8Length are kept summed up, so that the length of a
+      // cons node can be told without building it.
+      Left:PPOCAString;
+      Right:PPOCAString;
       DataLength:TPOCAInt32;
       HashCode:TPOCAUInt32;
       UTF8Length:TPOCAInt32;
@@ -6771,9 +6786,63 @@ begin
  EndThread(result);
 end;
 
+// Builds the bytes of a cons node. Iterative on purpose: a loop appending to the
+// same string builds a chain as deep as it has iterations, which recursion would
+// not survive.
+procedure POCAStringFlatten(Str:PPOCAString);
+var Stack:array of PPOCAString;
+    StackSize,Position:TPOCAInt32;
+    Current:PPOCAString;
+    Buffer:TPOCARawByteString;
+begin
+ SetLength(Buffer,Str^.DataLength);
+ Position:=1;
+ StackSize:=0;
+ SetLength(Stack,64);
+ Current:=Str;
+ repeat
+  while assigned(Current^.Left) do begin
+   if StackSize>=length(Stack) then begin
+    SetLength(Stack,StackSize*2);
+   end;
+   Stack[StackSize]:=Current^.Right;
+   inc(StackSize);
+   Current:=Current^.Left;
+  end;
+  // Left is nil here, so this one carries bytes of its own.
+  if Current^.DataLength>0 then begin
+   Move(Current^.RawData[1],Buffer[Position],Current^.DataLength);
+   inc(Position,Current^.DataLength);
+  end;
+  if StackSize=0 then begin
+   break;
+  end;
+  dec(StackSize);
+  Current:=Stack[StackSize];
+ until false;
+ Str^.RawData:=Buffer;
+ Str^.Left:=nil;
+ Str^.Right:=nil;
+end;
+
+// The only way to the bytes of a string. Costs one pointer test on a string that
+// is already flat, which is every string that never took part in a deferred
+// concatenation.
+function POCAStringRawData(const Str:PPOCAString):PPOCARawByteString; {$ifdef caninline}inline;{$endif}
+begin
+ if assigned(Str^.Left) then begin
+  POCAStringFlatten(Str);
+ end;
+ result:=@Str^.RawData;
+end;
+
 procedure POCAFinalizeString(Obj:PPOCAString);
 begin
- Obj^.Data:='';
+ // Not through the accessor: building the bytes of a string that is being thrown
+ // away would allocate for nothing.
+ Obj^.Left:=nil;
+ Obj^.Right:=nil;
+ Obj^.RawData:='';
  if assigned(Obj^.UTF8CodePointsToCodeUnitsIndex) then begin
   FreeMem(Obj^.UTF8CodePointsToCodeUnitsIndex);
   Obj^.UTF8CodePointsToCodeUnitsIndex:=nil;
@@ -8070,6 +8139,15 @@ begin
   end;
   pvtSTRING:begin
    result:=MarkObjectAsGray(TPOCAPointer(Obj));
+   // A cons node keeps its two halves alive until it has been flattened.
+   if assigned(PPOCAString(TPOCAPointer(Obj))^.Left) then begin
+    if MarkObjectAsGray(PPOCAObject(TPOCAPointer(PPOCAString(TPOCAPointer(Obj))^.Left))) then begin
+     result:=true;
+    end;
+    if MarkObjectAsGray(PPOCAObject(TPOCAPointer(PPOCAString(TPOCAPointer(Obj))^.Right))) then begin
+     result:=true;
+    end;
+   end;
   end;
   pvtARRAY:begin
    result:=MarkArrayAsGray(TPOCAPointer(Obj));
@@ -9066,7 +9144,7 @@ begin
   try
    v:=POCACall(SubContext,HashEvents^[pmoTOSTRING],@Value,1,POCAValueNull,POCAValueNull);
    if POCAIsValueString(v) then begin
-    ResultValue:=PPOCAString(POCAGetValueReferencePointer(v))^.Data;
+    ResultValue:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(v)))^;
     result:=true;
    end;
   finally
@@ -9281,14 +9359,14 @@ begin
    result:=Value.Num<>0;
   end;
   pvtSTRING:begin
-   if length(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)=0 then begin
+   if length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^)=0 then begin
     result:=false;
    end else begin
-    Num:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(Value))^.Data,rmNearest,@OK);
+    Num:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^,rmNearest,@OK);
     if OK then begin
      result:=Num<>0;
     end else begin
-     result:=length(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)>0;
+     result:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^)>0;
     end;
    end;
   end;
@@ -9316,14 +9394,14 @@ begin
    result.Num:=ord(Value.Num<>0) and 1;
   end;
   pvtSTRING:begin
-   if length(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)=0 then begin
+   if length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^)=0 then begin
     result.Num:=0;
    end else begin
-    Num:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(Value))^.Data,rmNearest,@OK);
+    Num:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^,rmNearest,@OK);
     if OK then begin
      result.Num:=ord(Num<>0) and 1;
     end else begin
-     result.Num:=ord(length(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)>0) and 1;
+     result.Num:=ord(length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^)>0) and 1;
     end;
    end;
   end;
@@ -9348,7 +9426,7 @@ begin
    result:=Value;
   end;
   pvtSTRING:begin
-   POCASetValueNumber(result,ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(Value))^.Data,rmNearest,@OK));
+   POCASetValueNumber(result,ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^,rmNearest,@OK));
    if not OK then begin
   //result:=POCAValueNull;
     result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -9395,14 +9473,14 @@ begin
    result:=Value.Num<>0;
   end;
   pvtSTRING:begin
-   if length(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)=0 then begin
+   if length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^)=0 then begin
     result:=false;
    end else begin
-    Num:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(Value))^.Data,rmNearest,@OK);
+    Num:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^,rmNearest,@OK);
     if OK then begin
      result:=Num<>0;
     end else begin
-     result:=length(PPOCAString(POCAGetValueReferencePointer(Value))^.Data)>0;
+     result:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^)>0;
     end;
    end;
   end;
@@ -9429,7 +9507,7 @@ begin
    result:=Value.Num;
   end;
   pvtSTRING:begin
-   result:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(Value))^.Data,rmNearest,@OK);
+   result:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^,rmNearest,@OK);
    if not OK then begin
     result:=NAN;
    end;
@@ -9451,7 +9529,7 @@ begin
    result:=POCADoubleToString(Value.Num);
   end;
   pvtSTRING:begin
-   result:=PPOCAString(POCAGetValueReferencePointer(Value))^.Data;
+   result:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^;
   end;
   else begin
    result:='';
@@ -9470,7 +9548,7 @@ begin
    result:=Value.Num;
   end;
   pvtSTRING:begin
-   result:=PPOCAString(POCAGetValueReferencePointer(Value))^.Data;
+   result:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^;
   end;
   else begin
    result:=Variants.Null;
@@ -9489,7 +9567,7 @@ begin
    result:=false;
   end;
   pvtSTRING:begin
-   result:=(PPOCAString(POCAGetValueReferencePointer(Value))^.UTF8=suISUTF8) or ((PPOCAString(POCAGetValueReferencePointer(Value))^.UTF8=suPOSSIBLEUTF8) and PUCUIsUTF8(PPOCAString(POCAGetValueReferencePointer(Value))^.Data));
+   result:=(PPOCAString(POCAGetValueReferencePointer(Value))^.UTF8=suISUTF8) or ((PPOCAString(POCAGetValueReferencePointer(Value))^.UTF8=suPOSSIBLEUTF8) and PUCUIsUTF8(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^));
   end;
   else begin
    s:='';
@@ -9835,7 +9913,7 @@ begin
       end;
      end;
     end else begin
-     result:=PUCUUTF8GetCodeUnit(Str^.Data,CodePoint);
+     result:=PUCUUTF8GetCodeUnit(POCAStringRawData(Str)^,CodePoint);
     end;
    end else begin
     if CodePoint<0 then begin
@@ -9873,7 +9951,7 @@ begin
       end;
      end;
     end else begin
-     result:=PUCUUTF8GetCodePoint(Str^.Data,CodeUnit);
+     result:=PUCUUTF8GetCodePoint(POCAStringRawData(Str)^,CodeUnit);
     end;
    end else begin
     if CodeUnit<0 then begin
@@ -9904,7 +9982,7 @@ begin
    ToCodeUnit:=ToCodePoint+2;
   end;
   if (FromCodeUnit>0) and (ToCodeUnit>=FromCodeUnit) then begin
-   result:=System.Copy(Str^.Data,FromCodeUnit,ToCodeUnit-FromCodeUnit);
+   result:=System.Copy(POCAStringRawData(Str)^,FromCodeUnit,ToCodeUnit-FromCodeUnit);
   end else begin
    result:='';
   end;
@@ -9933,7 +10011,7 @@ begin
 {$ifdef pocastrictutf8}
    UTF8CodePoint:=0;
    while true do {$endif}begin
-    s:=Str^.Data;
+    s:=POCAStringRawData(Str)^;
     Str^.DataLength:=length(s);
     UTF8State:=ucACCEPT;
     UTF8CodePoint:=0;
@@ -10012,7 +10090,7 @@ begin
        TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(UTF8CodeUnit-1) shl 2])^):=UTF8CodePoint;
       end;
      end;
-     inc(UTF8CodeUnit,PUCUUTF8CharSteps[Str^.Data[UTF8CodeUnit]]);
+     inc(UTF8CodeUnit,PUCUUTF8CharSteps[POCAStringRawData(Str)^[UTF8CodeUnit]]);
      inc(UTF8CodePoint);
     end;
     begin
@@ -10057,7 +10135,12 @@ var Str:PPOCAString;
 begin
  result:=POCANew(Context,pvtSTRING,PPOCAObject(Str));
 //Str:=POCAGetValueReferencePointer(result);
- Str^.Data:=Data;
+ // The pool hands out recycled memory as is, so these have to be cleared before
+ // anything may look at them, or a fresh string would inherit the halves of its
+ // predecessor.
+ Str^.Left:=nil;
+ Str^.Right:=nil;
+ Str^.RawData:=Data;
  Str^.DataLength:=length(Data);
  Str^.HashCode:=POCAHashString(Data);
  Str^.Dirty:=true;
@@ -10084,8 +10167,10 @@ begin
    try
     result:=POCANew(Context,pvtSTRING,PPOCAObject(Str));
 //  Str:=POCAGetValueReferencePointer(result);
-    Str^.Data:=Data;
-    Str^.DataLength:=length(Str^.Data);
+    Str^.Left:=nil;
+    Str^.Right:=nil;
+    Str^.RawData:=Data;
+    Str^.DataLength:=length(Str^.RawData);
     Str^.HashCode:=POCAHashString(Data);
     Str^.Dirty:=true;
     POCAStringUpdate(Context,result);
@@ -10351,7 +10436,7 @@ begin
     (POCAIsValueNull(a) and POCAIsValueNull(b)) then begin
   result:=true;
  end else if POCAIsValueString(a) and POCAIsValueString(b) then begin
-  result:=PPOCAString(POCAGetValueReferencePointer(a))^.Data=PPOCAString(POCAGetValueReferencePointer(b))^.Data;
+  result:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(b)))^;
  end else begin
   case POCAGetValueType(a) of
    pvtNULL:begin
@@ -10361,7 +10446,7 @@ begin
     na:=a.Num;
    end;
    pvtSTRING:begin
-    na:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(a))^.Data,rmNearest,@OK);
+    na:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^,rmNearest,@OK);
     if not OK then begin
      result:=false;
      exit;
@@ -10380,7 +10465,7 @@ begin
     nb:=b.Num;
    end;
    pvtSTRING:begin
-    nb:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(b))^.Data,rmNearest,@OK);
+    nb:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(b)))^,rmNearest,@OK);
     if not OK then begin
      result:=false;
      exit;
@@ -10408,7 +10493,7 @@ begin
     result:=a.Num=b.Num;
    end;
    pvtSTRING:begin
-    result:=PPOCAString(POCAGetValueReferencePointer(a))^.Data=PPOCAString(POCAGetValueReferencePointer(b))^.Data;
+    result:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(b)))^;
    end;
    else begin
     result:=(POCAIsValueObject(a) and POCAIsValueObject(b)) and (a.Reference.Obj=b.Reference.Obj);
@@ -10484,7 +10569,7 @@ var na,nb:double;
     OK:TPasDblStrUtilsBoolean;
 begin
  if POCAIsValueString(a) and POCAIsValueString(b) then begin
-  result:=POCACompareString(PPOCAString(POCAGetValueReferencePointer(a))^.Data,PPOCAString(POCAGetValueReferencePointer(b))^.Data);
+  result:=POCACompareString(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^,POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(b)))^);
  end else if ((POCAIsValueNumber(a) and POCAIsValueNumber(b)) and (a.Num=b.Num)) or
              ((POCAIsValueObject(a) and POCAIsValueObject(b)) and (a.Reference.Obj=b.Reference.Obj)) or
              (POCAIsValueNull(a) and POCAIsValueNull(b)) then begin
@@ -10501,7 +10586,7 @@ begin
      na:=a.Num;
     end;
     pvtSTRING:begin
-     na:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(a))^.Data,rmNearest,@OK);
+     na:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^,rmNearest,@OK);
      if not OK then begin
       result:=-1;
       exit;
@@ -10520,7 +10605,7 @@ begin
      nb:=b.Num;
     end;
     pvtSTRING:begin
-     nb:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(b))^.Data,rmNearest,@OK);
+     nb:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(b)))^,rmNearest,@OK);
      if not OK then begin
       result:=1;
       exit;
@@ -10567,7 +10652,7 @@ function POCAEqual(const a:TPOCAValue;const s:TPOCARawByteString):boolean; overl
 var na,nb:double;
     OK:TPasDblStrUtilsBoolean;
 begin
- if POCAIsValueString(a) and (PPOCAString(POCAGetValueReferencePointer(a))^.Data=s) then begin
+ if POCAIsValueString(a) and (POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^=s) then begin
   result:=true;
  end else begin
   if POCAIsValueNumber(a) then begin
@@ -10577,7 +10662,7 @@ begin
     result:=false;
     exit;
    end;
-   na:=ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(a))^.Data,rmNearest,@OK);
+   na:=ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^,rmNearest,@OK);
    if not OK then begin
     result:=false;
     exit;
@@ -10594,12 +10679,12 @@ end;
 
 function POCAStrictEqual(const a:TPOCAValue;const s:TPOCARawByteString):boolean; overload;
 begin
- result:=POCAIsValueString(a) and (PPOCAString(POCAGetValueReferencePointer(a))^.Data=s);
+ result:=POCAIsValueString(a) and (POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^=s);
 end;
 
 function POCAStringEqual(const a,b:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=(POCAIsValueString(a) and POCAIsValueString(b)) and (PPOCAString(POCAGetValueReferencePointer(a))^.Data=PPOCAString(POCAGetValueReferencePointer(b))^.Data);
+ result:=(POCAIsValueString(a) and POCAIsValueString(b)) and (POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(a)))^=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(b)))^);
 end;
 
 function POCAObjectEqual(const a,b:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
@@ -11820,7 +11905,7 @@ begin
    Str:=PPOCAString(POCAGetValueReferencePointer(R));
    result:=Str^.HashCode;
    if result=0 then begin
-    result:=POCAHashString(Str^.Data);
+    result:=POCAHashString(POCAStringRawData(Str)^);
     Str^.HashCode:=result;
    end;
   end;
@@ -11991,8 +12076,8 @@ begin
    EntityRec^:=HashRec^.Entities^[Entity];
    if POCAIsValueString(EntityRec^.Key) then begin
     Str:=PPOCAString(POCAGetValueReferencePointer(EntityRec^.Key));
-    if (length(Str^.Data)>2) and ((Str^.Data[1]='_') and (Str^.Data[2]='_')) then begin
-     Op:=MetaOpNamesHashMap.GetValue(Str^.Data);
+    if (length(POCAStringRawData(Str)^)>2) and ((POCAStringRawData(Str)^[1]='_') and (POCAStringRawData(Str)^[2]='_')) then begin
+     Op:=MetaOpNamesHashMap.GetValue(POCAStringRawData(Str)^);
      if Op>=0 then begin
       result^.Events[TPOCAMetaOp(Op)]:=EntityRec^.Value;
      end;
@@ -12814,8 +12899,8 @@ begin
  Instance:=Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance;
  if POCAIsValueString(Key) then begin
   Str:=PPOCAString(POCAGetValueReferencePointer(Key));
-  if (length(Str^.Data)>2) and ((Str^.Data[1]='_') and (Str^.Data[2]='_')) then begin
-   Op:=MetaOpNamesHashMap.GetValue(Str^.Data);
+  if (length(POCAStringRawData(Str)^)>2) and ((POCAStringRawData(Str)^[1]='_') and (POCAStringRawData(Str)^[2]='_')) then begin
+   Op:=MetaOpNamesHashMap.GetValue(POCAStringRawData(Str)^);
    if Op>=0 then begin
     if not assigned(HashRec^.Events) then begin
      HashRec:=POCAHashCreateEvents(Instance,Hash);
@@ -13242,7 +13327,7 @@ begin
  result:=false;
  HashCode:=Sym^.HashCode;
  if HashCode=0 then begin
-  HashCode:=POCAHashString(Sym^.Data);
+  HashCode:=POCAHashString(POCAStringRawData(Sym)^);
   TPasMPInterlocked.Exchange(TPOCAInt32(Sym^.HashCode),HashCode);
  end;
  while assigned(Hash) do begin
@@ -13304,7 +13389,7 @@ begin
 /// Str:=PPOCAString(POCAGetValueReferencePointer(Sym));
     HashCode:=Str^.HashCode;
     if HashCode=0 then begin
-     HashCode:=POCAHashString(Str^.Data);
+     HashCode:=POCAHashString(POCAStringRawData(Str)^);
      TPasMPInterlocked.Exchange(TPOCAInt32(Str^.HashCode),HashCode);
     end;
    end;
@@ -13392,7 +13477,7 @@ begin
    Str:=PPOCAString(POCAGetValueReferencePointer(Sym));
    HashCode:=Str^.HashCode;
    if HashCode=0 then begin
-    HashCode:=POCAHashString(Str^.Data);
+    HashCode:=POCAHashString(POCAStringRawData(Str)^);
     TPasMPInterlocked.Exchange(TPOCAInt32(Str^.HashCode),HashCode);
    end;
    while assigned(Hash) do begin
@@ -13452,7 +13537,7 @@ begin
 
   s:=PPOCAString(POCAGetValueReferencePointer(Key));
   if s^.HashCode=0 then begin
-   TPasMPInterlocked.Exchange(TPOCAInt32(s^.HashCode),POCAHashString(s^.Data));
+   TPasMPInterlocked.Exchange(TPOCAInt32(s^.HashCode),POCAHashString(POCAStringRawData(s)^));
   end;
 
   while (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) do begin
@@ -19153,7 +19238,7 @@ begin
     end;
    end;
    pvtSTRING:begin
-    s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
+    s:=TPOCAUTF8String(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^);
     if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
@@ -19258,7 +19343,7 @@ begin
    end;
   end;
   pvtSTRING:begin
-   result:=TValue.From<string>(TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data));
+   result:=TValue.From<string>(TPOCAUTF8String(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^));
   end;
   else begin
    result:=TValue.Empty;
@@ -20087,7 +20172,7 @@ begin
    if PPOCAString(POCAGetValueReferencePointer(Arguments^[0]))^.UTF8=suISUTF8 then begin
     result.Num:=PPOCAString(POCAGetValueReferencePointer(Arguments^[0]))^.UTF8Length;
    end else begin
-    result.Num:=length(PPOCAString(POCAGetValueReferencePointer(Arguments^[0]))^.Data);
+    result.Num:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Arguments^[0])))^);
    end;
   end;
   pvtARRAY:begin
@@ -20151,7 +20236,7 @@ begin
     end;
    end;
    pvtSTRING:begin
-    s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
+    s:=TPOCAUTF8String(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^);
     if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
@@ -20191,7 +20276,7 @@ begin
     end;
    end;
    pvtSTRING:begin
-    s:=TPOCAUTF8String(PPOCAString(POCAGetValueReferencePointer(Value))^.Data);
+    s:=TPOCAUTF8String(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^);
     if not (assigned(Context) and POCAContextUserIOWrite(Context,s)) then begin
      System.Write(s);
     end;
@@ -22049,7 +22134,7 @@ begin
    if PPOCAString(POCAGetValueReferencePointer(This))^.UTF8=suISUTF8 then begin
     result.Num:=PPOCAString(POCAGetValueReferencePointer(This))^.UTF8Length;
    end else begin
-    result.Num:=length(PPOCAString(POCAGetValueReferencePointer(This))^.Data);
+    result.Num:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^);
    end;
   end;
   else begin
@@ -22064,7 +22149,7 @@ function POCAStringFunctionCOUNTCODEUNITS(Context:PPOCAContext;const This:TPOCAV
 begin
  case POCAGetValueType(This) of
   pvtSTRING:begin
-   result.Num:=length(PPOCAString(POCAGetValueReferencePointer(This))^.Data);
+   result.Num:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^);
   end;
   else begin
  //result:=POCAValueNull;
@@ -22081,7 +22166,7 @@ begin
    if PPOCAString(POCAGetValueReferencePointer(This))^.UTF8=suISUTF8 then begin
     result.Num:=PPOCAString(POCAGetValueReferencePointer(This))^.UTF8Length;
    end else begin
-    result.Num:=length(PPOCAString(POCAGetValueReferencePointer(This))^.Data);
+    result.Num:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^);
    end;
   end;
   else begin
@@ -22102,7 +22187,7 @@ begin
   result.CastedUInt64:=POCAValueNullCastedUInt64;
   OK:=false;
   if POCAGetValueType(This)=pvtSTRING then begin
-   POCASetValueNumber(result,ConvertStringToDouble(PPOCAString(POCAGetValueReferencePointer(This))^.Data,rmNearest,@OK,trunc(POCAGetNumberValue(Context,Arguments^[0]))));
+   POCASetValueNumber(result,ConvertStringToDouble(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^,rmNearest,@OK,trunc(POCAGetNumberValue(Context,Arguments^[0]))));
   end;
   if not OK then begin
  //result:=POCAValueNull;
@@ -22128,11 +22213,11 @@ begin
   POCARuntimeError(Context,'Bad this value to "includes"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- InString:=p^.Data;
+ InString:=POCAStringRawData(p)^;
  InStringIsUTF8:=p^.UTF8;
  if POCAIsValueString(Arguments^[0]) then begin
   p:=PPOCAString(POCAGetValueReferencePointer(Arguments^[0]));
-  SearchString:=p^.Data;
+  SearchString:=POCAStringRawData(p)^;
   SearchStringIsUTF8:=p^.UTF8;
  end else begin
   SearchString:=POCAGetStringValue(Context,Arguments^[0]);
@@ -22165,11 +22250,11 @@ begin
   POCARuntimeError(Context,'Bad this value to "indexOf"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- InString:=p^.Data;
+ InString:=POCAStringRawData(p)^;
  InStringIsUTF8:=p^.UTF8;
  if POCAIsValueString(Arguments^[0]) then begin
   p:=PPOCAString(POCAGetValueReferencePointer(Arguments^[0]));
-  SearchString:=p^.Data;
+  SearchString:=POCAStringRawData(p)^;
   SearchStringIsUTF8:=p^.UTF8;
  end else begin
   SearchString:=POCAGetStringValue(Context,Arguments^[0]);
@@ -22195,11 +22280,11 @@ begin
   POCARuntimeError(Context,'Bad this value to "lastIndexOf"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- InString:=p^.Data;
+ InString:=POCAStringRawData(p)^;
  InStringIsUTF8:=p^.UTF8;
  if POCAIsValueString(Arguments^[0]) then begin
   p:=PPOCAString(POCAGetValueReferencePointer(Arguments^[0]));
-  SearchString:=p^.Data;
+  SearchString:=POCAStringRawData(p)^;
   SearchStringIsUTF8:=p^.UTF8;
  end else begin
   SearchString:=POCAGetStringValue(Context,Arguments^[0]);
@@ -22238,11 +22323,11 @@ begin
   POCARuntimeError(Context,'Bad this value to "split"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- FromString:=p^.Data;
+ FromString:=POCAStringRawData(p)^;
  FromStringIsUTF8:=p^.UTF8;
  if POCAIsValueString(Arguments^[0]) then begin
   p:=PPOCAString(POCAGetValueReferencePointer(Arguments^[0]));
-  DelimeterString:=p^.Data;
+  DelimeterString:=POCAStringRawData(p)^;
  end else begin
   DelimeterString:=POCAGetStringValue(Context,Arguments^[0]);
  end;
@@ -22292,7 +22377,7 @@ begin
   POCARuntimeError(Context,'Bad this value to "trim"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- s:=p^.Data;
+ s:=POCAStringRawData(p)^;
  if p^.UTF8=suISUTF8 then begin
   result:=POCANewString(Context,TPOCAUTF8String(PUCUUTF8Trim(TPOCAUTF8String(s))));
  end else begin
@@ -22308,7 +22393,7 @@ begin
   POCARuntimeError(Context,'Bad this value to "trimLeft"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- s:=p^.Data;
+ s:=POCAStringRawData(p)^;
  if p^.UTF8=suISUTF8 then begin
   result:=POCANewString(Context,TPOCAUTF8String(PUCUUTF8TrimLeft(TPOCAUTF8String(s))));
  end else begin
@@ -22324,7 +22409,7 @@ begin
   POCARuntimeError(Context,'Bad this value to "trimRight"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- s:=p^.Data;
+ s:=POCAStringRawData(p)^;
  if p^.UTF8=suISUTF8 then begin
   result:=POCANewString(Context,TPOCAUTF8String(PUCUUTF8TrimRight(TPOCAUTF8String(s))));
  end else begin
@@ -22340,7 +22425,7 @@ begin
   POCARuntimeError(Context,'Bad this value to "toLowerCase"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- s:=p^.Data;
+ s:=POCAStringRawData(p)^;
  if p^.UTF8=suISUTF8 then begin
   result:=POCANewString(Context,PUCUUTF8LowerCase(s));
  end else begin
@@ -22356,7 +22441,7 @@ begin
   POCARuntimeError(Context,'Bad this value to "toUpperCase"');
  end;
  p:=PPOCAString(POCAGetValueReferencePointer(This));
- s:=p^.Data;
+ s:=POCAStringRawData(p)^;
  if p^.UTF8=suISUTF8 then begin
   result:=POCANewString(Context,PUCUUTF8UpperCase(s));
  end else begin
@@ -22375,7 +22460,7 @@ begin
   POCARuntimeError(Context,'Bad this value to "escape"');
  end;
  StringPointer:=PPOCAString(POCAGetValueReferencePointer(This));
- SourceString:=StringPointer^.Data;
+ SourceString:=POCAStringRawData(StringPointer)^;
  EscapedString:='';
  if StringPointer^.UTF8=suISUTF8 then begin
   CodeUnit:=1;
@@ -22519,7 +22604,7 @@ begin
   POCARuntimeError(Context,'Bad this value to "unescape"');
  end;
  StringPointer:=PPOCAString(POCAGetValueReferencePointer(This));
- SourceString:=StringPointer^.Data;
+ SourceString:=POCAStringRawData(StringPointer)^;
  UnescapedString:='';
  Index:=1;
  while Index<=length(SourceString) do begin
@@ -22621,12 +22706,12 @@ begin
    Len:=0;
   end;
   if POCAIsValueString(This) then begin
-   Str:=PPOCAString(POCAGetValueReferencePointer(This))^.Data;
+   Str:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^;
    IsUTF8:=PPOCAString(POCAGetValueReferencePointer(This))^.UTF8;
    if IsUTF8=suISUTF8 then begin
     Size:=PPOCAString(POCAGetValueReferencePointer(This))^.UTF8Length;
    end else begin
-    Size:=length(PPOCAString(POCAGetValueReferencePointer(This))^.Data);
+    Size:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^);
    end;
   end else begin
    Str:=POCAGetStringValue(Context,This);
@@ -22673,7 +22758,7 @@ var d,s:TPOCARawByteString;
 begin
  if POCAIsValueString(This) then begin
   if PPOCAString(POCAGetValueReferencePointer(This))^.UTF8<>suNOUTF8 then begin
-   s:=PPOCAString(POCAGetValueReferencePointer(This))^.Data;
+   s:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^;
    d:='';
    CodeUnit:=1;
    while CodeUnit<=length(s) do begin
@@ -22707,7 +22792,7 @@ function POCAStringFunctionTOUTF8(Context:PPOCAContext;const This:TPOCAValue;con
 begin
  if POCAIsValueString(This) then begin
   if PPOCAString(POCAGetValueReferencePointer(This))^.UTF8=suNOUTF8 then begin
-   result:=POCANewString(Context,PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(This))^.Data));
+   result:=POCANewString(Context,PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^));
   end else begin
    result:=This;
   end;
@@ -22743,10 +22828,10 @@ begin
    end;
    if (CodePoint>=0) and (CodePoint<Len) then begin
     CodeUnit:=POCAStringUTF8GetCodeUnit(Context,This,CodePoint);
-    if (CodeUnit>0) and (CodeUnit<=length(Str^.Data)) then begin
-     result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(Str^.Data,CodeUnit)));
+    if (CodeUnit>0) and (CodeUnit<=length(POCAStringRawData(Str)^)) then begin
+     result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(POCAStringRawData(Str)^,CodeUnit)));
     end else begin
-     result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(Str^.Data,CodePoint)));
+     result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(POCAStringRawData(Str)^,CodePoint)));
     end;
    end else begin
   //result:=POCAValueNull;
@@ -22759,7 +22844,7 @@ begin
     inc(CodePoint,Len);
    end;
    if (CodePoint>=0) and (CodePoint<Len) then begin
-    result:=POCANewString(Context,PUCUUTF32CharToUTF8(TPOCAUInt8(ansichar(Str^.Data[CodePoint+1]))));
+    result:=POCANewString(Context,PUCUUTF32CharToUTF8(TPOCAUInt8(ansichar(POCAStringRawData(Str)^[CodePoint+1]))));
    end else begin
   //result:=POCAValueNull;
     result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -22813,10 +22898,10 @@ begin
    end;
    if (CodePoint>=0) and (CodePoint<Len) then begin
     CodeUnit:=POCAStringUTF8GetCodeUnit(Context,This,CodePoint);
-    if (CodeUnit>0) and (CodeUnit<=length(Str^.Data)) then begin
-     result.Num:=PUCUUTF8CodeUnitGetChar(Str^.Data,CodeUnit);
+    if (CodeUnit>0) and (CodeUnit<=length(POCAStringRawData(Str)^)) then begin
+     result.Num:=PUCUUTF8CodeUnitGetChar(POCAStringRawData(Str)^,CodeUnit);
     end else begin
-     result.Num:=PUCUUTF8CodePointGetChar(Str^.Data,CodePoint);
+     result.Num:=PUCUUTF8CodePointGetChar(POCAStringRawData(Str)^,CodePoint);
     end;
    end else begin
   //result:=POCAValueNull;
@@ -22829,7 +22914,7 @@ begin
     inc(CodePoint,Len);
    end;
    if (CodePoint>=0) and (CodePoint<Len) then begin
-    result.Num:=TPOCAUInt8(ansichar(Str^.Data[CodePoint+1]));
+    result.Num:=TPOCAUInt8(ansichar(POCAStringRawData(Str)^[CodePoint+1]));
    end else begin
   //result:=POCAValueNull;
     result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -22881,7 +22966,7 @@ begin
    inc(CodePoint,Len);
   end;
   if (CodePoint>=0) and (CodePoint<Len) then begin
-   result.Num:=TPOCAUInt8(ansichar(Str^.Data[CodePoint+1]));
+   result.Num:=TPOCAUInt8(ansichar(POCAStringRawData(Str)^[CodePoint+1]));
   end else begin
  //result:=POCAValueNull;
    result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -23044,16 +23129,16 @@ begin
    Len:=Str^.UTF8Length;
    for CodePoint:=0 to Len-1 do begin
     CodeUnit:=POCAStringUTF8GetCodeUnit(Context,This,CodePoint);
-    if (CodeUnit>0) and (CodeUnit<=length(Str^.Data)) then begin
-     POCAArrayPush(result,POCANewNumber(Context,PUCUUTF8CodeUnitGetChar(Str^.Data,CodeUnit)));
+    if (CodeUnit>0) and (CodeUnit<=length(POCAStringRawData(Str)^)) then begin
+     POCAArrayPush(result,POCANewNumber(Context,PUCUUTF8CodeUnitGetChar(POCAStringRawData(Str)^,CodeUnit)));
     end else begin
-     POCAArrayPush(result,POCANewNumber(Context,PUCUUTF8CodePointGetChar(Str^.Data,CodePoint)));
+     POCAArrayPush(result,POCANewNumber(Context,PUCUUTF8CodePointGetChar(POCAStringRawData(Str)^,CodePoint)));
     end;
    end;
   end else begin
    Len:=Str^.DataLength;
    for CodeUnit:=1 to Len do begin
-    POCAArrayPush(result,POCANewNumber(Context,TPOCAUInt8(ansichar(Str^.Data[CodeUnit]))));
+    POCAArrayPush(result,POCANewNumber(Context,TPOCAUInt8(ansichar(POCAStringRawData(Str)^[CodeUnit]))));
    end;
   end;
  end else begin
@@ -23087,7 +23172,7 @@ begin
   Str:=PPOCAString(POCAGetValueReferencePointer(This));
   Len:=Str^.DataLength;
   for CodeUnit:=1 to Len do begin
-   POCAArrayPush(result,POCANewNumber(Context,TPOCAUInt8(ansichar(Str^.Data[CodeUnit]))));
+   POCAArrayPush(result,POCANewNumber(Context,TPOCAUInt8(ansichar(POCAStringRawData(Str)^[CodeUnit]))));
   end;
  end else begin
   s:=POCAGetStringValue(Context,This);
@@ -23103,7 +23188,7 @@ var s:TPOCARawByteString;
     i,j:TPOCAInt32;
 begin
  if POCAIsValueString(This) then begin
-  s:=PPOCAString(POCAGetValueReferencePointer(This))^.Data;
+  s:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^;
  end else begin
   s:=POCAGetStringValue(Context,This);
  end;
@@ -23127,7 +23212,7 @@ var s,Src:TPOCARawByteString;
     i,j:TPOCAInt32;
 begin
  if POCAIsValueString(This) then begin
-  Src:=PPOCAString(POCAGetValueReferencePointer(This))^.Data;
+  Src:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(This)))^;
  end else begin
   Src:=POCAGetStringValue(Context,This);
  end;
@@ -30835,7 +30920,7 @@ var TokenList:PPOCAToken;
       b:=POCAArrayGet(CodeGenerator^.Consts,i);
       if ((POCAIsValueNumber(b) and POCAIsValueNumber(c)) and (b.Num=c.Num)) or
          (POCAIsValueNull(b) and POCAIsValueNull(c)) or
-         ((POCAIsValueString(b) and POCAIsValueString(c)) and (PPOCAString(POCAGetValueReferencePointer(b))^.Data=PPOCAString(POCAGetValueReferencePointer(c))^.Data)) then begin
+         ((POCAIsValueString(b) and POCAIsValueString(c)) and (POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(b)))^=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(c)))^)) then begin
        result:=i;
        exit;
       end;
@@ -39083,7 +39168,7 @@ begin
     if PPOCAString(POCAGetValueReferencePointer(Obj))^.UTF8=suISUTF8 then begin
      OutValue.Num:=PPOCAString(POCAGetValueReferencePointer(Obj))^.UTF8Length;
     end else begin
-     OutValue.Num:=length(PPOCAString(POCAGetValueReferencePointer(Obj))^.Data);
+     OutValue.Num:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Obj)))^);
     end;
     result:=true;
    end;
@@ -39521,12 +39606,12 @@ begin
   Symbol:=Code^.Constants[Code^.ArgumentSymbols[Index]];
   if assigned(Hash^.Events) then begin
    if not POCAHashGet(Context,HashValue,Symbol,Value) then begin
-    POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Symbol))^.Data+'"');
+    POCARuntimeError(Context,'Missing argument "'+POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Symbol)))^+'"');
     exit;
    end;
   end else begin
    if not POCAHashSymbol(Hash,PPOCAString(POCAGetValueReferencePointer(Symbol)),Value) then begin
-    POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Symbol))^.Data+'"');
+    POCARuntimeError(Context,'Missing argument "'+POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Symbol)))^+'"');
     exit;
    end;
   end;
@@ -39596,7 +39681,7 @@ begin
     end;
    end;
   end else begin
-   POCARuntimeError(Context,'Missing argument "'+PPOCAString(POCAGetValueReferencePointer(Symbol))^.Data+'"');
+   POCARuntimeError(Context,'Missing argument "'+POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Symbol)))^+'"');
    exit;
   end;
  end;
@@ -39762,6 +39847,7 @@ end;
 
 function POCARunEvalCat(Context:PPOCAContext;const l,r:TPOCAValue):TPOCAValue;
 var i,ls,rs:TPOCAInt32;
+    LeftString,RightString,ResultString:PPOCAString;
 begin
  if POCAIsValueArray(l) and POCAIsValueArray(r) then begin
   ls:=POCAArraySize(l);
@@ -39779,39 +39865,68 @@ begin
   POCAHashCombine(Context,result,l);
   POCAHashCombine(Context,result,r);
  end else if POCAIsValueString(l) and POCAIsValueString(r) then begin
+  LeftString:=PPOCAString(POCAGetValueReferencePointer(l));
+  RightString:=PPOCAString(POCAGetValueReferencePointer(r));
+  if ((((LeftString^.UTF8=suPOSSIBLEUTF8) and (RightString^.UTF8=suPOSSIBLEUTF8)) or
+       ((LeftString^.UTF8=suNOUTF8) and (RightString^.UTF8=suNOUTF8))) and
+      ((LeftString^.DataLength+RightString^.DataLength)>=POCAStringConsThreshold)) and
+     ((LeftString^.DataLength>0) and (RightString^.DataLength>0)) then begin
+   // Deferred concatenation. Only the two combinations that join byte for byte
+   // qualify; the ones that run PUCUUTF8Correct over an operand change its length
+   // and are built eagerly below, as are the ones that end up as suISUTF8, which
+   // would have their code point indices rebuilt here anyway.
+   //
+   // This is what turns a loop appending to the same string from quadratic into
+   // linear: the operands are pointed at rather than copied, and the bytes are
+   // only laid out once, when somebody finally asks for them.
+   result:=POCANewString(Context,'');
+   ResultString:=PPOCAString(POCAGetValueReferencePointer(result));
+   ResultString^.Left:=LeftString;
+   ResultString^.Right:=RightString;
+   ResultString^.DataLength:=LeftString^.DataLength+RightString^.DataLength;
+   ResultString^.UTF8Length:=LeftString^.UTF8Length+RightString^.UTF8Length;
+   ResultString^.UTF8:=LeftString^.UTF8;
+   ResultString^.HashCode:=0;
+   ResultString^.Dirty:=true;
+   // Both halves are now reachable only through an object that may already be
+   // black, so they have to be shaded like any other stored reference.
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ResultString)),l);
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ResultString)),r);
+   exit;
+  end;
   result:=POCANewString(Context,'');
   if PPOCAString(POCAGetValueReferencePointer(l))^.UTF8<>suNOUTF8 then begin
    case PPOCAString(POCAGetValueReferencePointer(r))^.UTF8 of
     suPOSSIBLEUTF8:begin
-     PPOCAString(POCAGetValueReferencePointer(result))^.Data:=PPOCAString(POCAGetValueReferencePointer(l))^.Data+PPOCAString(POCAGetValueReferencePointer(r))^.Data;
+     POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(result)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(l)))^+POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(r)))^;
      PPOCAString(POCAGetValueReferencePointer(result))^.UTF8:=PPOCAString(POCAGetValueReferencePointer(l))^.UTF8;
     end;
     suISUTF8:begin
-     PPOCAString(POCAGetValueReferencePointer(result))^.Data:=PPOCAString(POCAGetValueReferencePointer(l))^.Data+PPOCAString(POCAGetValueReferencePointer(r))^.Data;
+     POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(result)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(l)))^+POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(r)))^;
      PPOCAString(POCAGetValueReferencePointer(result))^.UTF8:=suISUTF8;
     end;
     else begin
-     PPOCAString(POCAGetValueReferencePointer(result))^.Data:=PPOCAString(POCAGetValueReferencePointer(l))^.Data+PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(r))^.Data);
+     POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(result)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(l)))^+PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(r)))^);
      PPOCAString(POCAGetValueReferencePointer(result))^.UTF8:=suISUTF8;
     end;
    end;
   end else begin
    case PPOCAString(POCAGetValueReferencePointer(r))^.UTF8 of
     suPOSSIBLEUTF8:begin
-     PPOCAString(POCAGetValueReferencePointer(result))^.Data:=PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(l))^.Data)+PPOCAString(POCAGetValueReferencePointer(r))^.Data;
+     POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(result)))^:=PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(l)))^)+POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(r)))^;
      PPOCAString(POCAGetValueReferencePointer(result))^.UTF8:=suISUTF8;
     end;
     suISUTF8:begin
-     PPOCAString(POCAGetValueReferencePointer(result))^.Data:=PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(l))^.Data)+PPOCAString(POCAGetValueReferencePointer(r))^.Data;
+     POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(result)))^:=PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(l)))^)+POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(r)))^;
      PPOCAString(POCAGetValueReferencePointer(result))^.UTF8:=suISUTF8;
     end;
     else begin
-     PPOCAString(POCAGetValueReferencePointer(result))^.Data:=PPOCAString(POCAGetValueReferencePointer(l))^.Data+PPOCAString(POCAGetValueReferencePointer(r))^.Data;
+     POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(result)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(l)))^+POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(r)))^;
      PPOCAString(POCAGetValueReferencePointer(result))^.UTF8:=suNOUTF8;
     end;
    end;
   end;
-  PPOCAString(POCAGetValueReferencePointer(result))^.DataLength:=length(PPOCAString(POCAGetValueReferencePointer(result))^.Data);
+  PPOCAString(POCAGetValueReferencePointer(result))^.DataLength:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(result)))^);
   PPOCAString(POCAGetValueReferencePointer(result))^.UTF8Length:=PPOCAString(POCAGetValueReferencePointer(l))^.UTF8Length+PPOCAString(POCAGetValueReferencePointer(r))^.UTF8Length;
   PPOCAString(POCAGetValueReferencePointer(result))^.HashCode:=0;
   if PPOCAString(POCAGetValueReferencePointer(result))^.UTF8=suISUTF8 then begin
@@ -40254,13 +40369,13 @@ begin
  if PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8 then begin
   CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
   CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Box,CodePoint);
-  if (CodeUnit>0) and (CodeUnit<=length(PPOCAString(POCAGetValueReferencePointer(Box))^.Data)) then begin
-   result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit)));
+  if (CodeUnit>0) and (CodeUnit<=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^)) then begin
+   result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^,CodeUnit)));
   end else begin
-   result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint)));
+   result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^,CodePoint)));
   end;
  end else begin
-  result:=POCANewString(Context,PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
+  result:=POCANewString(Context,POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^[POCARunCheckString(Context,Box,Key)+1]);
  end;
 end;
 
@@ -40400,13 +40515,13 @@ begin
      if PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8 then begin
       CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
       CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Box,CodePoint);
-      if (CodeUnit>0) and (CodeUnit<=length(PPOCAString(POCAGetValueReferencePointer(Box))^.Data)) then begin
-       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit)));
+      if (CodeUnit>0) and (CodeUnit<=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^)) then begin
+       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^,CodeUnit)));
       end else begin
-       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint)));
+       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^,CodePoint)));
       end;
      end else begin
-      result:=POCANewString(Context,PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
+      result:=POCANewString(Context,POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^[POCARunCheckString(Context,Box,Key)+1]);
      end;
     end;
    end;
@@ -40442,11 +40557,11 @@ begin
   CharValue:=trunc(POCAGetNumberValue(Context,Value));
   if (PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8) or ((PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suPOSSIBLEUTF8) and (CharValue>$7f)) then begin
    CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
-   PPOCAString(POCAGetValueReferencePointer(Box))^.Data:=POCAStringUTF8CopyCodePointRange(Context,Box,0,CodePoint-1)+PUCUUTF32CharToUTF8(CharValue)+POCAStringUTF8CopyCodePointRange(Context,Box,CodePoint+1,PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8Length-1);
+   POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^:=POCAStringUTF8CopyCodePointRange(Context,Box,0,CodePoint-1)+PUCUUTF32CharToUTF8(CharValue)+POCAStringUTF8CopyCodePointRange(Context,Box,CodePoint+1,PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8Length-1);
    PPOCAString(POCAGetValueReferencePointer(Box))^.Dirty:=true;
    POCAStringUpdate(Context,Box);
   end else begin
-   PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]:=ansichar(TPOCAUInt8(CharValue));
+   POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^[POCARunCheckString(Context,Box,Key)+1]:=ansichar(TPOCAUInt8(CharValue));
   end;
  end;
 end;
@@ -40528,14 +40643,14 @@ begin
      if (PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8) or ((PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suPOSSIBLEUTF8) and (CharValue>$7f)) then begin
       CodePoint:=POCARunSafeCheckStringUTF8(Context,Box,Key);
       if CodePoint>=0 then begin
-       PPOCAString(POCAGetValueReferencePointer(Box))^.Data:=POCAStringUTF8CopyCodePointRange(Context,Box,0,CodePoint-1)+PUCUUTF32CharToUTF8(CharValue)+POCAStringUTF8CopyCodePointRange(Context,Box,CodePoint+1,PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8Length-1);
+       POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^:=POCAStringUTF8CopyCodePointRange(Context,Box,0,CodePoint-1)+PUCUUTF32CharToUTF8(CharValue)+POCAStringUTF8CopyCodePointRange(Context,Box,CodePoint+1,PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8Length-1);
        PPOCAString(POCAGetValueReferencePointer(Box))^.Dirty:=true;
        POCAStringUpdate(Context,Box);
       end;
      end else begin
       Index:=POCARunSafeCheckString(Context,Box,Key);
       if Index>=0 then begin
-       PPOCAString(POCAGetValueReferencePointer(Box))^.Data[Index+1]:=ansichar(TPOCAUInt8(CharValue));
+       POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Box)))^[Index+1]:=ansichar(TPOCAUInt8(CharValue));
       end;
      end;
     end;
@@ -40572,9 +40687,9 @@ begin
       CodePoint:=CurrentIndex;
       CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Obj,CodePoint);
       if (CodeUnit>0) and (CodeUnit<=Str^.DataLength) then begin
-       Value:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(Str^.Data,CodeUnit)));
+       Value:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(POCAStringRawData(Str)^,CodeUnit)));
       end else begin
-       Value:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(Str^.Data,CodePoint)));
+       Value:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(POCAStringRawData(Str)^,CodePoint)));
       end;
       result:=true;
      end;
@@ -40582,7 +40697,7 @@ begin
      if ((CurrentIndex>=0) and (CurrentIndex<Str^.DataLength)) then begin
       Index.Num:=CurrentIndex+1;
       CodeUnit:=CurrentIndex+1;
-      Value:=POCANewString(Context,AnsiChar(Str^.Data[CodeUnit]));
+      Value:=POCANewString(Context,AnsiChar(POCAStringRawData(Str)^[CodeUnit]));
       result:=true;
      end;
     end;
@@ -40752,16 +40867,16 @@ begin
       case PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8 of
        suPOSSIBLEUTF8:begin
         CodePoint:=POCARunCheckString(Context,Src,Idx);
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,CodePoint+1,1);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,CodePoint+1,1);
        end;
        suISUTF8:begin
         CodePoint:=POCARunCheckStringUTF8(Context,Src,Idx);
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+POCAStringUTF8CopyCodePointRange(Context,Src,CodePoint,CodePoint);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+POCAStringUTF8CopyCodePointRange(Context,Src,CodePoint,CodePoint);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        else begin
         CodePoint:=POCARunCheckString(Context,Src,Idx);
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+PUCUUTF8Correct(copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,CodePoint+1,1));
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+PUCUUTF8Correct(copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,CodePoint+1,1));
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
       end;
@@ -40769,17 +40884,17 @@ begin
       case PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8 of
        suPOSSIBLEUTF8:begin
         CodePoint:=POCARunCheckString(Context,Src,Idx);
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(Dst))^.Data)+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,CodePoint+1,1);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^)+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,CodePoint+1,1);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        suISUTF8:begin
         CodePoint:=POCARunCheckStringUTF8(Context,Src,Idx);
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(Dst))^.Data)+POCAStringUTF8CopyCodePointRange(Context,Src,CodePoint,CodePoint);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^)+POCAStringUTF8CopyCodePointRange(Context,Src,CodePoint,CodePoint);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        else begin
         CodePoint:=POCARunCheckString(Context,Src,Idx);
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,CodePoint+1,1);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,CodePoint+1,1);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suNOUTF8;
        end;
       end;
@@ -40855,7 +40970,7 @@ begin
      if PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8=suISUTF8 then begin
       Size:=PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8Length;
      end else begin
-      Size:=length(PPOCAString(POCAGetValueReferencePointer(Src))^.Data);
+      Size:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^);
      end;
      s:=Bound(Start,false,true);
      e:=Bound(EndR,true,true);
@@ -40863,29 +40978,29 @@ begin
      if PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8<>suNOUTF8 then begin
       case PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8 of
        suPOSSIBLEUTF8:begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,s+1,l);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,s+1,l);
        end;
        suISUTF8:begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+POCAStringUTF8CopyCodePointRange(Context,Src,s,e);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+POCAStringUTF8CopyCodePointRange(Context,Src,s,e);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        else begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+PUCUUTF8Correct(copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,s+1,l));
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+PUCUUTF8Correct(copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,s+1,l));
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
       end;
      end else begin
       case PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8 of
        suPOSSIBLEUTF8:begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(Dst))^.Data)+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,s+1,l);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^)+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,s+1,l);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        suISUTF8:begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(Dst))^.Data)+POCAStringUTF8CopyCodePointRange(Context,Src,s,e);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^)+POCAStringUTF8CopyCodePointRange(Context,Src,s,e);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        else begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,s+1,l);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,s+1,l);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suNOUTF8;
        end;
       end;
@@ -40938,7 +41053,7 @@ begin
      if PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8=suISUTF8 then begin
       Size:=PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8Length;
      end else begin
-      Size:=length(PPOCAString(POCAGetValueReferencePointer(Src))^.Data);
+      Size:=length(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^);
      end;
      if POCAIsValueNull(Start) then begin
       s:=0;
@@ -40970,29 +41085,29 @@ begin
      if PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8<>suNOUTF8 then begin
       case PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8 of
        suPOSSIBLEUTF8:begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,s+1,l);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,s+1,l);
        end;
        suISUTF8:begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+POCAStringUTF8CopyCodePointRange(Context,Src,s,e);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+POCAStringUTF8CopyCodePointRange(Context,Src,s,e);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        else begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+PUCUUTF8Correct(copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,s+1,l));
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+PUCUUTF8Correct(copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,s+1,l));
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
       end;
      end else begin
       case PPOCAString(POCAGetValueReferencePointer(Src))^.UTF8 of
        suPOSSIBLEUTF8:begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(Dst))^.Data)+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,s+1,l);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^)+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,s+1,l);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        suISUTF8:begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PUCUUTF8Correct(PPOCAString(POCAGetValueReferencePointer(Dst))^.Data)+POCAStringUTF8CopyCodePointRange(Context,Src,s,e);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=PUCUUTF8Correct(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^)+POCAStringUTF8CopyCodePointRange(Context,Src,s,e);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suISUTF8;
        end;
        else begin
-        PPOCAString(POCAGetValueReferencePointer(Dst))^.Data:=PPOCAString(POCAGetValueReferencePointer(Dst))^.Data+copy(PPOCAString(POCAGetValueReferencePointer(Src))^.Data,s+1,l);
+        POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^:=POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Dst)))^+copy(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Src)))^,s+1,l);
         PPOCAString(POCAGetValueReferencePointer(Dst))^.UTF8:=suNOUTF8;
        end;
       end;
