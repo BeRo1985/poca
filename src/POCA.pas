@@ -540,10 +540,29 @@ const POCAVersion='2026-07-13-00-59-0000';
       popCLONELOCALVALUES=168;
       popPUSHLOCALVALUELEVEL=169;
       popPOPLOCALVALUELEVEL=170;
-      popCOUNT=171;
+      popMCALLINTRINSIC=171;
+      popCOUNT=172;
 {$else}
-      popCOUNT=168;
+      popMCALLINTRINSIC=168;
+      popCOUNT=169;
 {$endif}
+
+      // Intrinsics: a method call on Math whose callee turns out to still be the
+      // built in function is computed inline instead of being called. The check
+      // compares the resolved value against the built in one, so overwriting
+      // Math.sqrt keeps working and simply takes the ordinary call path again.
+      piidSQRT=0;
+      piidSIN=1;
+      piidCOS=2;
+      piidTAN=3;
+      piidFLOOR=4;
+      piidCEIL=5;
+      piidROUND=6;
+      piidTRUNC=7;
+      piidABS=8;
+      piidEXP=9;
+      piidLOG=10;
+      piidCOUNT=11;
 
       pvtNULL=0;
       pvtNUMBER=1;
@@ -1297,6 +1316,15 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCAHash=packed record
       Header:TPOCAObjectHeader;
       HashRecord:PPOCAHashRecord;
+      // Stamped from a process wide monotonic counter on creation and on every
+      // mutation of this hash, so that a call site can tell whether a cached
+      // lookup result is still the current one without redoing the lookup.
+      // The stamps are globally unique and never reused, so a match proves both
+      // the identity of the hash and its state, even after the object memory has
+      // been recycled by the pool allocator. All writes go through
+      // POCAHashEntitySetValue and the structural entry points below, so that no
+      // path can silently skip it.
+      Version:TPOCAUInt64;
       Children:TPOCAHashChildren;
       Prototype:PPOCAHash;
       Constructor_:PPOCAObject;
@@ -1338,6 +1366,27 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCACodeArguments=array[0..($7fffffff div sizeof(TPOCACodeArgument))-1] of TPOCACodeArgument;
      PPOCACodeArguments=^TPOCACodeArguments;
 
+     // One inline cache slot per member read call site. A slot is valid exactly
+     // when Version equals the version stamp of the hash currently sitting in the
+     // receiver register. The stamps come from a process wide monotonic counter
+     // and are never reused, so a match proves both that this is the same hash
+     // and that neither it nor its prototype chain has been touched since Entity
+     // was recorded, which is what makes the recorded raw pointer safe to follow.
+     PPOCAInlineCache=^TPOCAInlineCache;
+     TPOCAInlineCache=packed record
+      Entity:PPOCAHashEntity;
+      Version:TPOCAUInt64;
+      // The position in the flattened prototype chain, the second level. Unlike
+      // the stamp above this one is a property of the layout rather than of the
+      // object, so it still carries when a loop walks many instances of one
+      // class. Kept in the same record so that both levels reach their state
+      // through a single base pointer.
+      ChainIndex:TPOCAUInt32;
+      HashChainIndex:TPOCAUInt32;
+     end;
+     PPOCAInlineCaches=^TPOCAInlineCaches;
+     TPOCAInlineCaches=array[0..($7fffffff div sizeof(TPOCAInlineCache))-1] of TPOCAInlineCache;
+
      TPOCACode=packed record
       Header:TPOCAObjectHeader;
       Name:TPOCARawByteString;
@@ -1357,6 +1406,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ConstantCount:TPOCAUInt32;
       ByteCode:PPOCAUInt32Array;
       ByteCodeSize:TPOCAUInt32;
+      InlineCaches:PPOCAInlineCaches;
+      CountInlineCaches:TPOCAUInt32;
       Constants:PPOCAValues;
       HasArgumentLocals:TPOCABool32;
       ArgumentSymbols:PPOCAInt32Array;
@@ -1739,6 +1790,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       NativeCodeValueReference:TPOCAValue;
       UnknownValueReference:TPOCAValue;
       LengthStringReference:TPOCAValue;
+      // The built in Math functions, kept for the identity check of the intrinsics.
+      MathIntrinsics:array[0..piidCOUNT-1] of TPOCAValue;
 
       Symbols:TPOCAValue;
 
@@ -1789,6 +1842,13 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       HostData:TPOCAPointer;
       HostDataFreeable:TPOCABool32;
+
+      // The Math namespace itself. An intrinsic call site compares its receiver
+      // against this, which in one 64 bit comparison settles that the receiver is
+      // the global Math and not something else that happens to be named Math.
+      // Deliberately at the end, so that adding it moves no field that the hot
+      // paths reach through this record.
+      MathHash:TPOCAValue;
 
      end;
 
@@ -2385,6 +2445,11 @@ implementation
 
 //const EPSILON=1e-18;
 const ConstructorValueSymbolString:TPOCARawByteString='$|constuctor|$';
+
+// Member names recognised as intrinsics, shared by the code generator and the
+// initialisation of the built in table they are checked against.
+const POCAIntrinsicNames:array[0..piidCOUNT-1] of TPOCARawByteString=
+       ('sqrt','sin','cos','tan','floor','ceil','round','trunc','abs','exp','log');
 
 {$ifdef POCAThreadContextTracking}
 type PPOCAThreadContextStack=^TPOCAThreadContextStack;
@@ -6746,6 +6811,11 @@ begin
   FreeMem(Obj^.ByteCode);
   Obj^.ByteCode:=nil;
  end;
+ if assigned(Obj^.InlineCaches) then begin
+  FreeMem(Obj^.InlineCaches);
+  Obj^.InlineCaches:=nil;
+ end;
+ Obj^.CountInlineCaches:=0;
  if assigned(Obj^.Constants) then begin
   FreeMem(Obj^.Constants);
   Obj^.Constants:=nil;
@@ -8093,6 +8163,7 @@ begin
 end;
 
 procedure TPOCAGarbageCollector.MarkGlobals;
+var MarkIntrinsicIndex:TPOCAInt32;
 begin
  MarkValue(Instance^.Globals.RootArray);
  MarkValue(Instance^.Globals.RootHash);
@@ -8137,6 +8208,10 @@ begin
  MarkValue(Instance^.Globals.NativeCodeValueReference);
  MarkValue(Instance^.Globals.UnknownValueReference);
  MarkValue(Instance^.Globals.LengthStringReference);
+ for MarkIntrinsicIndex:=0 to piidCOUNT-1 do begin
+  MarkValue(Instance^.Globals.MathIntrinsics[MarkIntrinsicIndex]);
+ end;
+ MarkValue(Instance^.Globals.MathHash);
  MarkValue(Instance^.Globals.SourceFiles);
  MarkValue(Instance^.Globals.UniqueStringArray);
 end;
@@ -10036,10 +10111,30 @@ begin
 {$endif}
 end;
 
+// Hands out the version stamps for TPOCAHash.Version. The counter is process
+// wide and strictly monotonic, so that a stamp is never handed out twice. That
+// is what lets a call site cache a raw entity pointer: a matching stamp rules
+// out that the pool allocator has meanwhile recycled the object memory for a
+// different hash, which a per hash counter starting over at zero could not.
+var POCAHashVersionCounter:TPOCAUInt64=0;
+
+function POCAHashNextVersion:TPOCAUInt64; {$ifdef caninline}inline;{$endif}
+begin
+ if POCAMultiThreaded then begin
+  result:=TPasMPInterlocked.Increment(POCAHashVersionCounter);
+ end else begin
+  inc(POCAHashVersionCounter);
+  result:=POCAHashVersionCounter;
+ end;
+end;
+
 function POCANewHash(Context:PPOCAContext):TPOCAValue;
 var Hash:PPOCAHash;
 begin
  result:=POCANew(Context,pvtHASH,PPOCAObject(Hash));
+ // The pool allocator recycles object memory as is, so a fresh hash would
+ // otherwise inherit the stamp of its predecessor and could be mistaken for it.
+ Hash^.Version:=POCAHashNextVersion;
 {Hash^.HashRecord:=nil;
  Hash^.Prototype:=nil;
  Hash^.Constructor_:=nil;
@@ -11919,6 +12014,10 @@ procedure POCAHashLockInvalidate(Hash:PPOCAHash);
 var Current:PPOCAHash;
 begin
  if assigned(Hash) then begin
+  // This already runs on every structural change, so it is also the right place
+  // to restamp the version. It recurses into the children, which makes the
+  // stamping conservative rather than incomplete.
+  Hash^.Version:=POCAHashNextVersion;
   POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
   try
    TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),0);
@@ -11937,6 +12036,10 @@ procedure POCAHashInvalidate(Hash:PPOCAHash);
 var Current:PPOCAHash;
 begin
  if assigned(Hash) then begin
+  // Callers reach this right after having swapped the whole hash record, which
+  // moves every entity, so the stamp has to be renewed here as well and not
+  // only for the children below.
+  Hash^.Version:=POCAHashNextVersion;
   TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),0);
   Current:=Hash^.Children.First;
   while assigned(Current) do begin
@@ -12728,6 +12831,28 @@ begin
  end;
 end;
 
+// The only sanctioned way to overwrite the value of an existing hash entry.
+// Everything writing Entities^[..].Value goes through here, which makes it
+// provable by grep rather than by memory that no path writes a value behind the
+// back of the version stamping below.
+//
+// Deliberately without restamping: a call site caches the entity, not the value,
+// and reads Entities^[..].Value through that pointer, so it observes this write
+// anyway. Restamping here would invalidate every cached read of an object on
+// every field write, which is exactly what an object mutating itself in a loop
+// does all the time.
+procedure POCAHashEntitySetValue(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Entity:TPOCAInt32;const Value:TPOCAValue); {$ifdef caninline}inline;{$endif}
+begin
+ HashRec^.Entities^[Entity].Value:=Value;
+end;
+
+// For inserts and deletes, where key, size and cell indices change as well, so
+// that which entity a key resolves to may change.
+procedure POCAHashBumpVersion(Hash:PPOCAHash); {$ifdef caninline}inline;{$endif}
+begin
+ Hash^.Version:=POCAHashNextVersion;
+end;
+
 function POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant,Invalidate:Boolean):Boolean;
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
@@ -12741,7 +12866,7 @@ begin
   Entity:=HashRec^.CellToEntityIndex^[Cell];
   if Entity>=0 then begin
   
-   HashRec^.Entities^[Entity].Value:=Value;
+   POCAHashEntitySetValue(Hash,HashRec,Entity,Value);
    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
    if assigned(HashRec^.Events) then begin
     POCAHashPutHashEvents(Hash,HashRec,Key,Value);
@@ -12755,7 +12880,10 @@ begin
    if Entity<(2 shl HashRec^.LogSize) then begin
     TPasMPInterlocked.Increment(HashRec^.Size);
     HashRec^.Entities^[Entity].Key:=Key;
-    HashRec^.Entities^[Entity].Value:=Value;
+    POCAHashEntitySetValue(Hash,HashRec,Entity,Value);
+    // A new key may shadow one of the prototype chain, so this has to be stamped
+    // even when the caller does not ask for an invalidation.
+    POCAHashBumpVersion(Hash);
     HashRec^.Entities^[Entity].Constant:=Constant;
     TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
     TPasMPInterlocked.Exchange(HashRec^.CellToEntityIndex^[Cell],Entity);
@@ -12791,7 +12919,7 @@ begin
 
  if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
 
-  HashRec^.Entities^[Entity].Value:=Value;
+  POCAHashEntitySetValue(Hash,HashRec,Entity,Value);
   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
   if assigned(HashRec^.Events) then begin
    POCAHashPutHashEvents(Hash,HashRec,Key,Value);
@@ -12808,7 +12936,7 @@ begin
    if Entity>=0 then begin
 
     TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
-    HashRec^.Entities^[Entity].Value:=Value;
+    POCAHashEntitySetValue(Hash,HashRec,Entity,Value);
     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
     if assigned(HashRec^.Events) then begin
      POCAHashPutHashEvents(Hash,HashRec,Key,Value);
@@ -12823,7 +12951,7 @@ begin
 
      TPasMPInterlocked.Increment(HashRec^.Size);
      HashRec^.Entities^[Entity].Key:=Key;
-     HashRec^.Entities^[Entity].Value:=Value;
+     POCAHashEntitySetValue(Hash,HashRec,Entity,Value);
      HashRec^.Entities^[Entity].Constant:=Constant;
      TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
      TPasMPInterlocked.Exchange(HashRec^.EntityToCellIndex^[Entity],Cell);
@@ -12853,6 +12981,9 @@ var HashRec:PPOCAHashRecord;
     LogSize,Size,Cell,Entity:TPOCAInt32;
     i,j:TPOCAUInt32;
 begin
+ // Entities are reallocated respectively dropped here, so any cached entity
+ // pointer of a call site becomes stale.
+ POCAHashBumpVersion(Hash);
  HashRec:=Hash^.HashRecord;
  LogSize:=0;
  if assigned(HashRec) then begin
@@ -13408,7 +13539,7 @@ begin
        if HashRec^.Entities^[Entity].Constant then begin
         POCARuntimeError(Context,'Constant write access attempt');
        end else begin
-        HashRec^.Entities^[Entity].Value:=Value;
+        POCAHashEntitySetValue(HashInstance,HashRec,Entity,Value);
         HashRec^.Entities^[Entity].Constant:=Constant;
         TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
         if assigned(HashRec^.Events) then begin
@@ -13468,7 +13599,7 @@ begin
       if HashRec^.Entities^[Entity].Constant then begin
        POCARuntimeError(Context,'Constant write access attempt');
       end else begin
-       HashRec^.Entities^[Entity].Value:=Value;
+       POCAHashEntitySetValue(HashInstance,HashRec,Entity,Value);
        HashRec^.Entities^[Entity].Constant:=Constant;
        TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
        if assigned(HashRec^.Events) then begin
@@ -13485,7 +13616,7 @@ begin
         if HashRec^.Entities^[Entity].Constant then begin
          POCARuntimeError(Context,'Constant write access attempt');
         end else begin
-         HashRec^.Entities^[Entity].Value:=Value;
+         POCAHashEntitySetValue(HashInstance,HashRec,Entity,Value);
          HashRec^.Entities^[Entity].Constant:=Constant;
          TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
          if assigned(HashRec^.Events) then begin
@@ -14273,6 +14404,8 @@ begin
  if POCAIsValueHash(Hash) then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   if assigned(HashInstance) then begin
+   // Every entry goes away here, so cached entity pointers become stale.
+   POCAHashBumpVersion(HashInstance);
 {$ifdef POCAThreadSafeHash}  
    Locked:=POCAMultiThreaded;
    if Locked then begin
@@ -16321,6 +16454,7 @@ begin
 end;
 
 function POCAInitMathNamespace(Context:PPOCAContext):TPOCAValue;
+var IntrinsicIndex:TPOCAInt32;
 begin
  result:=POCANewHash(Context);
  POCAHashSetString(Context,result,'PI',POCANumber(3.14159265358979323846));
@@ -16383,6 +16517,10 @@ begin
  POCAAddNativeFunction(Context,result,'isFinite',POCAMathFunctionISFINITE);
  POCAAddNativeFunction(Context,result,'frac',POCAMathFunctionFRAC);
  POCAAddNativeFunction(Context,result,'fract',POCAMathFunctionFRACT);
+ Context^.Instance^.Globals.MathHash:=result;
+ for IntrinsicIndex:=0 to piidCOUNT-1 do begin
+  Context^.Instance^.Globals.MathIntrinsics[IntrinsicIndex]:=POCAHashGetString(Context,result,POCAIntrinsicNames[IntrinsicIndex]);
+ end;
 end;
 
 type PPOCAIOGhostData=^TPOCAIOGhostData;
@@ -30299,6 +30437,7 @@ var TokenList:PPOCAToken;
        ByteCode:PPOCAUInt32Array;
        ByteCodeSize:TPOCAInt32;
        ByteCodeAllocated:TPOCAInt32;
+       CountInlineCaches:TPOCAUInt32;
        Lines:TPOCACodeLines;
        LineCount:TPOCAInt32;
        NextLineIP:TPOCAInt32;
@@ -30643,18 +30782,26 @@ var TokenList:PPOCAToken;
     Emit(OperandH);
    end;
    procedure EmitGetMember(OperandA,OperandB,OperandC,OperandD,OperandE:TPOCAUInt32);
+   var IsLength:boolean;
    begin
-    if (POCAGetStringValue(Context,POCAArrayGet(CodeGenerator^.Consts,OperandC))='length') or
-       (POCAArrayGet(CodeGenerator^.Consts,OperandC).CastedUInt64=Context^.Instance^.Globals.LengthStringReference.CastedUInt64) then begin
+    IsLength:=(POCAGetStringValue(Context,POCAArrayGet(CodeGenerator^.Consts,OperandC))='length') or
+              (POCAArrayGet(CodeGenerator^.Consts,OperandC).CastedUInt64=Context^.Instance^.Globals.LengthStringReference.CastedUInt64);
+    if IsLength then begin
      EmitImmediate(popGETLENGTH,5);
     end else begin
-     EmitImmediate(popGETMEMBER,5);
+     // The sixth operand indexes the inline cache slot belonging to this call
+     // site, see TPOCAInlineCache.
+     EmitImmediate(popGETMEMBER,6);
     end;
     Emit(OperandA);
     Emit(OperandB);
     Emit(OperandC);
     Emit(OperandD);
     Emit(OperandE);
+    if not IsLength then begin
+     Emit(CodeGenerator^.CountInlineCaches);
+     inc(CodeGenerator^.CountInlineCaches);
+    end;
    end;
    procedure EmitSafeGetMember(OperandA,OperandB,OperandC,OperandD,OperandE:TPOCAUInt32);
    begin
@@ -34360,9 +34507,28 @@ var TokenList:PPOCAToken;
     end;
     function GenerateFunctionCall(t:PPOCAToken;OutReg:TPOCAInt32;const InjectedMember:TPOCARawByteString=''):TPOCAInt32;
     var IsMethod,IsSafeMethod:boolean;
-        Count,Reg1,Reg2,Reg3,i,JumpNull,JumpEnd,ConstantIndex:TPOCAInt32;
+        Count,Reg1,Reg2,Reg3,i,JumpNull,JumpEnd,ConstantIndex,IntrinsicId:TPOCAInt32;
+        MemberOpcodePC:TPOCAInt32;
+        MemberConstantIndex:TPOCAUInt32;
         Registers:TPOCACodeGeneratorRegisters;
         Regs:array of TPOCAInt32;
+     // Recognises Math.<name>(x) with exactly one argument. Only the shape is
+     // decided here; whether the callee really still is the built in function is
+     // checked at run time, so overwriting Math.sqrt keeps working.
+     function GetMathIntrinsicId(t:PPOCAToken):TPOCAInt32;
+     var Index:TPOCAInt32;
+     begin
+      result:=-1;
+      if ((assigned(t) and (t^.Token=ptDOT)) and (assigned(t^.Left) and assigned(t^.Right))) and
+         (t^.Left^.Str='Math') then begin
+       for Index:=0 to piidCOUNT-1 do begin
+        if t^.Right^.Str=POCAIntrinsicNames[Index] then begin
+         result:=Index;
+         break;
+        end;
+       end;
+      end;
+     end;
      function HasSpreadOperator(t:PPOCAToken):Boolean;
      begin  
       result:=false;
@@ -34414,6 +34580,8 @@ var TokenList:PPOCAToken;
      end;
     begin
      Regs:=nil;
+     MemberOpcodePC:=-1;
+     MemberConstantIndex:=0;
      try
       if OutReg<0 then begin
        result:=GetRegister(true,false);
@@ -34454,7 +34622,11 @@ var TokenList:PPOCAToken;
          if IsSafeMethod then begin
           EmitSafeGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
          end else begin
-          EmitGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
+          // Remembered, so that an intrinsic call site further down can fold this
+          // member read into itself.
+          MemberConstantIndex:=FindConstantIndex(t^.Left^.Right,false,nil,false);
+          MemberOpcodePC:=CodeGenerator^.ByteCodeSize;
+          EmitGetMember(Reg2,Reg1,MemberConstantIndex,$ffffffff,$ffffffff);
          end;
         end;
        end;
@@ -34488,6 +34660,9 @@ var TokenList:PPOCAToken;
       end;
       if length(InjectedMember)>0 then begin
        IsMethod:=true;
+       // The receiver moves on, so the member read remembered above is no longer
+       // the one that feeds the call.
+       MemberOpcodePC:=-1;
        ConstantIndex:=InternConstant(POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,InjectedMember)));
        Reg1:=Reg2;
        Reg2:=GetRegister(true,false);
@@ -34539,19 +34714,43 @@ var TokenList:PPOCAToken;
        Count:=CollectList(t^.Right);
        SetLength(Regs,Count);
        EmitList(t^.Right);
-       if IsMethod then begin
-        EmitOpcode(popMCALL or ((3+Count) shl 8));
+       if (IsMethod and (Count=1)) and not IsSafeMethod then begin
+        IntrinsicId:=GetMathIntrinsicId(t^.Left);
+       end else begin
+        IntrinsicId:=-1;
+       end;
+       if (IntrinsicId>=0) and ((MemberOpcodePC>=0) and ((CodeGenerator^.ByteCode^[MemberOpcodePC] and $ff)=popGETMEMBER)) then begin
+        // The call site resolves the callee itself, guarded by the version stamp
+        // of the Math namespace, so the separate member read in front of it has
+        // become dead. Overwritten in place rather than cut out, so that every
+        // jump target, line mapping and opcode boundary keeps pointing where it
+        // did.
+        CodeGenerator^.ByteCode^[MemberOpcodePC]:=popNOP or (6 shl 8);
+        EmitOpcode(popMCALLINTRINSIC or (7 shl 8));
         Emit(result);
         Emit(Reg1);
         Emit(Reg2);
+        Emit(Regs[0]);
+        Emit(TPOCAUInt32(IntrinsicId));
+        Emit(MemberConstantIndex);
+        Emit(CodeGenerator^.CountInlineCaches);
+        inc(CodeGenerator^.CountInlineCaches);
+        FreeRegister(Regs[0]);
        end else begin
-        EmitOpcode(popFCALL or ((2+Count) shl 8));
-        Emit(result);
-        Emit(Reg2);
-       end;
-       for i:=0 to Count-1 do begin
-        Emit(Regs[i]);
-        FreeRegister(Regs[i]);
+        if IsMethod then begin
+         EmitOpcode(popMCALL or ((3+Count) shl 8));
+         Emit(result);
+         Emit(Reg1);
+         Emit(Reg2);
+        end else begin
+         EmitOpcode(popFCALL or ((2+Count) shl 8));
+         Emit(result);
+         Emit(Reg2);
+        end;
+        for i:=0 to Count-1 do begin
+         Emit(Regs[i]);
+         FreeRegister(Regs[i]);
+        end;
        end;
       end;
       if IsSafeMethod then begin
@@ -38577,6 +38776,23 @@ var TokenList:PPOCAToken;
         end;
        end;
        begin
+        // Allocated once and never moved afterwards, so that the JIT may bake the
+        // address of a slot straight into the emitted code.
+        Code^.CountInlineCaches:=CodeGenerator^.CountInlineCaches;
+        if Code^.CountInlineCaches>0 then begin
+         GetMem(Code^.InlineCaches,Code^.CountInlineCaches*sizeof(TPOCAInlineCache));
+         FillChar(Code^.InlineCaches^,Code^.CountInlineCaches*sizeof(TPOCAInlineCache),#0);
+         for i:=0 to Code^.CountInlineCaches-1 do begin
+          // A zero stamp never matches, but zero is a perfectly valid chain
+          // position, so that level has to start out explicitly empty.
+          Code^.InlineCaches^[i].ChainIndex:=$ffffffff;
+          Code^.InlineCaches^[i].HashChainIndex:=$ffffffff;
+         end;
+        end else begin
+         Code^.InlineCaches:=nil;
+        end;
+       end;
+       begin
         Code^.ByteCodeSize:=CodeGenerator^.ByteCodeSize;
         GetMem(Code^.ByteCode,Code^.ByteCodeSize*sizeof(TPOCAUInt32));
         Move(CodeGenerator^.ByteCode^,Code^.ByteCode^,Code^.ByteCodeSize*sizeof(TPOCAUInt32));
@@ -39744,6 +39960,91 @@ end;
 procedure POCARunGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
 begin
  POCAGetMember(Context,Obj,Fld,OutValue,CacheIndex,HashCacheIndex,IsInherited,true);
+end;
+
+// Reduces a member read to a version compare. A stamp only matches when the
+// receiver is the very same hash in the very same state, so the entity recorded
+// back then is still the one that a full lookup would arrive at, and following
+// the recorded pointer is safe: the receiver is held in a register and therefore
+// alive, and an unchanged stamp rules out that its storage has been moved.
+procedure POCARunGetMemberCached(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;const InlineCache:PPOCAInlineCache);
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    Entity:PPOCAHashEntity;
+begin
+
+ if POCAMultiThreaded or not POCAIsValueHash(Obj) then begin
+  // Under real concurrency the stamp and the entity would have to be read as one
+  // unit, so those call sites keep taking the locked path.
+  POCAGetMember(Context,Obj,Fld,OutValue,InlineCache^.ChainIndex,InlineCache^.HashChainIndex,false,true);
+  exit;
+ end;
+
+ HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Obj));
+
+ if InlineCache^.Version=HashInstance^.Version then begin
+  OutValue:=InlineCache^.Entity^.Value;
+  exit;
+ end;
+
+ POCAGetMember(Context,Obj,Fld,OutValue,InlineCache^.ChainIndex,InlineCache^.HashChainIndex,false,true);
+
+ // Only an entity out of the receiver's own storage may be recorded. A member
+ // served by the global hash prototype or by a get event lives in a different
+ // object, whose mutations this stamp does not cover, so such a call site has to
+ // keep missing rather than to cache something the stamp cannot vouch for.
+ InlineCache^.Version:=0;
+ if InlineCache^.ChainIndex<>$ffffffff then begin
+  if assigned(HashInstance^.Prototype) then begin
+   if (HashInstance^.Cache.Ready and assigned(HashInstance^.Cache.ChainEntities)) and
+      (InlineCache^.ChainIndex<TPOCAUInt32(HashInstance^.Cache.ChainCount)) then begin
+    Entity:=HashInstance^.Cache.ChainEntities^[InlineCache^.ChainIndex];
+   end else begin
+    Entity:=nil;
+   end;
+  end else begin
+   HashRec:=HashInstance^.HashRecord;
+   if (assigned(HashRec) and (InlineCache^.ChainIndex<TPOCAUInt32(HashRec^.Size))) and (HashRec^.EntityToCellIndex^[InlineCache^.ChainIndex]>=0) then begin
+    Entity:=@HashRec^.Entities^[InlineCache^.ChainIndex];
+   end else begin
+    Entity:=nil;
+   end;
+  end;
+  if assigned(Entity) and (Entity^.Key.CastedInt64=Fld.CastedInt64) then begin
+   InlineCache^.Entity:=Entity;
+   InlineCache^.Version:=HashInstance^.Version;
+  end;
+ end;
+
+end;
+
+// Resolves the callee of an intrinsic call site the ordinary way and records the
+// version stamp of the receiver in the call site's slot, but only when the lookup
+// really did yield the built in function. That is what lets the emitted code get
+// away with checking nothing but the identity of the receiver and that stamp: a
+// monkey patched Math.sqrt leaves the stamp cleared, so such a call site keeps
+// missing and keeps taking the ordinary call path.
+procedure POCARunIntrinsicResolve(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;const IntrinsicId:TPOCAUInt32;const InlineCache:PPOCAInlineCache);
+begin
+ POCAGetMember(Context,Obj,Fld,OutValue,InlineCache^.ChainIndex,InlineCache^.HashChainIndex,false,true);
+ InlineCache^.Version:=0;
+ if (((not POCAMultiThreaded) and POCAIsValueHash(Obj)) and
+     (Obj.CastedUInt64=Context^.Instance^.Globals.MathHash.CastedUInt64)) and
+    (OutValue.CastedUInt64=Context^.Instance^.Globals.MathIntrinsics[IntrinsicId].CastedUInt64) then begin
+  InlineCache^.Version:=PPOCAHash(POCAGetValueReferencePointer(Obj))^.Version;
+ end;
+end;
+
+function POCARunIntrinsicCallee(Context:PPOCAContext;const Obj,Fld:TPOCAValue;const IntrinsicId:TPOCAUInt32;const InlineCache:PPOCAInlineCache):TPOCAValue;
+begin
+ if (((not POCAMultiThreaded) and (InlineCache^.Version<>0)) and (Obj.CastedUInt64=Context^.Instance^.Globals.MathHash.CastedUInt64)) and
+    (InlineCache^.Version=PPOCAHash(POCAGetValueReferencePointer(Obj))^.Version) then begin
+  // Same object, untouched since the stamp was taken, and back then the lookup
+  // did yield the built in function, so it still does.
+  result:=Context^.Instance^.Globals.MathIntrinsics[IntrinsicId];
+ end else begin
+  POCARunIntrinsicResolve(Context,Obj,Fld,result,IntrinsicId,InlineCache);
+ end;
 end;
 
 procedure POCARunSafeGetMember(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited:boolean); {$ifdef caninline}inline;{$endif}
@@ -44305,6 +44606,36 @@ end;
 // Helpers that need the frame itself get it instead of the register file, and
 // index the register file through it.
 
+// Thin wrappers the JIT can call directly for the transcendental intrinsics.
+// They use the very same Pascal functions as the built in Math functions, so the
+// result is bit identical, while the whole POCA call machinery is skipped. The
+// single double argument arrives in XMM0 and the result is returned there under
+// both ABIs.
+function POCAJITMathSin(const aValue:double):double;
+begin
+ result:=sin(aValue);
+end;
+
+function POCAJITMathCos(const aValue:double):double;
+begin
+ result:=cos(aValue);
+end;
+
+function POCAJITMathTan(const aValue:double):double;
+begin
+ result:=tan(aValue);
+end;
+
+function POCAJITMathExp(const aValue:double):double;
+begin
+ result:=exp(aValue);
+end;
+
+function POCAJITMathLog(const aValue:double):double;
+begin
+ result:=ln(aValue);
+end;
+
 procedure POCAJITOpLOADCODE(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
 begin
  Frame^.Registers[Operands^[0]]:=POCABindFunction(Context,Frame,Code^.Constants^[Operands^[1]],Code^.ClassFunction);
@@ -44345,20 +44676,11 @@ begin
 end;
 
 procedure POCAJITOpGETMEMBER(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
-var HashInstance:PPOCAHash;
 begin
- // Fast path: a cache hit on an object with a prototype, which is what every
- // field and method access on a class instance is. Going through
- // POCARunGetMember, POCAGetMember and POCAHashGetCache instead costs three
- // nested calls before the very same check is reached.
- if not POCAMultiThreaded then begin
-  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Registers^[Operands^[1]]));
-  if (POCAIsValueHash(Registers^[Operands^[1]]) and assigned(HashInstance^.Prototype)) and
-     POCAHashGetCacheHit(HashInstance,Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3]) then begin
-   exit;
-  end;
- end;
- POCARunGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
+ // The emitted code tries the inline cache itself and only lands here when the
+ // version stamp did not match, so this does the full lookup and refills the slot
+ // for the next time around.
+ POCARunGetMemberCached(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],@Code^.InlineCaches^[Operands^[5]]);
 end;
 
 procedure POCAJITOpSETMEMBER(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
@@ -44383,7 +44705,7 @@ begin
     Entity:=Operands^[3];
     if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and
        (HashRec^.Entities^[Entity].Key.CastedInt64=Code^.Constants^[Operands^[1]].CastedInt64) then begin
-     HashRec^.Entities^[Entity].Value:=Registers^[Operands^[2]];
+     POCAHashEntitySetValue(HashInstance,HashRec,Entity,Registers^[Operands^[2]]);
      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Registers^[Operands^[2]]);
      exit;
     end;
@@ -45005,19 +45327,164 @@ var Fixups:TFixups;
   AddDWord(0);
   FixLocalJump(Slow[0]);
  end;
- // Reads one member of an object that has a prototype, which is what every field
- // and method access on a class instance is, without leaving native code. This
- // is the check of POCAHashGetCacheHit, emitted inline instead of reached through
- // a helper call. Every case it does not cover, a cache miss included, falls
- // through to the helper, which then behaves exactly as before.
- procedure AddInlineGetMember;
- var Slow:array[0..7] of TPOCAInt32;
+ // Computes a Math intrinsic inline. Only the ones that map exactly onto a
+ // single instruction are emitted here; sin, cos, tan, exp, log and the
+ // rounding family go through the dispatcher, because the built in versions
+ // route through Int64 respectively libm and reproducing that bit for bit in
+ // emitted code is not worth the risk. Note that this opcode is marked as
+ // interpreted, so this code is reached by falling through from the preceding
+ // opcode, which is what happens inside a hot loop, while a direct entry lands
+ // in the dispatch loop instead. Both are correct.
+ function AddInlineMathIntrinsic:boolean;
+ var Deopt:array[0..3] of TPOCAInt32;
      Index,Done:TPOCAInt32;
  begin
+  result:=Operands^[4]<piidCOUNT;
+  if not result then begin
+   exit;
+  end;
+
+  // Nothing of the callee is read here. That the receiver is the global Math and
+  // that its version stamp still is the one recorded at the last miss together
+  // prove that Math.<name> is the built in function, because the stamp is only
+  // ever recorded when the lookup really yielded it. So the member read in front
+  // of this call site could be dropped entirely, which is where the bulk of the
+  // work used to sit.
   Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
   AddQWordPointer(@POCAMultiThreaded);
   Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
-  Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
+  Deopt[0]:=AddLocalJump(#$0f#$85); // jne deopt
+
+  Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+Obj]
+  AddDWord(Operands^[1]*sizeof(double));
+  Add(#$48#$ba); // mov rdx,@Instance^.Globals.MathHash
+  AddQWordPointer(@Code^.Header.Instance^.Globals.MathHash);
+  Add(#$48#$3b#$02); // cmp rax,qword ptr [rdx]
+  Deopt[1]:=AddLocalJump(#$0f#$85); // jne deopt (receiver is not the global Math)
+
+  Add(#$48#$ba); // mov rdx,pointer mask (strip signal bits and type tag)
+  AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
+  Add(#$48#$21#$d0); // and rax,rdx
+
+  Add(#$48#$ba); // mov rdx,@Code^.InlineCaches^[Operands^[6]] (this call site's slot)
+  AddQWordPointer(@Code^.InlineCaches^[Operands^[6]]);
+  Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Version]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Version)));
+  Add(#$48#$3b#$88); // cmp rcx,qword ptr [rax+TPOCAHash.Version]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Version)));
+  Deopt[2]:=AddLocalJump(#$0f#$85); // jne deopt (a cleared slot never matches, stamps start at one)
+
+  Add(#$48#$8b#$93); // mov rdx,qword ptr [rbx+Argument]
+  AddDWord(Operands^[3]*sizeof(double));
+  Add(#$48#$c1#$ea#$30); // shr rdx,48
+  Add(#$81#$fa); // cmp edx,0000ffffh
+  AddDWord($0000ffff);
+  Deopt[3]:=AddLocalJump(#$0f#$84); // je deopt (argument is not a number, needs coercion)
+
+  case Operands^[4] of
+   piidSQRT:begin
+    Add(#$f2#$0f#$51#$83); // sqrtsd xmm0,qword ptr [rbx+Argument]
+    AddDWord(Operands^[3]*sizeof(double));
+    Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+Result],xmm0
+    AddDWord(Operands^[0]*sizeof(double));
+   end;
+   piidABS:begin
+    Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+Argument]
+    AddDWord(Operands^[3]*sizeof(double));
+    Add(#$48#$0f#$ba#$f0#$3f); // btr rax,63 (clearing the sign bit is what abs does)
+    Add(#$48#$89#$83); // mov qword ptr [rbx+Result],rax
+    AddDWord(Operands^[0]*sizeof(double));
+   end;
+   piidFLOOR,piidCEIL,piidROUND,piidTRUNC:begin
+    // roundsd with the matching mode: 0 = to nearest even, which is what
+    // System.round does, 1 = down, 2 = up, 3 = towards zero. The built in ones
+    // route through Int64, so they differ for magnitudes beyond its range,
+    // where a double is an integer anyway and roundsd simply keeps the value.
+    Add(#$66#$0f#$3a#$0b#$83); // roundsd xmm0,qword ptr [rbx+Argument],mode
+    AddDWord(Operands^[3]*sizeof(double));
+    case Operands^[4] of
+     piidFLOOR:begin
+      Add(#$09); // round down, suppress precision exception
+     end;
+     piidCEIL:begin
+      Add(#$0a); // round up
+     end;
+     piidTRUNC:begin
+      Add(#$0b); // round towards zero
+     end;
+     else begin
+      Add(#$08); // round to nearest even
+     end;
+    end;
+    Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+Result],xmm0
+    AddDWord(Operands^[0]*sizeof(double));
+   end;
+   else begin
+    // sin, cos, tan, exp and log go through a wrapper around the very same
+    // Pascal function the built in one uses, so the result stays bit identical.
+    Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+Argument]
+    AddDWord(Operands^[3]*sizeof(double));
+{$ifdef windows}
+    Add(#$48#$83#$ec#$28); // sub rsp,40 (shadow space plus alignment)
+{$else}
+    Add(#$48#$83#$ec#$08); // sub rsp,8 (align rsp to 16 bytes at the call)
+{$endif}
+    Add(#$48#$b8); // mov rax,wrapper
+    case Operands^[4] of
+     piidSIN:begin
+      AddQWordPointer(@POCAJITMathSin);
+     end;
+     piidCOS:begin
+      AddQWordPointer(@POCAJITMathCos);
+     end;
+     piidTAN:begin
+      AddQWordPointer(@POCAJITMathTan);
+     end;
+     piidEXP:begin
+      AddQWordPointer(@POCAJITMathExp);
+     end;
+     else begin
+      AddQWordPointer(@POCAJITMathLog);
+     end;
+    end;
+    Add(#$ff#$d0); // call rax
+{$ifdef windows}
+    Add(#$48#$83#$c4#$28); // add rsp,40
+{$else}
+    Add(#$48#$83#$c4#$08); // add rsp,8
+{$endif}
+    Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+Result],xmm0
+    AddDWord(Operands^[0]*sizeof(double));
+   end;
+  end;
+  Done:=AddLocalJump(#$e9); // jmp done
+
+  for Index:=0 to 3 do begin
+   FixLocalJump(Deopt[Index]);
+  end;
+  DoItByVMOpcodeDispatcher;
+  FixLocalJump(Done);
+ end;
+ // Reads one member without leaving native code, through the call site's inline
+ // cache. Every case it does not cover, a miss included, falls through to the
+ // helper, which then does the full lookup and refills the slot.
+ procedure AddInlineGetMember;
+ var Slow:array[0..2] of TPOCAInt32;
+     Chain:array[0..5] of TPOCAInt32;
+     Done:array[0..1] of TPOCAInt32;
+     Index,Stamp:TPOCAInt32;
+ begin
+  // Two ways to remember a member lookup, picked by whether the receiver has a
+  // prototype. With one, the receiver is a class instance and the call site sees
+  // a new object on nearly every pass, so only the position in the flattened
+  // chain carries, being a property of the layout rather than of the object.
+  // Without one, the receiver is a namespace, a module table or a plain hash and
+  // tends to be the very same object every time, where the version stamp settles
+  // the whole lookup in a single comparison.
+  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
+  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
+  Slow[0]:=AddLocalJump(#$0f#$85); // jne slow (stamp and entity would have to be read as one unit)
 
   Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+Obj]
   AddDWord(Operands^[1]*sizeof(double));
@@ -45031,55 +45498,81 @@ var Fixups:TFixups;
   Add(#$83#$e2#$0f); // and edx,15
   Add(#$83#$fa); // cmp edx,pvtHASH
   Add(AnsiChar(TPOCAUInt8(pvtHASH)));
-  Slow[2]:=AddLocalJump(#$0f#$85); // jne slow
+  Slow[2]:=AddLocalJump(#$0f#$85); // jne slow (only a hash receiver may be dereferenced here)
 
   Add(#$48#$ba); // mov rdx,pointer mask (strip signal bits and type tag)
   AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
   Add(#$48#$21#$d0); // and rax,rdx
 
+  Add(#$48#$ba); // mov rdx,@Code^.InlineCaches^[Operands^[5]] (both levels live in this slot)
+  AddQWordPointer(@Code^.InlineCaches^[Operands^[5]]);
+
   Add(#$48#$83#$b8); // cmp qword ptr [rax+TPOCAHash.Prototype],0
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Prototype)));
   Add(#$00);
-  Slow[3]:=AddLocalJump(#$0f#$84); // je slow (no prototype, different lookup path)
+  Stamp:=AddLocalJump(#$0f#$84); // je version stamp path
 
+  // Chain position, for receivers that inherit.
   Add(#$83#$b8); // cmp dword ptr [rax+TPOCAHash.Cache.Ready],0
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.Ready)));
   Add(#$00);
-  Slow[4]:=AddLocalJump(#$0f#$84); // je slow (cache not built yet)
+  Chain[0]:=AddLocalJump(#$0f#$84); // je stamp path (cache not built yet)
 
-  Add(#$48#$ba); // mov rdx,@Code^.ByteCode^[LastPC+4] (the inline cache slot)
-  AddQWordPointer(@Code^.ByteCode^[LastPC+4]);
-  Add(#$8b#$0a); // mov ecx,dword ptr [rdx]
+  Add(#$8b#$8a); // mov ecx,dword ptr [rdx+TPOCAInlineCache.ChainIndex]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.ChainIndex)));
   Add(#$83#$f9#$ff); // cmp ecx,-1
-  Slow[5]:=AddLocalJump(#$0f#$84); // je slow (nothing cached yet)
+  Chain[1]:=AddLocalJump(#$0f#$84); // je stamp path (nothing recorded yet)
 
-  Add(#$48#$8b#$90); // mov rdx,qword ptr [rax+TPOCAHash.Cache.ChainEntities]
+  Add(#$4c#$8b#$80); // mov r8,qword ptr [rax+TPOCAHash.Cache.ChainEntities]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.ChainEntities)));
-  Add(#$48#$85#$d2); // test rdx,rdx
-  Slow[6]:=AddLocalJump(#$0f#$84); // jz slow
+  Add(#$4d#$85#$c0); // test r8,r8
+  Chain[2]:=AddLocalJump(#$0f#$84); // jz stamp path
 
   Add(#$3b#$88); // cmp ecx,dword ptr [rax+TPOCAHash.Cache.ChainCount]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.ChainCount)));
-  Slow[7]:=AddLocalJump(#$0f#$83); // jae slow
+  Chain[3]:=AddLocalJump(#$0f#$83); // jae stamp path
 
-  Add(#$4c#$8b#$04#$ca); // mov r8,qword ptr [rdx+rcx*8] (the cached entity)
-  Add(#$48#$ba); // mov rdx,@Code^.Constants^[Operands^[2]] (the member name)
+  Add(#$4d#$8b#$04#$c8); // mov r8,qword ptr [r8+rcx*8] (the recorded entity)
+  Add(#$49#$b9); // mov r9,@Code^.Constants^[Operands^[2]] (the member name)
   AddQWordPointer(@Code^.Constants^[Operands^[2]]);
-  Add(#$48#$8b#$12); // mov rdx,qword ptr [rdx]
-  Add(#$49#$3b#$10); // cmp rdx,qword ptr [r8] (TPOCAHashEntity.Key)
-  Done:=AddLocalJump(#$0f#$84); // je fast, so the slow path can simply follow
+  Add(#$4d#$8b#$09); // mov r9,qword ptr [r9]
+  Add(#$4d#$3b#$08); // cmp r9,qword ptr [r8] (TPOCAHashEntity.Key)
+  Chain[4]:=AddLocalJump(#$0f#$85); // jne stamp path
 
-  for Index:=0 to 7 do begin
+  Add(#$4d#$8b#$48#$08); // mov r9,qword ptr [r8+TPOCAHashEntity.Value]
+  Add(#$4c#$89#$8b); // mov qword ptr [rbx+Dst],r9
+  AddDWord(Operands^[0]*sizeof(double));
+  Done[0]:=AddLocalJump(#$e9); // jmp behind the miss path
+
+  // Version stamp, for receivers that do not inherit, and as the fallback for
+  // those that do but whose chain position did not hold up.
+  FixLocalJump(Stamp);
+  for Index:=0 to 4 do begin
+   FixLocalJump(Chain[Index]);
+  end;
+
+  Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Version]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Version)));
+  Add(#$48#$3b#$88); // cmp rcx,qword ptr [rax+TPOCAHash.Version]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Version)));
+  Chain[5]:=AddLocalJump(#$0f#$85); // jne slow (a zeroed slot never matches, stamps start at one)
+
+  Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Entity]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Entity)));
+  Add(#$48#$8b#$89); // mov rcx,qword ptr [rcx+TPOCAHashEntity.Value]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHashEntity(nil)^.Value)));
+  Add(#$48#$89#$8b); // mov qword ptr [rbx+Dst],rcx
+  AddDWord(Operands^[0]*sizeof(double));
+  Done[1]:=AddLocalJump(#$e9); // jmp behind the miss path
+
+  for Index:=0 to 2 do begin
    FixLocalJump(Slow[Index]);
   end;
+  FixLocalJump(Chain[5]);
   AddCallRuntimeHelper(@POCAJITOpGETMEMBER,false,true);
-  Slow[0]:=AddLocalJump(#$e9); // jmp behind the fast path
-  FixLocalJump(Done);
-
-  Add(#$49#$8b#$50#$08); // mov rdx,qword ptr [r8+TPOCAHashEntity.Value]
-  Add(#$48#$89#$93); // mov qword ptr [rbx+Dst],rdx
-  AddDWord(Operands^[0]*sizeof(double));
-  FixLocalJump(Slow[0]);
+  for Index:=0 to 1 do begin
+   FixLocalJump(Done[Index]);
+  end;
  end;
 begin
  try
@@ -47104,6 +47597,12 @@ begin
      DoItByVMOpcodeDispatcher;
     end;
 
+    popMCALLINTRINSIC:begin
+     if not AddInlineMathIntrinsic then begin
+      DoItByVMOpcodeDispatcher;
+     end;
+    end;
+
     else begin
      // For now, all other opcodes fall back to VM interpreter
      DoItByVMOpcodeDispatcher;
@@ -47605,6 +48104,61 @@ begin
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
    end;
+   popMCALLINTRINSIC:begin
+    // Operands: 0 = result, 1 = object, 2 = callee, 3 = argument, 4 = intrinsic id,
+    // 5 = member name constant, 6 = inline cache slot. The member read that used
+    // to stand in front of this has been folded in here, so the callee is resolved
+    // first, cheaply when the Math namespace is untouched.
+    Registers^[Operands^[2]]:=POCARunIntrinsicCallee(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[5]],Operands^[4],@Code^.InlineCaches^[Operands^[6]]);
+    // The callee is compared against the built in function, so that overwriting
+    // Math.sqrt simply takes the ordinary call path below again. A non numeric
+    // argument does too, because the built in one coerces it.
+    if (Registers^[Operands^[2]].CastedUInt64=Context^.Instance^.Globals.MathIntrinsics[Operands^[4]].CastedUInt64) and
+       POCAIsValueNumber(Registers^[Operands^[3]]) then begin
+     // Each of these mirrors the body of the corresponding POCAMathFunction
+     // exactly; with a numeric argument POCAGetNumberValue is the identity.
+     case Operands^[4] of
+      piidSQRT:begin
+       Registers^[Operands^[0]].Num:=sqrt(Registers^[Operands^[3]].Num);
+      end;
+      piidSIN:begin
+       Registers^[Operands^[0]].Num:=sin(Registers^[Operands^[3]].Num);
+      end;
+      piidCOS:begin
+       Registers^[Operands^[0]].Num:=cos(Registers^[Operands^[3]].Num);
+      end;
+      piidTAN:begin
+       Registers^[Operands^[0]].Num:=tan(Registers^[Operands^[3]].Num);
+      end;
+      piidFLOOR:begin
+       Registers^[Operands^[0]].Num:=floor(Registers^[Operands^[3]].Num);
+      end;
+      piidCEIL:begin
+       Registers^[Operands^[0]].Num:=ceil(Registers^[Operands^[3]].Num);
+      end;
+      piidROUND:begin
+       Registers^[Operands^[0]].Num:=System.round(Registers^[Operands^[3]].Num);
+      end;
+      piidTRUNC:begin
+       Registers^[Operands^[0]].Num:=System.trunc(Registers^[Operands^[3]].Num);
+      end;
+      piidABS:begin
+       Registers^[Operands^[0]].Num:=abs(Registers^[Operands^[3]].Num);
+      end;
+      piidEXP:begin
+       Registers^[Operands^[0]].Num:=exp(Registers^[Operands^[3]].Num);
+      end;
+      piidLOG:begin
+       Registers^[Operands^[0]].Num:=ln(Registers^[Operands^[3]].Num);
+      end;
+     end;
+    end else begin
+     Frame:=POCASetupFunctionMethodCall(Context,Frame,4,Operands);
+     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
+     Registers:=@Frame^.Registers[0];
+     Context^.TemporarySavedObjectCount:=0;
+    end;
+   end;
    popRETURN:begin
     a:=Registers^[Operands^[0]];
     if assigned(Context^.CallChild) then begin
@@ -47679,7 +48233,7 @@ begin
     POCARunGetLength(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
    end;
    popGETMEMBER:begin
-    POCARunGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
+    POCARunGetMemberCached(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],@Code^.InlineCaches^[Operands^[5]]);
    end;
    popSETMEMBER:begin
     POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
