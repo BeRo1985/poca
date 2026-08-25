@@ -723,6 +723,10 @@ const POCAValueTypeTagMask=TPOCAPtrUInt(15);
       // than the extra object and the walk that deferring it costs later on.
       POCAStringConsThreshold=64;
 
+      // Marks a symbol lookup slot that has been given up on, because the call
+      // site kept seeing a different closure and the slot could never settle.
+      POCAInlineCacheGivenUp=TPOCAUInt32($fffffffe);
+
 type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCADoubleHiLo=packed record
 {$ifdef BIG_ENDIAN}
@@ -743,7 +747,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      TPOCAUTF16String=TPUCUUTF16String;
 
-     TPOCARawByteString=TPUCURawByteString;
+     TPOCARawByteString=TPUCURawByteString;
+
      PPOCARawByteString=^TPOCARawByteString;
 
      TPOCAUCS4Char=TPOCAInt32;
@@ -1398,6 +1403,13 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       // through a single base pointer.
       ChainIndex:TPOCAUInt32;
       HashChainIndex:TPOCAUInt32;
+      // For a symbol lookup, the two things that together pin down which hashes a
+      // search would walk: the frame's own locals and the closure whose namespace
+      // chain follows them. With both unchanged, the walk visits the same objects
+      // as when the slot was filled, so a single unchanged stamp on the hash that
+      // answered is enough to know the answer still stands.
+      LookupLocals:TPOCAValue;
+      LookupFunc:TPOCAValue;
      end;
      PPOCAInlineCaches=^TPOCAInlineCaches;
      TPOCAInlineCaches=array[0..($7fffffff div sizeof(TPOCAInlineCache))-1] of TPOCAInlineCache;
@@ -30866,6 +30878,17 @@ var TokenList:PPOCAToken;
     Emit(OperandG);
     Emit(OperandH);
    end;
+   procedure EmitGetLocal(OperandA,OperandB:TPOCAUInt32);
+   begin
+    // Operands: destination, symbol constant, the chain position for the slow
+    // path, and the inline cache slot belonging to this call site.
+    EmitImmediate(popGETLOCAL,4);
+    Emit(OperandA);
+    Emit(OperandB);
+    Emit($ffffffff);
+    Emit(CodeGenerator^.CountInlineCaches);
+    inc(CodeGenerator^.CountInlineCaches);
+   end;
    procedure EmitGetMember(OperandA,OperandB,OperandC,OperandD,OperandE:TPOCAUInt32);
    var IsLength:boolean;
    begin
@@ -32863,7 +32886,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        Reg2:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg2);
@@ -32904,7 +32927,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        Reg2:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg2);
@@ -32917,7 +32940,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        Reg2:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg2);
@@ -32930,7 +32953,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        Reg2:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg2);
@@ -33150,7 +33173,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -33232,7 +33255,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
@@ -33259,7 +33282,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
@@ -33286,7 +33309,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -33526,7 +33549,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -33608,7 +33631,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
@@ -33635,7 +33658,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
@@ -33662,7 +33685,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -33902,7 +33925,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -33984,7 +34007,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
@@ -34011,7 +34034,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
@@ -34038,7 +34061,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        JumpTrue:=CodeGenerator^.ByteCodeSize+1;
        case GetRegisterTypeKind(result) of
         tkNUMBER:begin
@@ -34181,7 +34204,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg1:=GetRegister(true,false);
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,Reg1,result);
        EmitOpcode(popSETLOCAL,ConstantIndex,Reg1,$ffffffff);
@@ -34220,7 +34243,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg1:=GetRegister(true,false);
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,Reg1,result);
        EmitOpcode(popSETCONSTLOCAL,ConstantIndex,Reg1,$ffffffff);
@@ -34233,7 +34256,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg1:=GetRegister(true,false);
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,Reg1,result);
        EmitOpcode(popSETSYM,ConstantIndex,Reg1,$ffffffff);
@@ -34246,7 +34269,7 @@ var TokenList:PPOCAToken;
         result:=OutReg;
        end;
        Reg1:=GetRegister(true,false);
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,Reg1,result);
        EmitOpcode(SetOp and $ff,ConstantIndex,Reg1);
@@ -34362,7 +34385,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETLOCAL,ConstantIndex,result,$ffffffff);
@@ -34395,7 +34418,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETCONSTLOCAL,ConstantIndex,result,$ffffffff);
@@ -34406,7 +34429,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
        EmitOpcode(popSETSYM,ConstantIndex,result,$ffffffff);
@@ -34417,7 +34440,7 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popGETLOCAL,result,ConstantIndex,$ffffffff);
+       EmitGetLocal(result,ConstantIndex);
        EmitOpcode(Op,result,result);
        EmitOpcode(SetOp and $ff,ConstantIndex,result);
       end;
@@ -37898,7 +37921,7 @@ var TokenList:PPOCAToken;
         end else begin
          result:=OutReg;
         end;
-        EmitOpcode(popGETLOCAL,result,FindConstantIndex(t,true,nil,false),$ffffffff);
+        EmitGetLocal(result,FindConstantIndex(t,true,nil,false));
         SetRegisterTypeKind(result,tkUNKNOWN);
        end;
       end;
@@ -39998,6 +40021,95 @@ begin
  end;
 
  POCARunGetLocalError(Context,Sym);
+
+end;
+
+// Resolves a symbol through the call site's inline cache. The stamps are globally
+// unique, so an unchanged one proves that the namespace is the same hash in the
+// same state and that the entity recorded back then is still the one the walk
+// below would arrive at.
+//
+// Restricted on purpose to two situations, both of which the guard checks:
+//  - the frame has no locals hash, so nothing can shadow the symbol in front of
+//    the namespace chain. A function that does have one gets a fresh hash on every
+//    call anyway, which no call site level cache could ever hit.
+//  - the symbol sits in the first namespace of the chain, so no hash searched
+//    before it could have gained it meanwhile.
+// Everything else keeps taking the full walk.
+procedure POCARunGetLocalCached(Context:PPOCAContext;Frame:PPOCAFrame;const Sym:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32;const InlineCache:PPOCAInlineCache);
+var Func:PPOCAFunction;
+    NamespaceHash:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    Entity:PPOCAHashEntity;
+begin
+
+ if ((not POCAMultiThreaded) and (InlineCache^.Version<>0)) and
+    (Frame^.Locals.CastedUInt64=InlineCache^.LookupLocals.CastedUInt64) then begin
+  if Frame^.Locals.CastedUInt64=POCAValueNullCastedUInt64 then begin
+   // No locals hash in front of the chain, so the first namespace answered. Same
+   // closure means the same chain: a namespace never changes after binding.
+   if Frame^.Func.CastedUInt64=InlineCache^.LookupFunc.CastedUInt64 then begin
+    Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
+    NamespaceHash:=PPOCAHash(POCAGetValueReferencePointer(Func^.Namespace));
+   end else begin
+    NamespaceHash:=nil;
+   end;
+  end else begin
+   // The locals hash itself answered, and nothing is searched before it.
+   NamespaceHash:=PPOCAHash(POCAGetValueReferencePointer(Frame^.Locals));
+  end;
+  if assigned(NamespaceHash) and (InlineCache^.Version=NamespaceHash^.Version) then begin
+   OutValue:=InlineCache^.Entity^.Value;
+   exit;
+  end;
+ end;
+
+ POCARunGetLocal(Context,Frame,Sym,OutValue,CacheIndex);
+
+ // Record only what the guard above can vouch for. A call site that never
+ // qualifies must not write to its slot on every pass, which would dirty a cache
+ // line for nothing.
+ Entity:=nil;
+ NamespaceHash:=nil;
+ if (not POCAMultiThreaded) and (CacheIndex<>$ffffffff) then begin
+  if Frame^.Locals.CastedUInt64=POCAValueNullCastedUInt64 then begin
+   Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
+   if assigned(Func) then begin
+    NamespaceHash:=PPOCAHash(POCAGetValueReferencePointer(Func^.Namespace));
+   end;
+  end else begin
+   NamespaceHash:=PPOCAHash(POCAGetValueReferencePointer(Frame^.Locals));
+  end;
+  // A hash carrying events may answer out of a get handler rather than out of an
+  // entity, which is exactly the case the walk bails out of.
+  if assigned(NamespaceHash) and not assigned(NamespaceHash^.Events) then begin
+   HashRec:=NamespaceHash^.HashRecord;
+   if ((assigned(HashRec) and (CacheIndex<TPOCAUInt32(HashRec^.Size))) and (HashRec^.EntityToCellIndex^[CacheIndex]>=0)) and
+      (HashRec^.Entities^[CacheIndex].Key.CastedInt64=Sym.CastedInt64) then begin
+    // The key settles that the walk really did stop right here and not somewhere
+    // further along the chain.
+    Entity:=@HashRec^.Entities^[CacheIndex];
+   end;
+  end;
+ end;
+ if not assigned(Entity) then begin
+  if InlineCache^.Version<>0 then begin
+   InlineCache^.Version:=0;
+  end;
+ end else if (InlineCache^.Version<>0) and
+             ((InlineCache^.LookupLocals.CastedUInt64<>Frame^.Locals.CastedUInt64) or
+              (InlineCache^.LookupFunc.CastedUInt64<>Frame^.Func.CastedUInt64)) then begin
+  // The call site sees a different closure than it did last time, so a slot here
+  // would only be overwritten again on the very next pass. Give up on it once
+  // rather than keep paying for writes that can never settle.
+  InlineCache^.Version:=0;
+  InlineCache^.HashChainIndex:=POCAInlineCacheGivenUp;
+ end else if InlineCache^.HashChainIndex<>POCAInlineCacheGivenUp then begin
+  InlineCache^.LookupLocals:=Frame^.Locals;
+  InlineCache^.LookupFunc:=Frame^.Func;
+  InlineCache^.Entity:=Entity;
+  InlineCache^.Version:=NamespaceHash^.Version;
+ end;
 
 end;
 
@@ -44832,7 +44944,7 @@ end;
 
 procedure POCAJITOpGETLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
 begin
- POCARunGetLocal(Context,Frame,Code^.Constants^[Operands^[1]],Frame^.Registers[Operands^[0]],Operands^[2]);
+ POCARunGetLocalCached(Context,Frame,Code^.Constants^[Operands^[1]],Frame^.Registers[Operands^[0]],Operands^[2],@Code^.InlineCaches^[Operands^[3]]);
 end;
 
 procedure POCAJITOpSETLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
@@ -45580,6 +45692,77 @@ var Fixups:TFixups;
   DoItByVMOpcodeDispatcher;
   FixLocalJump(Done);
  end;
+ // Resolves a symbol out of the call site's inline cache without leaving native
+ // code. What it checks mirrors POCARunGetLocalCached exactly: the same frame
+ // locals and, when there are none, the same closure, so that a search would walk
+ // the same hashes; then the recorded stamp on the hash that answered.
+ procedure AddInlineGetLocal;
+ var Slow:array[0..4] of TPOCAInt32;
+     Index,Namespace,HaveHash:TPOCAInt32;
+ begin
+  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
+  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
+  Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$48#$ba); // mov rdx,@Code^.InlineCaches^[Operands^[3]] (this call site's slot)
+  AddQWordPointer(@Code^.InlineCaches^[Operands^[3]]);
+
+  Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Locals]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Locals)));
+  Add(#$48#$3b#$82); // cmp rax,qword ptr [rdx+TPOCAInlineCache.LookupLocals]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.LookupLocals)));
+  Slow[1]:=AddLocalJump(#$0f#$85); // jne slow (different locals means a different walk)
+
+  Add(#$48#$b9); // mov rcx,POCAValueNullCastedUInt64
+  AddQWord(TPOCAUInt64(POCAValueNullCastedUInt64));
+  Add(#$48#$39#$c8); // cmp rax,rcx
+  Namespace:=AddLocalJump(#$0f#$84); // je namespace path (no locals hash in the way)
+
+  // The locals hash itself answered, and nothing is searched before it.
+  Add(#$48#$b9); // mov rcx,pointer mask (strip signal bits and type tag)
+  AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
+  Add(#$48#$21#$c8); // and rax,rcx
+  HaveHash:=AddLocalJump(#$e9); // jmp to the stamp check
+
+  // No locals hash, so the first namespace of the closure answered.
+  FixLocalJump(Namespace);
+  Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Func]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Func)));
+  Add(#$48#$3b#$82); // cmp rax,qword ptr [rdx+TPOCAInlineCache.LookupFunc]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.LookupFunc)));
+  Slow[2]:=AddLocalJump(#$0f#$85); // jne slow (a different closure searches a different chain)
+
+  Add(#$48#$b9); // mov rcx,pointer mask (strip signal bits and type tag)
+  AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
+  Add(#$48#$21#$c8); // and rax,rcx
+  Add(#$48#$8b#$80); // mov rax,qword ptr [rax+TPOCAFunction.Namespace]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFunction(nil)^.Namespace)));
+  Add(#$48#$21#$c8); // and rax,rcx
+  Add(#$48#$85#$c0); // test rax,rax
+  Slow[3]:=AddLocalJump(#$0f#$84); // jz slow
+
+  FixLocalJump(HaveHash);
+  Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Version]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Version)));
+  Add(#$48#$3b#$88); // cmp rcx,qword ptr [rax+TPOCAHash.Version]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Version)));
+  Slow[4]:=AddLocalJump(#$0f#$85); // jne slow (a cleared slot never matches, stamps start at one)
+
+  Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Entity]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Entity)));
+  Add(#$48#$8b#$89); // mov rcx,qword ptr [rcx+TPOCAHashEntity.Value]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHashEntity(nil)^.Value)));
+  Add(#$48#$89#$8b); // mov qword ptr [rbx+Dst],rcx
+  AddDWord(Operands^[0]*sizeof(double));
+  Index:=AddLocalJump(#$e9); // jmp behind the miss path
+
+  for Namespace:=0 to 4 do begin
+   FixLocalJump(Slow[Namespace]);
+  end;
+  AddCallRuntimeHelper(@POCAJITOpGETLOCAL,true,true);
+  FixLocalJump(Index);
+ end;
  // Reads one member without leaving native code, through the call site's inline
  // cache. Every case it does not cover, a miss included, falls through to the
  // helper, which then does the full lookup and refills the slot.
@@ -46178,7 +46361,7 @@ begin
     end;
 
     popGETLOCAL:begin
-     AddCallRuntimeHelper(@POCAJITOpGETLOCAL,true,true);
+     AddInlineGetLocal;
     end;
 
     popSETLOCAL:begin
@@ -48354,7 +48537,7 @@ begin
     POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
    end;
    popGETLOCAL:begin
-    POCARunGetLocal(Context,Frame,Code^.Constants^[Operands^[1]],Registers^[Operands^[0]],Operands^[2]);
+    POCARunGetLocalCached(Context,Frame,Code^.Constants^[Operands^[1]],Registers^[Operands^[0]],Operands^[2],@Code^.InlineCaches^[Operands^[3]]);
    end;
    popSETLOCAL:begin
     POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Registers^[Operands^[1]],false,Operands^[2]);
