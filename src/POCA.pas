@@ -719,6 +719,13 @@ const POCAValueReferenceTag=TPOCAUInt32($7fff6789); // $7ff56789
 // single type check. A tag of zero means null, which matches pvtNULL.
 const POCAValueTypeTagMask=TPOCAPtrUInt(15);
 
+      // Handed back by the call setup when the call turned out to be done already,
+      // so that the call site carries on instead of entering anything. Kept as an
+      // integer rather than a pointer, since a cast to a pointer type is not a
+      // constant expression for Delphi. It has to stay small enough for the one
+      // byte immediate that the emitted comparison uses.
+      POCAJITCallCompleted=TPOCAPtrUInt(1);
+
       // Below this, laying the bytes of a concatenation out right away is cheaper
       // than the extra object and the walk that deferring it costs later on.
       POCAStringConsThreshold=64;
@@ -44994,36 +45001,50 @@ begin
  POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
 end;
 
-// Sets up the callee frame of an emitted call and hands back the address inside
-// the callee's native code to continue at, or nil when the interpreter has to
-// take over from here. Everything the emitted call sequence is not prepared for
-// ends up as nil: a native function, an empty one, a callee that has not been
-// compiled yet, or one whose first opcode is not emitted.
+// Decides what an emitted call site does after the callee frame has been set up.
+// Three outcomes, and the emitted sequence tells them apart by the return value:
 //
-// The frame stack is touched either way, so the interpreter is told that its view
-// went stale regardless of the outcome.
-function POCAJITCallSetup(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):TPOCAPointer;
-var NewFrame:PPOCAFrame;
-    NewCode:PPOCACode;
-    OldFrameTop:TPOCAInt32;
+//  - an address: a callee frame was pushed and its native code may be entered
+//    right there, which is the case the whole thing exists for;
+//  - POCAJITCallCompleted: no frame was pushed because the call is already done,
+//    which is what a native function or an empty one looks like. The result has
+//    been stored into the caller's register, so the call site simply carries on.
+//    This is the common shape of a script calling into the host;
+//  - nil: a frame was pushed but cannot be entered natively, so the interpreter
+//    has to take over.
+function POCAJITCallFinish(Context:PPOCAContext;NewFrame:PPOCAFrame;OldFrameTop:TPOCAInt32):TPOCAPointer; {$ifdef caninline}inline;{$endif}
+var NewCode:PPOCACode;
 begin
- result:=nil;
- OldFrameTop:=Context^.FrameTop;
- NewFrame:=POCASetupFunctionNormalCall(Context,Frame,CountArguments,Operands);
  Context^.TemporarySavedObjectCount:=0;
- Context^.JITFrameChanged:=1;
  if Context^.FrameTop<=OldFrameTop then begin
-  // No callee frame was pushed, so the call is already done and there is nothing
-  // to enter.
+  // Nothing was pushed and nothing was left behind, so the interpreter's view is
+  // still good and does not need to be taken again.
+  result:=TPOCAPointer(POCAJITCallCompleted);
   exit;
  end;
+ Context^.JITFrameChanged:=1;
  NewCode:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(NewFrame^.Func))^.Code));
  if ((not assigned(NewCode^.NativeCode)) or (length(NewCode^.ByteCodeToNativeCodeMap)=0)) or NewCode^.InterpretByteCodeMap[0] then begin
+  result:=nil;
   exit;
  end;
  Context^.JITCallFrame:=NewFrame;
  Context^.JITCallCode:=NewCode;
  result:=TPOCAPointer(TPOCAPtrUInt(NewCode^.NativeCode)+TPOCAPtrUInt(NewCode^.ByteCodeToNativeCodeMap[0]));
+end;
+
+function POCAJITCallSetup(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):TPOCAPointer;
+var OldFrameTop:TPOCAInt32;
+begin
+ OldFrameTop:=Context^.FrameTop;
+ result:=POCAJITCallFinish(Context,POCASetupFunctionNormalCall(Context,Frame,CountArguments,Operands),OldFrameTop);
+end;
+
+function POCAJITMethodCallSetup(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):TPOCAPointer;
+var OldFrameTop:TPOCAInt32;
+begin
+ OldFrameTop:=Context^.FrameTop;
+ result:=POCAJITCallFinish(Context,POCASetupFunctionMethodCall(Context,Frame,CountArguments,Operands),OldFrameTop);
 end;
 
 procedure POCAJITOpGETLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
@@ -45828,9 +45849,9 @@ var Fixups:TFixups;
   end;
   DoItByVMOpcodeDispatcher;
  end;
- procedure AddInlineCall;
+ procedure AddInlineCall(const SetupHelper:TPOCAPointer);
  var Bail:array[0..1] of TPOCAInt32;
-     Index,Done:TPOCAInt32;
+     Index,Completed,Done:TPOCAInt32;
  begin
   // The interpreter advances the pointer before executing an opcode, so this is
   // the value a runtime error raised inside the setup has to see, and equally the
@@ -45855,14 +45876,18 @@ var Fixups:TFixups;
   Add(#$48#$b9); // mov rcx,imm64 (Operands)
   AddQWordPointer(@Code^.ByteCode^[LastPC+1]);
 {$endif}
-  Add(#$48#$b8); // mov rax,imm64 (POCAJITCallSetup)
-  AddQWordPointer(@POCAJITCallSetup);
+  Add(#$48#$b8); // mov rax,imm64 (the setup helper for this kind of call)
+  AddQWordPointer(SetupHelper);
   Add(#$ff#$d0); // call rax
 {$ifdef windows}
   Add(#$48#$83#$c4#$28); // add rsp,40
 {$else}
   Add(#$48#$83#$c4#$08); // add rsp,8
 {$endif}
+  Add(#$48#$83#$f8); // cmp rax,POCAJITCallCompleted (taken from the constant, so
+  Add(AnsiChar(TPOCAUInt8(POCAJITCallCompleted))); // that the two cannot drift apart)
+  Completed:=AddLocalJump(#$0f#$84); // je the call is already done, so carry on
+
   Add(#$48#$85#$c0); // test rax,rax
   Bail[0]:=AddLocalJump(#$0f#$84); // jz hand over to the interpreter
 
@@ -45906,6 +45931,10 @@ var Fixups:TFixups;
   // carries on with the callee frame rather than repeating the call.
   Add(#$31#$c0); // xor eax,eax
   Add(#$c3); // ret
+
+  // The setup did the whole call itself and put the result where it belongs, so
+  // there is nothing left to do here.
+  FixLocalJump(Completed);
   FixLocalJump(Done);
  end;
  // Resolves a symbol out of the call site's inline cache without leaving native
@@ -46452,11 +46481,11 @@ begin
     end;
 
     popFCALL:begin
-     AddInlineCall;
+     AddInlineCall(@POCAJITCallSetup);
     end;
 
     popMCALL:begin
-     DoItByVMOpcodeDispatcher;
+     AddInlineCall(@POCAJITMethodCallSetup);
     end;
 
     popRETURN:begin
