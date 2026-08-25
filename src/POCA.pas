@@ -693,6 +693,13 @@ const POCAValueReferenceMask=TPOCAUInt64(TPOCAUInt64(TPOCAUInt64(1) shl 48)-1);
 const POCAValueReferenceTag=TPOCAUInt32($7fff6789); // $7ff56789
 {$endif}
 
+// The type tag of a referenced object is kept in the low four bits of the stored
+// pointer, which are always zero because objects are allocated 16 byte aligned.
+// This makes the value type available without dereferencing the object, which
+// otherwise costs a load of Header.ValueType, 32 bytes into the object, on every
+// single type check. A tag of zero means null, which matches pvtNULL.
+const POCAValueTypeTagMask=TPOCAPtrUInt(15);
+
 type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCADoubleHiLo=packed record
 {$ifdef BIG_ENDIAN}
@@ -2311,6 +2318,8 @@ function POCAContextUserIOFlush(const aContext:PPOCAContext):Boolean;
 
 function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
 
+procedure POCAEnableMultiThreading;
+
 {$ifdef POCAThreadContextTracking}
 function POCAGetCurrentThreadContext:PPOCAContext;
 procedure POCAPushThreadContext(const aContext:PPOCAContext);
@@ -2406,15 +2415,13 @@ type TPOCALexerKeywordTokens=array[TPOCATokenType] of TPOCARawByteString;
       Token:TPOCATokenType;
      end;
 
-const POCAInitialized:boolean=false;
-
 {$ifdef POCAHasJIT}
-      bncmmMemoryBlockSignature:TPOCAPtrUInt={$ifdef cpu64}$1337bab3deadc0d3{$else}$deadc0d3{$endif};
+const bncmmMemoryBlockSignature:TPOCAPtrUInt={$ifdef cpu64}$1337bab3deadc0d3{$else}$deadc0d3{$endif};
 
       bncmmMINBLOCKCONTAINERSIZE=1048576;
 {$endif}
 
-      FPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
+const FPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
       FPURoundingMode:TFPURoundingMode=rmNearest;
       FPUPrecisionMode:TFPUPrecisionMode={$ifdef HAS_TYPE_EXTENDED}pmEXTENDED{$else}pmDOUBLE{$endif};
 
@@ -2428,7 +2435,21 @@ const POCAInitialized:boolean=false;
       ENT_EMPTY=-1;
       ENT_DELETED=-2;
 
-var LexerKeywordTokens:TPOCALexerKeywordTokens;
+// True as soon as POCA code can run on more than one thread at a time. While it
+// is false, the per object locks of arrays and hashes are skipped, so that
+// single threaded scripts pay a predictable branch instead of an atomic
+// read-modify-write on every write access.
+//
+// It is turned on automatically when POCA spawns a thread or a coroutine, and
+// when a context is created from a different thread than the very first one.
+// Hosts that hand POCA values to threads of their own without going through any
+// of those must call POCAEnableMultiThreading themselves before doing so. It is
+// a one way switch and never goes back to false.
+var POCAMultiThreaded:TPOCABool32=false;
+
+    POCAInitialized:boolean=false;
+
+    LexerKeywordTokens:TPOCALexerKeywordTokens;
     LexerKeywordTokenCharTreeRootNode:PPOCALexerKeywordTokenCharTreeNode;
 
     MetaOpNames:TPOCAMetaOpNames;
@@ -5237,6 +5258,7 @@ begin
   result^.ResumeEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
   result^.YieldEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
   result^.TerminatedEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
+  POCAEnableMultiThreading;
 {$ifdef fpc}
   result^.Handle:=BeginThread(POCACoroutineContextEntrypoint,result,result^.ThreadID);
 {$else}
@@ -6331,46 +6353,37 @@ begin
 end;
 
 function POCAGetValueType(const v:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
-{$ifdef cpu64}
-var p:PPOCAObject;
 begin
- if (TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask then begin
-  p:=TPOCAPointer(TPOCAPtrUInt(v.Reference.Obj) and POCAValueReferenceMask);
-  if assigned(p) then begin
-   result:=p^.Header.ValueType;
-  end else begin
-   result:=pvtNULL;
-  end;
+ // Straight out of the tag, no dereferencing: a tag of zero is pvtNULL anyway.
+ if {$ifdef cpu64}(TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask{$else}v.ReferenceTag=POCAValueReferenceTag{$endif} then begin
+  result:=TPOCAInt32(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueTypeTagMask);
  end else begin
   result:=pvtNUMBER;
  end;
 end;
-{$else}
-begin
- if v.ReferenceTag=POCAValueReferenceTag then begin
-  if assigned(v.Reference.Obj) then begin
-   result:=v.Reference.Obj^.Header.ValueType;
-  end else begin
-   result:=pvtNULL;
-  end;
- end else begin
-  result:=pvtNUMBER;
- end;
-end;
-{$endif}
 
 function POCAGetValueReferencePointer(const v:TPOCAValue):TPOCAPointer; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask){$else}v.Reference.Ptr{$endif};
+ result:=TPOCAPointer((TPOCAPtrUInt(v.Reference.Ptr){$ifdef cpu64} and POCAValueReferenceMask{$endif}) and not POCAValueTypeTagMask);
 end;
 
 procedure POCASetValueReferencePointer(out v:TPOCAValue;const Ptr:TPOCAPointer); {$ifdef caninline}inline;{$endif}
+var Tag:TPOCAPtrUInt;
 begin
+ // The tag is taken from the object itself, so that the signature stays as it
+ // is. This requires Header.ValueType to be set before a value is made from the
+ // object, which holds for both allocation paths: the pooled one types a whole
+ // block at construction time, the plain one right after the allocation.
+ if assigned(Ptr) then begin
+  Tag:=TPOCAPtrUInt(PPOCAObject(Ptr)^.Header.ValueType) and POCAValueTypeTagMask;
+ end else begin
+  Tag:=0;
+ end;
 {$ifdef cpu64}
- v.Reference.Ptr:=TPOCAPointer(TPOCAPtrUInt((TPOCAPtrUInt(Ptr) and POCAValueReferenceMask) or POCAValueReferenceSignalMask));
+ v.Reference.Ptr:=TPOCAPointer(TPOCAPtrUInt(((TPOCAPtrUInt(Ptr) and POCAValueReferenceMask) and not POCAValueTypeTagMask) or Tag or POCAValueReferenceSignalMask));
 {$else}
  v.ReferenceTag:=POCAValueReferenceTag;
- v.Reference.Ptr:=Ptr;
+ v.Reference.Ptr:=TPOCAPointer((TPOCAPtrUInt(Ptr) and not POCAValueTypeTagMask) or Tag);
 {$endif}
 end;
 
@@ -6402,7 +6415,7 @@ end;
 
 function POCAIsValueObjectAndGetReferencePointer(const v:TPOCAValue;var p):boolean;
 begin
- TPOCAPointer(p):={$ifdef cpu64}TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask){$else}v.Reference.Ptr{$endif};
+ TPOCAPointer(p):=POCAGetValueReferencePointer(v);
  result:={$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(p)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(TPOCAPointer(p)){$endif};
 end;
 
@@ -6413,22 +6426,22 @@ end;
 
 function POCAIsValueReferenceType(const v:TPOCAValue;t:TPOCAInt32):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=POCAIsValueObject(v) and (PPOCAObject(POCAGetValueReferencePointer(v))^.Header.ValueType=t);
+ result:=POCAIsValueReference(v) and (TPOCAInt32(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueTypeTagMask)=t);
 end;
 
 function POCAIsValueString(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=POCAIsValueObject(v) and (PPOCAObject(POCAGetValueReferencePointer(v))^.Header.ValueType=pvtSTRING);
+ result:=POCAIsValueReference(v) and ((TPOCAPtrUInt(v.Reference.Ptr) and POCAValueTypeTagMask)=pvtSTRING);
 end;
 
 function POCAIsValueArray(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=POCAIsValueObject(v) and (PPOCAObject(POCAGetValueReferencePointer(v))^.Header.ValueType=pvtARRAY);
+ result:=POCAIsValueReference(v) and ((TPOCAPtrUInt(v.Reference.Ptr) and POCAValueTypeTagMask)=pvtARRAY);
 end;
 
 function POCAIsValueHash(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:=POCAIsValueObject(v) and (PPOCAObject(POCAGetValueReferencePointer(v))^.Header.ValueType=pvtHASH);
+ result:=POCAIsValueReference(v) and ((TPOCAPtrUInt(v.Reference.Ptr) and POCAValueTypeTagMask)=pvtHASH);
 end;
 
 function POCAIsValueSimpleHash(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
@@ -7048,7 +7061,7 @@ begin
  if assigned(Obj) then begin
 //writeln(IntToHex(TPOCAPtrUInt(Obj),16));
   POCACleanElement(Obj);
-  FreeMem(Obj);
+  FreeMemAligned(Obj);
  end;
 end;
 {$endif}
@@ -7114,7 +7127,7 @@ begin
  while assigned(Node) do begin
   NextNode:=Node^.Next;
   Obj:=TPOCAPointer(Node);
-  FreeMem(Obj);
+  FreeMemAligned(Obj);
   Node:=NextNode;
  end;
  First:=nil;
@@ -9170,13 +9183,15 @@ end;
 
 function POCAObject(Instance:PPOCAInstance;ValueType:TPOCAInt32;Obj:PPOCAObject):TPOCAValue;
 begin
- POCASetValueReferencePointer(result,Obj);
+ // ValueType has to be set before the value is made, since the value carries the
+ // type as a tag in the low bits of the pointer.
  if assigned(Obj) then begin
   Obj^.Header.ValueType:=ValueType;
 {$ifndef POCAGarbageCollectorPoolBlockInstance}
   Obj^.Header.Instance:=Instance;
 {$endif}
  end;
+ POCASetValueReferencePointer(result,Obj);
 end;
 
 function POCAIsValueTrue(Context:PPOCAContext;const Value:TPOCAValue):boolean; {$ifdef UseRegister}register;{$endif}
@@ -9690,7 +9705,9 @@ begin
   end;
  end;
 
- GetMem(Obj,POCARoundUpToMask(POCATypeSizes[ValueType],16));
+ // Aligned, because the low bits of an object pointer are meaningful: every
+ // pointer stored in a TPOCAValue is expected to be 16 byte aligned.
+ GetMemAligned(Obj,POCARoundUpToMask(POCATypeSizes[ValueType],16),16);
  FillChar(Obj^,POCATypeSizes[ValueType],#0);
  Obj^.Header.GarbageCollector.LinkedList.List:=nil;
  Obj^.Header.GarbageCollector.LinkedList.Next:=nil;
@@ -10209,7 +10226,15 @@ end;
 
 function POCAEndToken:TPOCAValue; {$ifdef caninline}inline;{$endif}
 begin
- POCASetValueReferencePointer(result,TPOCAPointer(TPOCAPtrUInt(1)));
+ // A sentinel, not a real object, so the tag cannot be derived from one. It is
+ // given a tag of zero and a pointer value outside the tag bits, which keeps it
+ // distinguishable from null by its bit pattern without ever being dereferenced.
+{$ifdef cpu64}
+ result.Reference.Ptr:=TPOCAPointer(TPOCAPtrUInt(TPOCAPtrUInt(16) or POCAValueReferenceSignalMask));
+{$else}
+ result.ReferenceTag:=POCAValueReferenceTag;
+ result.Reference.Ptr:=TPOCAPointer(TPOCAPtrUInt(16));
+{$endif}
 end;
 
 function POCANumber(Num:double):TPOCAValue; {$ifdef caninline}inline;{$endif}
@@ -10605,32 +10630,40 @@ begin
  result.CastedUInt64:=POCAValueNullCastedUInt64;
 end;
 
+procedure POCAArraySetUnlocked(const ArrayInstance:PPOCAArray;i:TPOCAInt32;const Value:TPOCAValue);
+var ArrayRecord:PPOCAArrayRecord;
+begin
+ ArrayRecord:=ArrayInstance^.ArrayRecord;
+ if assigned(ArrayRecord) then begin
+  while i<0 do begin
+   inc(i,ArrayRecord^.Size);
+  end;
+  if (i>=0) and (i<ArrayRecord^.Size) then begin
+   ArrayRecord^.Data[i]:=Value;
+   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+  end;
+ end;
+end;
+
 procedure POCAArraySet(const ArrayObject:TPOCAValue;i:TPOCAInt32;const Value:TPOCAValue);
 var ArrayInstance:PPOCAArray;
-    ArrayRecord:PPOCAArrayRecord;
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
-  ArrayRecord:=ArrayInstance^.ArrayRecord;
-  if assigned(ArrayRecord) then begin
 {$ifdef POCAThreadSafeArray}
+  if POCAMultiThreaded then begin
    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
    try
-    ArrayRecord:=ArrayInstance^.ArrayRecord;
-{$endif}
-    while i<0 do begin
-     inc(i,ArrayRecord^.Size);
-    end;
-    if (i>=0) and (i<ArrayRecord^.Size) then begin
-     ArrayRecord^.Data[i]:=Value;
-     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
-    end;
-{$ifdef POCAThreadSafeArray}
+    POCAArraySetUnlocked(ArrayInstance,i,Value);
    finally
     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
    end;
-{$endif}
+  end else begin
+   POCAArraySetUnlocked(ArrayInstance,i,Value);
   end;
+{$else}
+  POCAArraySetUnlocked(ArrayInstance,i,Value);
+{$endif}
  end;
 end;
 
@@ -10647,31 +10680,41 @@ begin
  result:=0;
 end;
 
+function POCAArrayPushUnlocked(const ArrayInstance:PPOCAArray;const Value:TPOCAValue):TPOCAUInt32;
+var ArrayRecord:PPOCAArrayRecord;
+begin
+ result:=0;
+ ArrayRecord:=ArrayInstance^.ArrayRecord;
+ while (not assigned(ArrayRecord)) or (ArrayRecord^.Allocated<=ArrayRecord^.Size) do begin
+  ArrayRecord:=POCAArrayResize(ArrayInstance);
+ end;
+ if assigned(ArrayRecord) then begin
+  ArrayRecord^.Data[ArrayRecord^.Size]:=Value;
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+  result:=ArrayRecord^.Size;
+  TPasMPInterlocked.Increment(ArrayRecord^.Size);
+ end;
+end;
+
 function POCAArrayPush(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TPOCAUInt32;
 var ArrayInstance:PPOCAArray;
-    ArrayRecord:PPOCAArrayRecord;
 begin
  result:=0;
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
 {$ifdef POCAThreadSafeArray}
-  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
-  try
-{$endif}
-   ArrayRecord:=ArrayInstance^.ArrayRecord;
-   while (not assigned(ArrayRecord)) or (ArrayRecord^.Allocated<=ArrayRecord^.Size) do begin
-    ArrayRecord:=POCAArrayResize(ArrayInstance);
+  if POCAMultiThreaded then begin
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   try
+    result:=POCAArrayPushUnlocked(ArrayInstance,Value);
+   finally
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
    end;
-   if assigned(ArrayRecord) then begin
-    ArrayRecord^.Data[ArrayRecord^.Size]:=Value;
-    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
-    result:=ArrayRecord^.Size;
-    TPasMPInterlocked.Increment(ArrayRecord^.Size);
-   end;
-{$ifdef POCAThreadSafeArray}
-  finally
-   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+  end else begin
+   result:=POCAArrayPushUnlocked(ArrayInstance,Value);
   end;
+{$else}
+  result:=POCAArrayPushUnlocked(ArrayInstance,Value);
 {$endif}
  end;
 end;
@@ -10738,7 +10781,10 @@ begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   WithArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(WithArrayObject));
 {$ifdef POCAThreadSafeArray}
-  if ArrayInstance=WithArrayInstance then begin
+  if not POCAMultiThreaded then begin
+   FirstLockArray:=nil;
+   SecondLockArray:=nil;
+  end else if ArrayInstance=WithArrayInstance then begin
    FirstLockArray:=ArrayInstance;
    SecondLockArray:=nil;
   end else if TPOCAPtrUInt(TPOCAPointer(ArrayInstance))<TPOCAPtrUInt(TPOCAPointer(WithArrayInstance)) then begin
@@ -10748,7 +10794,9 @@ begin
    FirstLockArray:=WithArrayInstance;
    SecondLockArray:=ArrayInstance;
   end;
-  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(FirstLockArray^.Lock);
+  if assigned(FirstLockArray) then begin
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(FirstLockArray^.Lock);
+  end;
   try
    if assigned(SecondLockArray) then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(SecondLockArray^.Lock);
@@ -10783,7 +10831,9 @@ begin
     end;
    end;
   finally
-   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(FirstLockArray^.Lock);
+   if assigned(FirstLockArray) then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(FirstLockArray^.Lock);
+   end;
   end;
 {$endif}
  end;
@@ -10793,13 +10843,19 @@ function POCAArrayDelete(const ArrayObject:TPOCAValue;const Index:TPOCAInt32):TP
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
     i,j:TPOCAInt32;
+{$ifdef POCAThreadSafeArray}
+    Locked:Boolean;
+{$endif}
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
 {$ifdef POCAThreadSafeArray}
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   Locked:=POCAMultiThreaded;
+   if Locked then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   end;
    try
     ArrayRecord:=ArrayInstance^.ArrayRecord;
 {$endif}
@@ -10820,7 +10876,9 @@ begin
     end;
 {$ifdef POCAThreadSafeArray}
    finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+    end;
    end;
 {$endif}
   end;
@@ -10832,13 +10890,19 @@ function POCAArrayRemove(const ArrayObject:TPOCAValue;const Value:TPOCAValue):TP
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
     i,j:TPOCAInt32;
+{$ifdef POCAThreadSafeArray}
+    Locked:Boolean;
+{$endif}
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
 {$ifdef POCAThreadSafeArray}
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   Locked:=POCAMultiThreaded;
+   if Locked then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   end;
    try
     ArrayRecord:=ArrayInstance^.ArrayRecord;
 {$endif}
@@ -10864,7 +10928,9 @@ begin
     end;
 {$ifdef POCAThreadSafeArray}
    finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+    end;
    end;
 {$endif}
   end;
@@ -10920,11 +10986,17 @@ procedure POCAArraySetSize(const ArrayObject:TPOCAValue;Size:TPOCAInt32);
 var ArrayInstance:PPOCAArray;
     ArrayRecord,NewVecRec:PPOCAArrayRecord;
     i:TPOCAInt32;
+{$ifdef POCAThreadSafeArray}
+    Locked:Boolean;
+{$endif}
 begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
 {$ifdef POCAThreadSafeArray}
-  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+  Locked:=POCAMultiThreaded;
+  if Locked then begin
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+  end;
   try
 {$endif}
    ArrayRecord:=ArrayInstance^.ArrayRecord;
@@ -10950,7 +11022,9 @@ begin
    POCAGarbageCollectorSwapFree(ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@ArrayInstance^.ArrayRecord,NewVecRec);
 {$ifdef POCAThreadSafeArray}
   finally
-   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+   if Locked then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+   end;
   end;
 {$endif}
  end;
@@ -10959,6 +11033,9 @@ end;
 function POCAArrayPop(const ArrayObject:TPOCAValue):TPOCAValue;
 var ArrayInstance:PPOCAArray;
     ArrayRecord:PPOCAArrayRecord;
+{$ifdef POCAThreadSafeArray}
+    Locked:Boolean;
+{$endif}
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -10967,7 +11044,10 @@ begin
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
 {$ifdef POCAThreadSafeArray}
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   Locked:=POCAMultiThreaded;
+   if Locked then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
+   end;
    try
     ArrayRecord:=ArrayInstance^.ArrayRecord;
 {$endif}
@@ -10981,7 +11061,9 @@ begin
     end;
 {$ifdef POCAThreadSafeArray}
    finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(ArrayInstance^.Lock);
+    end;
    end;
 {$endif}
   end;
@@ -12377,7 +12459,10 @@ begin
   if POCAIsValueHash(FromHash) then begin
    Hashs[1]:=PPOCAHash(POCAGetValueReferencePointer(FromHash));
 {$ifdef POCAThreadSafeHash}
-   if Hashs[0]=Hashs[1] then begin
+   if not POCAMultiThreaded then begin
+    FirstLockHash:=nil;
+    SecondLockHash:=nil;
+   end else if Hashs[0]=Hashs[1] then begin
     FirstLockHash:=Hashs[0];
     SecondLockHash:=nil;
    end else if TPOCAPtrUInt(TPOCAPointer(Hashs[0]))<TPOCAPtrUInt(TPOCAPointer(Hashs[1])) then begin
@@ -12387,7 +12472,9 @@ begin
     FirstLockHash:=Hashs[1];
     SecondLockHash:=Hashs[0];
    end;
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(FirstLockHash^.Lock);
+   if assigned(FirstLockHash) then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(FirstLockHash^.Lock);
+   end;
    try
     if assigned(SecondLockHash) then begin
      TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(SecondLockHash^.Lock);
@@ -12410,19 +12497,28 @@ begin
      end;
     end;
    finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(FirstLockHash^.Lock);
+    if assigned(FirstLockHash) then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(FirstLockHash^.Lock);
+    end;
    end;
 {$endif}
   end else if POCAIsValueNull(FromHash) then begin
 {$ifdef POCAThreadSafeHash}
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hashs[0]^.Lock);
+   if POCAMultiThreaded then begin
+    FirstLockHash:=Hashs[0];
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(FirstLockHash^.Lock);
+   end else begin
+    FirstLockHash:=nil;
+   end;
    try
 {$endif}  
     POCAHashLockInvalidate(Hashs[0]);
     TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),nil);
 {$ifdef POCAThreadSafeHash}
    finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(Hashs[0]^.Lock);
+    if assigned(FirstLockHash) then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(FirstLockHash^.Lock);
+    end;
    end;
 {$endif}    
    result:=true;
@@ -12898,12 +12994,18 @@ function POCAHashRawSet(const Hash,Key,Value:TPOCAValue;const Constant:Boolean):
 var Iteration:TPOCAInt32;
     HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
+{$ifdef POCAThreadSafeHash}
+    Locked:Boolean;
+{$endif}
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
 {$ifdef POCAThreadSafeHash}
-  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+  Locked:=POCAMultiThreaded;
+  if Locked then begin
+   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+  end;
   try
 {$endif}
    HashRec:=HashInstance^.HashRecord;
@@ -12922,7 +13024,9 @@ begin
    end;
 {$ifdef POCAThreadSafeHash}
   finally
-   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+   if Locked then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+   end;
   end;
 {$endif}
  end;
@@ -12933,6 +13037,9 @@ var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     Cell:TPOCAUInt32;
     Entity:TPOCAInt32;
+{$ifdef POCAThreadSafeHash}
+    Locked:Boolean;
+{$endif}
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -12940,7 +13047,10 @@ begin
   HashRec:=HashInstance^.HashRecord;
   if assigned(HashRec) then begin
 {$ifdef POCAThreadSafeHash}
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+   Locked:=POCAMultiThreaded;
+   if Locked then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+   end;
    try
     HashRec:=HashInstance^.HashRecord; // Re-read hash record after acquiring lock, as it could have been resized by another thread
 {$endif}
@@ -12963,7 +13073,9 @@ begin
     end;
 {$ifdef POCAThreadSafeHash}
    finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    end;
    end;
 {$endif}
   end;
@@ -13057,11 +13169,7 @@ begin
     end;
    end;
    if HashCode=0 then begin
-{$ifdef cpu32}
-    Str:=Sym.Reference.StringObject;
-{$else}
-    Str:=PPOCAString(TPOCAPointer(TPOCAPtrUInt(Sym.Reference.Ptr) and POCAValueReferenceMask));
-{$endif}
+    Str:=PPOCAString(POCAGetValueReferencePointer(Sym));
 /// Str:=PPOCAString(POCAGetValueReferencePointer(Sym));
     HashCode:=Str^.HashCode;
     if HashCode=0 then begin
@@ -13100,6 +13208,7 @@ var HashRec:PPOCAHashRecord;
     Entity,Index:TPOCAInt32;
     he:PPOCAHashEntity;
     Str:PPOCAString;
+    CacheLocked:Boolean;
 begin
  result:=0;
  if assigned(Hash) then begin
@@ -13108,7 +13217,14 @@ begin
   end else begin
    if Hash^.Cache.Ready then begin
     if CacheIndex<>$ffffffff then begin
-     POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
+     // The cache lock only matters when POCA is actually used concurrently;
+     // otherwise this is an atomic read-modify-write on every cache hit. The
+     // flag is captured once, so that a thread being spawned in between cannot
+     // leave the lock released without ever having been taken.
+     CacheLocked:=POCAMultiThreaded;
+     if CacheLocked then begin
+      POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
+     end;
 {$ifdef POCAUseSafeMRSWLocks}
      try
 {$endif}
@@ -13119,7 +13235,9 @@ begin
         if he^.Key.CastedInt64=Sym.CastedInt64 then begin
          OutValue:=he^.Value;
 {$ifndef POCAUseSafeMRSWLocks}
-         POCAMRSWLockReadUnlock(@Hash^.Cache.MRSWLock);
+         if CacheLocked then begin
+          POCAMRSWLockReadUnlock(@Hash^.Cache.MRSWLock);
+         end;
 {$endif}
          result:=1;
          exit;
@@ -13129,7 +13247,9 @@ begin
 {$ifdef POCAUseSafeMRSWLocks}
      finally
 {$endif}
-      POCAMRSWLockReadUnlock(@Hash^.Cache.MRSWLock);
+      if CacheLocked then begin
+       POCAMRSWLockReadUnlock(@Hash^.Cache.MRSWLock);
+      end;
 {$ifdef POCAUseSafeMRSWLocks}
      end;
 {$endif}
@@ -13183,11 +13303,17 @@ var HashRec:PPOCAHashRecord;
     Entity:TPOCAInt32;
     s:PPOCAString;
     HashEntity:PPOCAHashEntity;
+{$ifdef POCAThreadSafeHash}
+    Locked:Boolean;
+{$endif}
 begin
  result:=false;
 
 {$ifdef POCAThreadSafeHash}
- TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hash^.Lock);
+ Locked:=POCAMultiThreaded;
+ if Locked then begin
+  TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hash^.Lock);
+ end;
  try
 {$endif}
 
@@ -13234,7 +13360,9 @@ begin
 
 {$ifdef POCAThreadSafeHash}
  finally
-  TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(Hash^.Lock);
+  if Locked then begin
+   TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(Hash^.Lock);
+  end;
  end;  
 {$endif}
 
@@ -13246,6 +13374,9 @@ var HashInstance:PPOCAHash;
     Cell:TPOCAUInt32;
     Entity:TPOCAInt32;
     SubContext:PPOCAContext;
+{$ifdef POCAThreadSafeHash}
+    Locked:Boolean;
+{$endif}
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -13263,7 +13394,10 @@ begin
    HashRec:=HashInstance^.HashRecord;
    if assigned(HashRec) then begin
 {$ifdef POCAThreadSafeHash}
-    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    Locked:=POCAMultiThreaded;
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    end;
     try
      HashRec:=HashInstance^.HashRecord; // Re-read hash record after acquiring lock, as it could have been resized by another thread
 {$endif}
@@ -13286,7 +13420,9 @@ begin
      end;
 {$ifdef POCAThreadSafeHash}
     finally
-     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+     if Locked then begin
+      TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+     end;
     end;
 {$endif}
    end;
@@ -13300,6 +13436,9 @@ var HashInstance:PPOCAHash;
     Cell:TPOCAUInt32;
     Entity:TPOCAInt32;
     SubContext:PPOCAContext;
+{$ifdef POCAThreadSafeHash}
+    Locked:Boolean;
+{$endif}
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -13317,7 +13456,10 @@ begin
    HashRec:=HashInstance^.HashRecord;
    if assigned(HashRec) then begin
 {$ifdef POCAThreadSafeHash}
-    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    Locked:=POCAMultiThreaded;
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    end;
     try
      HashRec:=HashInstance^.HashRecord; // Re-read hash record after acquiring lock, as it could have been resized by another thread
 {$endif}
@@ -13356,7 +13498,9 @@ begin
      end;
 {$ifdef POCAThreadSafeHash}
     finally
-     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+     if Locked then begin
+      TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+     end;
     end;
 {$endif}
    end;
@@ -13527,11 +13671,29 @@ begin
  end;
 end;
 
+// Just the cache hit check of POCAHashGetCache, without any of the fallbacks.
+// Only valid while POCA is not used concurrently, since it does not take the
+// cache lock; callers have to check POCAMultiThreaded themselves.
+function POCAHashGetCacheHit(HashInstance:PPOCAHash;const Key:TPOCAValue;var OutValue:TPOCAValue;const CacheIndex:TPOCAUInt32):boolean; {$ifdef caninline}inline;{$endif}
+var HashEntity:PPOCAHashEntity;
+begin
+ result:=false;
+ if ((CacheIndex<>$ffffffff) and HashInstance^.Cache.Ready) and
+    (assigned(HashInstance^.Cache.ChainEntities) and (CacheIndex<TPOCAUInt32(HashInstance^.Cache.ChainCount))) then begin
+  HashEntity:=HashInstance^.Cache.ChainEntities^[CacheIndex];
+  if HashEntity^.Key.CastedInt64=Key.CastedInt64 then begin
+   OutValue:=HashEntity^.Value;
+   result:=true;
+  end;
+ end;
+end;
+
 function POCAHashGetCache(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     Entity,Index:TPOCAInt32;
     Cell:TPOCAUInt32;
+    CacheLocked:Boolean;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -13540,7 +13702,14 @@ begin
    if assigned(HashInstance^.Prototype) then begin
     if HashInstance^.Cache.Ready then begin
      if CacheIndex<>$ffffffff then begin
-      POCAMRSWLockReadLock(@HashInstance^.Cache.MRSWLock);
+      // The cache lock only matters when POCA is actually used concurrently;
+      // otherwise this is an atomic read-modify-write on every cache hit. The
+      // flag is captured once, so that a thread being spawned in between cannot
+      // leave the lock released without ever having been taken.
+      CacheLocked:=POCAMultiThreaded;
+      if CacheLocked then begin
+       POCAMRSWLockReadLock(@HashInstance^.Cache.MRSWLock);
+      end;
 {$ifdef POCAUseSafeMRSWLocks}
       try
 {$endif}
@@ -13549,7 +13718,9 @@ begin
         if (TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
          OutValue:=HashInstance^.Cache.ChainEntities^[Entity]^.Value;
 {$ifndef POCAUseSafeMRSWLocks}
-         POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+         if CacheLocked then begin
+          POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+         end;
 {$endif}
          result:=true;
          exit;
@@ -13558,7 +13729,9 @@ begin
 {$ifdef POCAUseSafeMRSWLocks}
       finally
 {$endif}
-       POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+       if CacheLocked then begin
+        POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+       end;
 {$ifdef POCAUseSafeMRSWLocks}
       end;
 {$endif}
@@ -13628,6 +13801,7 @@ var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     Entity,Index:TPOCAInt32;
     Cell:TPOCAUInt32;
+    CacheLocked:Boolean;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -13635,7 +13809,14 @@ begin
   if assigned(HashInstance) then begin
    if HashInstance^.Cache.Ready then begin
     if CacheIndex<>$ffffffff then begin
-     POCAMRSWLockReadLock(@HashInstance^.Cache.MRSWLock);
+     // The cache lock only matters when POCA is actually used concurrently;
+     // otherwise this is an atomic read-modify-write on every cache hit. The
+     // flag is captured once, so that a thread being spawned in between cannot
+     // leave the lock released without ever having been taken.
+     CacheLocked:=POCAMultiThreaded;
+     if CacheLocked then begin
+      POCAMRSWLockReadLock(@HashInstance^.Cache.MRSWLock);
+     end;
 {$ifdef POCAUseSafeMRSWLocks}
      try
 {$endif}
@@ -13644,7 +13825,9 @@ begin
        if (TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
         OutValue:=HashInstance^.Cache.ChainEntities^[Entity]^.Value;
 {$ifndef POCAUseSafeMRSWLocks}
-        POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+        if CacheLocked then begin
+         POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+        end;
 {$endif}
         result:=true;
         exit;
@@ -13653,7 +13836,9 @@ begin
 {$ifdef POCAUseSafeMRSWLocks}
      finally
 {$endif}
-      POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+      if CacheLocked then begin
+       POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
+      end;
 {$ifdef POCAUseSafeMRSWLocks}
      end;
 {$endif}
@@ -13713,6 +13898,9 @@ function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const 
 var Iteration:TPOCAInt32;
     HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
+{$ifdef POCAThreadSafeHash}
+    Locked:Boolean;
+{$endif}
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -13721,7 +13909,10 @@ begin
    result:=POCAHashSetEvent(Context,HashInstance^.Events^.HashRecord^.Events^[pmoSET],Hash,Key,Value);
   end else begin
 {$ifdef POCAThreadSafeHash}
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+   Locked:=POCAMultiThreaded;
+   if Locked then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+   end;
    try
 {$endif}
     HashRec:=HashInstance^.HashRecord;
@@ -13740,16 +13931,30 @@ begin
     end;
 {$ifdef POCAThreadSafeHash}
    finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    end;
    end;
 {$endif}
   end;
  end;
 end;
 
+function POCAHashSetCacheUnlocked(const HashInstance:PPOCAHash;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):boolean;
+var HashRec:PPOCAHashRecord;
+begin
+ result:=false;
+ HashRec:=HashInstance^.HashRecord;
+ while (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) do begin
+  HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
+ end;
+ if assigned(HashRec) then begin
+  result:=POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
+ end;
+end;
+
 function POCAHashSetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
-    HashRec:PPOCAHashRecord;
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -13758,20 +13963,18 @@ begin
    result:=POCAHashSetEvent(Context,HashInstance^.Events^.HashRecord^.Events^[pmoSET],Hash,Key,Value);
   end else begin
 {$ifdef POCAThreadSafeHash}
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
-   try
-{$endif}
-    HashRec:=HashInstance^.HashRecord;
-    while (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) do begin
-     HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
-    end; 
-    if assigned(HashRec) then begin
-     result:=POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
+   if POCAMultiThreaded then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    try
+     result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex);
+    finally
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
     end;
-{$ifdef POCAThreadSafeHash}
-   finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+   end else begin
+    result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex);
    end;
+{$else}
+   result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex);
 {$endif}
   end;
  end;
@@ -13793,6 +13996,9 @@ var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
+{$ifdef POCAThreadSafeHash}
+    Locked:Boolean;
+{$endif}
 begin
  result:=false;
  if POCAIsValueHash(Hash) then begin
@@ -13803,7 +14009,10 @@ begin
    HashRec:=HashInstance^.HashRecord;
    if assigned(HashRec) then begin
 {$ifdef POCAThreadSafeHash}
-    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    Locked:=POCAMultiThreaded;
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+    end;
     try
      HashRec:=HashInstance^.HashRecord; // Re-read after lock
 {$endif}
@@ -13827,7 +14036,9 @@ begin
      end;
 {$ifdef POCAThreadSafeHash}
     finally
-     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+     if Locked then begin
+      TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+     end;
     end;
 {$endif}
    end;
@@ -14055,12 +14266,18 @@ var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     LogSize,Size:TPOCAInt32;
     Events:TPOCABool32;
+{$ifdef POCAThreadSafeHash}
+    Locked:Boolean;
+{$endif}
 begin
  if POCAIsValueHash(Hash) then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   if assigned(HashInstance) then begin
 {$ifdef POCAThreadSafeHash}  
-   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+   Locked:=POCAMultiThreaded;
+   if Locked then begin
+    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
+   end;
    try
 {$endif}   
     HashRec:=HashInstance^.HashRecord;
@@ -14100,7 +14317,9 @@ begin
     end;
 {$ifdef POCAThreadSafeHash}  
    finally
-    TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    if Locked then begin
+     TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
+    end;
    end; 
 {$endif}   
   end;
@@ -14421,8 +14640,17 @@ begin
 
 end;
 
+// Thread that created the very first context; a context created from any other
+// thread implies that POCA is being used concurrently.
+var POCAFirstThreadID:TThreadID=TThreadID(0);
+
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 begin
+ if POCAFirstThreadID=TThreadID(0) then begin
+  POCAFirstThreadID:=POCAGetCurrentThreadID;
+ end else if POCAFirstThreadID<>POCAGetCurrentThreadID then begin
+  POCAEnableMultiThreading;
+ end;
  POCALockEnter(Instance^.Globals.Lock);
  try
   result:=Instance^.Globals.FreeContexts;
@@ -14617,6 +14845,11 @@ begin
    POCALockLeave(Context^.Instance^.Globals.Lock);
   end;
  end;
+end;
+
+procedure POCAEnableMultiThreading;
+begin
+ POCAMultiThreaded:=true;
 end;
 
 function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
@@ -18241,6 +18474,7 @@ begin
   TPasMPInterlocked.Write(ThreadData^.Terminated,false);
   ThreadData^.StartSemaphore:=POCASemaphoreCreate;
   TPasMPInterlocked.Write(ThreadData^.Started,false);
+  POCAEnableMultiThreading;
 {$ifdef fpc}
   ThreadData^.Handle:=BeginThread(POCAThreadProc,ThreadData,ThreadData^.ThreadID);
 {$else}
@@ -38643,6 +38877,21 @@ begin
  end;
 end;
 
+procedure POCAGetMemberErrorNoSuchMember(Context:PPOCAContext;const Field:TPOCAValue);
+begin
+ POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
+end;
+
+procedure POCAGetMemberErrorNonNullObjectExpected(Context:PPOCAContext);
+begin
+ POCARuntimeError(Context,'Non-null object expected');
+end;
+
+procedure POCAGetMemberErrorNonObject(Context:PPOCAContext;const Field:TPOCAValue);
+begin
+ POCARuntimeError(Context,'Non-objects have no members at getting member: '+POCAGetStringValue(Context,Field));
+end;
+
 function POCAGetMember(Context:PPOCAContext;const Obj,Field:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex,HashCacheIndex:TPOCAUInt32;const IsInherited,Throw:boolean):boolean;
 var p:TPOCAValue;
     Ghost:PPOCAGhost;
@@ -38657,14 +38906,14 @@ begin
     result:=true;
    end;
    if (not result) and Throw then begin
-    POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
+    POCAGetMemberErrorNoSuchMember(Context,Field);
    end;
   end;
 
   pvtNUMBER:begin
    result:=POCAHashGetCache(Context,Context.Instance^.Globals.NumberHash,Field,OutValue,CacheIndex);
    if (not result) and Throw then begin
-    POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
+    POCAGetMemberErrorNoSuchMember(Context,Field);
    end;
   end;
 
@@ -38674,14 +38923,14 @@ begin
     result:=true;
    end;
    if (not result) and Throw then begin
-    POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
+    POCAGetMemberErrorNoSuchMember(Context,Field);
    end;
   end;
 
   pvtFUNCTION:begin
    result:=POCAHashGetCache(Context,Context.Instance^.Globals.FunctionHash,Field,OutValue,CacheIndex);
    if (not result) and Throw then begin
-    POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
+    POCAGetMemberErrorNoSuchMember(Context,Field);
    end;
   end;
 
@@ -38702,7 +38951,7 @@ begin
    end;
 
    if Throw then begin
-    POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
+    POCAGetMemberErrorNoSuchMember(Context,Field);
    end;
 
    exit;
@@ -38750,7 +38999,7 @@ begin
    end;
 
    if (not result) and Throw then begin
-    POCARuntimeError(Context,'No such member: '+POCAGetStringValue(Context,Field));
+    POCAGetMemberErrorNoSuchMember(Context,Field);
    end;
 
   end;
@@ -38758,18 +39007,33 @@ begin
   pvtNULL:begin
    result:=false;
    if Throw then begin
-    POCARuntimeError(Context,'Non-null object expected');
+    POCAGetMemberErrorNonNullObjectExpected(Context);
    end;
   end;
 
   else begin
    result:=false;
    if Throw then begin
-    POCARuntimeError(Context,'Non-objects have no members at getting member: '+POCAGetStringValue(Context,Field));
+    POCAGetMemberErrorNonObject(Context,Field);
    end;
   end;
 
  end;
+end;
+
+procedure POCASetMemberErrorNonExpandableNativeObject(Context:PPOCAContext);
+begin
+ POCARuntimeError(Context,'Expandable-write-access to a non-expandable native object isn''t allowed');
+end;
+
+procedure POCASetMemberErrorAtSettingMember(Context:PPOCAContext;const Field:TPOCAValue);
+begin
+ POCARuntimeError(Context,'Error at setting member: '+POCAGetStringValue(Context,Field));
+end;
+
+procedure POCASetMemberErrorNonObject(Context:PPOCAContext;const Field:TPOCAValue);
+begin
+ POCARuntimeError(Context,'Non-objects have no member at setting member: '+POCAGetStringValue(Context,Field));
 end;
 
 function POCASetMember(Context:PPOCAContext;const Obj,Field,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32;Throw:boolean):boolean;
@@ -38790,7 +39054,7 @@ begin
      exit;
     end;
     if not TPOCANativeObject(Ghost^.Ptr).fExpandable then begin
-     POCARuntimeError(Context,'Expandable-write-access to a non-expandable native object isn''t allowed');
+     POCASetMemberErrorNonExpandableNativeObject(Context);
     end;
    end;
    if assigned(Ghost) and assigned(Ghost^.GhostType) and assigned(Ghost^.GhostType^.SetKey) and Ghost^.GhostType^.SetKey(Context,Ghost,Field,Value,@CacheIndex) then begin
@@ -38813,13 +39077,13 @@ begin
     end;
    end;
    if (not result) and Throw then begin
-    POCARuntimeError(Context,'Error at setting member: '+POCAGetStringValue(Context,Field));
+    POCASetMemberErrorAtSettingMember(Context,Field);
    end;
   end;
   else begin
    result:=false;
    if Throw then begin
-    POCARuntimeError(Context,'Non-objects have no member at setting member: '+POCAGetStringValue(Context,Field));
+    POCASetMemberErrorNonObject(Context,Field);
    end;
   end;
  end;
@@ -39449,7 +39713,7 @@ var p:PPOCAObject;
     ArrayRecord:PPOCAArrayRecord;
 begin
  if (Obj.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask then begin
-  p:=TPOCAPointer(TPOCAPtrUInt(Obj.Reference.Obj) and POCAValueReferenceMask);
+  p:=POCAGetValueReferencePointer(Obj);
   if assigned(p) then begin
    case p^.Header.ValueType of
     pvtARRAY:begin
@@ -39510,6 +39774,11 @@ begin
  end;
 end;
 
+procedure POCARunCheckArrayErrorOutOfBounds(Context:PPOCAContext;const Index,Size:TPOCAInt32);
+begin
+ POCARuntimeError(Context,'Array index '+TPOCARawByteString(IntToStr(Index))+' is out of bounds with size '+TPOCARawByteString(IntToStr(Size)));
+end;
+
 function POCARunCheckArray(Context:PPOCAContext;const r,Index:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
 begin
  result:=trunc(POCAGetNumberValue(Context,Index));
@@ -39517,7 +39786,7 @@ begin
   inc(result,POCAArraySize(r));
  end;
  if (result<0) or (result>=TPOCAInt32(POCAArraySize(r))) then begin
-  POCARuntimeError(Context,'Array index '+TPOCARawByteString(IntToStr(result))+' is out of bounds with size '+TPOCARawByteString(IntToStr(POCAArraySize(r))));
+  POCARunCheckArrayErrorOutOfBounds(Context,result,POCAArraySize(r));
  end;
 end;
 
@@ -39663,29 +39932,65 @@ begin
  end;
 end;
 
-function POCARunContainerGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
-var CodePoint,CodeUnit,Index:TPOCAInt32;
+procedure POCARunContainerGetErrorIndexNotScalar(Context:PPOCAContext);
 begin
-//result:=POCAValueNull;
+ POCARuntimeError(Context,'Container index not scalar');
+end;
+
+procedure POCARunContainerGetErrorNoSuchKeyMember(Context:PPOCAContext;const Key:TPOCAValue);
+begin
+ POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+end;
+
+procedure POCARunContainerGetErrorNonContainer(Context:PPOCAContext);
+begin
+ POCARuntimeError(Context,'Extract from non-container');
+end;
+
+function POCARunContainerGetStringCharacter(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
+var CodePoint,CodeUnit:TPOCAInt32;
+begin
+ if PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8 then begin
+  CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
+  CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Box,CodePoint);
+  if (CodeUnit>0) and (CodeUnit<=length(PPOCAString(POCAGetValueReferencePointer(Box))^.Data)) then begin
+   result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit)));
+  end else begin
+   result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint)));
+  end;
+ end else begin
+  result:=POCANewString(Context,PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
+ end;
+end;
+
+// The error paths and the string character extraction are deliberately kept in
+// separate subroutines here, so that this function itself has no managed string
+// temporaries left. Otherwise the compiler has to wrap it into an implicit
+// try/finally, which costs a setjmp, an exception frame push/pop and a thread
+// variable lookup on every single container access, error or not.
+function POCARunContainerGet(Context:PPOCAContext;const Box,Key:TPOCAValue):TPOCAValue;
+var Index,Size:TPOCAInt32;
+    ArrayRecord:PPOCAArrayRecord;
+begin
  result.CastedUInt64:=POCAValueNullCastedUInt64;
  if not POCAIsValueScalarType(Key) then begin
-  POCARuntimeError(Context,'Container index not scalar');
+  POCARunContainerGetErrorIndexNotScalar(Context);
  end else begin
   case POCAGetValueType(Box) of
    pvtNUMBER:begin
     if not POCAHashGet(Context,Context.Instance^.Globals.NumberHash,Key,result) then begin
-     POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+     POCARunContainerGetErrorNoSuchKeyMember(Context,Key);
     end;
    end;
    pvtFUNCTION:begin
     if not POCAHashGet(Context,Context.Instance^.Globals.FunctionHash,Key,result) then begin
-     POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+     POCARunContainerGetErrorNoSuchKeyMember(Context,Key);
     end;
    end;
    pvtHASH:begin
     if not POCAHashGet(Context,Box,Key,result) then begin
      if not POCAHashGet(Context,Context.Instance^.Globals.HashHash,Key,result) then begin
-      POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+      POCARunContainerGetErrorNoSuchKeyMember(Context,Key);
      end;
     end;
    end;
@@ -39693,15 +39998,28 @@ begin
     if POCAIsValueString(Key) then begin
      if not POCAHashGet(Context,Context.Instance^.Globals.ArrayHash,Key,result) then begin
       if not POCAGetArrayProperty(Context,Box,Key,result) then begin
-       POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+       POCARunContainerGetErrorNoSuchKeyMember(Context,Key);
       end;
      end;
     end else begin
-     Index:=POCARunCheckArray(Context,Box,Key);
-     if Index>=0 then begin
-      result:=POCAArrayGet(Box,Index);
+     // Fast path for the by far most common case, an array indexed by a number.
+     // Going through POCARunCheckArray and POCAArrayGet instead would re-check
+     // the value type, re-load the array record and redo the bounds check
+     // several times over for a single element read.
+     ArrayRecord:=PPOCAArray(POCAGetValueReferencePointer(Box))^.ArrayRecord;
+     if assigned(ArrayRecord) then begin
+      Size:=ArrayRecord^.Size;
      end else begin
-      result.CastedUInt64:=POCAValueNullCastedUInt64;
+      Size:=0;
+     end;
+     Index:=trunc(POCAGetNumberValue(Context,Key));
+     if Index<0 then begin
+      inc(Index,Size);
+     end;
+     if (Index>=0) and (Index<Size) then begin
+      result:=ArrayRecord^.Data[Index];
+     end else begin
+      POCARunCheckArrayErrorOutOfBounds(Context,Index,Size);
      end;
     end;
    end;
@@ -39709,30 +40027,20 @@ begin
     if POCAIsValueString(Key) then begin
      if not POCAHashGet(Context,Context.Instance^.Globals.StringHash,Key,result) then begin
       if not POCAGetStringProperty(Context,Box,Key,result) then begin
-       POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+       POCARunContainerGetErrorNoSuchKeyMember(Context,Key);
       end;
      end;
     end else begin
-     if PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8 then begin
-      CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
-      CodeUnit:=POCAStringUTF8GetCodeUnit(Context,Box,CodePoint);
-      if (CodeUnit>0) and (CodeUnit<=length(PPOCAString(POCAGetValueReferencePointer(Box))^.Data)) then begin
-       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodeUnitGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodeUnit)));
-      end else begin
-       result:=POCANewString(Context,PUCUUTF32CharToUTF8(PUCUUTF8CodePointGetChar(PPOCAString(POCAGetValueReferencePointer(Box))^.Data,CodePoint)));
-      end;
-     end else begin
-      result:=POCANewString(Context,PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]);
-     end;
+     result:=POCARunContainerGetStringCharacter(Context,Box,Key);
     end;
    end;
    pvtGHOST:begin
     if not POCAHashGet(Context,POCAGhostGetHashValue(Box),Key,result) then begin
-     POCARuntimeError(Context,'No such key member: '+POCAGetStringValue(Context,Key));
+     POCARunContainerGetErrorNoSuchKeyMember(Context,Key);
     end;
    end;
    else begin
-    POCARuntimeError(Context,'Extract from non-container');
+    POCARunContainerGetErrorNonContainer(Context);
    end;
   end;
  end;
@@ -39813,37 +40121,86 @@ begin
  end;
 end;
 
-procedure POCARunContainerSet(Context:PPOCAContext;const Box,Key,Value:TPOCAValue;const Constant:Boolean);
+procedure POCARunContainerSetErrorIndexNotScalar(Context:PPOCAContext);
+begin
+ POCARuntimeError(Context,'Container index not scalar');
+end;
+
+procedure POCARunContainerSetErrorNonContainer(Context:PPOCAContext);
+begin
+ POCARuntimeError(Context,'Insert into non-container');
+end;
+
+procedure POCARunContainerSetStringCharacter(Context:PPOCAContext;const Box,Key,Value:TPOCAValue);
 var CodePoint:TPOCAInt32;
     CharValue:TPOCAUInt32;
 begin
+ if PPOCAString(POCAGetValueReferencePointer(Box))^.HashCode<>0 then begin
+  POCARuntimeError(Context,'Cannot change immutable string');
+ end else begin
+  CharValue:=trunc(POCAGetNumberValue(Context,Value));
+  if (PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8) or ((PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suPOSSIBLEUTF8) and (CharValue>$7f)) then begin
+   CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
+   PPOCAString(POCAGetValueReferencePointer(Box))^.Data:=POCAStringUTF8CopyCodePointRange(Context,Box,0,CodePoint-1)+PUCUUTF32CharToUTF8(CharValue)+POCAStringUTF8CopyCodePointRange(Context,Box,CodePoint+1,PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8Length-1);
+   PPOCAString(POCAGetValueReferencePointer(Box))^.Dirty:=true;
+   POCAStringUpdate(Context,Box);
+  end else begin
+   PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]:=ansichar(TPOCAUInt8(CharValue));
+  end;
+ end;
+end;
+
+// The error paths and the string mutation are kept in separate subroutines, so
+// that this function itself has no managed string temporaries left and thus no
+// implicit try/finally, which would cost a setjmp on every container write.
+procedure POCARunContainerSet(Context:PPOCAContext;const Box,Key,Value:TPOCAValue;const Constant:Boolean);
+var Index,Size:TPOCAInt32;
+    ArrayInstance:PPOCAArray;
+    ArrayRecord:PPOCAArrayRecord;
+begin
  if not POCAIsValueScalarType(Key) then begin
-  POCARuntimeError(Context,'Container index not scalar');
+  POCARunContainerSetErrorIndexNotScalar(Context);
  end else begin
   case POCAGetValueType(Box) of
    pvtHASH:begin
     POCAHashSet(Context,Box,Key,Value,Constant);
    end;
    pvtARRAY:begin
-    POCAArraySet(Box,POCARunCheckArray(Context,Box,Key),Value);
-   end;
-   pvtSTRING:begin
-    if PPOCAString(POCAGetValueReferencePointer(Box))^.HashCode<>0 then begin
-     POCARuntimeError(Context,'Cannot change immutable string');
-    end else begin
-     CharValue:=trunc(POCAGetNumberValue(Context,Value));
-     if (PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suISUTF8) or ((PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8=suPOSSIBLEUTF8) and (CharValue>$7f)) then begin
-      CodePoint:=POCARunCheckStringUTF8(Context,Box,Key);
-      PPOCAString(POCAGetValueReferencePointer(Box))^.Data:=POCAStringUTF8CopyCodePointRange(Context,Box,0,CodePoint-1)+PUCUUTF32CharToUTF8(CharValue)+POCAStringUTF8CopyCodePointRange(Context,Box,CodePoint+1,PPOCAString(POCAGetValueReferencePointer(Box))^.UTF8Length-1);
-      PPOCAString(POCAGetValueReferencePointer(Box))^.Dirty:=true;
-      POCAStringUpdate(Context,Box);
+{$ifdef POCAThreadSafeArray}
+    if POCAMultiThreaded then begin
+     // Concurrent use: keep the fully locked path, which re-reads the array
+     // record under the lock, since another thread may resize it meanwhile.
+     POCAArraySet(Box,POCARunCheckArray(Context,Box,Key),Value);
+    end else{$endif}begin
+     // Fast path, mirroring the one in POCARunContainerGet: resolve the array
+     // record once and do the index arithmetic, the bounds check and the store
+     // in one go, instead of walking through POCARunCheckArray and POCAArraySet,
+     // which each re-check the value type, re-load the array record and redo the
+     // bounds check.
+     ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(Box));
+     ArrayRecord:=ArrayInstance^.ArrayRecord;
+     if assigned(ArrayRecord) then begin
+      Size:=ArrayRecord^.Size;
      end else begin
-      PPOCAString(POCAGetValueReferencePointer(Box))^.Data[POCARunCheckString(Context,Box,Key)+1]:=ansichar(TPOCAUInt8(CharValue));
+      Size:=0;
+     end;
+     Index:=trunc(POCAGetNumberValue(Context,Key));
+     if Index<0 then begin
+      inc(Index,Size);
+     end;
+     if (Index>=0) and (Index<Size) then begin
+      ArrayRecord^.Data[Index]:=Value;
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(ArrayInstance)),Value);
+     end else begin
+      POCARunCheckArrayErrorOutOfBounds(Context,Index,Size);
      end;
     end;
    end;
+   pvtSTRING:begin
+    POCARunContainerSetStringCharacter(Context,Box,Key,Value);
+   end;
    else begin
-    POCARuntimeError(Context,'Insert into non-container');
+    POCARunContainerSetErrorNonContainer(Context);
    end;
   end;
  end;
@@ -43932,6 +44289,359 @@ end;
 // x86-64 JIT Compiler for POCA
 // Supports both SysV AMD64 ABI (Linux/BSD/macOS) and Win64 ABI (Windows)
 
+// Runtime helpers that are called directly out of JIT'ed native code, instead of
+// leaving native code and re-entering it through POCARunNativeCode for every
+// single non-arithmetic opcode. Each one mirrors the corresponding case of the
+// POCARunByteCode dispatch loop, and they are kept in opcode order here.
+//
+// At most four pointer arguments are used, so that all of them are passed in
+// registers under both ABIs. On x86-64 there is effectively one calling
+// convention per operating system, and the default one maps onto it for both
+// FreePascal and Delphi, so no calling convention directive is needed here:
+// Win64 passes them in RCX,RDX,R8,R9 (plus 32 bytes of shadow space), SysV in
+// RDI,RSI,RDX,RCX. RBX, RBP and R12..R15, which hold the JIT'ed code's pinned
+// state, are callee-saved under both ABIs and therefore survive these calls.
+//
+// Helpers that need the frame itself get it instead of the register file, and
+// index the register file through it.
+
+procedure POCAJITOpLOADCODE(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ Frame^.Registers[Operands^[0]]:=POCABindFunction(Context,Frame,Code^.Constants^[Operands^[1]],Code^.ClassFunction);
+end;
+
+procedure POCAJITOpLOADTHAT(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array);
+begin
+ POCARunGetThat(Context,Frame,Frame^.Registers[Operands^[0]]);
+end;
+
+procedure POCAJITOpARRAYINSERT(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCARunArraySet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]]);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpARRAYEXTRACT(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCARunArrayGet(Context,Registers^[Operands^[1]],Registers^[Operands^[2]]);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpINSERT(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCARunContainerSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],false);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpEXTRACT(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCARunContainerGet(Context,Registers^[Operands^[1]],Registers^[Operands^[2]]);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpGETLENGTH(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ POCARunGetLength(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
+end;
+
+procedure POCAJITOpGETMEMBER(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+var HashInstance:PPOCAHash;
+begin
+ // Fast path: a cache hit on an object with a prototype, which is what every
+ // field and method access on a class instance is. Going through
+ // POCARunGetMember, POCAGetMember and POCAHashGetCache instead costs three
+ // nested calls before the very same check is reached.
+ if not POCAMultiThreaded then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Registers^[Operands^[1]]));
+  if (POCAIsValueHash(Registers^[Operands^[1]]) and assigned(HashInstance^.Prototype)) and
+     POCAHashGetCacheHit(HashInstance,Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3]) then begin
+   exit;
+  end;
+ end;
+ POCARunGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
+end;
+
+procedure POCAJITOpSETMEMBER(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    Entity:TPOCAInt32;
+begin
+ // Fast path for overwriting an already existing key of a plain hash, the
+ // counterpart of the one in POCAJITOpGETMEMBER. The same check sits at the top
+ // of POCAHashPutCache, but only after POCARunSetMember, POCASetMember and
+ // POCAHashSetCache have been walked through. Hashes carrying events are left
+ // to the slow path, as is the case where the key has to be created.
+ if not POCAMultiThreaded then begin
+  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Registers^[Operands^[0]]));
+  // Mirrors the condition of POCAHashSetCache: not merely "has an events hash",
+  // which every class instance does, but "has a callable pmoSET handler".
+  if POCAIsValueHash(Registers^[Operands^[0]]) and
+     not (((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and
+          POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoSET])) then begin
+   HashRec:=HashInstance^.HashRecord;
+   if assigned(HashRec) and not assigned(HashRec^.Events) then begin
+    Entity:=Operands^[3];
+    if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and
+       (HashRec^.Entities^[Entity].Key.CastedInt64=Code^.Constants^[Operands^[1]].CastedInt64) then begin
+     HashRec^.Entities^[Entity].Value:=Registers^[Operands^[2]];
+     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Registers^[Operands^[2]]);
+     exit;
+    end;
+   end;
+  end;
+ end;
+ POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
+end;
+
+procedure POCAJITOpGETLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ POCARunGetLocal(Context,Frame,Code^.Constants^[Operands^[1]],Frame^.Registers[Operands^[0]],Operands^[2]);
+end;
+
+procedure POCAJITOpSETLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Frame^.Registers[Operands^[1]],false,Operands^[2]);
+end;
+
+procedure POCAJITOpNEWARRAY(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCANewArray(Context);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpARRAYPUSH(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCAArrayPush(Registers^[Operands^[0]],Registers^[Operands^[1]]);
+end;
+
+procedure POCAJITOpARRAYRANGEPUSH(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCAArrayRangePush(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]]);
+end;
+
+procedure POCAJITOpNEWHASH(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCANewHash(Context);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpHASHAPPEND(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCAHashSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],false);
+end;
+
+procedure POCAJITOpSETSYM(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ POCARunSetSymbol(Context,Frame,Code^.Constants^[Operands^[0]],Frame^.Registers[Operands^[1]],false,Operands^[2]);
+end;
+
+procedure POCAJITOpSLICE(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCARunEvalSlice(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]]);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpSLICE2(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCARunEvalSlice2(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],Registers^[Operands^[3]]);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpSLICE3(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCARunEvalSlice3(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],Registers^[Operands^[3]]);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpINSTANCEOF(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]].Num:=ord(POCAObjectInstanceOf(Context,Registers^[Operands^[1]],Registers^[Operands^[2]])) and 1;
+end;
+
+procedure POCAJITOpUPDATESTRING(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ if POCAIsValueString(Registers^[Operands^[0]]) then begin
+  POCAStringUpdate(Context,Registers^[Operands^[0]]);
+ end;
+end;
+
+procedure POCAJITOpREGEXP(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+var a:TPOCAValue;
+begin
+ a:=Code^.RegExps^[Operands^[1]];
+ if POCAGhostGetType(Code^.RegExps^[Operands^[1]])<>@POCARegExpGhost then begin
+  a:=POCARegExpFunctionCOMPILE(Context,POCAValueNull,@Registers^[Operands^[2]],1,nil);
+  POCAAtomicSetValue(Code^.RegExps^[Operands^[1]],a);
+ end;
+ Registers^[Operands^[0]]:=a;
+end;
+
+procedure POCAJITOpGETPROTOTYPE(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCAValueGetPrototypeValue(Context,Registers^[Operands^[1]],0);
+end;
+
+procedure POCAJITOpSETPROTOTYPE(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCAValueSetPrototypeValue(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],0);
+end;
+
+procedure POCAJITOpGETCONSTRUCTOR(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCAValueGetConstructorValue(Context,Registers^[Operands^[1]],0);
+end;
+
+procedure POCAJITOpSETCONSTRUCTOR(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCAValueSetConstructorValue(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],0);
+end;
+
+procedure POCAJITOpDELETE(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ Registers^[Operands^[0]].Num:=ord(POCAHashDelete(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]])) and 1;
+end;
+
+procedure POCAJITOpDELETEEX(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+var a:TPOCAValue;
+begin
+ case POCAGetValueType(Registers^[Operands^[1]]) of
+  pvtNULL:begin
+   Registers^[Operands^[0]].Num:=0;
+  end;
+  pvtHASH:begin
+   Registers^[Operands^[0]].Num:=ord(POCAHashDelete(Context,Registers^[Operands^[1]],Registers^[Operands^[2]])) and 1;
+  end;
+  pvtARRAY:begin
+   a.CastedInt64:=System.trunc(POCAGetNumberValue(Context,Registers^[Operands^[2]]));
+   if (a.CastedInt64>=0) and (a.CastedInt64<POCAArraySize(Registers^[Operands^[1]])) then begin
+    POCAArraySet(Registers^[Operands^[1]],a.CastedInt64,POCAValueNull);
+    Registers^[Operands^[0]].Num:=1;
+   end else begin
+    Registers^[Operands^[0]].Num:=0;
+   end;
+  end;
+  else begin
+   Registers^[Operands^[0]].Num:=0;
+  end;
+ end;
+end;
+
+procedure POCAJITOpDEFINED(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ Registers^[Operands^[0]].Num:=ord(POCAHashExist(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]])) and 1;
+end;
+
+procedure POCAJITOpDEFINEDEX(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+var a,b:TPOCAValue;
+begin
+ case POCAGetValueType(Registers^[Operands^[1]]) of
+  pvtNULL:begin
+   Registers^[Operands^[0]].Num:=0;
+  end;
+  pvtHASH:begin
+   Registers^[Operands^[0]].Num:=ord(POCAHashExist(Context,Registers^[Operands^[1]],Registers^[Operands^[2]])) and 1;
+  end;
+  pvtARRAY:begin
+   a.CastedInt64:=System.trunc(POCAGetNumberValue(Context,Registers^[Operands^[2]]));
+   if (a.CastedInt64>=0) and (a.CastedInt64<POCAArraySize(Registers^[Operands^[1]])) then begin
+    b:=POCAArrayGet(Registers^[Operands^[1]],a.CastedInt64);
+    Registers^[Operands^[0]].Num:=ord(not POCAIsValueNull(b)) and 1;
+   end else begin
+    Registers^[Operands^[0]].Num:=0;
+   end;
+  end;
+  else begin
+   Registers^[Operands^[0]].Num:=0;
+  end;
+ end;
+end;
+
+procedure POCAJITOpLOADGLOBAL(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=Context^.Instance.Globals.Namespace;
+end;
+
+procedure POCAJITOpLOADBASECLASS(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=Context^.Instance.Globals.BaseClass;
+end;
+
+procedure POCAJITOpGETHASHKIND(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]].Num:=POCAHashGetKind(Registers^[Operands^[1]]);
+end;
+
+procedure POCAJITOpSETHASHKIND(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCAHashSetKind(Context,Registers^[Operands^[0]],trunc(POCAGetNumberValue(Context,Registers^[Operands^[1]])));
+end;
+
+procedure POCAJITOpTYPEOF(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCATypeOf(Context,Registers^[Operands^[1]]);
+end;
+
+procedure POCAJITOpIDOF(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCAIDOf(Context,Registers^[Operands^[1]]);
+end;
+
+procedure POCAJITOpGHOSTTYPEOF(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCAGhostTypeOf(Context,Registers^[Operands^[1]]);
+end;
+
+procedure POCAJITOpELVIS(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ if POCAGetBooleanValue(Context,Registers^[Operands^[1]]) then begin
+  Registers^[Operands^[0]]:=Registers^[Operands^[1]];
+ end else begin
+  Registers^[Operands^[0]]:=Registers^[Operands^[2]];
+ end;
+end;
+
+procedure POCAJITOpIS(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]].Num:=ord(POCAObjectIs(Context,Registers^[Operands^[1]],Registers^[Operands^[2]])) and 1;
+end;
+
+procedure POCAJITOpSAFEINSERT(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCARunContainerSafeSet(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],false);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpSAFEEXTRACT(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ Registers^[Operands^[0]]:=POCARunContainerSafeGet(Context,Registers^[Operands^[1]],Registers^[Operands^[2]]);
+ Context^.TemporarySavedObjectCount:=0;
+end;
+
+procedure POCAJITOpSAFEGETMEMBER(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ POCARunSafeGetMember(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],Operands^[3],Operands^[4],false);
+end;
+
+procedure POCAJITOpSAFESETMEMBER(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ POCARunSafeSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
+end;
+
+procedure POCAJITOpSETCONSTLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Frame^.Registers[Operands^[1]],true,Operands^[2]);
+end;
+
+procedure POCAJITOpARRAYCOMBINE(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCAArrayCombine(Registers^[Operands^[0]],Registers^[Operands^[1]]);
+end;
+
+procedure POCAJITOpHASHCOMBINE(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
+begin
+ POCAHashCombine(Context,Registers^[Operands^[0]],Registers^[Operands^[1]]);
+end;
+
 function POCAGenerateNativeCode(Context:PPOCAContext;Code:PPOCACode):boolean;
 type TFixupKind=(fkPTR,fkRET,fkOFS,fkRIPREL);
      TFixup=record
@@ -44086,6 +44796,290 @@ var Fixups:TFixups;
   Add(#$31#$c0); // xor eax,eax
 
   Add(#$c3); // ret
+ end;
+ // A forward jump inside the code of a single opcode, patched once its target
+ // is known. The type checks further up use hard coded jump distances instead,
+ // which does not scale to longer sequences.
+ function AddLocalJump(const Opcode:TPUCURawByteString):TPOCAInt32;
+ begin
+  Add(Opcode);
+  result:=CodeBufferLen;
+  Add(#$00#$00#$00#$00);
+ end;
+ procedure FixLocalJump(const Position:TPOCAInt32);
+ begin
+  TPOCAUInt32(TPOCAPointer(@CodeBuffer[Position])^):=TPOCAUInt32(TPOCAInt32(CodeBufferLen-(Position+4)));
+ end;
+ procedure AddCallRuntimeHelper(const HelperPointer:TPOCAPointer;const WithFrame,WithCode:boolean);
+ begin
+  // Call a runtime helper without leaving native code at all. Frame^.Instruction-
+  // Pointer must be current beforehand, since the helper can raise a runtime
+  // error (whose source line is looked up from it) or trigger a garbage
+  // collection cycle. CurrentPC, which already points behind this instruction,
+  // is used rather than LastPC, so that the value seen by the helper is exactly
+  // the one the dispatch loop would have had, which increments it before
+  // executing an opcode. Otherwise reported error line numbers would differ
+  // between interpreted and JIT compiled code.
+  Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],CurrentPC
+  AddDWord(CurrentPC);
+
+  // RBX, RBP and R12..R15 are callee-saved under both ABIs, so the pinned state
+  // survives the call and nothing needs to be saved around it.
+{$ifdef windows}
+  Add(#$48#$83#$ec#$28); // sub rsp,40 (32 bytes shadow space + 8 to realign rsp to 16 bytes at the call)
+  Add(#$4c#$89#$e1); // mov rcx,r12 (Context)
+  if WithFrame then begin
+   Add(#$4c#$89#$ea); // mov rdx,r13 (Frame)
+  end else begin
+   Add(#$48#$89#$da); // mov rdx,rbx (Registers)
+  end;
+  Add(#$49#$b8); // mov r8,imm64 (Operands)
+  AddQWordPointer(@Code^.ByteCode^[LastPC+1]);
+  if WithCode then begin
+   Add(#$49#$b9); // mov r9,imm64 (Code)
+   AddQWordPointer(Code);
+  end;
+{$else}
+  Add(#$48#$83#$ec#$08); // sub rsp,8 (rsp is 8 mod 16 here, so this realigns it to 16 bytes at the call)
+  Add(#$4c#$89#$e7); // mov rdi,r12 (Context)
+  if WithFrame then begin
+   Add(#$4c#$89#$ee); // mov rsi,r13 (Frame)
+  end else begin
+   Add(#$48#$89#$de); // mov rsi,rbx (Registers)
+  end;
+  Add(#$48#$ba); // mov rdx,imm64 (Operands)
+  AddQWordPointer(@Code^.ByteCode^[LastPC+1]);
+  if WithCode then begin
+   Add(#$48#$b9); // mov rcx,imm64 (Code)
+   AddQWordPointer(Code);
+  end;
+{$endif}
+
+  Add(#$48#$b8); // mov rax,imm64 (helper)
+  AddQWordPointer(HelperPointer);
+
+  Add(#$ff#$d0); // call rax
+
+{$ifdef windows}
+  Add(#$48#$83#$c4#$28); // add rsp,40
+{$else}
+  Add(#$48#$83#$c4#$08); // add rsp,8
+{$endif}
+ end;
+ // Reads one array element without leaving native code. Guards that the box is
+ // a reference tagged as an array and that the key is a number; anything else,
+ // including every out of bounds case, falls through to the runtime helper,
+ // which then produces exactly the same result and error as before.
+ procedure AddInlineArrayExtract(const HelperPointer:TPOCAPointer);
+ var Slow1,Slow2,Slow3,Slow4,Done,NonNegative:TPOCAInt32;
+ begin
+  Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+Box]
+  AddDWord(Operands^[1]*sizeof(double));
+
+  Add(#$48#$89#$c2); // mov rdx,rax
+  Add(#$48#$c1#$ea#$30); // shr rdx,48
+  Add(#$81#$fa); // cmp edx,0000ffffh
+  AddDWord($0000ffff);
+  Slow1:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$89#$c2); // mov edx,eax
+  Add(#$83#$e2#$0f); // and edx,15
+  Add(#$83#$fa); // cmp edx,pvtARRAY
+  Add(AnsiChar(TPOCAUInt8(pvtARRAY)));
+  Slow2:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$48#$8b#$93); // mov rdx,qword ptr [rbx+Key]
+  AddDWord(Operands^[2]*sizeof(double));
+  Add(#$48#$c1#$ea#$30); // shr rdx,48
+  Add(#$81#$fa); // cmp edx,0000ffffh
+  AddDWord($0000ffff);
+  Slow3:=AddLocalJump(#$0f#$84); // je slow (key is a reference, not a number)
+
+  Add(#$f2#$0f#$2c#$8b); // cvttsd2si ecx,qword ptr [rbx+Key]
+  AddDWord(Operands^[2]*sizeof(double));
+
+  Add(#$48#$ba); // mov rdx,pointer mask (strip signal bits and type tag)
+  AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
+  Add(#$48#$21#$d0); // and rax,rdx
+  Add(#$48#$8b#$80); // mov rax,qword ptr [rax+TPOCAArray.ArrayRecord]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAArray(nil)^.ArrayRecord)));
+  Add(#$48#$85#$c0); // test rax,rax
+  Slow4:=AddLocalJump(#$0f#$84); // jz slow
+
+  Add(#$8b#$10); // mov edx,dword ptr [rax] (TPOCAArrayRecord.Size)
+  Add(#$85#$c9); // test ecx,ecx
+  Add(#$79#$02); // jns +2
+  Add(#$01#$d1); // add ecx,edx (negative indices count from the end)
+  Add(#$39#$d1); // cmp ecx,edx
+  NonNegative:=AddLocalJump(#$0f#$83); // jae slow (unsigned, so it catches negative too)
+
+  Add(#$48#$8b#$44#$c8); // mov rax,qword ptr [rax+rcx*8+TPOCAArrayRecord.Data]
+  Add(AnsiChar(TPOCAUInt8(TPOCAPtrUInt(Pointer(@PPOCAArrayRecord(nil)^.Data[0])))));
+  Add(#$48#$89#$83); // mov qword ptr [rbx+Dst],rax
+  AddDWord(Operands^[0]*sizeof(double));
+  Add(#$41#$c7#$84#$24); // mov dword ptr [r12+TPOCAContext.TemporarySavedObjectCount],0
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.TemporarySavedObjectCount)));
+  AddDWord(0);
+  Done:=AddLocalJump(#$e9); // jmp done
+
+  FixLocalJump(Slow1);
+  FixLocalJump(Slow2);
+  FixLocalJump(Slow3);
+  FixLocalJump(Slow4);
+  FixLocalJump(NonNegative);
+  AddCallRuntimeHelper(HelperPointer,false,false);
+  FixLocalJump(Done);
+ end;
+ // Writes one array element without leaving native code. On top of the guards of
+ // the read path this needs two more: POCA must not be running concurrently, so
+ // that the per object lock can be skipped, and the stored value has to be a
+ // number, so that no garbage collector write barrier is needed. Everything else
+ // falls through to the runtime helper.
+ procedure AddInlineArrayInsert(const HelperPointer:TPOCAPointer);
+ var Slow:array[0..5] of TPOCAInt32;
+     Index,Done:TPOCAInt32;
+ begin
+  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
+  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
+  Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+Box]
+  AddDWord(Operands^[0]*sizeof(double));
+  Add(#$48#$89#$c2); // mov rdx,rax
+  Add(#$48#$c1#$ea#$30); // shr rdx,48
+  Add(#$81#$fa); // cmp edx,0000ffffh
+  AddDWord($0000ffff);
+  Slow[1]:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$89#$c2); // mov edx,eax
+  Add(#$83#$e2#$0f); // and edx,15
+  Add(#$83#$fa); // cmp edx,pvtARRAY
+  Add(AnsiChar(TPOCAUInt8(pvtARRAY)));
+  Slow[2]:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$48#$8b#$93); // mov rdx,qword ptr [rbx+Key]
+  AddDWord(Operands^[1]*sizeof(double));
+  Add(#$48#$c1#$ea#$30); // shr rdx,48
+  Add(#$81#$fa); // cmp edx,0000ffffh
+  AddDWord($0000ffff);
+  Slow[3]:=AddLocalJump(#$0f#$84); // je slow (key is not a number)
+
+  Add(#$4c#$8b#$83); // mov r8,qword ptr [rbx+Value]
+  AddDWord(Operands^[2]*sizeof(double));
+  Add(#$4c#$89#$c2); // mov rdx,r8
+  Add(#$48#$c1#$ea#$30); // shr rdx,48
+  Add(#$81#$fa); // cmp edx,0000ffffh
+  AddDWord($0000ffff);
+  Slow[4]:=AddLocalJump(#$0f#$84); // je slow (a reference would need a write barrier)
+
+  Add(#$f2#$0f#$2c#$8b); // cvttsd2si ecx,qword ptr [rbx+Key]
+  AddDWord(Operands^[1]*sizeof(double));
+
+  Add(#$48#$ba); // mov rdx,pointer mask (strip signal bits and type tag)
+  AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
+  Add(#$48#$21#$d0); // and rax,rdx
+  Add(#$48#$8b#$80); // mov rax,qword ptr [rax+TPOCAArray.ArrayRecord]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAArray(nil)^.ArrayRecord)));
+  Add(#$48#$85#$c0); // test rax,rax
+  Slow[5]:=AddLocalJump(#$0f#$84); // jz slow
+
+  Add(#$8b#$10); // mov edx,dword ptr [rax] (TPOCAArrayRecord.Size)
+  Add(#$85#$c9); // test ecx,ecx
+  Add(#$79#$02); // jns +2
+  Add(#$01#$d1); // add ecx,edx (negative indices count from the end)
+  Add(#$39#$d1); // cmp ecx,edx
+  Done:=AddLocalJump(#$0f#$82); // jb fast, so the slow path can simply follow
+
+  for Index:=0 to 5 do begin
+   FixLocalJump(Slow[Index]);
+  end;
+  AddCallRuntimeHelper(HelperPointer,false,false);
+  Slow[0]:=AddLocalJump(#$e9); // jmp behind the fast path
+  FixLocalJump(Done);
+
+  Add(#$4c#$89#$44#$c8); // mov qword ptr [rax+rcx*8+TPOCAArrayRecord.Data],r8
+  Add(AnsiChar(TPOCAUInt8(TPOCAPtrUInt(Pointer(@PPOCAArrayRecord(nil)^.Data[0])))));
+  Add(#$41#$c7#$84#$24); // mov dword ptr [r12+TPOCAContext.TemporarySavedObjectCount],0
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.TemporarySavedObjectCount)));
+  AddDWord(0);
+  FixLocalJump(Slow[0]);
+ end;
+ // Reads one member of an object that has a prototype, which is what every field
+ // and method access on a class instance is, without leaving native code. This
+ // is the check of POCAHashGetCacheHit, emitted inline instead of reached through
+ // a helper call. Every case it does not cover, a cache miss included, falls
+ // through to the helper, which then behaves exactly as before.
+ procedure AddInlineGetMember;
+ var Slow:array[0..7] of TPOCAInt32;
+     Index,Done:TPOCAInt32;
+ begin
+  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
+  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
+  Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+Obj]
+  AddDWord(Operands^[1]*sizeof(double));
+  Add(#$48#$89#$c2); // mov rdx,rax
+  Add(#$48#$c1#$ea#$30); // shr rdx,48
+  Add(#$81#$fa); // cmp edx,0000ffffh
+  AddDWord($0000ffff);
+  Slow[1]:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$89#$c2); // mov edx,eax
+  Add(#$83#$e2#$0f); // and edx,15
+  Add(#$83#$fa); // cmp edx,pvtHASH
+  Add(AnsiChar(TPOCAUInt8(pvtHASH)));
+  Slow[2]:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$48#$ba); // mov rdx,pointer mask (strip signal bits and type tag)
+  AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
+  Add(#$48#$21#$d0); // and rax,rdx
+
+  Add(#$48#$83#$b8); // cmp qword ptr [rax+TPOCAHash.Prototype],0
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Prototype)));
+  Add(#$00);
+  Slow[3]:=AddLocalJump(#$0f#$84); // je slow (no prototype, different lookup path)
+
+  Add(#$83#$b8); // cmp dword ptr [rax+TPOCAHash.Cache.Ready],0
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.Ready)));
+  Add(#$00);
+  Slow[4]:=AddLocalJump(#$0f#$84); // je slow (cache not built yet)
+
+  Add(#$48#$ba); // mov rdx,@Code^.ByteCode^[LastPC+4] (the inline cache slot)
+  AddQWordPointer(@Code^.ByteCode^[LastPC+4]);
+  Add(#$8b#$0a); // mov ecx,dword ptr [rdx]
+  Add(#$83#$f9#$ff); // cmp ecx,-1
+  Slow[5]:=AddLocalJump(#$0f#$84); // je slow (nothing cached yet)
+
+  Add(#$48#$8b#$90); // mov rdx,qword ptr [rax+TPOCAHash.Cache.ChainEntities]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.ChainEntities)));
+  Add(#$48#$85#$d2); // test rdx,rdx
+  Slow[6]:=AddLocalJump(#$0f#$84); // jz slow
+
+  Add(#$3b#$88); // cmp ecx,dword ptr [rax+TPOCAHash.Cache.ChainCount]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.ChainCount)));
+  Slow[7]:=AddLocalJump(#$0f#$83); // jae slow
+
+  Add(#$4c#$8b#$04#$ca); // mov r8,qword ptr [rdx+rcx*8] (the cached entity)
+  Add(#$48#$ba); // mov rdx,@Code^.Constants^[Operands^[2]] (the member name)
+  AddQWordPointer(@Code^.Constants^[Operands^[2]]);
+  Add(#$48#$8b#$12); // mov rdx,qword ptr [rdx]
+  Add(#$49#$3b#$10); // cmp rdx,qword ptr [r8] (TPOCAHashEntity.Key)
+  Done:=AddLocalJump(#$0f#$84); // je fast, so the slow path can simply follow
+
+  for Index:=0 to 7 do begin
+   FixLocalJump(Slow[Index]);
+  end;
+  AddCallRuntimeHelper(@POCAJITOpGETMEMBER,false,true);
+  Slow[0]:=AddLocalJump(#$e9); // jmp behind the fast path
+  FixLocalJump(Done);
+
+  Add(#$49#$8b#$50#$08); // mov rdx,qword ptr [r8+TPOCAHashEntity.Value]
+  Add(#$48#$89#$93); // mov qword ptr [rbx+Dst],rdx
+  AddDWord(Operands^[0]*sizeof(double));
+  FixLocalJump(Slow[0]);
  end;
 begin
  try
@@ -44463,7 +45457,7 @@ begin
     end;
 
     popLOADCODE:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpLOADCODE,true,true);
     end;
 
     popLOADCONST:begin
@@ -44507,7 +45501,7 @@ begin
     end;
 
     popLOADTHAT:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpLOADTHAT,true,false);
     end;
 
     popLOADTHIS:begin
@@ -44547,32 +45541,40 @@ begin
      end;
     end;
 
+    popARRAYINSERT:begin
+     AddInlineArrayInsert(@POCAJITOpARRAYINSERT);
+    end;
+
+    popARRAYEXTRACT:begin
+     AddInlineArrayExtract(@POCAJITOpARRAYEXTRACT);
+    end;
+
     popINSERT:begin
-     DoItByVMOpcodeDispatcher;
+     AddInlineArrayInsert(@POCAJITOpINSERT);
     end;
 
     popEXTRACT:begin
-     DoItByVMOpcodeDispatcher;
+     AddInlineArrayExtract(@POCAJITOpEXTRACT);
     end;
 
     popGETLENGTH:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpGETLENGTH,false,true);
     end;
 
     popGETMEMBER:begin
-     DoItByVMOpcodeDispatcher;
+     AddInlineGetMember;
     end;
 
     popSETMEMBER:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSETMEMBER,false,true);
     end;
 
     popGETLOCAL:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpGETLOCAL,true,true);
     end;
 
     popSETLOCAL:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSETLOCAL,true,true);
     end;
 
     popGETLOCALVALUE:begin
@@ -44745,27 +45747,27 @@ begin
     end;
 
     popNEWARRAY:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpNEWARRAY,false,false);
     end;
 
     popARRAYPUSH:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpARRAYPUSH,false,false);
     end;
 
     popARRAYRANGEPUSH:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpARRAYRANGEPUSH,false,false);
     end;
 
     popNEWHASH:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpNEWHASH,false,false);
     end;
 
     popHASHAPPEND:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpHASHAPPEND,false,false);
     end;
 
     popSETSYM:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSETSYM,true,true);
     end;
 
     popINDEX:begin
@@ -44785,15 +45787,15 @@ begin
     end;
 
     popSLICE:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSLICE,false,false);
     end;
 
     popSLICE2:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSLICE2,false,false);
     end;
 
     popSLICE3:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSLICE3,false,false);
     end;
 
     popTRY:begin
@@ -45105,7 +46107,7 @@ begin
     end;
 
     popINSTANCEOF:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpINSTANCEOF,false,false);
     end;
 
     popBREAKPOINT:begin
@@ -45883,11 +46885,11 @@ begin
     end;
 
     popUPDATESTRING:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpUPDATESTRING,false,false);
     end;
 
     popREGEXP:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpREGEXP,false,true);
     end;
 
     popREGEXPEQ:begin
@@ -45917,71 +46919,71 @@ begin
     end;
 
     popGETPROTOTYPE:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpGETPROTOTYPE,false,false);
     end;
 
     popSETPROTOTYPE:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSETPROTOTYPE,false,false);
     end;
 
     popGETCONSTRUCTOR:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpGETCONSTRUCTOR,false,false);
     end;
 
     popSETCONSTRUCTOR:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSETCONSTRUCTOR,false,false);
     end;
 
     popDELETE:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpDELETE,false,true);
     end;
 
     popDELETEEX:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpDELETEEX,false,false);
     end;
 
     popDEFINED:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpDEFINED,false,true);
     end;
 
     popDEFINEDEX:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpDEFINEDEX,false,false);
     end;
 
     popLOADGLOBAL:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpLOADGLOBAL,false,false);
     end;
 
     popLOADBASECLASS:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpLOADBASECLASS,false,false);
     end;
 
     popGETHASHKIND:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpGETHASHKIND,false,false);
     end;
 
     popSETHASHKIND:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSETHASHKIND,false,false);
     end;
 
     popTYPEOF:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpTYPEOF,false,false);
     end;
 
     popIDOF:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpIDOF,false,false);
     end;
 
     popGHOSTTYPEOF:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpGHOSTTYPEOF,false,false);
     end;
 
     popELVIS:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpELVIS,false,false);
     end;
 
     popIS:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpIS,false,false);
     end;
 
     popJIFNULL:begin
@@ -46055,23 +47057,23 @@ begin
     end;
 
     popSAFEINSERT:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSAFEINSERT,false,false);
     end;
 
     popSAFEEXTRACT:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSAFEEXTRACT,false,false);
     end;
 
     popSAFEGETMEMBER:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSAFEGETMEMBER,false,true);
     end;
 
     popSAFESETMEMBER:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSAFESETMEMBER,false,true);
     end;
 
     popSETCONSTLOCAL:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpSETCONSTLOCAL,true,true);
     end;
 
     popFCALLA:begin
@@ -46091,11 +47093,11 @@ begin
     end;
 
     popARRAYCOMBINE:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpARRAYCOMBINE,false,false);
     end;
 
     popHASHCOMBINE:begin
-     DoItByVMOpcodeDispatcher;
+     AddCallRuntimeHelper(@POCAJITOpHASHCOMBINE,false,false);
     end;
 
     popDEBUGGER:begin
