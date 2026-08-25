@@ -1930,6 +1930,17 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Previous:PPOCAContext;
       Next:PPOCAContext;
 
+      // Handover between emitted code and the call setup helper. The helper puts
+      // the frame and the code object of the callee here, so that the emitted
+      // code can pick them up without having to walk the frame stack itself.
+      JITCallFrame:PPOCAFrame;
+      JITCallCode:PPOCACode;
+      // Raised by emitted code whenever it has entered or left a call frame on
+      // its own, so that the interpreter knows its local view is stale. Without
+      // it the interpreter would have to take that view again after every single
+      // native run, which costs more than the flag saves.
+      JITFrameChanged:TPOCAInt32;
+
      end;
 
      TPOCAInstance=record
@@ -39759,17 +39770,58 @@ end;
 
 procedure POCASetupRegisters(Frame:PPOCAFrame;Code:PPOCACode);
 var Index:TPOCAInt32;
+    Current:PPOCAValue;
+    NullValue:TPOCAUInt64;
 begin
  Frame^.CountRegisters:=Code^.CountRegisters;
  if Frame^.CountRegisters>0 then begin
   if length(Frame^.Registers)<TPOCAInt32(Frame^.CountRegisters) then begin
    SetLength(Frame^.Registers,POCARoundUpToPowerOfTwo(Frame^.CountRegisters+1));
   end;
-  for Index:=0 to Frame^.CountRegisters-1 do begin
-// Frame^.Registers[Index]:=POCAValueNull;
-   Frame^.Registers[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+  // Walked by pointer with the pattern held in a local, because indexing had the
+  // compiler sign extend the index and reload the sixty four bit immediate on
+  // every single iteration. This clearing runs on every call and was the largest
+  // single item of the whole call path.
+  NullValue:=POCAValueNullCastedUInt64;
+  Current:=@Frame^.Registers[0];
+  for Index:=1 to Frame^.CountRegisters do begin
+   Current^.CastedUInt64:=NullValue;
+   inc(Current);
   end;
  end;
+end;
+
+// Moves a freshly set up callee frame down onto the frame it replaces, which is
+// what a tail call does. Copying the record on its own will not do: it copies the
+// dynamic array references along with it, which leaves the vacated slot pointing
+// at the very same register and argument buffers. The next call landing in that
+// slot then finds them large enough, reuses them, and clears the registers that
+// the frame below is working with, which surfaces as arguments arriving as null.
+//
+// Swapping the buffers instead hands the vacated slot the ones this frame no
+// longer needs, so both slots keep one of their own and nothing is reallocated.
+procedure POCAMoveTailCallFrame(Context:PPOCAContext;Target:PPOCAFrame);
+var Source:PPOCAFrame;
+    Registers,Arguments:TPOCAValueArray;
+begin
+ Source:=@Context^.FrameStack[Context^.FrameTop];
+ Registers:=Target^.Registers;
+ Arguments:=Target^.Arguments;
+ Target^:=Source^;
+ Source^.Registers:=Registers;
+ Source^.Arguments:=Arguments;
+ Source^.CountRegisters:=0;
+ Source^.CountArguments:=0;
+ // The closure value arrays are meant to be shared with function objects, so the
+ // vacated slot only has to let go of its reference rather than hand one back.
+{$ifdef POCAClosureArrayValues}
+ Source^.LocalValues.CastedUInt64:=POCAValueNullCastedUInt64;
+ Source^.OuterValueLevels.CastedUInt64:=POCAValueNullCastedUInt64;
+{$else}
+ Source^.LocalValues:=nil;
+ Source^.OuterValueLevels:=nil;
+{$endif}
+ Source^.CountOuterValueLevels:=0;
 end;
 
 procedure POCASetupFrameValues(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode);
@@ -44942,6 +44994,38 @@ begin
  POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
 end;
 
+// Sets up the callee frame of an emitted call and hands back the address inside
+// the callee's native code to continue at, or nil when the interpreter has to
+// take over from here. Everything the emitted call sequence is not prepared for
+// ends up as nil: a native function, an empty one, a callee that has not been
+// compiled yet, or one whose first opcode is not emitted.
+//
+// The frame stack is touched either way, so the interpreter is told that its view
+// went stale regardless of the outcome.
+function POCAJITCallSetup(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):TPOCAPointer;
+var NewFrame:PPOCAFrame;
+    NewCode:PPOCACode;
+    OldFrameTop:TPOCAInt32;
+begin
+ result:=nil;
+ OldFrameTop:=Context^.FrameTop;
+ NewFrame:=POCASetupFunctionNormalCall(Context,Frame,CountArguments,Operands);
+ Context^.TemporarySavedObjectCount:=0;
+ Context^.JITFrameChanged:=1;
+ if Context^.FrameTop<=OldFrameTop then begin
+  // No callee frame was pushed, so the call is already done and there is nothing
+  // to enter.
+  exit;
+ end;
+ NewCode:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(NewFrame^.Func))^.Code));
+ if ((not assigned(NewCode^.NativeCode)) or (length(NewCode^.ByteCodeToNativeCodeMap)=0)) or NewCode^.InterpretByteCodeMap[0] then begin
+  exit;
+ end;
+ Context^.JITCallFrame:=NewFrame;
+ Context^.JITCallCode:=NewCode;
+ result:=TPOCAPointer(TPOCAPtrUInt(NewCode^.NativeCode)+TPOCAPtrUInt(NewCode^.ByteCodeToNativeCodeMap[0]));
+end;
+
 procedure POCAJITOpGETLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
 begin
  POCARunGetLocalCached(Context,Frame,Code^.Constants^[Operands^[1]],Frame^.Registers[Operands^[0]],Operands^[2],@Code^.InlineCaches^[Operands^[3]]);
@@ -45692,6 +45776,138 @@ var Fixups:TFixups;
   DoItByVMOpcodeDispatcher;
   FixLocalJump(Done);
  end;
+ // Performs a call without handing control back to the interpreter. The setup of
+ // the callee frame stays in Pascal, but entering the callee and coming back is
+ // done here, which is what saves the two trips through the dispatch loop and the
+ // save and restore of the pinned registers that each of them costs.
+ //
+ // R15 tells a callee whether it was entered from here or from the interpreter,
+ // which is what its return needs to know. The value comes back in RDX, the
+ // status in EAX: zero means the callee handed control to the interpreter, in
+ // which case this frame has to hand it over as well.
+ // Returns without handing control back to the interpreter, but only when this
+ // frame was entered from emitted code in the first place, which R15 says. The
+ // value goes into RDX and EAX is set to one, which is what the call sequence
+ // above expects. Everything it is not prepared for falls through to the
+ // interpreter: a live coroutine child, or the outermost frame, whose return ends
+ // the run and is the interpreter's business.
+ procedure AddInlineReturn;
+ var Interpret:array[0..2] of TPOCAInt32;
+     Index:TPOCAInt32;
+ begin
+  Add(#$45#$85#$ff); // test r15d,r15d
+  Interpret[0]:=AddLocalJump(#$0f#$84); // jz entered from the interpreter
+
+  Add(#$49#$83#$bc#$24); // cmp qword ptr [r12+TPOCAContext.CallChild],0
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.CallChild)));
+  Add(#$00);
+  Interpret[1]:=AddLocalJump(#$0f#$85); // jne a coroutine child has to be torn down first
+
+  Add(#$41#$8b#$84#$24); // mov eax,dword ptr [r12+TPOCAContext.FrameTop]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.FrameTop)));
+  Add(#$83#$f8#$01); // cmp eax,1
+  Interpret[2]:=AddLocalJump(#$0f#$8e); // jle the outermost frame ends the run
+
+  Add(#$48#$8b#$93); // mov rdx,qword ptr [rbx+Src] (the value to return)
+  AddDWord(Operands^[0]*sizeof(double));
+
+  Add(#$ff#$c8); // dec eax
+  Add(#$41#$89#$84#$24); // mov dword ptr [r12+TPOCAContext.FrameTop],eax
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.FrameTop)));
+
+  Add(#$41#$c7#$84#$24); // mov dword ptr [r12+TPOCAContext.TemporarySavedObjectCount],0
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.TemporarySavedObjectCount)));
+  AddDWord(0);
+
+  Add(#$b8); // mov eax,1 (returned on its own)
+  AddDWord(1);
+  Add(#$c3); // ret
+
+  for Index:=0 to 2 do begin
+   FixLocalJump(Interpret[Index]);
+  end;
+  DoItByVMOpcodeDispatcher;
+ end;
+ procedure AddInlineCall;
+ var Bail:array[0..1] of TPOCAInt32;
+     Index,Done:TPOCAInt32;
+ begin
+  // The interpreter advances the pointer before executing an opcode, so this is
+  // the value a runtime error raised inside the setup has to see, and equally the
+  // one to resume at once the callee has been dealt with.
+  Add(#$c7#$45#$00); // mov dword ptr [rbp+$00],CurrentPC
+  AddDWord(CurrentPC);
+
+{$ifdef windows}
+  Add(#$48#$83#$ec#$28); // sub rsp,40 (shadow space plus realignment)
+  Add(#$4c#$89#$e1); // mov rcx,r12 (Context)
+  Add(#$4c#$89#$ea); // mov rdx,r13 (Frame)
+  Add(#$41#$b8); // mov r8d,CountArguments
+  AddDWord(Instruction shr 8);
+  Add(#$49#$b9); // mov r9,imm64 (Operands)
+  AddQWordPointer(@Code^.ByteCode^[LastPC+1]);
+{$else}
+  Add(#$48#$83#$ec#$08); // sub rsp,8 (realigns rsp to 16 bytes at the call)
+  Add(#$4c#$89#$e7); // mov rdi,r12 (Context)
+  Add(#$4c#$89#$ee); // mov rsi,r13 (Frame)
+  Add(#$ba); // mov edx,CountArguments
+  AddDWord(Instruction shr 8);
+  Add(#$48#$b9); // mov rcx,imm64 (Operands)
+  AddQWordPointer(@Code^.ByteCode^[LastPC+1]);
+{$endif}
+  Add(#$48#$b8); // mov rax,imm64 (POCAJITCallSetup)
+  AddQWordPointer(@POCAJITCallSetup);
+  Add(#$ff#$d0); // call rax
+{$ifdef windows}
+  Add(#$48#$83#$c4#$28); // add rsp,40
+{$else}
+  Add(#$48#$83#$c4#$08); // add rsp,8
+{$endif}
+  Add(#$48#$85#$c0); // test rax,rax
+  Bail[0]:=AddLocalJump(#$0f#$84); // jz hand over to the interpreter
+
+  // Enter the callee. Five pushes bring rsp to the same alignment that
+  // POCARunNativeCode establishes before it enters emitted code.
+  Add(#$41#$55); // push r13
+  Add(#$41#$56); // push r14
+  Add(#$53); // push rbx
+  Add(#$55); // push rbp
+  Add(#$41#$57); // push r15
+
+  Add(#$4d#$8b#$ac#$24); // mov r13,qword ptr [r12+TPOCAContext.JITCallFrame]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.JITCallFrame)));
+  Add(#$4d#$8b#$b4#$24); // mov r14,qword ptr [r12+TPOCAContext.JITCallCode]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.JITCallCode)));
+  Add(#$49#$8b#$9d); // mov rbx,qword ptr [r13+TPOCAFrame.Registers]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Registers)));
+  Add(#$49#$8d#$ad); // lea rbp,[r13+TPOCAFrame.InstructionPointer]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.InstructionPointer)));
+  Add(#$41#$bf); // mov r15d,1 (the callee may return on its own)
+  AddDWord(1);
+  Add(#$ff#$d0); // call rax
+
+  Add(#$41#$5f); // pop r15
+  Add(#$5d); // pop rbp
+  Add(#$5b); // pop rbx
+  Add(#$41#$5e); // pop r14
+  Add(#$41#$5d); // pop r13
+
+  Add(#$85#$c0); // test eax,eax
+  Bail[1]:=AddLocalJump(#$0f#$84); // jz the callee handed over, so this frame does too
+
+  Add(#$48#$89#$93); // mov qword ptr [rbx+Dst],rdx (the returned value)
+  AddDWord(Operands^[0]*sizeof(double));
+  Done:=AddLocalJump(#$e9); // jmp behind
+
+  for Index:=0 to 1 do begin
+   FixLocalJump(Bail[Index]);
+  end;
+  // The instruction pointer already stands behind this call, so the interpreter
+  // carries on with the callee frame rather than repeating the call.
+  Add(#$31#$c0); // xor eax,eax
+  Add(#$c3); // ret
+  FixLocalJump(Done);
+ end;
  // Resolves a symbol out of the call site's inline cache without leaving native
  // code. What it checks mirrors POCARunGetLocalCached exactly: the same frame
  // locals and, when there are none, the same closure, so that a search would walk
@@ -46236,7 +46452,7 @@ begin
     end;
 
     popFCALL:begin
-     DoItByVMOpcodeDispatcher;
+     AddInlineCall;
     end;
 
     popMCALL:begin
@@ -46244,7 +46460,7 @@ begin
     end;
 
     popRETURN:begin
-     DoItByVMOpcodeDispatcher;
+     AddInlineReturn;
     end;
 
     popLOADCODE:begin
@@ -47975,6 +48191,8 @@ asm
  mov r12, rcx  // R12 = Context
  mov r13, rdx  // R13 = Frame
  mov r14, r8   // R14 = Code
+ xor r15d, r15d // R15 = 0, this frame was entered from the interpreter, so a
+                // return has to be handed back to it rather than done here
 
  mov rax, qword ptr [r14+TPOCACode.NativeCode]
  mov rbx, qword ptr [r13+TPOCAFrame.Registers]
@@ -48010,6 +48228,8 @@ asm
  mov r12, rdi  // R12 = Context
  mov r13, rsi  // R13 = Frame
  mov r14, rdx  // R14 = Code
+ xor r15d, r15d // R15 = 0, this frame was entered from the interpreter, so a
+                // return has to be handed back to it rather than done here
 
  mov rax, qword ptr [r14+TPOCACode.NativeCode]
  mov rbx, qword ptr [r13+TPOCAFrame.Registers]
@@ -48055,7 +48275,22 @@ begin
  end;
 {$endif}
  Registers:=@Frame^.Registers[0];
- while {$ifdef POCAHasJIT}Code^.InterpretByteCodeMap[Frame^.InstructionPointer] or POCARunNativeCode(Context,Frame,Code){$else}true{$endif} do begin
+ while true do begin
+{$ifdef POCAHasJIT}
+  if not Code^.InterpretByteCodeMap[Frame^.InstructionPointer] then begin
+   if not POCARunNativeCode(Context,Frame,Code) then begin
+    break;
+   end;
+   if Context^.JITFrameChanged<>0 then begin
+    // Emitted code has entered or left a call frame on its own, so the local view
+    // of frame, code and registers is stale and has to be taken again.
+    Context^.JITFrameChanged:=0;
+    Frame:=@Context^.FrameStack[Context^.FrameTop-1];
+    Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func))^.Code));
+    Registers:=@Frame^.Registers[0];
+   end;
+  end;
+{$endif}
   Opcode:=Code^.ByteCode^[Frame^.InstructionPointer];
   Operands:=@Code^.ByteCode^[Frame^.InstructionPointer+1];
   inc(Frame^.InstructionPointer,1+(Opcode shr 8));
@@ -48846,7 +49081,7 @@ begin
     Frame:=POCASetupFunctionNormalCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
-    Frame^:=Context^.FrameStack[Context^.FrameTop];
+    POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
@@ -48855,7 +49090,7 @@ begin
     Frame:=POCASetupFunctionMethodCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
-    Frame^:=Context^.FrameStack[Context^.FrameTop];
+    POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
@@ -48864,7 +49099,7 @@ begin
     Frame:=POCASetupFunctionNormalNamedCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
-    Frame^:=Context^.FrameStack[Context^.FrameTop];
+    POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
@@ -48873,7 +49108,7 @@ begin
     Frame:=POCASetupFunctionMethodNamedCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
-    Frame^:=Context^.FrameStack[Context^.FrameTop];
+    POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
@@ -49259,7 +49494,7 @@ begin
     Frame:=POCASetupFunctionNormalArrayCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
-    Frame^:=Context^.FrameStack[Context^.FrameTop];
+    POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
@@ -49268,7 +49503,7 @@ begin
     Frame:=POCASetupFunctionMethodArrayCall(Context,Frame,Opcode shr 8,Operands);
     dec(Context^.FrameTop);
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
-    Frame^:=Context^.FrameStack[Context^.FrameTop];
+    POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
     Registers:=@Frame^.Registers[0];
     Context^.TemporarySavedObjectCount:=0;
