@@ -34805,7 +34805,7 @@ var TokenList:PPOCAToken;
     end;
     function GenerateFunctionCall(t:PPOCAToken;OutReg:TPOCAInt32;const InjectedMember:TPOCARawByteString=''):TPOCAInt32;
     var IsMethod,IsSafeMethod:boolean;
-        Count,Reg1,Reg2,Reg3,i,JumpNull,JumpEnd,ConstantIndex,IntrinsicId:TPOCAInt32;
+        Count,Reg1,Reg2,Reg3,i,JumpNull,JumpEnd,ConstantIndex,IntrinsicID:TPOCAInt32;
         MemberOpcodePC:TPOCAInt32;
         MemberConstantIndex:TPOCAUInt32;
         Registers:TPOCACodeGeneratorRegisters;
@@ -34813,7 +34813,7 @@ var TokenList:PPOCAToken;
      // Recognises Math.<name>(x) with exactly one argument. Only the shape is
      // decided here; whether the callee really still is the built in function is
      // checked at run time, so overwriting Math.sqrt keeps working.
-     function GetMathIntrinsicId(t:PPOCAToken):TPOCAInt32;
+     function GetMathIntrinsicID(t:PPOCAToken):TPOCAInt32;
      var Index:TPOCAInt32;
      begin
       result:=-1;
@@ -35013,11 +35013,11 @@ var TokenList:PPOCAToken;
        SetLength(Regs,Count);
        EmitList(t^.Right);
        if (IsMethod and (Count=1)) and not IsSafeMethod then begin
-        IntrinsicId:=GetMathIntrinsicId(t^.Left);
+        IntrinsicID:=GetMathIntrinsicID(t^.Left);
        end else begin
-        IntrinsicId:=-1;
+        IntrinsicID:=-1;
        end;
-       if (IntrinsicId>=0) and ((MemberOpcodePC>=0) and ((CodeGenerator^.ByteCode^[MemberOpcodePC] and $ff)=popGETMEMBER)) then begin
+       if (IntrinsicID>=0) and ((MemberOpcodePC>=0) and ((CodeGenerator^.ByteCode^[MemberOpcodePC] and $ff)=popGETMEMBER)) then begin
         // The call site resolves the callee itself, guarded by the version stamp
         // of the Math namespace, so the separate member read in front of it has
         // become dead. Overwritten in place rather than cut out, so that every
@@ -35029,7 +35029,7 @@ var TokenList:PPOCAToken;
         Emit(Reg1);
         Emit(Reg2);
         Emit(Regs[0]);
-        Emit(TPOCAUInt32(IntrinsicId));
+        Emit(TPOCAUInt32(IntrinsicID));
         Emit(MemberConstantIndex);
         Emit(CodeGenerator^.CountInlineCaches);
         inc(CodeGenerator^.CountInlineCaches);
@@ -40552,26 +40552,26 @@ end;
 // away with checking nothing but the identity of the receiver and that stamp: a
 // monkey patched Math.sqrt leaves the stamp cleared, so such a call site keeps
 // missing and keeps taking the ordinary call path.
-procedure POCARunIntrinsicResolve(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;const IntrinsicId:TPOCAUInt32;const InlineCache:PPOCAInlineCache);
+procedure POCARunIntrinsicResolve(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var OutValue:TPOCAValue;const IntrinsicID:TPOCAUInt32;const InlineCache:PPOCAInlineCache);
 begin
  POCAGetMember(Context,Obj,Fld,OutValue,InlineCache^.ChainIndex,InlineCache^.HashChainIndex,false,true);
  InlineCache^.Version:=0;
  if (((not POCAMultiThreaded) and POCAIsValueHash(Obj)) and
      (Obj.CastedUInt64=Context^.Instance^.Globals.MathHash.CastedUInt64)) and
-    (OutValue.CastedUInt64=Context^.Instance^.Globals.MathIntrinsics[IntrinsicId].CastedUInt64) then begin
+    (OutValue.CastedUInt64=Context^.Instance^.Globals.MathIntrinsics[IntrinsicID].CastedUInt64) then begin
   InlineCache^.Version:=PPOCAHash(POCAGetValueReferencePointer(Obj))^.Version;
  end;
 end;
 
-function POCARunIntrinsicCallee(Context:PPOCAContext;const Obj,Fld:TPOCAValue;const IntrinsicId:TPOCAUInt32;const InlineCache:PPOCAInlineCache):TPOCAValue;
+function POCARunIntrinsicCallee(Context:PPOCAContext;const Obj,Fld:TPOCAValue;const IntrinsicID:TPOCAUInt32;const InlineCache:PPOCAInlineCache):TPOCAValue;
 begin
  if (((not POCAMultiThreaded) and (InlineCache^.Version<>0)) and (Obj.CastedUInt64=Context^.Instance^.Globals.MathHash.CastedUInt64)) and
     (InlineCache^.Version=PPOCAHash(POCAGetValueReferencePointer(Obj))^.Version) then begin
   // Same object, untouched since the stamp was taken, and back then the lookup
   // did yield the built in function, so it still does.
-  result:=Context^.Instance^.Globals.MathIntrinsics[IntrinsicId];
+  result:=Context^.Instance^.Globals.MathIntrinsics[IntrinsicID];
  end else begin
-  POCARunIntrinsicResolve(Context,Obj,Fld,result,IntrinsicId,InlineCache);
+  POCARunIntrinsicResolve(Context,Obj,Fld,result,IntrinsicID,InlineCache);
  end;
 end;
 
