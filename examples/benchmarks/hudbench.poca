@@ -1,0 +1,43 @@
+// Modelled on per frame game HUD drawing: a script object whose render method issues
+// a long run of method calls, mixing calls into script objects with calls into native
+// builtins, which is what canvas.setColor and friends are.
+
+const FRAMES = 40000;
+
+let canvas = {
+  r: 0.0, g: 0.0, b: 0.0, a: 0.0, size: 0.0, ops: 0,
+  setColor: function(r, g, b, a) { this.r = r; this.g = g; this.b = b; this.a = a; this.ops = this.ops + 1; return this; },
+  setFontSize: function(s) { this.size = s; this.ops = this.ops + 1; return this; },
+  textWidth: function(s) { this.ops = this.ops + 1; return s.length * this.size * 0.5; },
+  drawText: function(s, x, y) { this.ops = this.ops + 1; return x + y + s.length; }
+};
+
+let hud = {
+  data: { score: 1234, lives: 3, ply: 7 },
+  onRenderHUD: function(c) {
+    let d = this.data;
+    let y = 30.0;
+    c.setColor(1.0, 1.0, 1.0, 1.0);
+    c.setFontSize(18);
+    let label = "Score";
+    let w = c.textWidth(label);
+    c.drawText(label, 10.0, y);
+    y = y + Math.round(w * 0.25);          // native call in the middle of the run
+    c.setColor(1.0, 0.85, 0.2, 1.0);
+    c.drawText("Lives", 10.0, y);
+    y = y + Math.floor(c.textWidth("Lives"));
+    c.setColor(0.2, 0.6, 1.0, 1.0);
+    c.setFontSize(14);
+    c.drawText("Ply", 10.0, y);
+    return y + d.ply;
+  }
+};
+
+let ta = DateTime.now();
+let acc = 0.0;
+for (let f = 0; f < FRAMES; f++) {
+  acc = acc + hud.onRenderHUD(canvas);
+}
+let tb = DateTime.now();
+puts("Time: ", Math.round(DateTime.milliseconds(tb - ta)), "ms\n");
+puts("ops: ", canvas.ops, " acc: ", Math.round(acc), "\n");

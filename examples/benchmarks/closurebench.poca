@@ -1,0 +1,44 @@
+// Closures and higher order functions, which none of the other benchmarks here
+// cover: captured variables read and written from nested scopes, a closure
+// escaping the frame that created it, and map/filter/reduce over arrays.
+
+const N = 2000;
+const ROUNDS = 1500;
+
+// a counter captured by two closures that share it
+function makeCounter() {
+  let count = 0;
+  let inc = function() { count = count + 1; return count; };
+  let get = function() { return count; };
+  return { inc: inc, get: get };
+}
+
+// three levels of capture, the innermost reading all of them
+function makeAdder(a) {
+  return function(b) {
+    return function(c) { return a + b + c; };
+  };
+}
+
+let data = new Array(N);
+for (let i = 0; i < N; i++) data[i] = i;
+
+let ta = DateTime.now();
+
+let total = 0;
+
+for (let r = 0; r < ROUNDS; r++) {
+  let c = makeCounter();
+  let add = makeAdder(r);
+
+  let doubled = data.map(function(v) { return v * 2; });
+  let odd     = doubled.filter(function(v) { return (v / 2) % 2 == 1; });
+  let sum     = odd.reduce(function(acc, v) { return acc + v; }, 0);
+
+  c.inc(); c.inc(); c.inc();
+  total = total + sum + c.get() + add(1)(2);
+}
+
+let tb = DateTime.now();
+puts("Time: ", Math.round(DateTime.milliseconds(tb - ta)), "ms\n");
+puts("checksum: ", total, "\n");
