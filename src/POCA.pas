@@ -311,10 +311,18 @@
 {$ifdef cpu386}
  {$undef POCAGarbageCollectorListsDoNeedFallbackLocking}
  {$define POCAGarbageCollectorListsUsePlainAssemblerCode}
- {$ifdef POCANoJIT}
-  {$undef POCAHasJIT}
+ // The x86-32 JIT emitter is unmaintained. It never received the inline caching,
+ // call protocol, symbol resolution and intrinsic work that the x86-64 emitter
+ // got, and it miscompiles closure-heavy code. The interpreter is correct there,
+ // so x86-32 runs interpreted unless POCAUseX86_32JIT is defined explicitly.
+ {$ifdef POCAUseX86_32JIT}
+  {$ifdef POCANoJIT}
+   {$undef POCAHasJIT}
+  {$else}
+   {$define POCAHasJIT}
+  {$endif}
  {$else}
-  {$define POCAHasJIT}
+  {$undef POCAHasJIT}
  {$endif}
  {$define UseRegister}
 {$endif}
@@ -10294,11 +10302,27 @@ end;
 // out that the pool allocator has meanwhile recycled the object memory for a
 // different hash, which a per hash counter starting over at zero could not.
 var POCAHashVersionCounter:TPOCAUInt64=0;
+{$ifndef cpu64}
+    POCAHashVersionLock:TPasMPInt32=0;
+{$endif}
 
 function POCAHashNextVersion:TPOCAUInt64; {$ifdef caninline}inline;{$endif}
 begin
  if POCAMultiThreaded then begin
+{$ifdef cpu64}
   result:=TPasMPInterlocked.Increment(POCAHashVersionCounter);
+{$else}
+  // A 32-bit target has no interlocked increment for a sixty four bit value, 
+  // so the counter is advanced under a spin lock there. Stamps have to stay
+  // unique whatever the target: two hashes sharing one would let a call site
+  // mistake the one for the other.
+  while TPasMPInterlocked.CompareExchange(POCAHashVersionLock,TPasMPInt32(1),TPasMPInt32(0))<>TPasMPInt32(0) do begin
+   TPasMP.Yield;
+  end;
+  inc(POCAHashVersionCounter);
+  result:=POCAHashVersionCounter;
+  TPasMPInterlocked.Exchange(POCAHashVersionLock,TPasMPInt32(0));
+{$endif}
  end else begin
   inc(POCAHashVersionCounter);
   result:=POCAHashVersionCounter;
@@ -40440,7 +40464,7 @@ procedure POCARunGetLength(Context:PPOCAContext;const Obj,Fld:TPOCAValue;var Out
 var p:PPOCAObject;
     ArrayRecord:PPOCAArrayRecord;
 begin
- if (Obj.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask then begin
+ if {$ifdef cpu64}(Obj.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask{$else}Obj.ReferenceTag=POCAValueReferenceTag{$endif} then begin
   p:=POCAGetValueReferencePointer(Obj);
   if assigned(p) then begin
    case p^.Header.ValueType of
@@ -50853,7 +50877,7 @@ const CRC32Table:array[TPOCAUInt8] of TPOCAUInt32=
         $bdbdf21c,$cabac28a,$53b39330,$24b4a3a6,$bad03605,$cdd70693,$54de5729,$23d967bf,
         $b3667a2e,$c4614ab8,$5d681b02,$2a6f2b94,$b40bbe37,$c30c8ea1,$5a05df1b,$2d02ef8d
        );
-var OldPosition,ReadBytes,ToReadBytes,Index,CurrentPosition,Position:TPOCAInt64;
+var OldPosition,ReadBytes,ToReadBytes,Index,CurrentPosition,Position:TPOCAPtrInt;
     Buffer:PPOCAUInt8Array;
     ByteValue:TPOCAUInt8;
     IsMemoryStream:Boolean;
@@ -50902,7 +50926,7 @@ begin
      inc(CurrentPosition,ReadBytes);
      dec(ToReadBytes,ReadBytes);
      if IsMemoryStream then begin
-      inc(Buffer,ReadBytes);
+      Buffer:=PPOCAUInt8Array(TPOCAPtrUInt(TPOCAPtrUInt(Buffer)+TPOCAPtrUInt(ReadBytes)));
      end;
     end;
    finally
@@ -50923,7 +50947,8 @@ var FileHeader:TPOCAValueDataFileHeader;
     Checksum:TPOCAUInt32;
  function LoadValue:TPOCAValue;
  var ValueTypeByte:TPOCAUInt8;
-     Index,CountElements:TPOCAUInt64;
+     Index:TPOCAPtrInt;
+     CountElements:TPOCAUInt64;
      Key,Value:TPOCAValue;
      DataString:TPOCARawByteString;
  begin
@@ -51023,7 +51048,8 @@ var FileHeader:TPOCAValueDataFileHeader;
     StartPosition,EndPosition:TPOCAInt64;
  procedure SaveValue(const aValue:TPOCAValue);
  var ValueTypeByte:TPOCAUInt8;
-     Index,CountElements:TPOCAUInt64;
+     Index:TPOCAPtrInt;
+     CountElements:TPOCAUInt64;
      DataString:TPOCARawByteString;
      HashInstance:PPOCAHash;
      HashRec:PPOCAHashRecord;
