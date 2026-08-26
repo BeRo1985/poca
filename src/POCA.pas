@@ -34806,7 +34806,7 @@ var TokenList:PPOCAToken;
     function GenerateFunctionCall(t:PPOCAToken;OutReg:TPOCAInt32;const InjectedMember:TPOCARawByteString=''):TPOCAInt32;
     var IsMethod,IsSafeMethod:boolean;
         Count,Reg1,Reg2,Reg3,i,JumpNull,JumpEnd,ConstantIndex,IntrinsicID:TPOCAInt32;
-        MemberOpcodePC:TPOCAInt32;
+        FoldedIntrinsicID:TPOCAInt32;
         MemberConstantIndex:TPOCAUInt32;
         Registers:TPOCACodeGeneratorRegisters;
         Regs:array of TPOCAInt32;
@@ -34878,7 +34878,7 @@ var TokenList:PPOCAToken;
      end;
     begin
      Regs:=nil;
-     MemberOpcodePC:=-1;
+     FoldedIntrinsicID:=-1;
      MemberConstantIndex:=0;
      try
       if OutReg<0 then begin
@@ -34920,11 +34920,21 @@ var TokenList:PPOCAToken;
          if IsSafeMethod then begin
           EmitSafeGetMember(Reg2,Reg1,FindConstantIndex(t^.Left^.Right,false,nil,false),$ffffffff,$ffffffff);
          end else begin
-          // Remembered, so that an intrinsic call site further down can fold this
-          // member read into itself.
           MemberConstantIndex:=FindConstantIndex(t^.Left^.Right,false,nil,false);
-          MemberOpcodePC:=CodeGenerator^.ByteCodeSize;
-          EmitGetMember(Reg2,Reg1,MemberConstantIndex,$ffffffff,$ffffffff);
+          // Decided here and not at the call site further down. Folding the member
+          // read into an intrinsic call afterwards could only blank it out in place,
+          // and such a hole still costs a full dispatch every time it is executed:
+          // in Math heavy code that was almost ten percent of all dispatched opcodes.
+          // CollectList and GetMathIntrinsicID only walk the syntax tree, so both can
+          // be asked this early.
+          if (IsMethod and not IsSafeMethod) and (CollectList(t^.Right)=1) then begin
+           FoldedIntrinsicID:=GetMathIntrinsicID(t^.Left);
+          end else begin
+           FoldedIntrinsicID:=-1;
+          end;
+          if FoldedIntrinsicID<0 then begin
+           EmitGetMember(Reg2,Reg1,MemberConstantIndex,$ffffffff,$ffffffff);
+          end;
          end;
         end;
        end;
@@ -34960,7 +34970,7 @@ var TokenList:PPOCAToken;
        IsMethod:=true;
        // The receiver moves on, so the member read remembered above is no longer
        // the one that feeds the call.
-       MemberOpcodePC:=-1;
+       FoldedIntrinsicID:=-1;
        ConstantIndex:=InternConstant(POCAInternSymbol(Parser.Context,Instance,POCANewUniqueString(Parser.Context,InjectedMember)));
        Reg1:=Reg2;
        Reg2:=GetRegister(true,false);
@@ -35012,18 +35022,11 @@ var TokenList:PPOCAToken;
        Count:=CollectList(t^.Right);
        SetLength(Regs,Count);
        EmitList(t^.Right);
-       if (IsMethod and (Count=1)) and not IsSafeMethod then begin
-        IntrinsicID:=GetMathIntrinsicID(t^.Left);
-       end else begin
-        IntrinsicID:=-1;
-       end;
-       if (IntrinsicID>=0) and ((MemberOpcodePC>=0) and ((CodeGenerator^.ByteCode^[MemberOpcodePC] and $ff)=popGETMEMBER)) then begin
+       IntrinsicID:=FoldedIntrinsicID;
+       if IntrinsicID>=0 then begin
         // The call site resolves the callee itself, guarded by the version stamp
-        // of the Math namespace, so the separate member read in front of it has
-        // become dead. Overwritten in place rather than cut out, so that every
-        // jump target, line mapping and opcode boundary keeps pointing where it
-        // did.
-        CodeGenerator^.ByteCode^[MemberOpcodePC]:=popNOP or (6 shl 8);
+        // of the Math namespace, so the separate member read in front of it was
+        // never emitted at all.
         EmitOpcode(popMCALLINTRINSIC or (7 shl 8));
         Emit(result);
         Emit(Reg1);
