@@ -29,10 +29,10 @@ begin
 {$ifend}
 {$ifend}
 {$elseif defined(POCASETUPFUNCTIONCALLMETHOD)}
- Obj:=Frame^.Registers[Operands^[1]];
- Func:=Frame^.Registers[Operands^[2]];
+ Obj:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif};
+ Func:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[2]]{$else}Frame^.Registers[Operands^[2]]{$endif};
 {$if defined(POCASETUPFUNCTIONCALLARRAY)}
- ArgumentArray:=Frame^.Registers[Operands^[3]];
+ ArgumentArray:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[3]]{$else}Frame^.Registers[Operands^[3]]{$endif};
  dec(CountArguments,4);
 {$if defined(POCASETUPFUNCTIONCALLNAMED)}
  ArgumentIndex:=4;
@@ -45,9 +45,9 @@ begin
 {$ifend}
 {$else}
  Obj.CastedUInt64:=POCAValueNullCastedUInt64;
- Func:=Frame^.Registers[Operands^[1]];
+ Func:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif};
 {$if defined(POCASETUPFUNCTIONCALLARRAY)}
- ArgumentArray:=Frame^.Registers[Operands^[2]];
+ ArgumentArray:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[2]]{$else}Frame^.Registers[Operands^[2]]{$endif};
  dec(CountArguments,3);
 {$if defined(POCASETUPFUNCTIONCALLNAMED)}
  ArgumentIndex:=3;
@@ -121,7 +121,7 @@ begin
      end;
      Frame^.CountArguments:=CountArguments;
      inc(Context^.NativeCallDepth);
-     Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
+     {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Frame^.ResultRegister]{$else}Frame^.Registers[Frame^.ResultRegister]{$endif}:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
      dec(Context^.NativeCallDepth);
      Frame^.CountArguments:=0;
      result:=@Context.FrameStack[Context.FrameTop-1];
@@ -131,11 +131,11 @@ begin
       SetLength(Frame^.Arguments,CountArguments);
      end;
      for Index:=0 to CountArguments-1 do begin
-      Frame^.Arguments[Index]:=Frame^.Registers[Operands^[Index+ArgumentIndex]];
+      Frame^.Arguments[Index]:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[Index+ArgumentIndex]]{$else}Frame^.Registers[Operands^[Index+ArgumentIndex]]{$endif};
      end;
      Frame^.CountArguments:=CountArguments;
      inc(Context^.NativeCallDepth);
-     Frame^.Registers[Frame^.ResultRegister]:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
+     {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Frame^.ResultRegister]{$else}Frame^.Registers[Frame^.ResultRegister]{$endif}:=PPOCANativeCode(ObjPtr)^.FunctionPointer(Context,Obj,@Frame^.Arguments[0],Frame^.CountArguments,PPOCANativeCode(ObjPtr)^.UserData);
      dec(Context^.NativeCallDepth);
      Frame^.CountArguments:=0;
      result:=@Context.FrameStack[Context.FrameTop-1];
@@ -156,7 +156,7 @@ begin
      result:=@Context^.FrameStack[Context^.FrameTop];
 {$ifdef POCASETUPFUNCTIONCALLNAMED}
      if not PPOCACode(ObjPtr)^.HasArgumentLocals then begin
-      result^.Locals:=Frame^.Registers[Operands^[ArgumentIndex]];
+      result^.Locals:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[ArgumentIndex]]{$else}Frame^.Registers[Operands^[ArgumentIndex]]{$endif};
       inc(ArgumentIndex);
       dec(CountArguments);
      end else{$endif}begin
@@ -176,14 +176,19 @@ begin
 
      if PPOCACode(ObjPtr)^.HasArguments or not PPOCACode(ObjPtr)^.IsEmpty then begin
 
+{$ifdef POCARegisterWindows}
+      // The callee's window starts where the caller's ends.
+      POCASetupRegisters(Context,result,PPOCACode(ObjPtr),Frame^.RegisterEnd);
+{$else}
       POCASetupRegisters(result,PPOCACode(ObjPtr));
+{$endif}
 
       POCASetupFrameValues(Context,result,PPOCACode(ObjPtr));
 
       if PPOCACode(ObjPtr)^.HasArguments then begin
 {$if defined(POCASETUPFUNCTIONCALLNAMED)}
        if PPOCACode(ObjPtr)^.HasArgumentLocals then begin
-        POCASetupNamedArgumentsWithLocals(Context,result,PPOCACode(ObjPtr),Frame^.Registers[Operands^[ArgumentIndex]],result^.Locals);
+        POCASetupNamedArgumentsWithLocals(Context,result,PPOCACode(ObjPtr),{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[ArgumentIndex]]{$else}Frame^.Registers[Operands^[ArgumentIndex]]{$endif},result^.Locals);
        end else begin
         POCACheckNamedArguments(Context,PPOCACode(ObjPtr),PPOCAHash(POCAGetValueReferencePointer(result^.Locals)),result^.Locals);
        end;
@@ -197,13 +202,13 @@ begin
        end;
        POCASetupArguments(Context,result,PPOCACode(ObjPtr),@Frame^.Arguments[0],CountArguments,nil);
 {$else}
-       POCASetupArguments(Context,result,PPOCACode(ObjPtr),@Frame^.Registers[0],CountArguments,@Operands^[ArgumentIndex]);
+       POCASetupArguments(Context,result,PPOCACode(ObjPtr),{$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif},CountArguments,@Operands^[ArgumentIndex]);
 {$ifend}
       end;
      end;
 
      if PPOCACode(ObjPtr)^.IsEmpty then begin
-      Frame^.Registers[Frame^.ResultRegister].CastedUInt64:=POCAValueNullCastedUInt64;
+      {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Frame^.ResultRegister]{$else}Frame^.Registers[Frame^.ResultRegister]{$endif}.CastedUInt64:=POCAValueNullCastedUInt64;
       Frame^.CountArguments:=0;
       result:=@Context.FrameStack[Context.FrameTop-1];
      end else begin
@@ -214,7 +219,7 @@ begin
    end;
   end;
 
-  Frame^.Registers[Frame^.ResultRegister].CastedUInt64:=POCAValueNullCastedUInt64;
+  {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Frame^.ResultRegister]{$else}Frame^.Registers[Frame^.ResultRegister]{$endif}.CastedUInt64:=POCAValueNullCastedUInt64;
   Frame^.CountArguments:=0;
 
   result:=@Context.FrameStack[Context.FrameTop-1];

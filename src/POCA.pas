@@ -355,6 +355,25 @@
 
 {$define POCAThreadSafeHash}
 
+// Lets the frames take their registers from one contiguous block per context, so
+// that a callee's window sits directly behind its caller's, instead of every frame
+// keeping a buffer of its own.
+//
+// Off by default: measured against the other variant it costs between one and
+// three per cent and gains nothing, because the locality it was meant to buy was
+// already there. The register blocks of caller and callee are both in L1 either
+// way, with a miss rate of well under a tenth of a per cent, so there was nothing
+// left to win. Turn it on with -dPOCAUseRegisterWindows to measure again on other
+// hardware or against workloads that stress the frame stack differently.
+//
+// Note that the specialised call path is not tied to this and runs either way; the
+// gain that came with it is not the register stack's.
+{$ifdef POCAUseRegisterWindows}
+ {$define POCARegisterWindows}
+{$else}
+ {$undef POCARegisterWindows}
+{$endif}
+
 interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
@@ -729,6 +748,12 @@ const POCAValueTypeTagMask=TPOCAPtrUInt(15);
       // Below this, laying the bytes of a concatenation out right away is cheaper
       // than the extra object and the walk that deferring it costs later on.
       POCAStringConsThreshold=64;
+
+{$ifdef POCARegisterWindows}
+      // Values in a context's register stack. Enough for the full frame depth at a
+      // typical register count; deeper or wider frames fall back one at a time.
+      POCARegisterStackSize=16384;
+{$endif}
 
       // Marks a symbol lookup slot that has been given up on, because the call
       // site kept seeing a different closure and the slot could never settle.
@@ -1447,6 +1472,12 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       CountInlineCaches:TPOCAUInt32;
       Constants:PPOCAValues;
       HasArgumentLocals:TPOCABool32;
+      // Set when a call into this code needs none of the general machinery: no
+      // locals hash, no named, optional, rest or array arguments, every parameter
+      // landing straight in a register, and no closure values to hand out. Such a
+      // call can be set up in one go instead of walking three nested routines with
+      // their checks, which is what the bulk of the call path used to be.
+      SimpleCall:TPOCABool32;
       ArgumentSymbols:PPOCAInt32Array;
       ArgumentLocals:PPOCACodeArguments;
       OptionalArgumentSymbols:PPOCAInt32Array;
@@ -1485,7 +1516,22 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Obj:TPOCAValue;
       InstructionPointer:TPOCAInt32;
       ResultRegister:TPOCAUInt32;
+{$ifdef POCARegisterWindows}
+      // Points into the context's register stack, or at the fallback below when a
+      // frame wants more registers than the stack has room left for. A plain
+      // pointer at this offset, so that emitted code keeps loading the register
+      // base from the frame in a single instruction, exactly as it does from the
+      // dynamic array of the other variant.
+      RegisterWindow:PPOCAValues;
+      RegisterFallback:TPOCAValueArray;
+      // Where this frame's window sits in the stack. The next frame starts where
+      // this one ends, which makes the arrangement correct itself after an unwind:
+      // nothing separate has to be kept in step with the frame stack.
+      RegisterBase:TPOCAInt32;
+      RegisterEnd:TPOCAInt32;
+{$else}
       Registers:TPOCAValueArray;
+{$endif}
       CountRegisters:TPOCAInt32;
       Arguments:TPOCAValueArray;
       CountArguments:TPOCAInt32;
@@ -1911,6 +1957,15 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
       FrameStack:TPOCAFrameStack;
       FrameTop:TPOCAInt32;
+
+{$ifdef POCARegisterWindows}
+      // One contiguous block the frames take their register windows from, so that
+      // a callee's window sits directly behind its caller's rather than in a heap
+      // block of its own. Allocated once per context; a frame wanting more than is
+      // left over keeps a buffer of its own and hands the stack on unchanged.
+      RegisterStack:PPOCAValues;
+      RegisterStackSize:TPOCAInt32;
+{$endif}
 
       NativeCallDepth:TPOCAInt32;
 
@@ -2437,7 +2492,11 @@ function POCAContextSubAuto(const aSuper:PPOCAContext;const aExplicitParent:PPOC
 
 function POCAStringDump(Context:PPOCAContext;const ToDumpValue:TPOCAValue):TPOCARawByteString;
 
+{$ifdef POCARegisterWindows}
+procedure POCASetupRegisters(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode;Base:TPOCAInt32); {$ifdef caninline}inline;{$endif}
+{$else}
 procedure POCASetupRegisters(Frame:PPOCAFrame;Code:PPOCACode); {$ifdef caninline}inline;{$endif}
+{$endif}
 procedure POCASetupFrameValues(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode); {$ifdef caninline}inline;{$endif}
 
 function POCAInstanceCreate:PPOCAInstance;
@@ -8365,7 +8424,7 @@ begin
    MarkValue(Frame^.Locals);
    MarkValue(Frame^.Obj);
    for j:=0 to Frame^.CountRegisters-1 do begin
-    MarkValue(Frame^.Registers[j]);
+    MarkValue({$ifdef POCARegisterWindows}Frame^.RegisterWindow^[j]{$else}Frame^.Registers[j]{$endif});
    end;
    for j:=0 to Frame^.CountArguments-1 do begin
     MarkValue(Frame^.Arguments[j]);
@@ -14672,6 +14731,14 @@ begin
  Context^.Active:=true;
  Context^.FrameTop:=0;
  Context^.NativeCallDepth:=0;
+{$ifdef POCARegisterWindows}
+ // Kept across reuse of a pooled context, since nothing about it depends on the
+ // run that has ended.
+ if not assigned(Context^.RegisterStack) then begin
+  GetMem(Context^.RegisterStack,POCARegisterStackSize*sizeof(TPOCAValue));
+  Context^.RegisterStackSize:=POCARegisterStackSize;
+ end;
+{$endif}
  if assigned(Context^.TemporarySavedObjects) and (Context^.TemporarySavedObjectSize>32) then begin
   FreeMem(Context^.TemporarySavedObjects);
   Context^.TemporarySavedObjects:=nil;
@@ -15095,8 +15162,20 @@ begin
   FreeMem(Context^.TemporarySavedObjects);
   Context^.TemporarySavedObjects:=nil;
  end;
+{$ifdef POCARegisterWindows}
+ if assigned(Context^.RegisterStack) then begin
+  FreeMem(Context^.RegisterStack);
+  Context^.RegisterStack:=nil;
+  Context^.RegisterStackSize:=0;
+ end;
+{$endif}
  for i:=0 to POCA_MAX_RECURSION-1 do begin
+{$ifdef POCARegisterWindows}
+  Context^.FrameStack[i].RegisterWindow:=nil;
+  Context^.FrameStack[i].RegisterFallback:=nil;
+{$else}
   Context^.FrameStack[i].Registers:=nil;
+{$endif}
   Context^.FrameStack[i].Arguments:=nil;
 {$ifndef POCAClosureArrayValues}
   Context^.FrameStack[i].LocalValues:=nil;
@@ -39038,6 +39117,23 @@ var TokenList:PPOCAToken;
       end;
       Code^.HasRestArguments:=Code^.HasRestArguments or CodeGenerator^.HasRestArguments;
       Code^.HasArguments:=Code^.HasRestArguments or ((Code^.CountArguments+Code^.CountOptionalArguments)<>0);
+      begin
+       // HasArgumentLocals is deliberately not among these: it is set for every
+       // function that takes a parameter at all, and only the path for named
+       // arguments ever looks at it, which is not a path that comes through here.
+       Code^.SimpleCall:=(((Code^.FastFunction and not Code^.IsEmpty) and
+                           (not Code^.NeedArgumentArray)) and
+                          ((not Code^.HasRestArguments) and (Code^.CountOptionalArguments=0))) and
+                         ((not Code^.UseFrameValues) and not Code^.LocalsAsThisObj);
+       if Code^.SimpleCall then begin
+        for i:=0 to TPOCAInt32(Code^.CountArguments)-1 do begin
+         if Code^.ArgumentLocals[i].Kind<>TPOCACodeArgument.pcakREG then begin
+          Code^.SimpleCall:=false;
+          break;
+         end;
+        end;
+       end;
+      end;
      end;
     end;
    finally
@@ -39601,7 +39697,7 @@ begin
      end;
     end;
     TPOCACodeArgument.pcakREG:begin
-     Frame^.Registers[Code^.ArgumentLocals[Index].Index]:=Value;
+     {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Code^.ArgumentLocals[Index].Index]{$else}Frame^.Registers[Code^.ArgumentLocals[Index].Index]{$endif}:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
@@ -39654,7 +39750,7 @@ begin
      end;
     end;
     TPOCACodeArgument.pcakREG:begin
-     Frame^.Registers[Code^.OptionalArgumentLocals[Index].Index]:=Value;
+     {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Code^.OptionalArgumentLocals[Index].Index]{$else}Frame^.Registers[Code^.OptionalArgumentLocals[Index].Index]{$endif}:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
@@ -39777,7 +39873,7 @@ begin
      end;
     end;
     TPOCACodeArgument.pcakREG:begin
-     Frame^.Registers[Code^.ArgumentLocals[Index].Index]:=Value;
+     {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Code^.ArgumentLocals[Index].Index]{$else}Frame^.Registers[Code^.ArgumentLocals[Index].Index]{$endif}:=Value;
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
@@ -39817,7 +39913,7 @@ begin
     end;
    end;
    TPOCACodeArgument.pcakREG:begin
-    Frame^.Registers[Code^.OptionalArgumentLocals[Index].Index]:=Value;
+    {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Code^.OptionalArgumentLocals[Index].Index]{$else}Frame^.Registers[Code^.OptionalArgumentLocals[Index].Index]{$endif}:=Value;
    end;
    TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
@@ -39852,22 +39948,48 @@ begin
  end;
 end;
 
+{$ifdef POCARegisterWindows}
+// Base says where in the context's register stack this frame's window starts,
+// which is where the frame below it ended.
+procedure POCASetupRegisters(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCACode;Base:TPOCAInt32);
+{$else}
 procedure POCASetupRegisters(Frame:PPOCAFrame;Code:PPOCACode);
+{$endif}
 var Index:TPOCAInt32;
     Current:PPOCAValue;
     NullValue:TPOCAUInt64;
 begin
  Frame^.CountRegisters:=Code^.CountRegisters;
+{$ifdef POCARegisterWindows}
+ Frame^.RegisterBase:=Base;
+ if (Base+TPOCAInt32(Code^.CountRegisters))<=Context^.RegisterStackSize then begin
+  Frame^.RegisterWindow:=PPOCAValues(TPOCAPointer(@Context^.RegisterStack^[Base]));
+  Frame^.RegisterEnd:=Base+TPOCAInt32(Code^.CountRegisters);
+ end else begin
+  // Out of room, so this frame keeps a buffer of its own and hands the stack on
+  // unchanged, which lets the frames above it carry on using it.
+  if length(Frame^.RegisterFallback)<TPOCAInt32(Code^.CountRegisters) then begin
+   SetLength(Frame^.RegisterFallback,POCARoundUpToPowerOfTwo(Code^.CountRegisters+1));
+  end;
+  Frame^.RegisterWindow:=PPOCAValues(TPOCAPointer(@Frame^.RegisterFallback[0]));
+  Frame^.RegisterEnd:=Base;
+ end;
+{$else}
+ // Without windows every frame keeps a buffer of its own, grown when it has to be
+ // and reused across calls at that depth.
  if Frame^.CountRegisters>0 then begin
   if length(Frame^.Registers)<TPOCAInt32(Frame^.CountRegisters) then begin
    SetLength(Frame^.Registers,POCARoundUpToPowerOfTwo(Frame^.CountRegisters+1));
   end;
+ end;
+{$endif}
+ if Frame^.CountRegisters>0 then begin
   // Walked by pointer with the pattern held in a local, because indexing had the
   // compiler sign extend the index and reload the sixty four bit immediate on
   // every single iteration. This clearing runs on every call and was the largest
   // single item of the whole call path.
   NullValue:=POCAValueNullCastedUInt64;
-  Current:=@Frame^.Registers[0];
+  Current:=PPOCAValue(TPOCAPointer({$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif}));
   for Index:=1 to Frame^.CountRegisters do begin
    Current^.CastedUInt64:=NullValue;
    inc(Current);
@@ -39886,16 +40008,43 @@ end;
 // longer needs, so both slots keep one of their own and nothing is reallocated.
 procedure POCAMoveTailCallFrame(Context:PPOCAContext;Target:PPOCAFrame);
 var Source:PPOCAFrame;
-    Registers,Arguments:TPOCAValueArray;
+    Fallback,Arguments:TPOCAValueArray;
+{$ifdef POCARegisterWindows}
+    Base,Count:TPOCAInt32;
+{$endif}
 begin
  Source:=@Context^.FrameStack[Context^.FrameTop];
- Registers:=Target^.Registers;
+{$ifdef POCARegisterWindows}
+ Base:=Target^.RegisterBase;
+ Count:=Source^.CountRegisters;
+{$endif}
+ // The buffer the vacated slot is handed is the one this frame no longer needs,
+ // so both slots keep one of their own and nothing has to be reallocated.
+ Fallback:={$ifdef POCARegisterWindows}Target^.RegisterFallback{$else}Target^.Registers{$endif};
  Arguments:=Target^.Arguments;
  Target^:=Source^;
- Source^.Registers:=Registers;
+ {$ifdef POCARegisterWindows}Source^.RegisterFallback{$else}Source^.Registers{$endif}:=Fallback;
  Source^.Arguments:=Arguments;
  Source^.CountRegisters:=0;
  Source^.CountArguments:=0;
+{$ifdef POCARegisterWindows}
+ Source^.RegisterBase:=0;
+ Source^.RegisterEnd:=0;
+{$endif}
+{$ifdef POCARegisterWindows}
+ // The window has to come down along with the frame. Left where it is, every tail
+ // call would claim fresh room and a loop written as tail recursion would walk off
+ // the end of the stack. Move rather than a plain copy, since the two regions
+ // overlap once the callee has more registers than the frame it replaces.
+ if (Target^.RegisterBase>Base) and ((Base+Count)<=Context^.RegisterStackSize) then begin
+  if Count>0 then begin
+   Move(Target^.RegisterWindow^[0],Context^.RegisterStack^[Base],Count*sizeof(TPOCAValue));
+  end;
+  Target^.RegisterWindow:=PPOCAValues(TPOCAPointer(@Context^.RegisterStack^[Base]));
+  Target^.RegisterBase:=Base;
+  Target^.RegisterEnd:=Base+Count;
+ end;
+{$endif}
  // The closure value arrays are meant to be shared with function objects, so the
  // vacated slot only has to let go of its reference rather than hand one back.
 {$ifdef POCAClosureArrayValues}
@@ -41164,13 +41313,13 @@ procedure POCARunEvalUnpack(Context:PPOCAContext;Frame:PPOCAFrame;Opcode:TPOCAUI
 var ArrayObject:TPOCAValue;
     i,Count:TPOCAInt32;
 begin
- ArrayObject:=Frame^.Registers[Operands^[0]];
+ ArrayObject:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[0]]{$else}Frame^.Registers[Operands^[0]]{$endif};
  Count:=(Opcode shr 8)-1;
  if (not POCAIsValueArray(ArrayObject)) or (TPOCAInt32(POCAArraySize(ArrayObject))<Count) then begin
   POCARuntimeError(Context,'Short or invalid multi-assignment array');
  end else begin
   for i:=0 to Count-1 do begin
-   Frame^.Registers[Operands^[i+1]]:=POCAArrayGet(ArrayObject,i);
+   {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[i+1]]{$else}Frame^.Registers[Operands^[i+1]]{$endif}:=POCAArrayGet(ArrayObject,i);
   end;
  end;
 end;
@@ -41577,7 +41726,7 @@ begin
        POCAArraySet(v,2,POCAValueNull);
        POCAArraySet(v,3,POCANumber(-1));
       end;
-      Frame^.Registers[CatchReg]:=v;
+      {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[CatchReg]{$else}Frame^.Registers[CatchReg]{$endif}:=v;
      end;
      rv:=POCARunByteCode(Context);
     end;
@@ -41599,7 +41748,7 @@ begin
   Context^.NativeCallDepth:=NativeCallDepth;
  end;
  result:=EndPos;
- Frame^.Registers[ResultReg]:=rv;
+ {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[ResultReg]{$else}Frame^.Registers[ResultReg]{$endif}:=rv;
 end;
 
 procedure POCARunThrow(Context:PPOCAContext;Parameter:TPOCAValue);
@@ -41662,7 +41811,7 @@ end;
 function POCARunHashEventBinaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PPOCAUInt32Array;const Operation:TPOCAMetaOp):boolean;
 var HashEvents:PPOCAHashEvents;
 begin
- HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]],Frame^.Registers[Operands^[2]],Operation);
+ HashEvents:=POCAHashGetHashEvents({$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif},{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[2]]{$else}Frame^.Registers[Operands^[2]]{$endif},Operation);
  if assigned(HashEvents) and POCAIsValueFunctionOrNativeCode(HashEvents^[Operation]) then begin
   Frame:=POCASetupFunctionOpCall(Context,Frame,3,Operands,HashEvents^[Operation]);
   result:=true;
@@ -41674,7 +41823,7 @@ end;
 function POCARunHashEventRightBinaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PPOCAUInt32Array;const Operation:TPOCAMetaOp):boolean;
 var HashEvents:PPOCAHashEvents;
 begin
- HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[2]],Operation);
+ HashEvents:=POCAHashGetHashEvents({$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[2]]{$else}Frame^.Registers[Operands^[2]]{$endif},Operation);
  if assigned(HashEvents) and POCAIsValueFunctionOrNativeCode(HashEvents^[Operation]) then begin
   Frame:=POCASetupFunctionOpCall(Context,Frame,3,Operands,HashEvents^[Operation]);
   result:=true;
@@ -41686,7 +41835,7 @@ end;
 function POCARunHashEventUnaryOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PPOCAUInt32Array;const Operation:TPOCAMetaOp):boolean;
 var HashEvents:PPOCAHashEvents;
 begin
- HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]]);
+ HashEvents:=POCAHashGetHashEvents({$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif});
  if assigned(HashEvents) and POCAIsValueFunctionOrNativeCode(HashEvents^[Operation]) then begin
   Frame:=POCASetupFunctionOpCall(Context,Frame,2,Operands,HashEvents^[Operation]);
   result:=true;
@@ -41698,7 +41847,7 @@ end;
 function POCARunHashEventInRangeOp(Context:PPOCAContext;var Frame:PPOCAFrame;const Operands:PPOCAUInt32Array;const Operation:TPOCAMetaOp):boolean;
 var HashEvents:PPOCAHashEvents;
 begin
- HashEvents:=POCAHashGetHashEvents(Frame^.Registers[Operands^[1]],Frame^.Registers[Operands^[2]],Frame^.Registers[Operands^[3]],Operation);
+ HashEvents:=POCAHashGetHashEvents({$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif},{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[2]]{$else}Frame^.Registers[Operands^[2]]{$endif},{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[3]]{$else}Frame^.Registers[Operands^[3]]{$endif},Operation);
  if assigned(HashEvents) and POCAIsValueFunctionOrNativeCode(HashEvents^[Operation]) then begin
   Frame:=POCASetupFunctionOpCall(Context,Frame,4,Operands,HashEvents^[Operation]);
   result:=true;
@@ -45024,7 +45173,11 @@ asm
  mov esi,eax // ESI = Context
  mov edi,edx // EDI = Frame
  mov eax,dword ptr [ecx+TPOCACode.NativeCode]
+{$ifdef POCARegisterWindows}
+ mov ebx,dword ptr [edx+TPOCAFrame.RegisterWindow] // EBX = Register
+{$else}
  mov ebx,dword ptr [edx+TPOCAFrame.Registers] // EBX = Register
+{$endif}
  lea ebp,dword ptr [edx+TPOCAFrame.InstructionPointer] // EBP = Byte code ip
  mov ecx,dword ptr [ecx+TPOCACode.ByteCodeToNativeCodeMap]
  mov edx,dword ptr [ebp]
@@ -45090,12 +45243,12 @@ end;
 
 procedure POCAJITOpLOADCODE(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
 begin
- Frame^.Registers[Operands^[0]]:=POCABindFunction(Context,Frame,Code^.Constants^[Operands^[1]],Code^.ClassFunction);
+ {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[0]]{$else}Frame^.Registers[Operands^[0]]{$endif}:=POCABindFunction(Context,Frame,Code^.Constants^[Operands^[1]],Code^.ClassFunction);
 end;
 
 procedure POCAJITOpLOADTHAT(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array);
 begin
- POCARunGetThat(Context,Frame,Frame^.Registers[Operands^[0]]);
+ POCARunGetThat(Context,Frame,{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[0]]{$else}Frame^.Registers[Operands^[0]]{$endif});
 end;
 
 procedure POCAJITOpARRAYINSERT(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
@@ -45184,9 +45337,98 @@ begin
  result:=TPOCAPointer(TPOCAPtrUInt(NewCode^.NativeCode)+TPOCAPtrUInt(NewCode^.ByteCodeToNativeCodeMap[0]));
 end;
 
+// Sets up a call into code marked SimpleCall without walking the general
+// machinery. Everything the general path decides at run time has been decided at
+// compile time for such code, so what is left is filling in the frame and moving
+// the arguments across. Returns false when this callee is not one of those, and
+// the caller then takes the ordinary route.
+// ArgumentBase is where the arguments start among the operands, which is also how
+// many of them are not arguments, so the argument count follows from it. HasObj
+// says whether the receiver comes from the operands, as it does for a method call,
+// or from the function object itself, as it does for a plain one.
+function POCAJITSimpleCall(Context:PPOCAContext;Frame:PPOCAFrame;CountOperands:TPOCAInt32;Operands:PPOCAUInt32Array;const Func:TPOCAValue;const Obj:TPOCAValue;const HasObj:boolean;const ArgumentBase:TPOCAInt32;out Entry:TPOCAPointer):boolean; {$ifdef caninline}inline;{$endif}
+var CountArguments:TPOCAInt32;
+    FuncPointer:PPOCAFunction;
+    CodePointer:PPOCACode;
+    NewFrame:PPOCAFrame;
+    Index:TPOCAInt32;
+    Value:TPOCAValue;
+begin
+
+ result:=false;
+ CountArguments:=CountOperands-ArgumentBase;
+
+ if (CountArguments<0) or not POCAIsValueFunction(Func) then begin
+  exit;
+ end;
+ FuncPointer:=PPOCAFunction(POCAGetValueReferencePointer(Func));
+ if not POCAIsValueCode(FuncPointer^.Code) then begin
+  exit;
+ end;
+ CodePointer:=PPOCACode(POCAGetValueReferencePointer(FuncPointer^.Code));
+ if (not CodePointer^.SimpleCall) or (CountArguments<>TPOCAInt32(CodePointer^.CountArguments)) then begin
+  exit;
+ end;
+ if Context^.FrameTop>=POCA_MAX_RECURSION then begin
+  POCARuntimeError(Context,'Call frame overflow');
+ end;
+{$ifdef POCAHasJIT}
+ if not assigned(CodePointer^.NativeCode) then begin
+  POCAGenerateNativeCode(Context,CodePointer);
+ end;
+ if ((not assigned(CodePointer^.NativeCode)) or (length(CodePointer^.ByteCodeToNativeCodeMap)=0)) or CodePointer^.InterpretByteCodeMap[0] then begin
+  exit;
+ end;
+{$else}
+ exit;
+{$endif}
+
+ Frame^.ResultRegister:=Operands^[0];
+
+ NewFrame:=@Context^.FrameStack[Context^.FrameTop];
+ NewFrame^.Func:=Func;
+ NewFrame^.Locals.CastedUInt64:=POCAValueNullCastedUInt64;
+ if HasObj then begin
+  NewFrame^.Obj:=Obj;
+ end else begin
+  NewFrame^.Obj:=FuncPointer^.Obj;
+ end;
+ NewFrame^.InstructionPointer:=0;
+ NewFrame^.CountOuterValueLevels:=0;
+ NewFrame^.LocalValues:=nil;
+
+{$ifdef POCARegisterWindows}
+ POCASetupRegisters(Context,NewFrame,CodePointer,Frame^.RegisterEnd);
+{$else}
+ POCASetupRegisters(NewFrame,CodePointer);
+{$endif}
+
+ for Index:=0 to CountArguments-1 do begin
+  Value:={$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[Index+ArgumentBase]]{$else}Frame^.Registers[Operands^[Index+ArgumentBase]]{$endif};
+  if POCAIsValueCode(Value) then begin
+   Value:=POCABindFunction(Context,Frame,Value,false);
+  end;
+  {$ifdef POCARegisterWindows}NewFrame^.RegisterWindow^[CodePointer^.ArgumentLocals[Index].Index]{$else}NewFrame^.Registers[CodePointer^.ArgumentLocals[Index].Index]{$endif}:=Value;
+ end;
+
+ inc(Context^.FrameTop);
+ Context^.TemporarySavedObjectCount:=0;
+ Context^.JITFrameChanged:=1;
+ Context^.JITCallFrame:=NewFrame;
+ Context^.JITCallCode:=CodePointer;
+ Entry:=TPOCAPointer(TPOCAPtrUInt(CodePointer^.NativeCode)+TPOCAPtrUInt(CodePointer^.ByteCodeToNativeCodeMap[0]));
+ result:=true;
+
+end;
+
 function POCAJITCallSetup(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):TPOCAPointer;
 var OldFrameTop:TPOCAInt32;
 begin
+ // The receiver argument is ignored when HasObj is false, so the callee value is
+ // handed over again rather than materialising a null for it.
+ if POCAJITSimpleCall(Context,Frame,CountArguments,Operands,{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif},{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif},false,2,result) then begin
+  exit;
+ end;
  OldFrameTop:=Context^.FrameTop;
  result:=POCAJITCallFinish(Context,POCASetupFunctionNormalCall(Context,Frame,CountArguments,Operands),OldFrameTop);
 end;
@@ -45194,18 +45436,23 @@ end;
 function POCAJITMethodCallSetup(Context:PPOCAContext;Frame:PPOCAFrame;CountArguments:TPOCAInt32;Operands:PPOCAUInt32Array):TPOCAPointer;
 var OldFrameTop:TPOCAInt32;
 begin
+ // A method call carries the receiver as its second operand and its callee as the
+ // third, so the arguments start one later than for a plain call.
+ if POCAJITSimpleCall(Context,Frame,CountArguments,Operands,{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[2]]{$else}Frame^.Registers[Operands^[2]]{$endif},{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif},true,3,result) then begin
+  exit;
+ end;
  OldFrameTop:=Context^.FrameTop;
  result:=POCAJITCallFinish(Context,POCASetupFunctionMethodCall(Context,Frame,CountArguments,Operands),OldFrameTop);
 end;
 
 procedure POCAJITOpGETLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
 begin
- POCARunGetLocalCached(Context,Frame,Code^.Constants^[Operands^[1]],Frame^.Registers[Operands^[0]],Operands^[2],@Code^.InlineCaches^[Operands^[3]]);
+ POCARunGetLocalCached(Context,Frame,Code^.Constants^[Operands^[1]],{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[0]]{$else}Frame^.Registers[Operands^[0]]{$endif},Operands^[2],@Code^.InlineCaches^[Operands^[3]]);
 end;
 
 procedure POCAJITOpSETLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
 begin
- POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Frame^.Registers[Operands^[1]],false,Operands^[2]);
+ POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif},false,Operands^[2]);
 end;
 
 procedure POCAJITOpNEWARRAY(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
@@ -45237,7 +45484,7 @@ end;
 
 procedure POCAJITOpSETSYM(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
 begin
- POCARunSetSymbol(Context,Frame,Code^.Constants^[Operands^[0]],Frame^.Registers[Operands^[1]],false,Operands^[2]);
+ POCARunSetSymbol(Context,Frame,Code^.Constants^[Operands^[0]],{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif},false,Operands^[2]);
 end;
 
 procedure POCAJITOpSLICE(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
@@ -45434,7 +45681,7 @@ end;
 
 procedure POCAJITOpSETCONSTLOCAL(Context:PPOCAContext;Frame:PPOCAFrame;Operands:PPOCAUInt32Array;Code:PPOCACode);
 begin
- POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],Frame^.Registers[Operands^[1]],true,Operands^[2]);
+ POCAHashSetCache(Context,Frame^.Locals,Code^.Constants^[Operands^[0]],{$ifdef POCARegisterWindows}Frame^.RegisterWindow^[Operands^[1]]{$else}Frame^.Registers[Operands^[1]]{$endif},true,Operands^[2]);
 end;
 
 procedure POCAJITOpARRAYCOMBINE(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array);
@@ -46055,7 +46302,7 @@ var Fixups:TFixups;
   Add(#$4d#$8b#$b4#$24); // mov r14,qword ptr [r12+TPOCAContext.JITCallCode]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.JITCallCode)));
   Add(#$49#$8b#$9d); // mov rbx,qword ptr [r13+TPOCAFrame.Registers]
-  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Registers)));
+  AddDWord({$ifdef POCARegisterWindows}TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.RegisterWindow)){$else}TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Registers)){$endif});
   Add(#$49#$8d#$ad); // lea rbp,[r13+TPOCAFrame.InstructionPointer]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.InstructionPointer)));
   Add(#$41#$bf); // mov r15d,1 (the callee may return on its own)
@@ -48456,7 +48703,11 @@ asm
                 // return has to be handed back to it rather than done here
 
  mov rax, qword ptr [r14+TPOCACode.NativeCode]
+{$ifdef POCARegisterWindows}
+ mov rbx, qword ptr [r13+TPOCAFrame.RegisterWindow]
+{$else}
  mov rbx, qword ptr [r13+TPOCAFrame.Registers]
+{$endif}
  lea rbp, [r13+TPOCAFrame.InstructionPointer]
  mov r10, qword ptr [r14+TPOCACode.ByteCodeToNativeCodeMap]
  mov r11d, dword ptr [rbp]
@@ -48493,7 +48744,11 @@ asm
                 // return has to be handed back to it rather than done here
 
  mov rax, qword ptr [r14+TPOCACode.NativeCode]
+{$ifdef POCARegisterWindows}
+ mov rbx, qword ptr [r13+TPOCAFrame.RegisterWindow]
+{$else}
  mov rbx, qword ptr [r13+TPOCAFrame.Registers]
+{$endif}
  lea rbp, [r13+TPOCAFrame.InstructionPointer]
  mov r8, qword ptr [r14+TPOCACode.ByteCodeToNativeCodeMap]
  mov r9d, dword ptr [rbp]
@@ -48535,7 +48790,7 @@ begin
   POCAGenerateNativeCode(Context,Code);
  end;
 {$endif}
- Registers:=@Frame^.Registers[0];
+ Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
  while true do begin
 {$ifdef POCAHasJIT}
   if not Code^.InterpretByteCodeMap[Frame^.InstructionPointer] then begin
@@ -48548,7 +48803,7 @@ begin
     Context^.JITFrameChanged:=0;
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
    end;
   end;
 {$endif}
@@ -48565,7 +48820,7 @@ begin
      Registers^[Operands^[0]].Num:=a.Num+b.Num;
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoADD) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -48583,7 +48838,7 @@ begin
      Registers^[Operands^[0]].Num:=a.Num-b.Num;
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoSUB) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -48601,7 +48856,7 @@ begin
      Registers^[Operands^[0]].Num:=a.Num*b.Num;
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoMUL) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -48619,7 +48874,7 @@ begin
      Registers^[Operands^[0]].Num:=a.Num/b.Num;
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoDIV) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -48633,7 +48888,7 @@ begin
    popNEG:begin
     if POCARunHashEventUnaryOp(Context,Frame,Operands,pmoNEG) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      Registers^[Operands^[0]].Num:=-POCAGetNumberValue(Context,Registers^[Operands^[1]]);
     end;
@@ -48641,7 +48896,7 @@ begin
    popNOT:begin
     if POCARunHashEventUnaryOp(Context,Frame,Operands,pmoLNOT) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      Registers^[Operands^[0]].Num:=ord(not POCAGetBooleanValue(Context,Registers^[Operands^[1]])) and 1;
     end;
@@ -48651,7 +48906,7 @@ begin
     b:=Registers^[Operands^[2]];
     if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoCONCAT) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      Registers^[Operands^[0]]:=POCARunEvalCat(Context,a,b);
     end;
@@ -48668,7 +48923,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoLT) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=ord(POCACompare(Context,a,b)<0) and 1;
       end;
@@ -48688,7 +48943,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoLTEQ) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=ord(POCACompare(Context,a,b)<=0) and 1;
       end;
@@ -48708,7 +48963,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoGT) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=ord(POCACompare(Context,a,b)>0) and 1;
       end;
@@ -48728,7 +48983,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoGTEQ) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=ord(POCACompare(Context,a,b)>=0) and 1;
       end;
@@ -48748,7 +49003,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoEQ) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=ord(POCACompare(Context,a,b)=0) and 1;
       end;
@@ -48768,7 +49023,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoNEQ) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=ord(POCACompare(Context,a,b)<>0) and 1;
       end;
@@ -48794,7 +49049,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoCOMPARE) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=POCACompare(Context,a,b);
       end;
@@ -48814,7 +49069,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoSEQ) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=ord(POCAStrictEqual(a,b)) and 1;
       end;
@@ -48834,7 +49089,7 @@ begin
      end else begin
       if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoSNEQ) then begin
        Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-       Registers:=@Frame^.Registers[0];
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
       end else begin
        Registers^[Operands^[0]].Num:=ord(not POCAStrictEqual(a,b)) and 1;
       end;
@@ -48889,13 +49144,13 @@ begin
    popFCALL:begin
     Frame:=POCASetupFunctionNormalCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMCALL:begin
     Frame:=POCASetupFunctionMethodCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMCALLINTRINSIC:begin
@@ -48949,7 +49204,7 @@ begin
     end else begin
      Frame:=POCASetupFunctionMethodCall(Context,Frame,4,Operands);
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
      Context^.TemporarySavedObjectCount:=0;
     end;
    end;
@@ -48968,7 +49223,7 @@ begin
     begin
      Frame:=@Context^.FrameStack[Context^.FrameTop-1];
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end;
     Registers^[Frame^.ResultRegister]:=a;
     Context^.TemporarySavedObjectCount:=0;
@@ -49099,13 +49354,13 @@ begin
    popFCALLH:begin
     Frame:=POCASetupFunctionNormalNamedCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMCALLH:begin
     Frame:=POCASetupFunctionMethodNamedCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popUNPACK:begin
@@ -49141,7 +49396,7 @@ begin
      Registers^[Operands^[0]].Num:=a.Num-1.0;
     end else if POCARunHashEventUnaryOp(Context,Frame,Operands,pmoDEC) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      a.Num:=POCAGetNumberValue(Context,a);
      Registers^[Operands^[0]].Num:=a.Num-1.0;
@@ -49153,7 +49408,7 @@ begin
      Registers^[Operands^[0]].Num:=a.Num+1.0;
     end else if POCARunHashEventUnaryOp(Context,Frame,Operands,pmoDEC) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      a.Num:=POCAGetNumberValue(Context,a);
      Registers^[Operands^[0]].Num:=a.Num+1.0;
@@ -49166,7 +49421,7 @@ begin
      Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) and TPOCAInt64(System.trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBAND) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -49184,7 +49439,7 @@ begin
      Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) xor TPOCAInt64(System.trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBXOR) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -49202,7 +49457,7 @@ begin
      Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) or TPOCAInt64(System.trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBOR) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -49216,7 +49471,7 @@ begin
    popBNOT:begin
     if POCARunHashEventUnaryOp(Context,Frame,Operands,pmoBNOT) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      Registers^[Operands^[0]].Num:=TPOCAInt64(not TPOCAInt64(System.trunc(POCAGetNumberValue(Context,Registers^[Operands^[1]]))));
     end;
@@ -49228,7 +49483,7 @@ begin
      Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) shl TPOCAInt32(trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBSHL) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -49246,7 +49501,7 @@ begin
      Registers^[Operands^[0]].Num:=sar64(TPOCAInt64(System.trunc(a.Num)),TPOCAInt32(System.trunc(b.Num)));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBSHR) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -49264,7 +49519,7 @@ begin
      Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(a.Num)) shr TPOCAInt32(System.trunc(b.Num));
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoBUSHR) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -49282,7 +49537,7 @@ begin
      Registers^[Operands^[0]].Num:=Modulo(a.Num,b.Num);
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoMOD) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -49300,7 +49555,7 @@ begin
      Registers^[Operands^[0]].Num:=Math.Power(a.Num,b.Num);
     end else if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoPOW) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      if not POCAIsValueNumber(a) then begin
       a.Num:=POCAGetNumberValue(Context,a);
@@ -49325,7 +49580,7 @@ begin
    popIN:begin
     if POCARunHashEventRightBinaryOp(Context,Frame,Operands,pmoIN) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      POCARunIn(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]]);
     end;
@@ -49333,7 +49588,7 @@ begin
    popINRANGE:begin
     if POCARunHashEventInRangeOp(Context,Frame,Operands,pmoINRANGE) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      POCARunInRange(Context,Registers^[Operands^[0]],Registers^[Operands^[1]],Registers^[Operands^[2]],Registers^[Operands^[3]]);
     end;
@@ -49344,7 +49599,7 @@ begin
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMTAILCALL:begin
@@ -49353,7 +49608,7 @@ begin
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popFTAILCALLH:begin
@@ -49362,7 +49617,7 @@ begin
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMTAILCALLH:begin
@@ -49371,7 +49626,7 @@ begin
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popINSTANCEOF:begin
@@ -49591,7 +49846,7 @@ begin
    popREGEXPEQ:begin
     if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoREGEXPEQ) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else if POCAGhostGetType(Code^.RegExps^[Operands^[2]])=@POCARegExpGhost then begin
      Registers^[Operands^[0]]:=POCARegExpFunctionTEST(Context,POCAValueNull,@Registers^[Operands^[1]],2,nil);
     end else begin
@@ -49601,7 +49856,7 @@ begin
    popREGEXPNEQ:begin
     if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoREGEXPNEQ) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else if POCAGhostGetType(Code^.RegExps^[Operands^[2]])=@POCARegExpGhost then begin
      Registers^[Operands^[0]].Num:=ord(POCARegExpFunctionTEST(Context,POCAValueNull,@Registers^[Operands^[1]],2,nil).Num=0) and 1;
     end else begin
@@ -49611,7 +49866,7 @@ begin
    popSQRT:begin
     if POCARunHashEventUnaryOp(Context,Frame,Operands,pmoSQRT) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-     Registers:=@Frame^.Registers[0];
+     Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     end else begin
      Registers^[Operands^[0]].Num:=sqrt(POCAGetNumberValue(Context,Registers^[Operands^[1]]));
     end;
@@ -49742,13 +49997,13 @@ begin
    popFCALLA:begin
     Frame:=POCASetupFunctionNormalArrayCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMCALLA:begin
     Frame:=POCASetupFunctionMethodArrayCall(Context,Frame,Opcode shr 8,Operands);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popFTAILCALLA:begin
@@ -49757,7 +50012,7 @@ begin
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popMTAILCALLA:begin
@@ -49766,7 +50021,7 @@ begin
     Frame:=@Context^.FrameStack[Context^.FrameTop-1];
     POCAMoveTailCallFrame(Context,Frame);
     Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
-    Registers:=@Frame^.Registers[0];
+    Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
     Context^.TemporarySavedObjectCount:=0;
    end;
    popARRAYCOMBINE:begin
@@ -49950,7 +50205,12 @@ begin
      Frame^.Locals:=Locals;
      Frame^.Obj:=Obj;
      Frame^.InstructionPointer:=0;
+{$ifdef POCARegisterWindows}
+     // The outermost frame starts at the bottom of the stack.
+     POCASetupRegisters(Context,Frame,CodePointer,0);
+{$else}
      POCASetupRegisters(Frame,CodePointer);
+{$endif}
      POCASetupFrameValues(Context,Frame,CodePointer);
     end;
     POCASetupArguments(Context,@Context^.FrameStack[0],CodePointer,Arguments,CountArguments);
