@@ -1410,13 +1410,16 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       // through a single base pointer.
       ChainIndex:TPOCAUInt32;
       HashChainIndex:TPOCAUInt32;
-      // For a symbol lookup, the two things that together pin down which hashes a
-      // search would walk: the frame's own locals and the closure whose namespace
-      // chain follows them. With both unchanged, the walk visits the same objects
-      // as when the slot was filled, so a single unchanged stamp on the hash that
-      // answered is enough to know the answer still stands.
-      LookupLocals:TPOCAValue;
-      LookupFunc:TPOCAValue;
+      // What the slot is anchored to, which differs by opcode:
+      //  - a symbol lookup pins down which hashes a search would walk, so it needs
+      //    both the frame's own locals (AnchorValue) and the closure whose
+      //    namespace chain follows them (AnchorFunc);
+      //  - a member write only needs the receiver (AnchorValue), whose identity
+      //    makes dereferencing it safe without a separate type check.
+      // With those unchanged, a single unchanged stamp on the hash that answered
+      // is enough to know the answer still stands.
+      AnchorValue:TPOCAValue;
+      AnchorFunc:TPOCAValue;
      end;
      PPOCAInlineCaches=^TPOCAInlineCaches;
      TPOCAInlineCaches=array[0..($7fffffff div sizeof(TPOCAInlineCache))-1] of TPOCAInlineCache;
@@ -30896,6 +30899,18 @@ var TokenList:PPOCAToken;
     Emit(OperandG);
     Emit(OperandH);
    end;
+   procedure EmitSetMember(OperandA,OperandB,OperandC:TPOCAUInt32);
+   begin
+    // Operands: object, key constant, value, the entity index for the slow path,
+    // and the inline cache slot belonging to this call site.
+    EmitImmediate(popSETMEMBER,5);
+    Emit(OperandA);
+    Emit(OperandB);
+    Emit(OperandC);
+    Emit($ffffffff);
+    Emit(CodeGenerator^.CountInlineCaches);
+    inc(CodeGenerator^.CountInlineCaches);
+   end;
    procedure EmitGetLocal(OperandA,OperandB:TPOCAUInt32);
    begin
     // Operands: destination, symbol constant, the chain position for the slow
@@ -32725,7 +32740,7 @@ var TokenList:PPOCAToken;
      AssignOp:=ProcessLeftValue(t,ConstantIndex,Reg1,Reg2,FrameValueLevel,FrameValueIndex,Symbol,false);
      case AssignOp and $ff of
       popSETMEMBER:begin
-       EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,Reg,$ffffffff);
+       EmitSetMember(Reg1,ConstantIndex,Reg);
       end;
       popSAFESETMEMBER:begin
        EmitOpcode(popSAFESETMEMBER,Reg1,ConstantIndex,Reg,$ffffffff);
@@ -32801,7 +32816,7 @@ var TokenList:PPOCAToken;
        Reg3:=GenerateExpression(t^.Right,-1,true);
        EmitOpcode(Op,result,result,Reg3);
        FreeRegister(Reg3);
-       EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+       EmitSetMember(Reg1,ConstantIndex,result);
       end;
       popSAFESETMEMBER:begin
        if OutReg<0 then begin
@@ -33016,7 +33031,7 @@ var TokenList:PPOCAToken;
        end;
        FixTargetImmediate(JumpTrue);
        CombineCurrentRegisters(Registers);
-       EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+       EmitSetMember(Reg1,ConstantIndex,result);
       end;
       popSAFESETMEMBER:begin
        if OutReg<0 then begin
@@ -33385,7 +33400,7 @@ var TokenList:PPOCAToken;
        end;
        FixTargetImmediate(JumpTrue);
        CombineCurrentRegisters(Registers);
-       EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+       EmitSetMember(Reg1,ConstantIndex,result);
       end;
       popSAFESETMEMBER:begin
        if OutReg<0 then begin
@@ -33761,7 +33776,7 @@ var TokenList:PPOCAToken;
        end;
        FixTargetImmediate(JumpTrue);
        CombineCurrentRegisters(Registers);
-       EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+       EmitSetMember(Reg1,ConstantIndex,result);
       end;
       popSAFESETMEMBER:begin
        if OutReg<0 then begin
@@ -34122,7 +34137,7 @@ var TokenList:PPOCAToken;
        EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,Reg2,result);
-       EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,Reg2,$ffffffff);
+       EmitSetMember(Reg1,ConstantIndex,Reg2);
        FreeRegister(Reg2);
       end;
       popSAFESETMEMBER:begin
@@ -34315,7 +34330,7 @@ var TokenList:PPOCAToken;
        EmitGetMember(result,Reg1,ConstantIndex,$ffffffff,$ffffffff);
        SetRegisterTypeKind(result,tkUNKNOWN);
        EmitOpcode(Op,result,result);
-       EmitOpcode(popSETMEMBER,Reg1,ConstantIndex,result,$ffffffff);
+       EmitSetMember(Reg1,ConstantIndex,result);
       end;
       popSAFESETMEMBER:begin
        if OutReg<0 then begin
@@ -40103,11 +40118,11 @@ var Func:PPOCAFunction;
 begin
 
  if ((not POCAMultiThreaded) and (InlineCache^.Version<>0)) and
-    (Frame^.Locals.CastedUInt64=InlineCache^.LookupLocals.CastedUInt64) then begin
+    (Frame^.Locals.CastedUInt64=InlineCache^.AnchorValue.CastedUInt64) then begin
   if Frame^.Locals.CastedUInt64=POCAValueNullCastedUInt64 then begin
    // No locals hash in front of the chain, so the first namespace answered. Same
    // closure means the same chain: a namespace never changes after binding.
-   if Frame^.Func.CastedUInt64=InlineCache^.LookupFunc.CastedUInt64 then begin
+   if Frame^.Func.CastedUInt64=InlineCache^.AnchorFunc.CastedUInt64 then begin
     Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
     NamespaceHash:=PPOCAHash(POCAGetValueReferencePointer(Func^.Namespace));
    end else begin
@@ -40156,16 +40171,16 @@ begin
    InlineCache^.Version:=0;
   end;
  end else if (InlineCache^.Version<>0) and
-             ((InlineCache^.LookupLocals.CastedUInt64<>Frame^.Locals.CastedUInt64) or
-              (InlineCache^.LookupFunc.CastedUInt64<>Frame^.Func.CastedUInt64)) then begin
+             ((InlineCache^.AnchorValue.CastedUInt64<>Frame^.Locals.CastedUInt64) or
+              (InlineCache^.AnchorFunc.CastedUInt64<>Frame^.Func.CastedUInt64)) then begin
   // The call site sees a different closure than it did last time, so a slot here
   // would only be overwritten again on the very next pass. Give up on it once
   // rather than keep paying for writes that can never settle.
   InlineCache^.Version:=0;
   InlineCache^.HashChainIndex:=POCAInlineCacheGivenUp;
  end else if InlineCache^.HashChainIndex<>POCAInlineCacheGivenUp then begin
-  InlineCache^.LookupLocals:=Frame^.Locals;
-  InlineCache^.LookupFunc:=Frame^.Func;
+  InlineCache^.AnchorValue:=Frame^.Locals;
+  InlineCache^.AnchorFunc:=Frame^.Func;
   InlineCache^.Entity:=Entity;
   InlineCache^.Version:=NamespaceHash^.Version;
  end;
@@ -40342,6 +40357,90 @@ end;
 procedure POCARunSetMember(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32); {$ifdef caninline}inline;{$endif}
 begin
  POCASetMember(Context,Obj,Fld,Value,Constant,CacheIndex,true);
+end;
+
+// Writes a member through the call site's inline cache, the counterpart of
+// POCARunGetMemberCached. The version stamp settles everything the long winded
+// check of the slow path settles: that the receiver is the same hash in the same
+// state, so the recorded entity still belongs to this key, that no set handler has
+// been installed in the meantime, and that the entity has not been deleted or
+// moved. All of those restamp the hash.
+//
+// A plain overwrite deliberately does not restamp, which is what lets an object
+// that keeps writing its own fields in a loop hit this every time.
+procedure POCARunSetMemberCached(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;const InlineCache:PPOCAInlineCache);
+var HashInstance:PPOCAHash;
+    HashRec:PPOCAHashRecord;
+    Entity:TPOCAInt32;
+begin
+
+ if POCAMultiThreaded or not POCAIsValueHash(Obj) then begin
+  POCASetMember(Context,Obj,Fld,Value,false,InlineCache^.ChainIndex,true);
+  exit;
+ end;
+
+ HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Obj));
+
+ if (Obj.CastedUInt64=InlineCache^.AnchorValue.CastedUInt64) and (InlineCache^.Version=HashInstance^.Version) then begin
+  InlineCache^.Entity^.Value:=Value;
+  TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+  exit;
+ end;
+
+ // Second level, the same one the emitted code hands prototyped receivers over
+ // for: the position within this object's own record. That is a property of the
+ // layout rather than of the object, so it still carries when a loop walks a
+ // thousand instances of one class, where the stamp above cannot match.
+ if not (((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and
+         POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoSET])) then begin
+  HashRec:=HashInstance^.HashRecord;
+  if assigned(HashRec) and not assigned(HashRec^.Events) then begin
+   Entity:=InlineCache^.ChainIndex;
+   if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and
+      (HashRec^.Entities^[Entity].Key.CastedInt64=Fld.CastedInt64) then begin
+    POCAHashEntitySetValue(HashInstance,HashRec,Entity,Value);
+    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
+    // Only a receiver without a prototype gets a stamp recorded. A class instance
+    // is one of many, so a slot keyed on the object itself could never settle and
+    // the level above is the one that carries there.
+    if (not assigned(HashInstance^.Prototype)) and not HashRec^.Entities^[Entity].Constant then begin
+     InlineCache^.AnchorValue:=Obj;
+     InlineCache^.Entity:=@HashRec^.Entities^[Entity];
+     InlineCache^.Version:=HashInstance^.Version;
+    end;
+    exit;
+   end;
+  end;
+ end;
+
+ POCASetMember(Context,Obj,Fld,Value,false,InlineCache^.ChainIndex,true);
+
+ // Record only what the guard can vouch for, which is the same set of conditions
+ // the fast path of POCAHashSetCache insists on.
+ InlineCache^.Version:=0;
+ if assigned(HashInstance^.Prototype) then begin
+  exit;
+ end;
+ if ((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and
+    POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoSET]) then begin
+  exit;
+ end;
+ HashRec:=HashInstance^.HashRecord;
+ if (not assigned(HashRec)) or assigned(HashRec^.Events) then begin
+  exit;
+ end;
+ Entity:=InlineCache^.ChainIndex;
+ if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and
+    (HashRec^.Entities^[Entity].Key.CastedInt64=Fld.CastedInt64) then begin
+  // A constant entry is left out, so that writing to one keeps taking the path
+  // that decides what to do about it.
+  if not HashRec^.Entities^[Entity].Constant then begin
+   InlineCache^.AnchorValue:=Obj;
+   InlineCache^.Entity:=@HashRec^.Entities^[Entity];
+   InlineCache^.Version:=HashInstance^.Version;
+  end;
+ end;
+
 end;
 
 procedure POCARunSafeSetMember(Context:PPOCAContext;const Obj,Fld,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32); {$ifdef caninline}inline;{$endif}
@@ -44969,36 +45068,21 @@ begin
  POCARunGetMemberCached(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],@Code^.InlineCaches^[Operands^[5]]);
 end;
 
-procedure POCAJITOpSETMEMBER(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
-var HashInstance:PPOCAHash;
-    HashRec:PPOCAHashRecord;
-    Entity:TPOCAInt32;
+// A thin wrapper with plainly scalar parameters, so that the emitted code does not
+// have to depend on how the compiler decides to pass a record parameter, which for
+// a const parameter of pointer size is not something to guess at.
+procedure POCAJITWriteBarrier(Parent:TPOCAPointer;Value:TPOCAUInt64);
+var v:TPOCAValue;
 begin
- // Fast path for overwriting an already existing key of a plain hash, the
- // counterpart of the one in POCAJITOpGETMEMBER. The same check sits at the top
- // of POCAHashPutCache, but only after POCARunSetMember, POCASetMember and
- // POCAHashSetCache have been walked through. Hashes carrying events are left
- // to the slow path, as is the case where the key has to be created.
- if not POCAMultiThreaded then begin
-  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Registers^[Operands^[0]]));
-  // Mirrors the condition of POCAHashSetCache: not merely "has an events hash",
-  // which every class instance does, but "has a callable pmoSET handler".
-  if POCAIsValueHash(Registers^[Operands^[0]]) and
-     not (((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and
-          POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoSET])) then begin
-   HashRec:=HashInstance^.HashRecord;
-   if assigned(HashRec) and not assigned(HashRec^.Events) then begin
-    Entity:=Operands^[3];
-    if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and
-       (HashRec^.Entities^[Entity].Key.CastedInt64=Code^.Constants^[Operands^[1]].CastedInt64) then begin
-     POCAHashEntitySetValue(HashInstance,HashRec,Entity,Registers^[Operands^[2]]);
-     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Registers^[Operands^[2]]);
-     exit;
-    end;
-   end;
-  end;
- end;
- POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
+ v.CastedUInt64:=Value;
+ TPOCAGarbageCollector.WriteBarrier(PPOCAObject(Parent),v);
+end;
+
+procedure POCAJITOpSETMEMBER(Context:PPOCAContext;Registers:PPOCAValues;Operands:PPOCAUInt32Array;Code:PPOCACode);
+begin
+ // The emitted code tries the inline cache itself and only lands here when the
+ // version stamp did not match, so this does the full write and refills the slot.
+ POCARunSetMemberCached(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],@Code^.InlineCaches^[Operands^[4]]);
 end;
 
 // Decides what an emitted call site does after the callee frame has been set up.
@@ -45956,7 +46040,7 @@ var Fixups:TFixups;
   Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Locals]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Locals)));
   Add(#$48#$3b#$82); // cmp rax,qword ptr [rdx+TPOCAInlineCache.LookupLocals]
-  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.LookupLocals)));
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.AnchorValue)));
   Slow[1]:=AddLocalJump(#$0f#$85); // jne slow (different locals means a different walk)
 
   Add(#$48#$b9); // mov rcx,POCAValueNullCastedUInt64
@@ -45975,7 +46059,7 @@ var Fixups:TFixups;
   Add(#$49#$8b#$85); // mov rax,qword ptr [r13+TPOCAFrame.Func]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAFrame(nil)^.Func)));
   Add(#$48#$3b#$82); // cmp rax,qword ptr [rdx+TPOCAInlineCache.LookupFunc]
-  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.LookupFunc)));
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.AnchorFunc)));
   Slow[2]:=AddLocalJump(#$0f#$85); // jne slow (a different closure searches a different chain)
 
   Add(#$48#$b9); // mov rcx,pointer mask (strip signal bits and type tag)
@@ -46007,6 +46091,87 @@ var Fixups:TFixups;
   end;
   AddCallRuntimeHelper(@POCAJITOpGETLOCAL,true,true);
   FixLocalJump(Index);
+ end;
+ // Writes one member without leaving native code, through the call site's inline
+ // cache. The version stamp stands in for the whole chain of checks the helper
+ // would otherwise walk, and the write barrier is only reached when the value
+ // being stored is an object at all, which a field holding a number never is.
+ procedure AddInlineSetMember;
+ var Slow:array[0..2] of TPOCAInt32;
+     Done:array[0..1] of TPOCAInt32;
+     Index:TPOCAInt32;
+ begin
+  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
+  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
+  Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
+
+  // One comparison against the receiver recorded in the slot stands in for the
+  // type checks as well: the slot is only ever filled from a hash without a
+  // prototype, so a matching receiver is known to be one, and dereferencing it is
+  // safe because the register holding it keeps it alive. A class instance, which
+  // a call site sees in many copies, fails here after three instructions and goes
+  // to the helper, which keys on the position in the record instead.
+  Add(#$48#$ba); // mov rdx,@Code^.InlineCaches^[Operands^[4]] (this call site's slot)
+  AddQWordPointer(@Code^.InlineCaches^[Operands^[4]]);
+  Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+Obj]
+  AddDWord(Operands^[0]*sizeof(double));
+  Add(#$48#$3b#$82); // cmp rax,qword ptr [rdx+TPOCAInlineCache.AnchorValue]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.AnchorValue)));
+  Slow[1]:=AddLocalJump(#$0f#$85); // jne slow
+
+  Add(#$48#$b9); // mov rcx,pointer mask (strip signal bits and type tag)
+  AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
+  Add(#$48#$21#$c8); // and rax,rcx
+  Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Version]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Version)));
+  Add(#$48#$3b#$88); // cmp rcx,qword ptr [rax+TPOCAHash.Version]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Version)));
+  Slow[2]:=AddLocalJump(#$0f#$85); // jne slow (a cleared slot never matches, stamps start at one)
+
+  Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Entity]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Entity)));
+  Add(#$48#$8b#$93); // mov rdx,qword ptr [rbx+Value]
+  AddDWord(Operands^[2]*sizeof(double));
+  Add(#$48#$89#$91); // mov qword ptr [rcx+TPOCAHashEntity.Value],rdx
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHashEntity(nil)^.Value)));
+
+  // Storing a number cannot make anything reachable, so the barrier is skipped
+  // without leaving native code, which is the common case for a field of numbers.
+  Add(#$49#$89#$d0); // mov r8,rdx
+  Add(#$49#$c1#$e8#$30); // shr r8,48
+  Add(#$41#$81#$f8); // cmp r8d,0000ffffh
+  AddDWord($0000ffff);
+  Done[0]:=AddLocalJump(#$0f#$85); // jne behind, no barrier needed
+
+  // RAX still holds the receiver and RDX the stored value, which is what the
+  // barrier wrapper takes.
+{$ifdef windows}
+  Add(#$48#$83#$ec#$28); // sub rsp,40 (shadow space plus realignment)
+  Add(#$48#$89#$c1); // mov rcx,rax (Parent)
+  // RDX already holds the value
+{$else}
+  Add(#$48#$83#$ec#$08); // sub rsp,8 (realigns rsp to 16 bytes at the call)
+  Add(#$48#$89#$c7); // mov rdi,rax (Parent)
+  Add(#$48#$89#$d6); // mov rsi,rdx (Value)
+{$endif}
+  Add(#$48#$b8); // mov rax,imm64 (POCAJITWriteBarrier)
+  AddQWordPointer(@POCAJITWriteBarrier);
+  Add(#$ff#$d0); // call rax
+{$ifdef windows}
+  Add(#$48#$83#$c4#$28); // add rsp,40
+{$else}
+  Add(#$48#$83#$c4#$08); // add rsp,8
+{$endif}
+  Done[1]:=AddLocalJump(#$e9); // jmp behind the miss path
+
+  for Index:=0 to 2 do begin
+   FixLocalJump(Slow[Index]);
+  end;
+  AddCallRuntimeHelper(@POCAJITOpSETMEMBER,false,true);
+  for Index:=0 to 1 do begin
+   FixLocalJump(Done[Index]);
+  end;
  end;
  // Reads one member without leaving native code, through the call site's inline
  // cache. Every case it does not cover, a miss included, falls through to the
@@ -46602,7 +46767,7 @@ begin
     end;
 
     popSETMEMBER:begin
-     AddCallRuntimeHelper(@POCAJITOpSETMEMBER,false,true);
+     AddInlineSetMember;
     end;
 
     popGETLOCAL:begin
@@ -48798,7 +48963,7 @@ begin
     POCARunGetMemberCached(Context,Registers^[Operands^[1]],Code^.Constants^[Operands^[2]],Registers^[Operands^[0]],@Code^.InlineCaches^[Operands^[5]]);
    end;
    popSETMEMBER:begin
-    POCARunSetMember(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],false,Operands^[3]);
+    POCARunSetMemberCached(Context,Registers^[Operands^[0]],Code^.Constants^[Operands^[1]],Registers^[Operands^[2]],@Code^.InlineCaches^[Operands^[4]]);
    end;
    popGETLOCAL:begin
     POCARunGetLocalCached(Context,Frame,Code^.Constants^[Operands^[1]],Registers^[Operands^[0]],Operands^[2],@Code^.InlineCaches^[Operands^[3]]);
