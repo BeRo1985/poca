@@ -560,10 +560,14 @@ const POCAVersion='2026-07-13-00-59-0000';
       popPUSHLOCALVALUELEVEL=169;
       popPOPLOCALVALUELEVEL=170;
       popMCALLINTRINSIC=171;
-      popCOUNT=172;
+      popN_POSTINC=172;
+      popN_POSTDEC=173;
+      popCOUNT=174;
 {$else}
       popMCALLINTRINSIC=168;
-      popCOUNT=169;
+      popN_POSTINC=169;
+      popN_POSTDEC=170;
+      popCOUNT=171;
 {$endif}
 
       // Intrinsics: a method call on Math whose callee turns out to still be the
@@ -34379,11 +34383,24 @@ var TokenList:PPOCAToken;
        end else begin
         result:=OutReg;
        end;
-       EmitOpcode(popCOPY,result,Reg1);
        SetRegisterTypeKind(result,GetRegisterTypeKind(Reg1));
        if GetRegisterTypeKind(Reg1)=tkNUMBER then begin
+{$ifdef POCAHasJIT}
+        EmitOpcode(popCOPY,result,Reg1);
         EmitOpcode(GetNumberOp(Op),Reg1,Reg1);
+{$else}
+        // Nothing between these two emissions can bind a jump target, so they are
+        // fused into a single opcode and one dispatch disappears. Only done without
+        // the JIT, which would otherwise have to hand the fused opcode back to the
+        // interpreter and lose more than the fusion gains.
+        if Op=popINC then begin
+         EmitOpcode(popN_POSTINC,result,Reg1);
+        end else begin
+         EmitOpcode(popN_POSTDEC,result,Reg1);
+        end;
+{$endif}
        end else begin
+        EmitOpcode(popCOPY,result,Reg1);
         EmitOpcode(Op,Reg1,Reg1);
        end;
       end;
@@ -46384,6 +46401,17 @@ begin
    end;
    popN_INC:begin
     Registers^[Operands^[0]].Num:=Registers^[Operands^[1]].Num+1.0;
+   end;
+   popN_POSTINC:begin
+    // Fused postfix increment: the copy of the old value and the increment
+    // itself used to be two opcodes, which cost two dispatches for what is one
+    // of the most frequent things a loop does.
+    Registers^[Operands^[0]]:=Registers^[Operands^[1]];
+    Registers^[Operands^[1]].Num:=Registers^[Operands^[1]].Num+1.0;
+   end;
+   popN_POSTDEC:begin
+    Registers^[Operands^[0]]:=Registers^[Operands^[1]];
+    Registers^[Operands^[1]].Num:=Registers^[Operands^[1]].Num-1.0;
    end;
    popN_BAND:begin
     Registers^[Operands^[0]].Num:=TPOCAInt64(System.trunc(Registers^[Operands^[1]].Num)) and TPOCAInt64(System.trunc(Registers^[Operands^[2]].Num));
