@@ -6527,7 +6527,7 @@ end;
 function POCAGetValueType(const v:TPOCAValue):TPOCAInt32; {$ifdef caninline}inline;{$endif}
 begin
  // Straight out of the tag, no dereferencing: a tag of zero is pvtNULL anyway.
- if {$ifdef cpu64}(TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask{$else}v.ReferenceTag=POCAValueReferenceTag{$endif} then begin
+ if {$ifdef cpu64}(v.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask{$else}v.ReferenceTag=POCAValueReferenceTag{$endif} then begin
   result:=TPOCAInt32(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueTypeTagMask);
  end else begin
   result:=pvtNUMBER;
@@ -6562,7 +6562,7 @@ end;
 procedure POCASetValueNumber(out v:TPOCAValue;const n:double); {$ifdef caninline}inline;{$endif}
 begin
 {$ifdef cpu64}
- TPOCAUInt64(TPOCAPointer(@v.Num)^):=TPOCAUInt64(TPOCAPointer(@n)^);
+ v.CastedUInt64:=TPOCAUInt64(TPOCAPointer(@n)^);
 {$else}
 {v.ReferenceTag:=not POCAValueReferenceTag;
  v.Num:=n;(*{}
@@ -6572,28 +6572,28 @@ end;
 
 function POCAIsValueReference(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}(TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask{$else}v.ReferenceTag=POCAValueReferenceTag{$endif};
+ result:={$ifdef cpu64}(v.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask{$else}v.ReferenceTag=POCAValueReferenceTag{$endif};
 end;
 
 function POCAIsValueNumber(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}(TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)<>POCAValueReferenceSignalMask{$else}v.ReferenceTag<>POCAValueReferenceTag{$endif};
+ result:={$ifdef cpu64}(v.CastedUInt64 and POCAValueReferenceSignalMask)<>POCAValueReferenceSignalMask{$else}v.ReferenceTag<>POCAValueReferenceTag{$endif};
 end;
 
 function POCAIsValueObject(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(v.Reference.Ptr){$endif};
+ result:={$ifdef cpu64}((v.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(v.Reference.Ptr){$endif};
 end;
 
 function POCAIsValueObjectAndGetReferencePointer(const v:TPOCAValue;var p):boolean;
 begin
  TPOCAPointer(p):=POCAGetValueReferencePointer(v);
- result:={$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(p)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(TPOCAPointer(p)){$endif};
+ result:={$ifdef cpu64}((v.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and assigned(TPOCAPointer(p)){$else}(v.ReferenceTag=POCAValueReferenceTag) and assigned(TPOCAPointer(p)){$endif};
 end;
 
 function POCAIsValueNull(const v:TPOCAValue):boolean; {$ifdef caninline}inline;{$endif}
 begin
- result:={$ifdef cpu64}((TPOCAUInt64(TPOCAPointer(@v.Num)^) and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and not assigned(TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask)){$else}(v.ReferenceTag=POCAValueReferenceTag) and not assigned(v.Reference.Ptr){$endif};
+ result:={$ifdef cpu64}((v.CastedUInt64 and POCAValueReferenceSignalMask)=POCAValueReferenceSignalMask) and not assigned(TPOCAPointer(TPOCAPtrUInt(v.Reference.Ptr) and POCAValueReferenceMask)){$else}(v.ReferenceTag=POCAValueReferenceTag) and not assigned(v.Reference.Ptr){$endif};
 end;
 
 function POCAIsValueReferenceType(const v:TPOCAValue;t:TPOCAInt32):boolean; {$ifdef caninline}inline;{$endif}
