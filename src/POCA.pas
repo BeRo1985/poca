@@ -34385,20 +34385,14 @@ var TokenList:PPOCAToken;
        end;
        SetRegisterTypeKind(result,GetRegisterTypeKind(Reg1));
        if GetRegisterTypeKind(Reg1)=tkNUMBER then begin
-{$ifdef POCAHasJIT}
-        EmitOpcode(popCOPY,result,Reg1);
-        EmitOpcode(GetNumberOp(Op),Reg1,Reg1);
-{$else}
         // Nothing between these two emissions can bind a jump target, so they are
-        // fused into a single opcode and one dispatch disappears. Only done without
-        // the JIT, which would otherwise have to hand the fused opcode back to the
-        // interpreter and lose more than the fusion gains.
+        // fused into a single opcode and one dispatch disappears. Both engines
+        // understand the fused opcode, so this needs no build time distinction.
         if Op=popINC then begin
          EmitOpcode(popN_POSTINC,result,Reg1);
         end else begin
          EmitOpcode(popN_POSTDEC,result,Reg1);
         end;
-{$endif}
        end else begin
         EmitOpcode(popCOPY,result,Reg1);
         EmitOpcode(Op,Reg1,Reg1);
@@ -44565,6 +44559,68 @@ begin
 
      Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
      AddDWord(Operands^[0]*sizeof(double));
+    end;
+
+    popN_POSTINC:begin
+     // Fused postfix increment. The old value goes to the destination register
+     // first and the source is then incremented in place, so both halves share
+     // the same xmm register and the copy costs one extra store.
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+
+{$ifdef x8664JITUseRIP}
+     Add(#$f2#$0f#$10#$0d); // movsd xmm1,qword ptr [rip+POCADoubleOne]
+     if CountFixups>=length(Fixups) then begin
+      SetLength(Fixups,CountFixups+4096);
+     end;
+     Fixups[CountFixups].Kind:=fkRIPREL;
+     Fixups[CountFixups].Ofs:=CodeBufferLen;
+     Fixups[CountFixups].Dest:=@POCADoubleOne;
+     inc(CountFixups);
+     Add(#$00#$00#$00#$00); // Placeholder for RIP-relative offset (needs fixup)
+{$else}
+     Add(#$48#$b8); // mov rax,POCADoubleOne
+     AddQWordPointer(@POCADoubleOne);
+     Add(#$f2#$0f#$10#$08); // movsd xmm1,qword ptr [rax]
+{$endif}
+
+     Add(#$f2#$0f#$58#$c1); // addsd xmm0,xmm1
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[1]*sizeof(double));
+    end;
+
+    popN_POSTDEC:begin
+     // Fused postfix decrement, see popN_POSTINC.
+     Add(#$f2#$0f#$10#$83); // movsd xmm0,qword ptr [rbx+RegisterOfs]
+     AddDWord(Operands^[1]*sizeof(double));
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[0]*sizeof(double));
+
+{$ifdef x8664JITUseRIP}
+     Add(#$f2#$0f#$10#$0d); // movsd xmm1,qword ptr [rip+POCADoubleOne]
+     if CountFixups>=length(Fixups) then begin
+      SetLength(Fixups,CountFixups+4096);
+     end;
+     Fixups[CountFixups].Kind:=fkRIPREL;
+     Fixups[CountFixups].Ofs:=CodeBufferLen;
+     Fixups[CountFixups].Dest:=@POCADoubleOne;
+     inc(CountFixups);
+     Add(#$00#$00#$00#$00); // Placeholder for RIP-relative offset (needs fixup)
+{$else}
+     Add(#$48#$b8); // mov rax,POCADoubleOne
+     AddQWordPointer(@POCADoubleOne);
+     Add(#$f2#$0f#$10#$08); // movsd xmm1,qword ptr [rax]
+{$endif}
+
+     Add(#$f2#$0f#$5c#$c1); // subsd xmm0,xmm1
+
+     Add(#$f2#$0f#$11#$83); // movsd qword ptr [rbx+RegisterOfs],xmm0
+     AddDWord(Operands^[1]*sizeof(double));
     end;
 
     popN_BAND:begin
