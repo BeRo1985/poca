@@ -12971,19 +12971,28 @@ begin
  Hash^.Version:=POCAHashNextVersion;
 end;
 
-function POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant,Invalidate:Boolean):Boolean;
+// ConstantViolation reports back that an existing entry refused the write because
+// it is marked constant. It cannot be reported from here, since raising needs a
+// context, so the callers that have one turn it into a runtime error.
+function POCAHashPut(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant,Invalidate:Boolean;out ConstantViolation:Boolean):Boolean;
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
 
  result:=false;
+ ConstantViolation:=false;
 
  Cell:=POCAHashFindCellForWrite(HashRec,Key,POCAValueHash(Key));
  if Cell<>CELL_INVALID then begin
 
   Entity:=HashRec^.CellToEntityIndex^[Cell];
   if Entity>=0 then begin
-  
+
+   if HashRec^.Entities^[Entity].Constant then begin
+    ConstantViolation:=true;
+    exit;
+   end;
+
    POCAHashEntitySetValue(Hash,HashRec,Entity,Value);
    TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
    if assigned(HashRec^.Events) then begin
@@ -13026,16 +13035,22 @@ begin
 end;
 
 // Caller holds lock 
-function POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):Boolean;
+function POCAHashPutCache(Hash:PPOCAHash;HashRec:PPOCAHashRecord;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32;out ConstantViolation:Boolean):Boolean;
 var Entity:TPOCAInt32;
     Cell:TPOCAUInt32;
 begin
 
  result:=false;
+ ConstantViolation:=false;
 
  Entity:=CacheIndex;
 
  if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
+
+  if HashRec^.Entities^[Entity].Constant then begin
+   ConstantViolation:=true;
+   exit;
+  end;
 
   POCAHashEntitySetValue(Hash,HashRec,Entity,Value);
   TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
@@ -13052,6 +13067,11 @@ begin
 
    Entity:=HashRec^.CellToEntityIndex^[Cell];
    if Entity>=0 then begin
+
+    if HashRec^.Entities^[Entity].Constant then begin
+     ConstantViolation:=true;
+     exit;
+    end;
 
     TPasMPInterlocked.Exchange(TPOCAInt32(CacheIndex),Entity);
     POCAHashEntitySetValue(Hash,HashRec,Entity,Value);
@@ -13098,6 +13118,7 @@ function POCAHashResize(Instance:PPOCAInstance;Hash:PPOCAHash;Events:TPOCABool32
 var HashRec:PPOCAHashRecord;
     LogSize,Size,Cell,Entity:TPOCAInt32;
     i,j:TPOCAUInt32;
+    IgnoredConstantViolation:Boolean;
 begin
  // Entities are reallocated respectively dropped here, so any cached entity
  // pointer of a call site becomes stale.
@@ -13154,7 +13175,9 @@ begin
    if Cell>=0 then begin
     Entity:=HashRec^.CellToEntityIndex^[Cell];
     if Entity>=0 then begin
-     POCAHashPut(Hash,result,HashRec^.Entities^[Entity].Key,HashRec^.Entities^[Entity].Value,HashRec^.Entities^[Entity].Constant,false);
+     // Into a fresh record, so nothing can be overwritten and the refusal flag is
+     // of no interest here.
+     POCAHashPut(Hash,result,HashRec^.Entities^[Entity].Key,HashRec^.Entities^[Entity].Value,HashRec^.Entities^[Entity].Constant,false,IgnoredConstantViolation);
     end;
    end;
    inc(i);
@@ -13243,6 +13266,9 @@ function POCAHashRawSet(const Hash,Key,Value:TPOCAValue;const Constant:Boolean):
 var Iteration:TPOCAInt32;
     HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
+    // No context here to raise from, so a refused write simply reports back as a
+    // false result, which is what this raw entry point already means by it.
+    ConstantViolation:Boolean;
 {$ifdef POCAThreadSafeHash}
     Locked:Boolean;
 {$endif}
@@ -13263,7 +13289,7 @@ begin
    end; 
    if assigned(HashRec) then begin
     for Iteration:=0 to 1 do begin
-     if POCAHashPut(HashInstance,HashRec,Key,Value,Constant,true) then begin
+     if POCAHashPut(HashInstance,HashRec,Key,Value,Constant,true,ConstantViolation) then begin
       result:=true;
       break;
      end else begin
@@ -13658,7 +13684,13 @@ begin
         POCARuntimeError(Context,'Constant write access attempt');
        end else begin
         POCAHashEntitySetValue(HashInstance,HashRec,Entity,Value);
-        HashRec^.Entities^[Entity].Constant:=Constant;
+        if HashRec^.Entities^[Entity].Constant<>Constant then begin
+         // Turning an existing entry constant, or back, is a change that a call
+         // site holding a cached write has to notice. The value write itself
+         // deliberately does not stamp, so it has to happen here.
+         HashRec^.Entities^[Entity].Constant:=Constant;
+         POCAHashBumpVersion(HashInstance);
+        end;
         TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
         if assigned(HashRec^.Events) then begin
          POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
@@ -13718,7 +13750,13 @@ begin
        POCARuntimeError(Context,'Constant write access attempt');
       end else begin
        POCAHashEntitySetValue(HashInstance,HashRec,Entity,Value);
-       HashRec^.Entities^[Entity].Constant:=Constant;
+       if HashRec^.Entities^[Entity].Constant<>Constant then begin
+        // Turning an existing entry constant, or back, is a change that a call
+        // site holding a cached write has to notice. The value write itself
+        // deliberately does not stamp, so it has to happen here.
+        HashRec^.Entities^[Entity].Constant:=Constant;
+        POCAHashBumpVersion(HashInstance);
+       end;
        TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
        if assigned(HashRec^.Events) then begin
         POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
@@ -13735,7 +13773,13 @@ begin
          POCARuntimeError(Context,'Constant write access attempt');
         end else begin
          POCAHashEntitySetValue(HashInstance,HashRec,Entity,Value);
-         HashRec^.Entities^[Entity].Constant:=Constant;
+         if HashRec^.Entities^[Entity].Constant<>Constant then begin
+          // Turning an existing entry constant, or back, is a change that a call
+          // site holding a cached write has to notice. The value write itself
+          // deliberately does not stamp, so it has to happen here.
+          HashRec^.Entities^[Entity].Constant:=Constant;
+          POCAHashBumpVersion(HashInstance);
+         end;
          TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
          if assigned(HashRec^.Events) then begin
           POCAHashPutHashEvents(HashInstance,HashRec,Key,Value);
@@ -14147,11 +14191,13 @@ function POCAHashSet(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const 
 var Iteration:TPOCAInt32;
     HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
+    ConstantViolation:Boolean;
 {$ifdef POCAThreadSafeHash}
     Locked:Boolean;
 {$endif}
 begin
  result:=false;
+ ConstantViolation:=false;
  if POCAIsValueHash(Hash) then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   if ((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoSET]) then begin
@@ -14170,8 +14216,12 @@ begin
     end; 
     if assigned(HashRec) then begin
      for Iteration:=0 to 1 do begin
-      if POCAHashPut(HashInstance,HashRec,Key,Value,Constant,true) then begin
+      if POCAHashPut(HashInstance,HashRec,Key,Value,Constant,true,ConstantViolation) then begin
        result:=true;
+       break;
+      end else if ConstantViolation then begin
+       // Refused rather than out of room, so growing and trying again would change
+       // nothing.
        break;
       end else begin
        HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
@@ -14187,25 +14237,32 @@ begin
 {$endif}
   end;
  end;
+ if ConstantViolation then begin
+  // Raised outside the lock, once the write has been refused.
+  POCARuntimeError(Context,'Constant write access attempt');
+ end;
 end;
 
-function POCAHashSetCacheUnlocked(const HashInstance:PPOCAHash;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):boolean;
+function POCAHashSetCacheUnlocked(const HashInstance:PPOCAHash;const Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32;out ConstantViolation:Boolean):boolean;
 var HashRec:PPOCAHashRecord;
 begin
  result:=false;
+ ConstantViolation:=false;
  HashRec:=HashInstance^.HashRecord;
  while (not assigned(HashRec)) or (HashRec^.RealSize>=(1 shl HashRec^.LogSize)) do begin
   HashRec:=POCAHashResize(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance,false);
  end;
  if assigned(HashRec) then begin
-  result:=POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex);
+  result:=POCAHashPutCache(HashInstance,HashRec,Key,Value,Constant,CacheIndex,ConstantViolation);
  end;
 end;
 
 function POCAHashSetCache(Context:PPOCAContext;const Hash,Key,Value:TPOCAValue;const Constant:Boolean;var CacheIndex:TPOCAUInt32):boolean;
 var HashInstance:PPOCAHash;
+    ConstantViolation:Boolean;
 begin
  result:=false;
+ ConstantViolation:=false;
  if POCAIsValueHash(Hash) then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   if ((assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord)) and assigned(HashInstance^.Events^.HashRecord^.Events)) and POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoSET]) then begin
@@ -14215,17 +14272,22 @@ begin
    if POCAMultiThreaded then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
     try
-     result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex);
+     result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex,ConstantViolation);
     finally
      TPasMPMultipleReaderSingleWriterSpinLock.ReleaseWrite(HashInstance^.Lock);
     end;
    end else begin
-    result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex);
+    result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex,ConstantViolation);
    end;
 {$else}
-   result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex);
+   result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex,ConstantViolation);
 {$endif}
   end;
+ end;
+ if ConstantViolation then begin
+  // Raised outside the lock above, and only once the write has been refused, so
+  // that a member marked constant by the host cannot be overwritten from a script.
+  POCARuntimeError(Context,'Constant write access attempt');
  end;
 end;
 
@@ -40396,8 +40458,13 @@ begin
   HashRec:=HashInstance^.HashRecord;
   if assigned(HashRec) and not assigned(HashRec^.Events) then begin
    Entity:=InlineCache^.ChainIndex;
-   if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and
-      (HashRec^.Entities^[Entity].Key.CastedInt64=Fld.CastedInt64) then begin
+   // A constant entry is handed to the full path below, which is the one that
+   // reports the attempt. Leaving it out here is what keeps this level and the
+   // interpreter in step; the stamped level above cannot see one at all, since a
+   // constant entry is never recorded and turning one constant restamps.
+   if (((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and
+       (HashRec^.Entities^[Entity].Key.CastedInt64=Fld.CastedInt64)) and
+      not HashRec^.Entities^[Entity].Constant then begin
     POCAHashEntitySetValue(HashInstance,HashRec,Entity,Value);
     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),Value);
     // Only a receiver without a prototype gets a stamp recorded. A class instance
