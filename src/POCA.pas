@@ -12249,10 +12249,31 @@ end;
 procedure POCAHashRebuildCache(Hash:PPOCAHash);
 var CountItems:TPOCAInt32;
     Cachable:boolean;
- procedure Process(CurrentHash:PPOCAHash);
+ function IsShadowed(const First,Level:PPOCAHash;const Key:TPOCAValue):boolean;
  var Current:PPOCAHash;
+     HashRec:PPOCAHashRecord;
+     Cell:TPOCAUInt32;
+ begin
+  result:=false;
+  Current:=First;
+  while assigned(Current) and (Current<>Level) do begin
+   HashRec:=Current^.HashRecord;
+   if assigned(HashRec) and (HashRec^.RealSize>0) then begin
+    Cell:=POCAHashFindCell(HashRec,Key,POCAValueHash(Key));
+    if (Cell<>CELL_INVALID) and (HashRec^.CellToEntityIndex^[Cell]>=0) then begin
+     result:=true;
+     exit;
+    end;
+   end;
+   Current:=Current^.Prototype;
+  end;
+ end;
+ procedure Process(CurrentHash:PPOCAHash);
+ var Current,Prototype:PPOCAHash;
+     HashRec,OwnHashRec:PPOCAHashRecord;
      OldEntities,Entities:PPPOCAHashEntities;
-     Index,i:TPOCAInt32;
+     Index,ProtoCount,Entity,i:TPOCAInt32;
+     HashCode,Cell:TPOCAUInt32;
  begin
   if assigned(CurrentHash) then begin
    if assigned(CurrentHash^.Events) or not Cachable then begin
@@ -12274,17 +12295,78 @@ var CountItems:TPOCAInt32;
    if Cachable then begin
     GetMem(Entities,CountItems*sizeof(PPOCAHashEntity));
     FillChar(Entities^,CountItems*sizeof(PPOCAHashEntity),#0);
-    Index:=CountItems;
-    Current:=Hash;
-    while assigned(Current) do begin
-     if assigned(Current^.HashRecord) and (Current^.HashRecord^.Size>0) then begin
-      for i:=Current^.HashRecord^.Size-1 downto 0 do begin
-       dec(Index);
-       Entities^[Index]:=@Current^.HashRecord^.Entities[i];
+
+    // A call site checks nothing but the key of the slot its index points at,
+    // and that index may stem from an object of another layout. So a slot may
+    // only hold an entry that a full lookup would really arrive at, and stays
+    // nil for a deleted entry and for one that an entry with the same key
+    // nearer to the object shadows.
+
+    // The object's own entries sit on top, where nothing can shadow them.
+    ProtoCount:=CountItems;
+    OwnHashRec:=Hash^.HashRecord;
+    if assigned(OwnHashRec) then begin
+     dec(ProtoCount,OwnHashRec^.Size);
+     for i:=0 to OwnHashRec^.Size-1 do begin
+      if OwnHashRec^.EntityToCellIndex^[i]>=0 then begin
+       Entities^[ProtoCount+i]:=@OwnHashRec^.Entities^[i];
       end;
      end;
-     Current:=Current^.Prototype;
     end;
+
+    // Below them follows the chain of the prototype in the very layout that a
+    // prototype with a prototype of its own has built already, shadowed entries
+    // left out, so that a class instance does not have to sort that out again.
+    Prototype:=Hash^.Prototype;
+    if (assigned(Prototype) and Prototype^.Cache.Ready) and
+       (assigned(Prototype^.Cache.ChainEntities) and (Prototype^.Cache.ChainCount=ProtoCount)) then begin
+     Move(Prototype^.Cache.ChainEntities^[0],Entities^[0],ProtoCount*sizeof(PPOCAHashEntity));
+    end else begin
+     Index:=ProtoCount;
+     Current:=Prototype;
+     while assigned(Current) do begin
+      HashRec:=Current^.HashRecord;
+      if assigned(HashRec) and (HashRec^.Size>0) then begin
+       for i:=HashRec^.Size-1 downto 0 do begin
+        dec(Index);
+        if (HashRec^.EntityToCellIndex^[i]>=0) and not IsShadowed(Prototype,Current,HashRec^.Entities^[i].Key) then begin
+         Entities^[Index]:=@HashRec^.Entities^[i];
+        end;
+       end;
+      end;
+      Current:=Current^.Prototype;
+     end;
+    end;
+
+    // Then what the object's own entries shadow. The part below holds at most one
+    // entry per key by now, so the search for a key ends at its first match.
+    if assigned(OwnHashRec) and (OwnHashRec^.RealSize>0) then begin
+     for i:=0 to OwnHashRec^.Size-1 do begin
+      if OwnHashRec^.EntityToCellIndex^[i]>=0 then begin
+       HashCode:=POCAValueHash(OwnHashRec^.Entities^[i].Key);
+       Index:=ProtoCount;
+       Current:=Prototype;
+       while assigned(Current) do begin
+        HashRec:=Current^.HashRecord;
+        if assigned(HashRec) then begin
+         dec(Index,HashRec^.Size);
+         if HashRec^.RealSize>0 then begin
+          Cell:=POCAHashFindCell(HashRec,OwnHashRec^.Entities^[i].Key,HashCode);
+          if Cell<>CELL_INVALID then begin
+           Entity:=HashRec^.CellToEntityIndex^[Cell];
+           if Entity>=0 then begin
+            Entities^[Index+Entity]:=nil;
+            break;
+           end;
+          end;
+         end;
+        end;
+        Current:=Current^.Prototype;
+       end;
+      end;
+     end;
+    end;
+
    end else begin
     Entities:=nil;
    end;
@@ -12296,6 +12378,12 @@ var CountItems:TPOCAInt32;
  end;
 begin
  if assigned(Hash) and not Hash^.Cache.Ready then begin
+  // The chain of the prototype comes first, since this one starts out from it.
+  // Before the lock, so that the locks are never taken nested, and only where the
+  // prototype inherits itself, since a chain of one level is cheap to build anyway.
+  if assigned(Hash^.Prototype) and assigned(Hash^.Prototype^.Prototype) then begin
+   POCAHashRebuildCache(Hash^.Prototype);
+  end;
   POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
   try
    if assigned(Hash^.HashRecord) then begin
@@ -13586,7 +13674,7 @@ begin
        Entity:=CacheIndex;
        if TPOCAUInt32(Entity)<TPOCAUInt32(Hash^.Cache.ChainCount) then begin
         he:=Hash^.Cache.ChainEntities^[Entity];
-        if he^.Key.CastedInt64=Sym.CastedInt64 then begin
+        if assigned(he) and (he^.Key.CastedInt64=Sym.CastedInt64) then begin
          OutValue:=he^.Value;
 {$ifndef POCAUseSafeMRSWLocks}
          if CacheLocked then begin
@@ -14053,7 +14141,7 @@ begin
  if ((CacheIndex<>$ffffffff) and HashInstance^.Cache.Ready) and
     (assigned(HashInstance^.Cache.ChainEntities) and (CacheIndex<TPOCAUInt32(HashInstance^.Cache.ChainCount))) then begin
   HashEntity:=HashInstance^.Cache.ChainEntities^[CacheIndex];
-  if HashEntity^.Key.CastedInt64=Key.CastedInt64 then begin
+  if assigned(HashEntity) and (HashEntity^.Key.CastedInt64=Key.CastedInt64) then begin
    OutValue:=HashEntity^.Value;
    result:=true;
   end;
@@ -14087,7 +14175,7 @@ begin
 {$endif}
        if HashInstance^.Cache.Ready and assigned(HashInstance^.Cache.ChainEntities) then begin
         Entity:=CacheIndex;
-        if (TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
+        if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and assigned(HashInstance^.Cache.ChainEntities^[Entity])) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
          OutValue:=HashInstance^.Cache.ChainEntities^[Entity]^.Value;
 {$ifndef POCAUseSafeMRSWLocks}
          if CacheLocked then begin
@@ -14194,7 +14282,7 @@ begin
 {$endif}
       if HashInstance^.Cache.Ready and assigned(HashInstance^.Cache.ChainEntities) then begin
        Entity:=CacheIndex;
-       if (TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
+       if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and assigned(HashInstance^.Cache.ChainEntities^[Entity])) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
         OutValue:=HashInstance^.Cache.ChainEntities^[Entity]^.Value;
 {$ifndef POCAUseSafeMRSWLocks}
         if CacheLocked then begin
@@ -43192,7 +43280,7 @@ var Fixups:TFixups;
  // helper, which then does the full lookup and refills the slot.
  procedure AddInlineGetMember;
  var Slow:array[0..2] of TPOCAInt32;
-     Chain:array[0..5] of TPOCAInt32;
+     Chain:array[0..6] of TPOCAInt32;
      Done:array[0..1] of TPOCAInt32;
      Index,Stamp:TPOCAInt32;
  begin
@@ -43255,11 +43343,13 @@ var Fixups:TFixups;
   Chain[3]:=AddLocalJump(#$0f#$83); // jae stamp path
 
   Add(#$4d#$8b#$04#$c8); // mov r8,qword ptr [r8+rcx*8] (the recorded entity)
+  Add(#$4d#$85#$c0); // test r8,r8
+  Chain[4]:=AddLocalJump(#$0f#$84); // jz stamp path (a deleted or shadowed entry)
   Add(#$49#$b9); // mov r9,@Code^.Constants^[Operands^[2]] (the member name)
   AddQWordPointer(@Code^.Constants^[Operands^[2]]);
   Add(#$4d#$8b#$09); // mov r9,qword ptr [r9]
   Add(#$4d#$3b#$08); // cmp r9,qword ptr [r8] (TPOCAHashEntity.Key)
-  Chain[4]:=AddLocalJump(#$0f#$85); // jne stamp path
+  Chain[5]:=AddLocalJump(#$0f#$85); // jne stamp path
 
   Add(#$4d#$8b#$48#$08); // mov r9,qword ptr [r8+TPOCAHashEntity.Value]
   Add(#$4c#$89#$8b); // mov qword ptr [rbx+Dst],r9
@@ -43269,7 +43359,7 @@ var Fixups:TFixups;
   // Version stamp, for receivers that do not inherit, and as the fallback for
   // those that do but whose chain position did not hold up.
   FixLocalJump(Stamp);
-  for Index:=0 to 4 do begin
+  for Index:=0 to 5 do begin
    FixLocalJump(Chain[Index]);
   end;
 
@@ -43277,7 +43367,7 @@ var Fixups:TFixups;
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Version)));
   Add(#$48#$3b#$88); // cmp rcx,qword ptr [rax+TPOCAHash.Version]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Version)));
-  Chain[5]:=AddLocalJump(#$0f#$85); // jne slow (a zeroed slot never matches, stamps start at one)
+  Chain[6]:=AddLocalJump(#$0f#$85); // jne slow (a zeroed slot never matches, stamps start at one)
 
   Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Entity]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Entity)));
@@ -43290,7 +43380,7 @@ var Fixups:TFixups;
   for Index:=0 to 2 do begin
    FixLocalJump(Slow[Index]);
   end;
-  FixLocalJump(Chain[5]);
+  FixLocalJump(Chain[6]);
   AddCallRuntimeHelper(@POCAJITOpGETMEMBER,false,true);
   for Index:=0 to 1 do begin
    FixLocalJump(Done[Index]);
