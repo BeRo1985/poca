@@ -1,0 +1,337 @@
+// Leaving try, catch and finally blocks early. A break or continue used to jump
+// out of the block without ending it, which ran code twice or ran out of stack,
+// and a return used to go on with the caller inside the block.
+
+#pragma loopclosures on
+
+(function() {
+
+  return {
+    try_break_continue: [
+      () => {
+        let n = 0;
+        for (let i = 0; i < 5; i++) {
+          try {
+            if (i == 1) continue;
+            if (i == 3) break;
+            n += 10;
+          } catch (let e) {
+          }
+          n += 1;
+        }
+        Test.assertEqual(n, 22);
+      },
+      () => {
+        // Would run out of stack if each continue went deeper
+        let n = 0;
+        for (let i = 0; i < 100000; i++) {
+          try {
+            if (i % 2 == 0) continue;
+            n++;
+          } catch (let e) {
+          }
+        }
+        Test.assertEqual(n, 50000);
+      },
+      () => {
+        let n = 0;
+        let i = 0;
+        while (true) {
+          i++;
+          try {
+            if (i > 3) break;
+          } finally {
+            n += 1;
+          }
+        }
+        // The finally block runs for the iteration that breaks as well
+        Test.assertEqual(n, 4);
+        Test.assertEqual(i, 4);
+      }
+    ],
+
+    catch_break_continue: [
+      () => {
+        let n = 0;
+        for (let i = 0; i < 6; i++) {
+          try {
+            throw 'x';
+          } catch (let e) {
+            if (i == 1) continue;
+            if (i == 4) break;
+            n += 1;
+          }
+          n += 10;
+        }
+        Test.assertEqual(n, 33);
+      },
+      () => {
+        let order = '';
+        outer: for (let i = 0; i < 3; i++) {
+          try {
+            for (let j = 0; j < 3; j++) {
+              try {
+                throw 'x';
+              } catch (let e) {
+                order ~= 'c';
+                if (j == 1) break outer;
+              } finally {
+                order ~= 'f';
+              }
+            }
+          } finally {
+            order ~= 'o';
+          }
+        }
+        Test.assertEqual(order, 'cfcfo');
+      }
+    ],
+
+    finally_break_continue: [
+      () => {
+        let n = 0;
+        for (let i = 0; i < 10; i++) {
+          try {
+            n += 1;
+          } finally {
+            if (i == 2) break;
+          }
+        }
+        Test.assertEqual(n, 3);
+      },
+      () => {
+        let n = 0;
+        for (let i = 0; i < 4; i++) {
+          try {
+            n += 1;
+          } finally {
+            if (i >= 0) continue;
+          }
+          n += 100;
+        }
+        Test.assertEqual(n, 4);
+      }
+    ],
+
+    nested_try_break: [
+      () => {
+        let order = '';
+        outer: for (let i = 0; i < 3; i++) {
+          for (let j = 0; j < 3; j++) {
+            try {
+              try {
+                if (j == 1) break outer;
+              } finally {
+                order ~= 'a';
+              }
+            } finally {
+              order ~= 'b';
+            }
+          }
+        }
+        // Both finally blocks run, the inner one first, and nothing after the break
+        Test.assertEqual(order, 'abab');
+      },
+      () => {
+        let n = 0;
+        for (let i = 0; i < 3; i++) {
+          try {
+            for (let j = 0; j < 5; j++) {
+              if (j == 2) break;
+              n += 1;
+            }
+          } catch (let e) {
+          }
+        }
+        Test.assertEqual(n, 6);
+      }
+    ],
+
+    try_break_closures: [
+      () => {
+        let fns = [];
+        outer: for (let i = 0; i < 3; i++) {
+          for (let j = 0; j < 3; j++) {
+            try {
+              fns.push(() => i * 10 + j);
+              if (j == 1) break outer;
+            } finally {
+            }
+          }
+        }
+        fns.push(() => 99);
+        let sum = 0;
+        foreach (let fn in fns) sum += fn();
+        Test.assertEqual(sum, 100);
+      }
+    ],
+
+    catch_return: [
+      () => {
+        let g = function() {
+          try {
+            throw 'x';
+          } catch (let e) {
+            return 3;
+          }
+          return 4;
+        };
+        Test.assertEqual(g(), 3);
+        Test.assertEqual(g() + g(), 6);
+      },
+      () => {
+        let log = '';
+        let g = function() {
+          try {
+            throw 'x';
+          } catch (let e) {
+            return 'caught';
+          } finally {
+            log ~= 'f';
+          }
+          return 'after';
+        };
+        Test.assertEqual(g(), 'caught');
+        Test.assertEqual(log, 'f');
+      },
+      () => {
+        // An exception from the finally block wins over the return
+        let k = function() {
+          try {
+            return 1;
+          } finally {
+            throw 'late';
+          }
+        };
+        let caught = 0;
+        try {
+          k();
+        } catch (let e) {
+          caught = 1;
+        }
+        Test.assertEqual(caught, 1);
+      }
+    ],
+
+    try_return: [
+      () => {
+        let log = '';
+        let f = function(x) {
+          try {
+            if (x > 0) return 'positive';
+            log ~= 'a';
+          } finally {
+            log ~= 'f';
+          }
+          return 'other';
+        };
+        Test.assertEqual(f(1), 'positive');
+        Test.assertEqual(f(-1), 'other');
+        Test.assertEqual(log, 'faf');
+      },
+      () => {
+        let h = function() {
+          try {
+            return 1;
+          } finally {
+            return 2;
+          }
+        };
+        Test.assertEqual(h(), 2);
+      },
+      () => {
+        let count = 0;
+        var fact = function(n) {
+          try {
+            count++;
+            if (n <= 1) return 1;
+            return n * fact(n - 1);
+          } catch (let e) {
+            return -1;
+          }
+        };
+        Test.assertEqual(fact(10), 3628800);
+        Test.assertEqual(count, 10);
+      },
+      () => {
+        let find = function(values, wanted) {
+          for (let i = 0; i < values.length; i++) {
+            try {
+              try {
+                if (values[i] == wanted) return i;
+              } finally {
+              }
+            } catch (let e) {
+            }
+          }
+          return -1;
+        };
+        Test.assertEqual(find([4, 5, 6], 6), 2);
+        Test.assertEqual(find([4, 5, 6], 7), -1);
+      },
+      () => {
+        // The value on its way out has to survive what the finally block allocates
+        let make = function() {
+          try {
+            return [1, 2, 3];
+          } finally {
+            for (let i = 0; i < 20000; i++) {
+              let garbage = [i, i, i];
+            }
+          }
+        };
+        let value = make();
+        Test.assertEqual(value.length, 3);
+        Test.assertEqual(value[2], 3);
+      }
+    ],
+
+    switch_when_in_try: [
+      () => {
+        let n = 0;
+        for (let i = 0; i < 3; i++) {
+          switch (i) {
+            case 1:
+              try {
+                n += 10;
+                break;
+              } finally {
+                n += 100;
+              }
+            default:
+              n += 1;
+          }
+        }
+        Test.assertEqual(n, 112);
+      },
+      () => {
+        let n = 0;
+        let v = 5;
+        when (v) {
+          case (5 .. 7) {
+            try {
+              n += 1;
+              v++;
+              retry;
+            } finally {
+              n += 10;
+            }
+          }
+          case (8) {
+            try {
+              n += 100;
+              fallthrough;
+            } finally {
+              n += 1000;
+            }
+          }
+          case (9) {
+            n += 10000;
+          }
+        }
+        Test.assertEqual(n, 11133);
+      }
+    ],
+  }
+
+})();
