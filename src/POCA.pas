@@ -2290,6 +2290,10 @@ const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAP
 
       POCAValueDataFileVersion=TPOCAUInt32($00000001);
 
+      // Written instead of POCAValueDataFileVersion only when the data holds stored
+      // code, so that plain data stays readable by older builds
+      POCAValueDataFileVersionWithCode=TPOCAUInt32($00000002);
+
       // Versions of stored bytecode, see docs/bytecode-serialization-plan.md. The
       // minor container version grows with optional additions that an older
       // loader can skip, the major one with anything it can not.
@@ -2718,8 +2722,8 @@ function POCASetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;co
 function POCACRC32(const aData;const aDataSize:TPOCASizeInt;const aCRC32:TPOCAUInt32=0):TPOCAUInt32;
 function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
 
-function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
-procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue;const aIgnoreUnsupportedValueTypes:Boolean=true);
+function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream;const aAllowCode:Boolean=false):TPOCAValue;
+procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue;const aIgnoreUnsupportedValueTypes:Boolean=true;const aSaveCode:Boolean=false);
 
 function POCAVerifyCode(const aCode:TPOCAValue;out aError:TPOCARawByteString):Boolean;
 function POCADisassembleCode(const aContext:PPOCAContext;const aCode:TPOCAValue):TPOCARawByteString;
@@ -48714,7 +48718,9 @@ begin
  result:=result xor $ffffffff;
 end;
 
-function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
+// Stored code is only loaded with aAllowCode, and then only from trusted sources,
+// see POCALoadCodeFromStream
+function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream;const aAllowCode:Boolean):TPOCAValue;
 var FileHeader:TPOCAValueDataFileHeader;
     StartPosition,EndPosition:TPOCAInt64;
     Checksum:TPOCAUInt32;
@@ -48772,11 +48778,28 @@ var FileHeader:TPOCAValueDataFileHeader;
    pvftREFERENCE:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: reference value type not supported yet');
    end;
-   pvftCODE:begin
+{  pvftCODE:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: code value type not supported yet');
    end;
    pvftFUNCTION:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: function value type not supported yet');
+   end;}
+   pvftCODE,pvftFUNCTION:begin
+    // Stored bytecode as POCASaveCodeToStream writes it, which knows its own size
+    if FileHeader.Version<>POCAValueDataFileVersionWithCode then begin
+     POCARuntimeError(aContext,'Invalid POCA value file format: code value outside of format version 2');
+    end;
+    if not aAllowCode then begin
+     POCARuntimeError(aContext,'POCA value file holds code, but loading code is not allowed here');
+    end;
+    result:=POCALoadCodeFromStream(aContext^.Instance,aContext,aStream);
+    if aStream.Position>EndPosition then begin
+     POCARuntimeError(aContext,'Invalid POCA value file format: unexpected end of data');
+    end;
+    if ValueTypeByte=pvftFUNCTION then begin
+     // Bound the same way as a freshly compiled script
+     result:=POCABindToContext(aContext,result);
+    end;
    end;
    pvftNATIVECODE:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: native code value type not supported yet');
@@ -48796,7 +48819,8 @@ begin
  StartPosition:=aStream.Position;
 
  aStream.ReadBuffer(FileHeader,sizeof(TPOCAValueDataFileHeader));
- if (FileHeader.Signature<>POCAValueDataFileHeaderSignatureValue) or (FileHeader.Version<>POCAValueDataFileVersion) then begin
+ if (FileHeader.Signature<>POCAValueDataFileHeaderSignatureValue) or
+    ((FileHeader.Version<>POCAValueDataFileVersion) and (FileHeader.Version<>POCAValueDataFileVersionWithCode)) then begin
   POCARuntimeError(aContext,'Invalid POCA value file format');
  end;
 
@@ -48816,9 +48840,25 @@ begin
 
 end;
 
-procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue;const aIgnoreUnsupportedValueTypes:Boolean);
+// With aSaveCode, code of the outermost level, such as what compile returns, is
+// stored as bytecode, and only then is the data written as format version 2.
+// Everything else stays version 1, byte for byte as before.
+procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue;const aIgnoreUnsupportedValueTypes:Boolean;const aSaveCode:Boolean);
 var FileHeader:TPOCAValueDataFileHeader;
     StartPosition,EndPosition:TPOCAInt64;
+    HasCode:Boolean;
+ function IsStorableCode(const aValue:TPOCAValue):Boolean;
+ var Code:TPOCAValue;
+ begin
+  result:=false;
+  if aSaveCode then begin
+   Code:=aValue;
+   if POCAIsValueFunction(Code) then begin
+    Code:=PPOCAFunction(POCAGetValueReferencePointer(Code))^.Code;
+   end;
+   result:=POCAIsValueCode(Code) and (PPOCACode(POCAGetValueReferencePointer(Code))^.Level=0);
+  end;
+ end;
  procedure SaveValue(const aValue:TPOCAValue);
  var ValueTypeByte:TPOCAUInt8;
      Index:TPOCAPtrInt;
@@ -48854,14 +48894,14 @@ var FileHeader:TPOCAValueDataFileHeader;
     end;
    end;
    pvtCODE:begin
-    if aIgnoreUnsupportedValueTypes then begin
+    if aIgnoreUnsupportedValueTypes and not IsStorableCode(aValue) then begin
      ValueTypeByte:=pvftNULL;
     end else begin
      ValueTypeByte:=pvftCODE;
     end;
    end;
    pvtFUNCTION:begin
-    if aIgnoreUnsupportedValueTypes then begin
+    if aIgnoreUnsupportedValueTypes and not IsStorableCode(aValue) then begin
      ValueTypeByte:=pvftNULL;
     end else begin
      ValueTypeByte:=pvftFUNCTION;
@@ -48880,7 +48920,7 @@ var FileHeader:TPOCAValueDataFileHeader;
     end else begin
      ValueTypeByte:=pvftGHOST;
     end;
-    ValueTypeByte:=pvftGHOST;
+{   ValueTypeByte:=pvftGHOST;}
    end;
    else begin
     if aIgnoreUnsupportedValueTypes then begin
@@ -48992,11 +49032,19 @@ var FileHeader:TPOCAValueDataFileHeader;
    pvftREFERENCE:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: reference value type not supported yet');
    end;
-   pvftCODE:begin
+{  pvftCODE:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: code value type not supported yet');
    end;
    pvftFUNCTION:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: function value type not supported yet');
+   end;}
+   pvftCODE,pvftFUNCTION:begin
+    if not aSaveCode then begin
+     POCARuntimeError(aContext,'Invalid POCA value file format: code values are only stored on request');
+    end;
+    // Raises an error for code that can not be stored, such as nested functions
+    POCASaveCodeToStream(aContext,aStream,aValue);
+    HasCode:=true;
    end;
    pvftNATIVECODE:begin
     POCARuntimeError(aContext,'Invalid POCA value file format: native code value type not supported yet');
@@ -49017,6 +49065,8 @@ begin
  FileHeader.CheckSum:=0;
  FileHeader.DataSize:=0;
 
+ HasCode:=false;
+
  StartPosition:=aStream.Position;
  aStream.WriteBuffer(FileHeader,sizeof(TPOCAValueDataFileHeader));
 
@@ -49024,6 +49074,11 @@ begin
 
  // End position is current stream size
  EndPosition:=aStream.Size;
+
+ // Only now is it known which version the data needs
+ if HasCode then begin
+  FileHeader.Version:=POCAValueDataFileVersionWithCode;
+ end;
 
  // Calculate data size and write checksum including header with data size
  FileHeader.DataSize:=EndPosition-(StartPosition+SizeOf(TPOCAValueDataFileHeader));
