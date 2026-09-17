@@ -734,17 +734,20 @@ procedure MainProc;
 {$ifdef Windows}
 //const CP_UTF16=1200;
 {$endif}
-type TMode=(mRun,mDisassemble,mVerify);
+type TMode=(mRun,mDisassemble,mVerify,mCompile);
 var Instance:PPOCAInstance;
     Context:PPOCAContext;
     Code:TPOCAValue;
     ResultValue:TPOCAValue;
     ExitCode:TPOCAInt32;
-    FileName:string;
+    FileName,OutputFileName,Parameter:string;
     Arguments:array of TPOCAValue;
     i,FirstParameter:longint;
     Mode:TMode;
     VerifyError:TPOCARawByteString;
+    SaveOptions:TPOCAByteCodeSaveOptions;
+    ShowUsage:boolean;
+    Stream:TStream;
 begin
  ExitCode:=0;
 {$ifdef Windows}
@@ -756,23 +759,50 @@ begin
 {$endif}
  Randomize;
  Arguments:=nil;
- // The options for looking at the bytecode only count in front of the file name,
- // so that everything after it is left to the script.
+ // The options only count in front of the file name, so that everything after it
+ // is left to the script.
  Mode:=mRun;
+ SaveOptions:=[];
+ OutputFileName:='';
+ ShowUsage:=false;
  FirstParameter:=1;
- if ParamCount>0 then begin
-  if ParamStr(1)='--disasm' then begin
+ while FirstParameter<=ParamCount do begin
+  Parameter:=ParamStr(FirstParameter);
+  if Parameter='--disasm' then begin
    Mode:=mDisassemble;
-   FirstParameter:=2;
-  end else if ParamStr(1)='--verify' then begin
+  end else if Parameter='--verify' then begin
    Mode:=mVerify;
-   FirstParameter:=2;
+  end else if (Parameter='-c') or (Parameter='--compile') then begin
+   Mode:=mCompile;
+  end else if Parameter='--strip' then begin
+   SaveOptions:=[pbsoSTRIPDEBUGINFO,pbsoSTRIPSOURCEINFO];
+  end else if Parameter='-o' then begin
+   inc(FirstParameter);
+   OutputFileName:=ParamStr(FirstParameter);
+   ShowUsage:=ShowUsage or (length(OutputFileName)=0);
+  end else if Parameter='--version' then begin
+   writeln('POCA version '+POCAVersion);
+   exit;
+  end else if (Parameter='-h') or (Parameter='--help') then begin
+   ShowUsage:=true;
+  end else begin
+   break;
   end;
+  inc(FirstParameter);
  end;
- if FindCmdLineSwitch('h',true) or ((Mode<>mRun) and (ParamCount<>FirstParameter)) then begin
+ // Everything but running needs exactly one file
+ if ShowUsage or ((Mode<>mRun) and (ParamCount<>FirstParameter)) then begin
   writeln('Usage: '+ExtractFileName(ParamStr(0))+' file.poca [parameters...]');
-  writeln('       '+ExtractFileName(ParamStr(0))+' --disasm file.poca   (print the bytecode without running it)');
-  writeln('       '+ExtractFileName(ParamStr(0))+' --verify file.poca   (check the bytecode without running it)');
+  writeln('       '+ExtractFileName(ParamStr(0))+' -c file.poca [-o file.pbc] [--strip]');
+  writeln('Options:');
+  writeln('  -c, --compile   store the bytecode instead of running it');
+  writeln('  -o <file>       where -c writes to, by default the input file with .pbc');
+  writeln('  --strip         leave the line tables and source file names out');
+  writeln('  --disasm        print the bytecode without running it');
+  writeln('  --verify        check the bytecode without running it');
+  writeln('  --version       print the version');
+  writeln('  -h, --help      print this help');
+  writeln('Stored bytecode is recognized by what is in the file, not by its name.');
  end else begin
   Instance:=POCAInstanceCreate;
   try
@@ -792,7 +822,18 @@ begin
       if not FileExists(FileName) then begin
        raise EPOCAGeneralError.Create(-1,-1,-1,'File "'+FileName+'" not found');
       end;
-      Code:=POCACompile(Instance,Context,POCAGetFileContent(TPOCAUTF8String(FileName)),TPOCAUTF8String(FileName));
+      // Stored bytecode is told apart from source by what is in the file. Only
+      // bytecode from trusted sources may be run, see POCAVerifyCode.
+      Stream:=TFileStream.Create(FileName,fmOpenRead or fmShareDenyWrite);
+      try
+       if POCAIsByteCodeStream(Stream) then begin
+        Code:=POCALoadCodeFromStream(Instance,Context,Stream,TPOCAUTF8String(FileName));
+       end else begin
+        Code:=POCACompile(Instance,Context,POCAGetFileContent(TPOCAUTF8String(FileName)),TPOCAUTF8String(FileName));
+       end;
+      finally
+       Stream.Free;
+      end;
      end else begin
       Code:=POCACompile(Instance,Context,REPLCode,'<REPL>');
      end;
@@ -808,6 +849,17 @@ begin
         ExitCode:=1;
        end;
       end;
+      mCompile:begin
+       if length(OutputFileName)=0 then begin
+        OutputFileName:=ChangeFileExt(FileName,'.pbc');
+       end;
+       Stream:=TFileStream.Create(OutputFileName,fmCreate);
+       try
+        POCASaveCodeToStream(Context,Stream,Code,SaveOptions);
+       finally
+        Stream.Free;
+       end;
+      end;
       else begin
        ResultValue:=POCACall(Context,Code,@Arguments[0],length(Arguments),POCAValueNull,Instance^.Globals.Namespace);
        if POCAIsValueNumber(ResultValue) then begin
@@ -819,6 +871,10 @@ begin
      FinalizeForPOCAContext(Context);
     end;
    except
+    on e:EPOCAByteCodeError do begin
+     writeln('ByteCodeError: ',e.Message);
+     raise;
+    end;
     on e:EPOCAGeneralError do begin
      writeln('GeneralError: ',e.Message);
      raise;
