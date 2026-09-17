@@ -57,6 +57,43 @@ puts(h?.missing ?? 42);    // 42
 
 **Important nuance:** `??` alone does not protect a plain access. `h.missing ?? 42` still throws, because the missing-member error happens before `??` ever sees a value. Combine it with the safe access operators: `h?.missing ?? 42`.
 
+## Arrays are always dense, there are no sparse arrays
+
+A POCA array is a contiguous block of values: every index from `0` to `length - 1` holds a value, possibly `null`. There are no holes. Writing past the end does not grow the array, it throws:
+
+```javascript
+let a = [1, 2, 3];
+a[3] = 4;           // RuntimeError: out of bounds (JavaScript appends)
+a[10] = 4;          // RuntimeError: out of bounds (JavaScript creates a hole)
+a.push(4);          // appending is explicit
+a.resize(10);       // growing is explicit, new slots are null
+puts(a[9]);         // null
+a.length = 20;      // RuntimeError, length is read-only, use resize()
+```
+
+The JavaScript constructs that produce holes produce `null` in POCA instead:
+
+```javascript
+puts([1, , 3][1]);          // null (elision)
+puts((new Array(3))[2]);    // null
+delete a[1];                // sets a[1] to null, length stays 10
+```
+
+This is deliberate, for several reasons:
+
+- **Speed.** An indexed access is a bounds check plus a direct slot read. JavaScript engines have to track whether an array is "packed" or "holey", check for holes on every read (a hole falls through to the prototype chain), and switch an array to a slow hash-backed dictionary mode when it becomes too sparse, often with deoptimizations along the way. POCA has none of that bookkeeping.
+- **Predictable memory.** In JavaScript, a stray `a[1e9] = x` silently turns a small array into one with a `length` of a billion. In POCA the array size only changes when the code says so.
+- **Consistent semantics.** JavaScript holes are not the same as `undefined`, and the built-ins disagree on them: `forEach`/`map`/`filter` skip holes, `for...of`, `join` and `includes` treat them as `undefined`, `in` tells them apart. In POCA an element is just a value, and every operation sees the same thing.
+- **Bugs surface early.** Same philosophy as the throwing reads above: an off-by-one write fails at the write site instead of quietly creating a gap.
+
+For genuinely sparse data, such as large index ranges with few occupied slots, use a `Hash` with numeric keys, which is what JavaScript falls back to internally anyway:
+
+```javascript
+let grid = {};
+grid[1000000] = "x";
+puts(grid?[42] ?? "empty");  // empty
+```
+
 ## There is no separate boolean type
 
 `true` and `false` are predefined constants for the numbers `1` and `0`. Comparisons return numbers, `typeof(true)` is `Number`, and boolean values take part in arithmetic:
