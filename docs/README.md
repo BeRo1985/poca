@@ -5,3 +5,4 @@ Here you can find the documentation for the following:
 - [Script API](./scriptapi.adoc)
 - [Garbage Collector](./garbagecollector.md)
 - [Compiler Pipeline](./compiler.md)
+- [Bytecode Files](./bytecode.md)
