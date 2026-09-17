@@ -2094,6 +2094,10 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       SourceFiles:TStringList;
       IncludeDirectories:TStringList;
       AutomaticSemicolonInsertion:boolean;
+      // Both are off by default, since only trusted bytecode may be loaded, see
+      // POCAVerifyCode
+      ByteCodeCache:boolean;
+      AllowByteCodeLoading:boolean;
 {$ifdef POCAClosureCopyOnIteration}
       ClosureCopyOnIteration:boolean;
 {$endif}
@@ -2283,6 +2287,15 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
                               pbsoSTRIPSOURCEINFO); // Leaves out the source file names
      TPOCAByteCodeSaveOptions=set of TPOCAByteCodeSaveOption;
 
+     // A file that a code object was compiled from, with the time it had then, so
+     // that a cache can tell whether what it stored is still up to date
+     TPOCAByteCodeDependency=record
+      FileName:TPOCARawByteString;
+      ModificationTime:Double;
+     end;
+     PPOCAByteCodeDependencies=^TPOCAByteCodeDependencies;
+     TPOCAByteCodeDependencies=array of TPOCAByteCodeDependency;
+
 const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
       POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAUInt64(POCAValueReferenceTag) shl 32){$endif};
 
@@ -2311,6 +2324,10 @@ const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAP
       pbffCLOSURECOPYONITERATION=TPOCAUInt32(1 shl 0);
 
       POCAByteCodeFeatureFlags=TPOCAUInt32({$ifdef POCAClosureCopyOnIteration}pbffCLOSURECOPYONITERATION{$else}0{$endif});
+
+      // What stored bytecode is called, and where POCACompileCached keeps it
+      POCAByteCodeFileExtension='.pbc';
+      POCAByteCodeCacheDirectoryName='.poca-cache';
 
       POCATypeSizes:array[pvtNULL..pvtGHOST] of TPOCAInt32=(-1, // pvtNULL
                                                             -1, // pvtNUMBER
@@ -2681,7 +2698,9 @@ procedure POCAInstanceDestroy(var Instance:PPOCAInstance);
 procedure POCACodeFinalize(const aCode:PPOCACode);
 function POCARegisterSourceFile(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aSourceFileName:TPOCARawByteString):TPOCAInt32;
 
-function POCACompile(Instance:PPOCAInstance;Context:PPOCAContext;const Source:TPOCARawByteString;const SourceFileName:TPOCARawByteString=''):TPOCAValue;
+function POCACompile(Instance:PPOCAInstance;Context:PPOCAContext;const Source:TPOCARawByteString;const SourceFileName:TPOCARawByteString='';const aDependencies:PPOCAByteCodeDependencies=nil):TPOCAValue;
+function POCACompileCached(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aSource:TPOCARawByteString;const aSourceFileName:TPOCARawByteString):TPOCAValue;
+function POCAByteCodeCacheFileName(const aSourceFileName:TPOCARawByteString):TPOCARawByteString;
 
 procedure POCASave(Context:PPOCAContext;Obj:TPOCAValue);
 
@@ -2728,7 +2747,8 @@ procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStrea
 function POCAVerifyCode(const aCode:TPOCAValue;out aError:TPOCARawByteString):Boolean;
 function POCADisassembleCode(const aContext:PPOCAContext;const aCode:TPOCAValue):TPOCARawByteString;
 
-procedure POCASaveCodeToStream(const aContext:PPOCAContext;const aStream:TStream;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions=[]);
+procedure POCASaveCodeToStream(const aContext:PPOCAContext;const aStream:TStream;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions=[];const aDependencies:TPOCAByteCodeDependencies=nil);
+function POCAReadByteCodeDependencies(const aStream:TStream;out aDependencies:TPOCAByteCodeDependencies):Boolean;
 function POCALoadCodeFromStream(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aStream:TStream;const aSourceFileName:TPOCARawByteString='<bytecode>'):TPOCAValue;
 function POCAIsByteCodeStream(const aStream:TStream):Boolean;
 function POCAIsByteCode(const aData:TPOCARawByteString):Boolean;
@@ -16681,7 +16701,7 @@ begin
      // trusted sources may be loaded, see POCAVerifyCode.
      Code:=POCABindToContext(Context,POCALoadCodeFromString(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
     end else begin
-     Code:=POCABindToContext(Context,POCACompile(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
+     Code:=POCABindToContext(Context,POCACompileCached(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
     end;
     POCAProtect(Context,ModuleScope);
     try
@@ -21713,9 +21733,125 @@ begin
  end;
 end;
 
+// ByteCode.compile(source[, name]): the bytecode of the source as a code value,
+// which is what save takes
+function POCAByteCodeFunctionCOMPILE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Name:TPOCARawByteString;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "ByteCode.compile"');
+ end;
+ if CountArguments>1 then begin
+  Name:=POCAGetStringValue(Context,Arguments^[1]);
+ end else begin
+  Name:='<eval>';
+ end;
+ result:=POCACompile(Context^.Instance,Context,POCAGetStringValue(Context,Arguments^[0]),Name);
+end;
+
+// ByteCode.save(code[, strip]): the stored bytecode of a code value or a function
+// as a string. Only code of the outermost level can be stored, so a function that
+// came out of compile works, but a nested one does not.
+function POCAByteCodeFunctionSAVE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Options:TPOCAByteCodeSaveOptions;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "ByteCode.save"');
+ end;
+ Options:=[];
+ if (CountArguments>1) and POCAGetBooleanValue(Context,Arguments^[1]) then begin
+  Options:=[pbsoSTRIPDEBUGINFO,pbsoSTRIPSOURCEINFO];
+ end;
+ result:=POCANewString(Context,POCASaveCodeToString(Context,Arguments^[0],Options));
+end;
+
+// ByteCode.load(data[, name]): what save stored, as a function ready to be called.
+// Only bytecode from trusted sources may be loaded, see POCAVerifyCode, so this
+// needs TPOCAInstance.AllowByteCodeLoading, which is off by default.
+function POCAByteCodeFunctionLOAD(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Name:TPOCARawByteString;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "ByteCode.load"');
+ end;
+ if not Context^.Instance^.AllowByteCodeLoading then begin
+  POCARuntimeError(Context,'Loading bytecode from scripts is switched off, see AllowByteCodeLoading');
+ end;
+ if CountArguments>1 then begin
+  Name:=POCAGetStringValue(Context,Arguments^[1]);
+ end else begin
+  Name:='<bytecode>';
+ end;
+ result:=POCABindToContext(Context,POCALoadCodeFromString(Context^.Instance,Context,POCAGetStringValue(Context,Arguments^[0]),Name));
+end;
+
+// ByteCode.isByteCode(data): whether the data begins like stored bytecode
+function POCAByteCodeFunctionISBYTECODE(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "ByteCode.isByteCode"');
+ end;
+ result.Num:=ord(POCAIsByteCode(POCAGetStringValue(Context,Arguments^[0]))) and 1;
+end;
+
+// ByteCode.info(data): what the stored bytecode says about itself, without loading
+// it, or null when this build could not load it at all
+function POCAByteCodeFunctionINFO(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
+var Data:TPOCARawByteString;
+    Dependencies:TPOCAByteCodeDependencies;
+    Stream:TMemoryStream;
+    List,Entry:TPOCAValue;
+    Index:TPOCAInt32;
+begin
+ if CountArguments<1 then begin
+  POCARuntimeError(Context,'Bad arguments to "ByteCode.info"');
+ end;
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
+ Data:=POCAGetStringValue(Context,Arguments^[0]);
+ if not POCAIsByteCode(Data) then begin
+  exit;
+ end;
+ Dependencies:=nil;
+ Stream:=TMemoryStream.Create;
+ try
+  Stream.WriteBuffer(Data[1],length(Data));
+  Stream.Seek(0,soBeginning);
+  if not POCAReadByteCodeDependencies(Stream,Dependencies) then begin
+   exit;
+  end;
+ finally
+  FreeAndNil(Stream);
+ end;
+ result:=POCANewHash(Context);
+ POCAProtect(Context,result);
+ try
+  List:=POCANewArray(Context);
+  POCAHashSetString(Context,result,'dependencies',List);
+  for Index:=0 to length(Dependencies)-1 do begin
+   Entry:=POCANewHash(Context);
+   POCAArrayPush(List,Entry);
+   POCAHashSetString(Context,Entry,'file',POCANewString(Context,Dependencies[Index].FileName));
+   POCAHashSetString(Context,Entry,'time',POCANewNumber(Context,Dependencies[Index].ModificationTime));
+  end;
+ finally
+  POCAUnprotect(Context,result);
+ end;
+end;
+
+function POCAInitByteCodeNamespace(Context:PPOCAContext):TPOCAValue;
+begin
+ result:=POCANewHash(Context);
+ POCAAddNativeFunction(Context,result,'compile',POCAByteCodeFunctionCOMPILE);
+ POCAAddNativeFunction(Context,result,'save',POCAByteCodeFunctionSAVE);
+ POCAAddNativeFunction(Context,result,'load',POCAByteCodeFunctionLOAD);
+ POCAAddNativeFunction(Context,result,'isByteCode',POCAByteCodeFunctionISBYTECODE);
+ POCAAddNativeFunction(Context,result,'info',POCAByteCodeFunctionINFO);
+end;
+
 function POCAInitGlobalNamespace(Context:PPOCAContext):TPOCAValue;
 begin
  result:=POCANewHash(Context);
+ POCAHashSetString(Context,result,'ByteCode',POCAInitByteCodeNamespace(Context));
  POCAHashSetString(Context,result,'GarbageCollector',POCAInitGarbageCollectorNamespace(Context));
  POCAHashSetString(Context,result,'ModuleManager',POCAInitModuleManagerNamespace(Context));
  POCAHashSetString(Context,result,'Math',POCAInitMathNamespace(Context));
@@ -24573,7 +24709,7 @@ var POCABinaryTokens:TPOCATokenTypes=[];
     POCABinaryOrPrefixTokens:TPOCATokenTypes=[];
     POCABinaryToPrefixUnaryTokenCorrectionMap:TPOCABinaryToPrefixUnaryTokenCorrectionMap;
 
-function POCACompile(Instance:PPOCAInstance;Context:PPOCAContext;const Source:TPOCARawByteString;const SourceFileName:TPOCARawByteString=''):TPOCAValue;
+function POCACompile(Instance:PPOCAInstance;Context:PPOCAContext;const Source:TPOCARawByteString;const SourceFileName:TPOCARawByteString='';const aDependencies:PPOCAByteCodeDependencies=nil):TPOCAValue;
 type PPPOCAToken=^PPOCAToken;
      PPOCAToken=^TPOCAToken;
      TPOCAToken=packed record
@@ -24626,6 +24762,9 @@ type PPPOCAToken=^PPOCAToken;
       OutputInfoCount:TPOCAInt32;
       OutputText:TPOCARawByteString;
       OutputTextLength:TPOCAInt32;
+      // The files pulled in with #include, for the bytecode cache
+      Dependencies:TPOCAByteCodeDependencies;
+      DependenciesCount:TPOCAInt32;
      end;
      TPOCAPreprocessorInstance=record
       Preprocessor:TPOCAPreprocessor;
@@ -24922,6 +25061,28 @@ var TokenList:PPOCAToken;
    InputStack[i].Buffer:=Text;
    InputStack[i].BufferPosition:=1;
    InputStack[i].BufferLine:=0;
+  end;
+  // What an included file was called and when it was last changed, so that a cache
+  // of the bytecode can tell whether it still fits
+  procedure AddDependency(const FileName:TPOCARawByteString);
+  var i:TPOCAInt32;
+      Time:TDateTime;
+  begin
+   for i:=0 to ParserInstance.Preprocessor.DependenciesCount-1 do begin
+    if ParserInstance.Preprocessor.Dependencies[i].FileName=FileName then begin
+     exit;
+    end;
+   end;
+   i:=ParserInstance.Preprocessor.DependenciesCount;
+   if i>=length(ParserInstance.Preprocessor.Dependencies) then begin
+    SetLength(ParserInstance.Preprocessor.Dependencies,(i+1)*2);
+   end;
+   if not FileAgeUTC(String(FileName),Time,true) then begin
+    Time:=0.0;
+   end;
+   ParserInstance.Preprocessor.Dependencies[i].FileName:=FileName;
+   ParserInstance.Preprocessor.Dependencies[i].ModificationTime:=Time;
+   ParserInstance.Preprocessor.DependenciesCount:=i+1;
   end;
   procedure PopInputSource;
   var i:TPOCAInt32;
@@ -25819,6 +25980,7 @@ var TokenList:PPOCAToken;
      end;
     end;
     {$i-}closefile(f);{$i+}
+    AddDependency(ffn);
    end else begin
     if m=ord('"') then begin
      AddError('#include: File "'+fn+'" I/O error');
@@ -39971,6 +40133,7 @@ var TokenList:PPOCAToken;
   FillChar(Parser,sizeof(TPOCAParser),#0);
  end;
 var Parser:TPOCAParser;
+    DependencyIndex:TPOCAInt32;
 {$ifdef POCAVerifyByteCodeAfterCompile}
     VerifyError:TPOCARawByteString;
 {$endif}
@@ -40008,6 +40171,13 @@ begin
     PreprocessorInstance.Preprocessor.InputText:=Source;
     ProcessPreprocessor(PreprocessorInstance,Parser);
    end;
+   if assigned(aDependencies) then begin
+    // What the source pulled in with #include, for a cache of the bytecode
+    SetLength(aDependencies^,PreprocessorInstance.Preprocessor.DependenciesCount);
+    for DependencyIndex:=0 to PreprocessorInstance.Preprocessor.DependenciesCount-1 do begin
+     aDependencies^[DependencyIndex]:=PreprocessorInstance.Preprocessor.Dependencies[DependencyIndex];
+    end;
+   end;
    ProcessLexer(Parser,PreprocessorInstance.Preprocessor.OutputText);
    ProcessTransformer(Parser);
    ProcessParser(Parser);
@@ -40043,6 +40213,113 @@ begin
    SetPrecisionMode(OldFPUPrecisionMode);
   end;
  end;
+end;
+
+// Where POCACompileCached keeps the bytecode of a source file
+function POCAByteCodeCacheFileName(const aSourceFileName:TPOCARawByteString):TPOCARawByteString;
+begin
+ result:=TPOCARawByteString(IncludeTrailingPathDelimiter(ExtractFilePath(String(aSourceFileName))+POCAByteCodeCacheDirectoryName)+
+                            ChangeFileExt(ExtractFileName(String(aSourceFileName)),POCAByteCodeFileExtension));
+end;
+
+// Compiles the source, or takes the bytecode from the cache next to it when the
+// instance has one switched on and what is stored there still fits the source and
+// everything it includes. A cache file that can not be read or does not fit is
+// simply written again, and one that can not be written is no reason to fail.
+//
+// Only bytecode from trusted sources may be loaded, see POCAVerifyCode. Since the
+// cache sits next to the sources, whoever may write there could run code anyway.
+function POCACompileCached(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aSource:TPOCARawByteString;const aSourceFileName:TPOCARawByteString):TPOCAValue;
+var CacheFileName,TemporaryFileName:TPOCARawByteString;
+    Dependencies,StoredDependencies:TPOCAByteCodeDependencies;
+    Stream:TFileStream;
+    Index:TPOCAInt32;
+    Time:TDateTime;
+    Fits:Boolean;
+begin
+
+ if (not aInstance^.ByteCodeCache) or (length(aSourceFileName)=0) or not FileExists(String(aSourceFileName)) then begin
+  result:=POCACompile(aInstance,aContext,aSource,aSourceFileName);
+  exit;
+ end;
+
+ CacheFileName:=POCAByteCodeCacheFileName(aSourceFileName);
+
+ if FileExists(String(CacheFileName)) then begin
+  try
+   Stream:=TFileStream.Create(String(CacheFileName),fmOpenRead or fmShareDenyWrite);
+   try
+    StoredDependencies:=nil;
+    Fits:=POCAReadByteCodeDependencies(Stream,StoredDependencies) and (length(StoredDependencies)>0);
+    if Fits then begin
+     for Index:=0 to length(StoredDependencies)-1 do begin
+      if (not FileAgeUTC(String(StoredDependencies[Index].FileName),Time,true)) or
+         (Time<>StoredDependencies[Index].ModificationTime) then begin
+       Fits:=false;
+       break;
+      end;
+     end;
+    end;
+    if Fits then begin
+     result:=POCALoadCodeFromStream(aInstance,aContext,Stream,aSourceFileName);
+     exit;
+    end;
+   finally
+    FreeAndNil(Stream);
+   end;
+  except
+   on e:EPOCAByteCodeError do begin
+   end;
+   on e:EStreamError do begin
+   end;
+   on e:EInOutError do begin
+   end;
+  end;
+ end;
+
+ Dependencies:=nil;
+ result:=POCACompile(aInstance,aContext,aSource,aSourceFileName,@Dependencies);
+
+ // The source itself comes first, the files it included after it
+ SetLength(Dependencies,length(Dependencies)+1);
+ for Index:=length(Dependencies)-1 downto 1 do begin
+  Dependencies[Index]:=Dependencies[Index-1];
+ end;
+ if not FileAgeUTC(String(aSourceFileName),Time,true) then begin
+  Time:=0.0;
+ end;
+ Dependencies[0].FileName:=aSourceFileName;
+ Dependencies[0].ModificationTime:=Time;
+
+ TemporaryFileName:=CacheFileName+'.'+TPOCARawByteString(IntToStr(Random($7fffffff)))+'.tmp';
+ try
+  if ForceDirectories(ExtractFilePath(String(CacheFileName))) then begin
+   Stream:=TFileStream.Create(String(TemporaryFileName),fmCreate);
+   try
+    POCASaveCodeToStream(aContext,Stream,result,[],Dependencies);
+   finally
+    FreeAndNil(Stream);
+   end;
+   if not RenameFile(String(TemporaryFileName),String(CacheFileName)) then begin
+    // Some targets do not replace an existing file on their own
+    DeleteFile(String(CacheFileName));
+    if not RenameFile(String(TemporaryFileName),String(CacheFileName)) then begin
+     DeleteFile(String(TemporaryFileName));
+    end;
+   end;
+  end;
+ except
+  on e:EPOCAByteCodeError do begin
+   DeleteFile(String(TemporaryFileName));
+  end;
+  on e:EStreamError do begin
+   DeleteFile(String(TemporaryFileName));
+  end;
+  on e:EInOutError do begin
+   DeleteFile(String(TemporaryFileName));
+  end;
+ end;
+
 end;
 
 procedure POCASave(Context:PPOCAContext;Obj:TPOCAValue);
@@ -49919,6 +50196,7 @@ const POCAByteCodeFileSignature:TPOCAValueDataFileHeaderSignature=('P','B','C','
       POCAByteCodeChunkSRCF:TPOCAValueDataFileHeaderSignature=('S','R','C','F');
       POCAByteCodeChunkCODE:TPOCAValueDataFileHeaderSignature=('C','O','D','E');
       POCAByteCodeChunkLINE:TPOCAValueDataFileHeaderSignature=('l','i','n','e');
+      POCAByteCodeChunkDEPS:TPOCAValueDataFileHeaderSignature=('d','e','p','s');
 
       // Flags of the header, which only tell what has been left out
       pbhfDEBUGINFOSTRIPPED=TPOCAUInt32(1 shl 0);
@@ -50068,7 +50346,7 @@ end;
 // interpreter writes to go back to how the compiler left them, and code objects
 // that nothing refers to, which the compiler leaves behind when it generates a
 // loop a second time, are stored as null.
-procedure POCASaveCodeToStream(const aContext:PPOCAContext;const aStream:TStream;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions);
+procedure POCASaveCodeToStream(const aContext:PPOCAContext;const aStream:TStream;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions;const aDependencies:TPOCAByteCodeDependencies);
 var Code:TPOCAValue;
     RootCode:PPOCACode;
     VerifyError:TPOCARawByteString;
@@ -50081,7 +50359,7 @@ var Code:TPOCAValue;
     SourceFileIndices:TPOCAUInt64HashMap;
     SourceFileNames:array of TPOCAUInt32;
     CountSourceFiles:TPOCAInt32;
-    MetaChunk,StringChunk,SourceFileChunk,CodeChunk,LineChunk,Payload,Header:TMemoryStream;
+    MetaChunk,StringChunk,SourceFileChunk,CodeChunk,LineChunk,DependencyChunk,Payload,Header:TMemoryStream;
     Index,LineIndex,CountLineTables:TPOCAInt32;
     CheckSum,FileFlags:TPOCAUInt32;
  procedure Fail(const aReason:TPOCAByteCodeErrorReason;const aMessage:TPOCARawByteString);
@@ -50343,6 +50621,7 @@ begin
  SourceFileChunk:=nil;
  CodeChunk:=nil;
  LineChunk:=nil;
+ DependencyChunk:=nil;
  Payload:=nil;
  Header:=nil;
  try
@@ -50355,6 +50634,7 @@ begin
   SourceFileChunk:=TMemoryStream.Create;
   CodeChunk:=TMemoryStream.Create;
   LineChunk:=TMemoryStream.Create;
+  DependencyChunk:=TMemoryStream.Create;
   Payload:=TMemoryStream.Create;
   Header:=TMemoryStream.Create;
 
@@ -50418,6 +50698,20 @@ begin
    POCAByteCodeWriteChunk(Payload,POCAByteCodeChunkLINE,LineChunk);
   end;
 
+  // What the code was compiled from, so that a cache can tell whether it still
+  // fits. Nothing here is needed to run the code, see POCAReadByteCodeDependencies.
+  if length(aDependencies)>0 then begin
+   POCAByteCodeWriteU32(DependencyChunk,length(aDependencies));
+   for Index:=0 to length(aDependencies)-1 do begin
+    POCAByteCodeWriteU32(DependencyChunk,length(aDependencies[Index].FileName));
+    if length(aDependencies[Index].FileName)>0 then begin
+     DependencyChunk.WriteBuffer(aDependencies[Index].FileName[1],length(aDependencies[Index].FileName));
+    end;
+    POCAByteCodeWriteU64(DependencyChunk,PPOCAUInt64(@aDependencies[Index].ModificationTime)^);
+   end;
+   POCAByteCodeWriteChunk(Payload,POCAByteCodeChunkDEPS,DependencyChunk);
+  end;
+
   if TPOCAUInt64(Payload.Size)>POCAByteCodeMaximumPayloadSize then begin
    Fail(pbceUNSUPPORTEDCODE,'the code is too large');
   end;
@@ -50452,6 +50746,7 @@ begin
  finally
   FreeAndNil(Header);
   FreeAndNil(Payload);
+  FreeAndNil(DependencyChunk);
   FreeAndNil(LineChunk);
   FreeAndNil(CodeChunk);
   FreeAndNil(SourceFileChunk);
@@ -50964,6 +51259,116 @@ begin
   result:=(aStream.Read(Signature,SizeOf(TPOCAValueDataFileHeaderSignature))=SizeOf(TPOCAValueDataFileHeaderSignature)) and
           CompareMem(@Signature,@POCAByteCodeFileSignature,SizeOf(TPOCAValueDataFileHeaderSignature));
  finally
+  aStream.Position:=OldPosition;
+ end;
+end;
+
+// The files that stored bytecode was compiled from, as POCASaveCodeToStream got
+// them, without loading the code itself. It says no for anything this build could
+// not load anyway, so that a cache of it counts as out of date then. The stream is
+// left where it was.
+function POCAReadByteCodeDependencies(const aStream:TStream;out aDependencies:TPOCAByteCodeDependencies):Boolean;
+var Data:array of TPOCAUInt8;
+    DataSize,OldPosition:TPOCAInt64;
+ function ReadU32(const aOffset:TPOCAInt64):TPOCAUInt32;
+ begin
+  result:=TPOCAUInt32(Data[aOffset]) or
+          (TPOCAUInt32(Data[aOffset+1]) shl 8) or
+          (TPOCAUInt32(Data[aOffset+2]) shl 16) or
+          (TPOCAUInt32(Data[aOffset+3]) shl 24);
+ end;
+ function ReadU64(const aOffset:TPOCAInt64):TPOCAUInt64;
+ begin
+  result:=TPOCAUInt64(ReadU32(aOffset)) or (TPOCAUInt64(ReadU32(aOffset+4)) shl 32);
+ end;
+ function Parse:Boolean;
+ var Position,ChunkSize,ChunkEnd:TPOCAInt64;
+     Count,Index,NameLength:TPOCAUInt32;
+     Bits:TPOCAUInt64;
+     ID:TPOCAValueDataFileHeaderSignature;
+     FileName:TPOCARawByteString;
+ begin
+  result:=false;
+  if (DataSize<POCAByteCodeFileHeaderSize) or (DataSize>TPOCAInt64(POCAByteCodeMaximumPayloadSize)) then begin
+   exit;
+  end;
+  if (not CompareMem(@Data[0],@POCAByteCodeFileSignature,SizeOf(TPOCAValueDataFileHeaderSignature))) or
+     ((TPOCAUInt32(Data[4]) or (TPOCAUInt32(Data[5]) shl 8))<>POCAByteCodeContainerMajorVersion) or
+     (ReadU32(8)<>POCAByteCodeABIVersion) or
+     (ReadU32(12)<>POCAByteCodeABIFingerprint) or
+     (ReadU32(16)<>POCAByteCodeFeatureFlags) or
+     (ReadU64(24)<>TPOCAUInt64(DataSize-POCAByteCodeFileHeaderSize)) then begin
+   exit;
+  end;
+  Position:=POCAByteCodeFileHeaderSize;
+  while (Position+POCAByteCodeChunkHeaderSize)<=DataSize do begin
+   Move(Data[Position],ID,SizeOf(TPOCAValueDataFileHeaderSignature));
+   ChunkSize:=TPOCAInt64(ReadU64(Position+8));
+   inc(Position,POCAByteCodeChunkHeaderSize);
+   if (ChunkSize<0) or ((Position+ChunkSize)>DataSize) then begin
+    exit;
+   end;
+   if CompareMem(@ID,@POCAByteCodeChunkDEPS,SizeOf(TPOCAValueDataFileHeaderSignature)) then begin
+    ChunkEnd:=Position+ChunkSize;
+    if (Position+4)>ChunkEnd then begin
+     exit;
+    end;
+    Count:=ReadU32(Position);
+    inc(Position,4);
+    // A dependency takes at least 12 bytes
+    if Count>TPOCAUInt32((ChunkEnd-Position) div 12) then begin
+     exit;
+    end;
+    SetLength(aDependencies,Count);
+    for Index:=0 to Count-1 do begin
+     if (Position+4)>ChunkEnd then begin
+      exit;
+     end;
+     NameLength:=ReadU32(Position);
+     inc(Position,4);
+     if (NameLength>TPOCAUInt32(ChunkEnd-Position)) or ((Position+TPOCAInt64(NameLength)+8)>ChunkEnd) then begin
+      exit;
+     end;
+     FileName:='';
+     SetLength(FileName,NameLength);
+     if NameLength>0 then begin
+      Move(Data[Position],FileName[1],NameLength);
+      inc(Position,NameLength);
+     end;
+     Bits:=ReadU64(Position);
+     inc(Position,8);
+     aDependencies[Index].FileName:=FileName;
+     aDependencies[Index].ModificationTime:=PDouble(@Bits)^;
+    end;
+    result:=true;
+    exit;
+   end;
+   inc(Position,ChunkSize);
+  end;
+  // Nothing was stored about where the code came from
+  result:=true;
+ end;
+begin
+ aDependencies:=nil;
+ Data:=nil;
+ OldPosition:=aStream.Position;
+ try
+  DataSize:=aStream.Size-OldPosition;
+  if (DataSize<POCAByteCodeFileHeaderSize) or (DataSize>TPOCAInt64(POCAByteCodeMaximumPayloadSize)) then begin
+   result:=false;
+   exit;
+  end;
+  SetLength(Data,DataSize);
+  if aStream.Read(Data[0],DataSize)<>DataSize then begin
+   result:=false;
+   exit;
+  end;
+  result:=Parse;
+  if not result then begin
+   aDependencies:=nil;
+  end;
+ finally
+  SetLength(Data,0);
   aStream.Position:=OldPosition;
  end;
 end;

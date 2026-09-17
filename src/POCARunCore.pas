@@ -746,7 +746,7 @@ var Instance:PPOCAInstance;
     Mode:TMode;
     VerifyError:TPOCARawByteString;
     SaveOptions:TPOCAByteCodeSaveOptions;
-    ShowUsage:boolean;
+    ShowUsage,UseCache,AllowByteCodeLoading:boolean;
     Stream:TStream;
 begin
  ExitCode:=0;
@@ -767,6 +767,8 @@ begin
  FileName:='';
  OutputFileName:='';
  ShowUsage:=false;
+ UseCache:=false;
+ AllowByteCodeLoading:=false;
  FirstParameter:=1;
  while FirstParameter<=ParamCount do begin
   Parameter:=ParamStr(FirstParameter);
@@ -781,6 +783,10 @@ begin
    Mode:=mCompile;
   end else if Parameter='--strip' then begin
    SaveOptions:=[pbsoSTRIPDEBUGINFO,pbsoSTRIPSOURCEINFO];
+  end else if Parameter='--cache' then begin
+   UseCache:=true;
+  end else if Parameter='--allow-bytecode-loading' then begin
+   AllowByteCodeLoading:=true;
   end else if Parameter='-o' then begin
    inc(FirstParameter);
    OutputFileName:=ParamStr(FirstParameter);
@@ -806,6 +812,8 @@ begin
   writeln('  -c, --compile   store the bytecode instead of running it');
   writeln('  -o <file>       where -c writes to, by default the input file with .pbc');
   writeln('  --strip         leave the line tables and source file names out');
+  writeln('  --cache         keep the bytecode of the file and its modules in .poca-cache');
+  writeln('  --allow-bytecode-loading  let the script itself load bytecode with ByteCode.load');
   writeln('  --disasm        print the bytecode without running it');
   writeln('  --verify        check the bytecode without running it');
   writeln('  --version       print the version');
@@ -814,6 +822,8 @@ begin
  end else begin
   Instance:=POCAInstanceCreate;
   try
+   Instance^.ByteCodeCache:=UseCache;
+   Instance^.AllowByteCodeLoading:=AllowByteCodeLoading;
    Context:=POCAContextCreate(Instance);
    try
     InitializeForPOCAContext(Context);
@@ -836,7 +846,7 @@ begin
        if POCAIsByteCodeStream(Stream) then begin
         Code:=POCALoadCodeFromStream(Instance,Context,Stream,TPOCAUTF8String(FileName));
        end else begin
-        Code:=POCACompile(Instance,Context,POCAGetFileContent(TPOCAUTF8String(FileName)),TPOCAUTF8String(FileName));
+        Code:=POCACompileCached(Instance,Context,POCAGetFileContent(TPOCAUTF8String(FileName)),TPOCAUTF8String(FileName));
        end;
       finally
        Stream.Free;
