@@ -574,13 +574,21 @@ const POCAVersion='2026-07-13-00-59-0000';
       popMCALLINTRINSIC=171;
       popN_POSTINC=172;
       popN_POSTDEC=173;
-      popCOUNT=174;
+      popTRYLEAVE=174;
+      popCOUNT=175;
 {$else}
       popMCALLINTRINSIC=168;
       popN_POSTINC=169;
       popN_POSTDEC=170;
-      popCOUNT=171;
+      popTRYLEAVE=171;
+      popCOUNT=172;
 {$endif}
+
+      // How a try, catch or finally block has been left other than by reaching its
+      // end, see TPOCAContext.TryExitKind
+      ptekNONE=0;
+      ptekRETURN=1;
+      ptekJUMP=2;
 
       // Intrinsics: a method call on Math whose callee turns out to still be the
       // built in function is computed inline instead of being called. The check
@@ -2069,6 +2077,16 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       // native run, which costs more than the flag saves.
       JITFrameChanged:TPOCAInt32;
 
+      // Set when the try, catch or finally block being run has been left by a
+      // return, with the value to return, or by a break, continue, fallthrough or
+      // retry, with where to go and how many try statements that leaves, see
+      // POCARunTry. Only ever set right before the block's run ends and taken
+      // right after, so the value needs no protection in between.
+      TryExitKind:TPOCAInt32;
+      TryExitValue:TPOCAValue;
+      TryExitTarget:TPOCAUInt32;
+      TryExitLevels:TPOCAUInt32;
+
      end;
 
      TPOCAInstance=record
@@ -2282,7 +2300,7 @@ const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAP
       // their meaning, of the kinds of constants, the intrinsic ids or the flags
       // of a code object. POCAByteCodeABIFingerprint catches a forgotten raise
       // after a change of the opcode table, but not a change of meaning.
-      POCAByteCodeABIVersion=TPOCAUInt32(1);
+      POCAByteCodeABIVersion=TPOCAUInt32(2);
 
       // Build options that change the bytecode itself, which a loader has to
       // match exactly.
@@ -31305,6 +31323,7 @@ var TokenList:PPOCAToken;
        BreakJumps:array of TPOCAUInt32;
        CountBreakJumps:TPOCAInt32;
        BreakRegisters:array of TPOCACodeGeneratorRegisters;
+       TryDepth:TPOCAInt32;
       end;
       TPOCACodeGeneratorSwitchs=array of TPOCACodeGeneratorSwitch;
       PPOCACodeGeneratorLoop=^TPOCACodeGeneratorLoop;
@@ -31316,6 +31335,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
        HasPushLevel:boolean;
 {$endif}
+       TryDepth:TPOCAInt32;
       end;
       TPOCACodeGeneratorLoops=array of TPOCACodeGeneratorLoop;
       TPOCACodeGeneratorScopeSymbolKind=
@@ -31357,6 +31377,7 @@ var TokenList:PPOCAToken;
        JumpRetryPos:TPOCAUInt32;
        HasRetry:boolean;
        HasFallthrough:boolean;
+       TryDepth:TPOCAInt32;
       end;
       TPOCACodeGeneratorWhenSwitchCaseBlocks=array of TPOCACodeGeneratorWhenSwitchCaseBlock;
       PPOCACodeGeneratorBreakContinueScopeKind=^TPOCACodeGeneratorBreakContinueScopeKind;
@@ -31418,6 +31439,8 @@ var TokenList:PPOCAToken;
        CountRegExps:TPOCAInt32;
        CountFrameValues:TPOCAInt32;
        Level:TPOCAUInt64;
+       // How many try statements the code being generated is in
+       TryDepth:TPOCAInt32;
       end;
       TScopeState=record
        CountScopes:TPOCAInt32;
@@ -33080,6 +33103,71 @@ var TokenList:PPOCAToken;
    procedure FixTargetImmediate(Position:TPOCAInt32);
    begin
     CodeGenerator^.ByteCode[Position]:=CodeGenerator^.ByteCodeSize;
+   end;
+   // Emits a jump to a statement that is in aTryDepth try statements, which has to
+   // leave those try statements that the code being generated is in on top of
+   // them, see popTRYLEAVE. Returns where the target goes, for fixing it up later.
+   function EmitLeavingJump(const aOpcode,aTarget:TPOCAUInt32;const aTryDepth:TPOCAInt32):TPOCAInt32;
+   begin
+    result:=CodeGenerator^.ByteCodeSize+1;
+    if CodeGenerator^.TryDepth>aTryDepth then begin
+     EmitOpcode(popTRYLEAVE,aTarget,TPOCAUInt32(CodeGenerator^.TryDepth-aTryDepth));
+    end else begin
+     EmitOpcode(aOpcode,aTarget);
+    end;
+   end;
+   // Throws away the code from aStart on, to generate it once more. The jumps out
+   // of that code which enclosing loops, switches and when blocks have noted down
+   // go as well, since fixing them up later would write into whatever has come to
+   // stand at their place by then.
+   procedure DiscardCode(const aStart:TPOCAInt32);
+   var Index,From,Into:TPOCAInt32;
+   begin
+    CodeGenerator^.ByteCodeSize:=aStart;
+    while (CodeGenerator^.CountOpcodes>0) and (CodeGenerator^.Opcodes[CodeGenerator^.CountOpcodes-1]>=aStart) do begin
+     dec(CodeGenerator^.CountOpcodes);
+    end;
+    for Index:=0 to CodeGenerator^.LoopTop-1 do begin
+     Into:=0;
+     for From:=0 to CodeGenerator^.Loops[Index].CountBreakJumps-1 do begin
+      if TPOCAInt32(CodeGenerator^.Loops[Index].BreakJumps[From])<aStart then begin
+       CodeGenerator^.Loops[Index].BreakJumps[Into]:=CodeGenerator^.Loops[Index].BreakJumps[From];
+       CodeGenerator^.Loops[Index].BreakRegisters[Into]:=CodeGenerator^.Loops[Index].BreakRegisters[From];
+       inc(Into);
+      end;
+     end;
+     CodeGenerator^.Loops[Index].CountBreakJumps:=Into;
+     Into:=0;
+     for From:=0 to CodeGenerator^.Loops[Index].CountContinueJumps-1 do begin
+      if TPOCAInt32(CodeGenerator^.Loops[Index].ContinueJumps[From])<aStart then begin
+       CodeGenerator^.Loops[Index].ContinueJumps[Into]:=CodeGenerator^.Loops[Index].ContinueJumps[From];
+       CodeGenerator^.Loops[Index].ContinueRegisters[Into]:=CodeGenerator^.Loops[Index].ContinueRegisters[From];
+       inc(Into);
+      end;
+     end;
+     CodeGenerator^.Loops[Index].CountContinueJumps:=Into;
+    end;
+    for Index:=0 to CodeGenerator^.SwitchTop-1 do begin
+     Into:=0;
+     for From:=0 to CodeGenerator^.Switchs[Index].CountBreakJumps-1 do begin
+      if TPOCAInt32(CodeGenerator^.Switchs[Index].BreakJumps[From])<aStart then begin
+       CodeGenerator^.Switchs[Index].BreakJumps[Into]:=CodeGenerator^.Switchs[Index].BreakJumps[From];
+       CodeGenerator^.Switchs[Index].BreakRegisters[Into]:=CodeGenerator^.Switchs[Index].BreakRegisters[From];
+       inc(Into);
+      end;
+     end;
+     CodeGenerator^.Switchs[Index].CountBreakJumps:=Into;
+    end;
+    for Index:=0 to CodeGenerator^.CountWhenSwitchCaseBlocks-1 do begin
+     Into:=0;
+     for From:=0 to CodeGenerator^.WhenSwitchCaseBlocks[Index].CountFallthroughs-1 do begin
+      if TPOCAInt32(CodeGenerator^.WhenSwitchCaseBlocks[Index].Fallthroughs[From])<aStart then begin
+       CodeGenerator^.WhenSwitchCaseBlocks[Index].Fallthroughs[Into]:=CodeGenerator^.WhenSwitchCaseBlocks[Index].Fallthroughs[From];
+       inc(Into);
+      end;
+     end;
+     CodeGenerator^.WhenSwitchCaseBlocks[Index].CountFallthroughs:=Into;
+    end;
    end;
    function GenerateExpression(t:PPOCAToken;OutReg:TPOCAInt32=-1;DoNeedResult:boolean=false):TPOCAInt32; forward;
    function GenerateBlock(t:PPOCAToken;OutReg:TPOCAInt32=-1;DoNeedResult:boolean=false;NewScope:boolean=true):TPOCAInt32;
@@ -35765,6 +35853,7 @@ var TokenList:PPOCAToken;
      s:=@CodeGenerator^.Switchs[CodeGenerator^.SwitchTop];
      s^.CountBreakJumps:=0;
      s^.BreakRegisters:=nil;
+     s^.TryDepth:=CodeGenerator^.TryDepth;
      StartBreakContinueScope(bcskSWITCH,CodeGenerator^.SwitchTop);
      inc(CodeGenerator^.SwitchTop);
      result:=CodeGenerator^.ByteCodeSize;
@@ -35804,6 +35893,7 @@ var TokenList:PPOCAToken;
 {$ifdef POCAClosureCopyOnIteration}
      l^.HasPushLevel:=false;
 {$endif}
+     l^.TryDepth:=CodeGenerator^.TryDepth;
      StartBreakContinueScope(bcskLOOP,CodeGenerator^.LoopTop);
      inc(CodeGenerator^.LoopTop);
      result:=CodeGenerator^.ByteCodeSize;
@@ -36246,6 +36336,7 @@ var TokenList:PPOCAToken;
       Emit($ffffffff);
       EndPos:=CodeGenerator^.ByteCodeSize;
       Emit($ffffffff);
+      inc(CodeGenerator^.TryDepth);
       if assigned(CatchBlock) then begin
        CatchIdentifier:=CatchBlock^.Children;
        FullCatchIdentifier:=nil;
@@ -36423,6 +36514,7 @@ var TokenList:PPOCAToken;
        FixTargetImmediate(EndPos);
        ClearRegisters;
       end;
+      dec(CodeGenerator^.TryDepth);
       FreeRegister(CatchIdentifierRegister);
      end else begin
       SyntaxError('Bad TRY-block expression',t^.SourceFile,t^.SourceLine,t^.SourceColumn);
@@ -36561,7 +36653,7 @@ var TokenList:PPOCAToken;
               AreRegistersEqual(Registers[2],Registers[3],false,false) and
               AreRegistersEqual(Registers[4],Registers[3],false,false)) then begin
        ScopeReset;
-       CodeGenerator^.ByteCodeSize:=Start;
+       DiscardCode(Start);
        SetRegisters(Registers[0]);
        CombineCurrentRegisters(Registers[1]);
        CombineCurrentRegisters(Registers[2]);
@@ -36695,7 +36787,7 @@ var TokenList:PPOCAToken;
               AreRegistersEqual(Registers[1],Registers[2],false,false) and
               AreRegistersEqual(Registers[4],Registers[2],false,false)) then begin
        ScopeReset;
-       CodeGenerator^.ByteCodeSize:=Start;
+       DiscardCode(Start);
        SetRegisters(Registers[0]);
        CombineCurrentRegisters(Registers[1]);
        CombineCurrentRegisters(Registers[4]);
@@ -36842,7 +36934,7 @@ var TokenList:PPOCAToken;
               AreRegistersEqual(Registers[5],Registers[2],false,false)) then begin
        CodeGenerator^.CountFrameValues:=CountFrameValues;
        ScopeReset;
-       CodeGenerator^.ByteCodeSize:=Start;
+       DiscardCode(Start);
        SetRegisters(Registers[0]);
        StartLoop(LabelToken,false);
 {$ifdef POCAClosureCopyOnIteration}
@@ -37040,7 +37132,7 @@ var TokenList:PPOCAToken;
         FreeRegister(Reg3);
         FreeRegister(Reg4);
         ScopeReset;
-        CodeGenerator^.ByteCodeSize:=Start;
+        DiscardCode(Start);
 {$ifdef POCAClosureCopyOnIteration}
         if NeedIterationLevel then begin
          EmitOpcode(popPUSHLOCALVALUELEVEL);
@@ -37192,10 +37284,9 @@ var TokenList:PPOCAToken;
             SetLength(SwitchItem^.BreakRegisters,SwitchItem^.CountBreakJumps shl 1);
            end;
           end;
-          SwitchItem^.BreakJumps[SwitchItem^.CountBreakJumps]:=CodeGenerator^.ByteCodeSize+1;
           SwitchItem^.BreakRegisters[SwitchItem^.CountBreakJumps]:=GetRegisters;
+          SwitchItem^.BreakJumps[SwitchItem^.CountBreakJumps]:=EmitLeavingJump(popJMP,0,SwitchItem^.TryDepth);
           inc(SwitchItem^.CountBreakJumps);
-          EmitOpcode(popJMP,0);
           exit;
          end;
         end;
@@ -37242,10 +37333,9 @@ var TokenList:PPOCAToken;
         SetLength(LoopItem^.BreakRegisters,LoopItem^.CountBreakJumps shl 1);
        end;
       end;
-      LoopItem^.BreakJumps[LoopItem^.CountBreakJumps]:=CodeGenerator^.ByteCodeSize+1;
       LoopItem^.BreakRegisters[LoopItem^.CountBreakJumps]:=GetRegisters;
+      LoopItem^.BreakJumps[LoopItem^.CountBreakJumps]:=EmitLeavingJump(popJMP,0,LoopItem^.TryDepth);
       inc(LoopItem^.CountBreakJumps);
-      EmitOpcode(popJMP,0);
      end else begin
       if LoopItem^.CountContinueJumps>=length(LoopItem^.ContinueJumps) then begin
        if LoopItem^.CountContinueJumps=0 then begin
@@ -37256,10 +37346,9 @@ var TokenList:PPOCAToken;
         SetLength(LoopItem^.ContinueRegisters,LoopItem^.CountContinueJumps shl 1);
        end;
       end;
-      LoopItem^.ContinueJumps[LoopItem^.CountContinueJumps]:=CodeGenerator^.ByteCodeSize+1;
       LoopItem^.ContinueRegisters[LoopItem^.CountContinueJumps]:=GetRegisters;
+      LoopItem^.ContinueJumps[LoopItem^.CountContinueJumps]:=EmitLeavingJump(popJMP,0,LoopItem^.TryDepth);
       inc(LoopItem^.CountContinueJumps);
-      EmitOpcode(popJMP,0);
      end;
     end;
     function ParameterListLen(t:PPOCAToken):TPOCAInt32;
@@ -37810,6 +37899,7 @@ var TokenList:PPOCAToken;
      Item^.JumpRetryPos:=JumpRetryPos;
      Item^.HasRetry:=false;
      Item^.HasFallthrough:=false;
+     Item^.TryDepth:=CodeGenerator^.TryDepth;
      Item^.RetryRegisters:=GetRegisters;
      Item^.FallthroughRegisters:=GetRegisters;
      inc(CodeGenerator^.CountWhenSwitchCaseBlocks);
@@ -37860,8 +37950,7 @@ var TokenList:PPOCAToken;
         Item^.Fallthroughs[i]:=$ffffffff;
        end;
       end;
-      Item^.Fallthroughs[Item^.CountFallthroughs]:=CodeGenerator^.ByteCodeSize+1;
-      EmitOpcode(popJMP,0);
+      Item^.Fallthroughs[Item^.CountFallthroughs]:=EmitLeavingJump(popJMP,0,Item^.TryDepth);
       inc(Item^.CountFallthroughs);
      end;
     end;
@@ -37874,7 +37963,7 @@ var TokenList:PPOCAToken;
       Item:=@CodeGenerator^.WhenSwitchCaseBlocks[CodeGenerator^.CountWhenSwitchCaseBlocks-1];
       Item^.HasRetry:=true;
       CombineRegisters(Item^.RetryRegisters,GetRegisters);
-      EmitOpcode(popJMPLOOP,Item^.JumpRetryPos);
+      EmitLeavingJump(popJMPLOOP,Item^.JumpRetryPos,Item^.TryDepth);
      end;
     end;
     function GenerateWhenOrSwitch(t:PPOCAToken;OutReg:TPOCAInt32;const IsSwitch:boolean):TPOCAInt32;
@@ -38023,7 +38112,7 @@ var TokenList:PPOCAToken;
       Start:=CodeGenerator^.ByteCodeSize;
       ScopePush(ScopeState);
       for TryIndex:=0 to 1 do begin
-       CodeGenerator^.ByteCodeSize:=Start;
+       DiscardCode(Start);
        SetRegisters(Registers[0]);
        SetLength(WhenSwitchCases,CountWhenSwitchCases);
        begin
@@ -39651,6 +39740,7 @@ var TokenList:PPOCAToken;
      CodeGenerator^.Switchs:=nil;
      SetLength(CodeGenerator^.Switchs,CodeGenerator^.SwitchAllocated);
      CodeGenerator^.LoopTop:=0;
+     CodeGenerator^.TryDepth:=0;
      CodeGenerator^.LoopAllocated:=4;
      CodeGenerator^.Loops:=nil;
      SetLength(CodeGenerator^.Loops,CodeGenerator^.LoopAllocated);
@@ -42379,21 +42469,49 @@ begin
  end;
 end;
 
-function POCARunByteCode(Context:PPOCAContext):TPOCAValue; forward;
+function POCARunByteCode(Context:PPOCAContext;const BlockRun:boolean):TPOCAValue; forward;
 
+// Runs a try statement: each of its blocks runs on its own, and returns to here
+// either at its end, by an exception, or by leaving the block early, which a
+// return, break, continue, fallthrough or retry does. Such a way out is taken over
+// here and handed back once the finally block has run, see TPOCAContext.TryExitKind
+// and popTRY, which is what makes the way out reach past this statement.
 function POCARunTry(Context:PPOCAContext;Frame:PPOCAFrame;ResultReg,CatchReg,TryBlockPos,CatchBlockPos,FinallyBlockPos,EndPos:TPOCAUInt32):TPOCAUInt32;
 var FrameTop,NativeCallDepth:TPOCAInt32;
     rv,v:TPOCAValue;
+    ExitKind:TPOCAInt32;
+    ExitValue:TPOCAValue;
+    ExitTarget,ExitLevels:TPOCAUInt32;
+    ExitValueProtected:boolean;
 {$ifdef POCAClosureCopyOnIteration}
-    SavedCountOuterValueLevels:TPOCAInt32;
+    SavedCountOuterValueLevels,ExitCountOuterValueLevels:TPOCAInt32;
 {$ifdef POCAClosureArrayValues}
-    SavedLocalValues:TPOCAValue;
-    SavedOuterValueLevels:TPOCAValue;
+    SavedLocalValues,ExitLocalValues:TPOCAValue;
+    SavedOuterValueLevels,ExitOuterValueLevels:TPOCAValue;
 {$else}
-    SavedLocalValues:TPOCAValueArray;
-    SavedOuterValueLevels:TPOCAValueArrayArray;
+    SavedLocalValues,ExitLocalValues:TPOCAValueArray;
+    SavedOuterValueLevels,ExitOuterValueLevels:TPOCAValueArrayArray;
 {$endif}
 {$endif}
+ // Takes over how the block just run has been left, if not at its end, together
+ // with the levels of frame values open at that point, which a jump expects and
+ // which running the finally block would change
+ procedure TakeExit;
+ begin
+  ExitKind:=Context^.TryExitKind;
+  if ExitKind<>ptekNONE then begin
+   ExitValue:=Context^.TryExitValue;
+   ExitTarget:=Context^.TryExitTarget;
+   ExitLevels:=Context^.TryExitLevels;
+   Context^.TryExitKind:=ptekNONE;
+   Context^.TryExitValue.CastedUInt64:=POCAValueNullCastedUInt64;
+{$ifdef POCAClosureCopyOnIteration}
+   ExitCountOuterValueLevels:=Frame^.CountOuterValueLevels;
+   ExitLocalValues:=Frame^.LocalValues;
+   ExitOuterValueLevels:=Frame^.OuterValueLevels;
+{$endif}
+  end;
+ end;
 begin
  FrameTop:=Context^.FrameTop;
  NativeCallDepth:=Context^.NativeCallDepth;
@@ -42402,13 +42520,19 @@ begin
  SavedLocalValues:=Frame^.LocalValues;
  SavedOuterValueLevels:=Frame^.OuterValueLevels;
 {$endif}
+ ExitKind:=ptekNONE;
+ ExitValue.CastedUInt64:=POCAValueNullCastedUInt64;
+ ExitTarget:=0;
+ ExitLevels:=0;
+ ExitValueProtected:=false;
  try
   try
    if TryBlockPos<>$ffffffff then begin
     Context^.FrameTop:=FrameTop;
     Context^.NativeCallDepth:=NativeCallDepth;
     Frame^.InstructionPointer:=TryBlockPos;
-    rv:=POCARunByteCode(Context);
+    rv:=POCARunByteCode(Context,true);
+    TakeExit;
    end else begin
   //rv:=POCAValueNull;
     rv.CastedUInt64:=POCAValueNullCastedUInt64;
@@ -42463,7 +42587,8 @@ begin
       end;
       {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[CatchReg]{$else}Frame^.Registers[CatchReg]{$endif}:=v;
      end;
-     rv:=POCARunByteCode(Context);
+     rv:=POCARunByteCode(Context,true);
+     TakeExit;
     end;
    end;
   end;
@@ -42477,13 +42602,42 @@ begin
    Frame^.LocalValues:=SavedLocalValues;
    Frame^.OuterValueLevels:=SavedOuterValueLevels;
 {$endif}
-   rv:=POCARunByteCode(Context);
+   // A value on its way out has to stay alive while this runs
+   if (ExitKind=ptekRETURN) and POCAIsValueObject(ExitValue) then begin
+    POCAProtect(Context,ExitValue);
+    ExitValueProtected:=true;
+   end;
+   try
+    rv:=POCARunByteCode(Context,true);
+   finally
+    if ExitValueProtected then begin
+     POCAUnprotect(Context,ExitValue);
+    end;
+   end;
+   // Leaving the finally block early wins over how the block before was left.
+   // With an exception on its way, the exception wins, and this is dropped.
+   if Context^.TryExitKind<>ptekNONE then begin
+    TakeExit;
+   end;
   end;
   Context^.FrameTop:=FrameTop;
   Context^.NativeCallDepth:=NativeCallDepth;
  end;
  result:=EndPos;
  {$ifdef POCARegisterWindows}Frame^.RegisterWindow^[ResultReg]{$else}Frame^.Registers[ResultReg]{$endif}:=rv;
+ if ExitKind<>ptekNONE then begin
+{$ifdef POCAClosureCopyOnIteration}
+  if ExitKind=ptekJUMP then begin
+   Frame^.CountOuterValueLevels:=ExitCountOuterValueLevels;
+   Frame^.LocalValues:=ExitLocalValues;
+   Frame^.OuterValueLevels:=ExitOuterValueLevels;
+  end;
+{$endif}
+  Context^.TryExitKind:=ExitKind;
+  Context^.TryExitValue:=ExitValue;
+  Context^.TryExitTarget:=ExitTarget;
+  Context^.TryExitLevels:=ExitLevels;
+ end;
 end;
 
 procedure POCARunThrow(Context:PPOCAContext;Parameter:TPOCAValue);
@@ -46323,16 +46477,21 @@ end;
 {$ifend}
 {$endif}
 
-function POCARunByteCode(Context:PPOCAContext):TPOCAValue;
+// Runs from the innermost frame on. BlockRun tells that this runs a try, catch or
+// finally block for POCARunTry, which ends where that block does, as opposed to
+// the run of a whole call.
+function POCARunByteCode(Context:PPOCAContext;const BlockRun:boolean):TPOCAValue;
 var Code:PPOCACode;
     Frame:PPOCAFrame;
     Opcode:TPOCAUInt32;
     Operands:PPOCAUInt32Array;
     Registers:PPOCAValues;
     a,b:TPOCAValue;
+    BaseFrameTop:TPOCAInt32;
 begin
 //result:=POCAValueNull;
  result.CastedUInt64:=POCAValueNullCastedUInt64;
+ BaseFrameTop:=Context^.FrameTop;
  Frame:=@Context^.FrameStack[Context^.FrameTop-1];
  Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
 {$ifdef POCAHasJIT}
@@ -46766,6 +46925,13 @@ begin
      Context^.CallChild:=nil;
     end;
     dec(Context^.FrameTop);
+    if BlockRun and (Context^.FrameTop<BaseFrameTop) then begin
+     // Leaves the frame of the block being run, which the try statement it
+     // belongs to finishes, see popTRY
+     Context^.TryExitKind:=ptekRETURN;
+     Context^.TryExitValue:=a;
+     exit;
+    end;
     if Context^.FrameTop<=0 then begin
      Context^.Active:=false;
      result:=a;
@@ -46931,9 +47097,63 @@ begin
    end;
    popTRY:begin
     Frame^.InstructionPointer:=POCARunTry(Context,Frame,Operands^[0],Operands^[1],Operands^[2],Operands^[3],Operands^[4],Operands^[5]);
+    case Context^.TryExitKind of
+     ptekRETURN:begin
+      // A block has been left by a return, whose value is in the context. The
+      // same as popRETURN from here on, since it is this frame that returns.
+      a:=Context^.TryExitValue;
+      Context^.TryExitKind:=ptekNONE;
+      Context^.TryExitValue.CastedUInt64:=POCAValueNullCastedUInt64;
+      if assigned(Context^.CallChild) then begin
+       POCAContextDestroy(Context^.CallChild);
+       Context^.CallChild:=nil;
+      end;
+      dec(Context^.FrameTop);
+      if BlockRun and (Context^.FrameTop<BaseFrameTop) then begin
+       Context^.TryExitKind:=ptekRETURN;
+       Context^.TryExitValue:=a;
+       exit;
+      end;
+      if Context^.FrameTop<=0 then begin
+       Context^.Active:=false;
+       result:=a;
+       exit;
+      end;
+      begin
+       Frame:=@Context^.FrameStack[Context^.FrameTop-1];
+       Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
+       Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
+      end;
+      Registers^[Frame^.ResultRegister]:=a;
+      Context^.TemporarySavedObjectCount:=0;
+     end;
+     ptekJUMP:begin
+      // A block has been left by a jump, see popTRYLEAVE, which leaves this try
+      // statement and maybe further ones around it
+      dec(Context^.TryExitLevels);
+      if (Context^.TryExitLevels=0) or not BlockRun then begin
+       Context^.TryExitKind:=ptekNONE;
+       Frame^.InstructionPointer:=Context^.TryExitTarget;
+       if Context^.Instance^.Globals.Bottleneck then begin
+        POCAGarbageCollectorDoBottleneck(Context^.Instance);
+       end;
+      end else begin
+       exit;
+      end;
+     end;
+    end;
    end;
    popTRYBLOCKEND:begin
     result:=Registers^[Operands^[0]];
+    exit;
+   end;
+   popTRYLEAVE:begin
+    // A break, continue, fallthrough or retry to somewhere outside of the try
+    // statements it is in. Ends the run of the block, and the try statements left
+    // hand the jump on once their finally blocks have run, see popTRY.
+    Context^.TryExitKind:=ptekJUMP;
+    Context^.TryExitTarget:=Operands^[0];
+    Context^.TryExitLevels:=Operands^[1];
     exit;
    end;
    popTHROW:begin
@@ -47676,7 +47896,7 @@ begin
   if OldFPUPrecisionMode<>FPUPrecisionMode then begin
    SetPrecisionMode(FPUPrecisionMode);
   end;
-  result:=POCARunByteCode(Context);
+  result:=POCARunByteCode(Context,false);
  finally
   if OldFPUExceptionMask<>FPUExceptionMask then begin
    SetExceptionMask(OldFPUExceptionMask);
@@ -51208,6 +51428,9 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
   Define(popMCALLINTRINSIC,'MCALLINTRINSIC','RRRRNSI');
   Define(popN_POSTINC,'N_POSTINC','RR');
   Define(popN_POSTDEC,'N_POSTDEC','RR');
+  // Ends the run of the block like TRYBLOCKEND and jumps on from the try
+  // statement, see POCARunTry
+  Define(popTRYLEAVE,'TRYLEAVE','JM',[pofNOFALLTHROUGH]);
   begin
    Fingerprint:=0;
    AddToFingerprint('POCA bytecode ABI '+POCAByteCodeIntToStr(POCAByteCodeABIVersion)+
