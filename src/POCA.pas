@@ -1361,6 +1361,10 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Events:PPOCAHashEvents;
      end;
 
+     // The hashes that have a hash as their prototype, as a list threaded through
+     // the children themselves, so that invalidating a hash reaches every cache
+     // built on top of it. A weak list: the garbage collector does not follow it,
+     // and a dying child unlinks itself.
      TPOCAHashChildren=record
       First,Last:PPOCAHash;
       Previous,Next:PPOCAHash;
@@ -1845,6 +1849,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
 {$ifdef POCAHasJIT}
       NativeCodeMemoryManager:PPOCANativeCodeMemoryManager;
+      // Serializes generating native code, see POCAEnsureNativeCode.
+      NativeCodeLock:TPOCAPointer;
 {$endif}
 
       GarbageCollector:TPOCAGarbageCollector;
@@ -1877,6 +1883,11 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       // Nonzero once either MultiThreaded or HashGetHandlerInstalled is set, so
       // that the emitted member read gets away with a single test for both.
       InlineCacheGuard:TPOCAInt32;
+
+      // Guards the prototype pointers and the children lists of all hashes of
+      // this instance. It is always taken before any cache lock of a hash, and
+      // no thread may reach a safepoint while holding it, see POCAHashInvalidate.
+      HashHierarchyLock:TPOCAMRSWLock;
 
       // Hands out the version stamps for TPOCAHash.Version, see POCAHashNextVersion.
       HashVersionCounter:TPOCAUInt64;
@@ -6875,7 +6886,12 @@ type PPOCAThreadData=^TPOCAThreadData;
       Started:TPasMPBool32;
       Terminated:TPasMPBool32;
       ThreadID:{$ifdef fpc}TThreadID{$else}Cardinal{$endif};
+      // Owned by whoever takes it out first, the thread itself when it ends or
+      // POCAThreadDestroy, so that it is destroyed exactly once.
       Context:PPOCAContext;
+      // Kept apart from Context, which is gone once the thread has ended, while
+      // the ghost may still be marked afterwards.
+      Instance:PPOCAInstance;
       Data:TPOCAValue;
       Func:TPOCAValue;
       Arguments:TPOCAValueArray;
@@ -6886,6 +6902,7 @@ function POCAThreadProc(ThreadData:TPOCAPointer):TPOCAPtrInt;
 {$else}
 function POCAThreadProc(ThreadData:TPOCAPointer):TPOCAUInt32;
 {$endif}
+var Context:PPOCAContext;
 begin
  result:=0;
  try
@@ -6899,9 +6916,16 @@ begin
    end;
   except
   end;
+  // The context goes first and the flag only afterwards, since whoever waits for
+  // the flag, down to the teardown of the instance, must find the context gone.
+  Context:=PPOCAContext(TPasMPInterlocked.Exchange(TPOCAPointer(PPOCAThreadData(ThreadData)^.Context),nil));
+  if assigned(Context) then begin
+   POCAContextDestroy(Context);
+  end;
   TPasMPInterlocked.Write(PPOCAThreadData(ThreadData)^.Terminated,true);
+{ TPasMPInterlocked.Write(PPOCAThreadData(ThreadData)^.Terminated,true);
   POCAContextDestroy(PPOCAThreadData(ThreadData)^.Context);
-  PPOCAThreadData(ThreadData)^.Context:=nil;
+  PPOCAThreadData(ThreadData)^.Context:=nil;}
  finally
  end;
  EndThread(result);
@@ -7882,7 +7906,7 @@ var HashRec:PPOCAHashRecord;
     i:TPOCAInt32;
     j:TPOCAInt32;
     mo:TPOCAMetaOp;
-    ChildHash:PPOCAHash;
+//  ChildHash:PPOCAHash;
 begin
  result:=false;
  HashRec:=Obj^.HashRecord;
@@ -7927,13 +7951,17 @@ begin
    result:=true;
   end;
  end;
- ChildHash:=Obj^.Children.First;
+ // The children are deliberately not followed. The list is a weak one that only
+ // serves the invalidation of their caches, and following it would keep every
+ // instance alive for as long as its class lives. A dying child unlinks itself
+ // in POCAFinalizeHash, so the list never points at a freed object.
+{ChildHash:=Obj^.Children.First;
  while assigned(ChildHash) do begin
   if MarkObjectAsGray(TPOCAPointer(ChildHash)) then begin
    result:=true;
   end;
   ChildHash:=ChildHash^.Children.Next;
- end;
+ end;}
 end;
 
 function TPOCAGarbageCollector.MarkCodeAsGray(Obj:PPOCACode):boolean;
@@ -8017,10 +8045,10 @@ var ArrayRecord:PPOCAArrayRecord;
     ArrayIndex,CellIndex,EntityIndex:TPOCAInt32;
     MetaOperation:TPOCAMetaOp;
     ClosureIndex,ClosureValueIndex:TPOCAInt32;
-    ChildHash:PPOCAHash;
+//  ChildHash:PPOCAHash;
 begin
  result:=false;
- 
+
  case CurrentObject^.Header.ValueType of
 
   pvtARRAY:begin
@@ -8130,8 +8158,9 @@ begin
      exit;
     end;
    end;
-   
-   // Check children list (for class inheritance)
+
+   // The children list is a weak one and no reference, see MarkHashAsGray.
+{  // Check children list (for class inheritance)
    ChildHash:=PPOCAHash(TPOCAPointer(CurrentObject))^.Children.First;
    while assigned(ChildHash) do begin
     ChildObject:=PPOCAObject(TPOCAPointer(ChildHash));
@@ -8140,7 +8169,7 @@ begin
      exit;
     end;
     ChildHash:=ChildHash^.Children.Next;
-   end;
+   end;}
 
   end;
   
@@ -9109,6 +9138,7 @@ end;
 
 procedure POCAGarbageCollectorSwapFree(Instance:PPOCAInstance;Target:PPOCAPointer;Value:TPOCAPointer); {$ifdef UseRegister}register;{$endif}
 var Old:TPOCAPointer;
+    NewDeadSize:TPOCAInt32;
 begin
  POCALockEnter(Instance^.Globals.Lock);
  try
@@ -9119,9 +9149,22 @@ begin
     FreeMem(Old);
     POCAFreeDead(Instance);
    end else begin
-    while Instance^.Globals.DeadCount>=Instance^.Globals.DeadSize do begin
-     POCAGarbageCollectorBottleneck(Instance);
+    // Waiting for a collection here would park this thread at a safepoint while
+    // its caller still holds hash locks, which other threads may be spinning on
+    // without ever reaching a safepoint themselves. So the list grows instead,
+    // and the next collection empties it anyway.
+    if Instance^.Globals.DeadCount>=Instance^.Globals.DeadSize then begin
+     NewDeadSize:=Instance^.Globals.DeadSize shl 1;
+     if NewDeadSize<256 then begin
+      NewDeadSize:=256;
+     end;
+     ReallocMem(TPOCAPointer(Instance^.Globals.DeadBlocks),NewDeadSize*sizeof(TPOCAPointer));
+     FillChar(PPOCAPointerArray(Instance^.Globals.DeadBlocks)^[Instance^.Globals.DeadSize],(NewDeadSize-Instance^.Globals.DeadSize)*sizeof(TPOCAPointer),#0);
+     Instance^.Globals.DeadSize:=NewDeadSize;
     end;
+{   while Instance^.Globals.DeadCount>=Instance^.Globals.DeadSize do begin
+     POCAGarbageCollectorBottleneck(Instance);
+    end;}
     PPOCAPointerArray(Instance^.Globals.DeadBlocks)^[Instance^.Globals.DeadCount]:=Old;
     inc(Instance^.Globals.DeadCount);
    end;
@@ -12235,20 +12278,59 @@ begin
   end;
   inc(i);
  end;
- POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+ POCAMRSWLockReadLock(@Instance^.Globals.HashHierarchyLock);
  try
-  POCAGarbageCollectorSwapFree(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@Hash^.HashRecord,result);
-  POCAHashInvalidate(Hash);
+  POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+  try
+   POCAGarbageCollectorSwapFree(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@Hash^.HashRecord,result);
+   POCAHashInvalidate(Hash);
+  finally
+   POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+  end;
  finally
-  POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+  POCAMRSWLockReadUnlock(@Instance^.Globals.HashHierarchyLock);
+ end;
+end;
+
+// Clears the cache of a hash and of everything that inherits from it. The caller
+// holds the hierarchy lock of the instance, which keeps the children lists as
+// they are. Each cache lock is taken only for clearing its own flag and released
+// again before the children follow, so that cache locks are only ever nested
+// from a hash down to its descendants, never the other way round.
+procedure POCAHashInvalidateTree(Hash:PPOCAHash);
+var Current:PPOCAHash;
+begin
+ // This already runs on every structural change, so it is also the right place
+ // to restamp the version. It recurses into the children, which makes the
+ // stamping conservative rather than incomplete. The stamp has to be renewed
+ // before the flag is cleared, see POCAHashRebuildCache.
+ Hash^.Version:=POCAHashNextVersion(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance);
+ POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
+ try
+  TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),0);
+ finally
+  POCAMRSWLockReadUnlock(@Hash^.Cache.MRSWLock);
+ end;
+ Current:=Hash^.Children.First;
+ while assigned(Current) do begin
+  POCAHashInvalidateTree(Current);
+  Current:=Current^.Children.Next;
  end;
 end;
 
 procedure POCAHashLockInvalidate(Hash:PPOCAHash);
-var Current:PPOCAHash;
+var Instance:PPOCAInstance;
+//  Current:PPOCAHash;
 begin
  if assigned(Hash) then begin
-  // This already runs on every structural change, so it is also the right place
+  Instance:=Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance;
+  POCAMRSWLockReadLock(@Instance^.Globals.HashHierarchyLock);
+  try
+   POCAHashInvalidateTree(Hash);
+  finally
+   POCAMRSWLockReadUnlock(@Instance^.Globals.HashHierarchyLock);
+  end;
+(* // This already runs on every structural change, so it is also the right place
   // to restamp the version. It recurses into the children, which makes the
   // stamping conservative rather than incomplete.
   Hash^.Version:=POCAHashNextVersion(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance);
@@ -12262,10 +12344,14 @@ begin
    end;
   finally
    POCAMRSWLockReadUnlock(@Hash^.Cache.MRSWLock);
-  end;
+  end;*)
  end;
 end;
 
+// For callers that already hold the hierarchy lock of the instance, for reading
+// or for writing, and the cache lock of the hash for writing, typically around
+// swapping its record. Nothing in between may reach a safepoint, since another
+// thread could be spinning on one of those locks and so would never park.
 procedure POCAHashInvalidate(Hash:PPOCAHash);
 var Current:PPOCAHash;
 begin
@@ -12277,7 +12363,8 @@ begin
   TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),0);
   Current:=Hash^.Children.First;
   while assigned(Current) do begin
-   POCAHashLockInvalidate(Current);
+// POCAHashLockInvalidate(Current);
+   POCAHashInvalidateTree(Current);
    Current:=Current^.Children.Next;
   end;
  end;
@@ -12286,6 +12373,31 @@ end;
 procedure POCAHashRebuildCache(Hash:PPOCAHash);
 var CountItems:TPOCAInt32;
     Cachable:boolean;
+    NewEntities,OldEntities:PPPOCAHashEntities;
+    Version,Signature:TPOCAUInt64;
+    Consistent:boolean;
+    Instance:PPOCAInstance;
+ // What the build depends on beyond the entries themselves: which record every
+ // level has, how far it is filled, and whether it has events. A record only
+ // grows in place and a replaced one is not reused before the next safepoint,
+ // so the same signature before and after the build means the same state
+ // throughout. Mixed by rotation and exclusive or, so that it cannot overflow.
+ function ChainSignature:TPOCAUInt64;
+ var Current:PPOCAHash;
+     HashRec:PPOCAHashRecord;
+ begin
+  result:=0;
+  Current:=Hash;
+  while assigned(Current) do begin
+   HashRec:=Current^.HashRecord;
+   result:=((result shl 13) or (result shr 51)) xor TPOCAUInt64(TPOCAPtrUInt(HashRec));
+   if assigned(HashRec) then begin
+    result:=((result shl 13) or (result shr 51)) xor TPOCAUInt64(TPOCAUInt32(HashRec^.Size));
+   end;
+   result:=((result shl 13) or (result shr 51)) xor TPOCAUInt64(TPOCAPtrUInt(Current^.Events));
+   Current:=Current^.Prototype;
+  end;
+ end;
  function IsShadowed(const First,Level:PPOCAHash;const Key:TPOCAValue):boolean;
  var Current:PPOCAHash;
      HashRec:PPOCAHashRecord;
@@ -12308,8 +12420,8 @@ var CountItems:TPOCAInt32;
  procedure Process(CurrentHash:PPOCAHash);
  var Current,Prototype:PPOCAHash;
      HashRec,OwnHashRec:PPOCAHashRecord;
-     OldEntities,Entities:PPPOCAHashEntities;
-     Index,ProtoCount,Entity,i:TPOCAInt32;
+     {OldEntities,}Entities:PPPOCAHashEntities;
+     Index,ProtoCount,OwnCount,Entity,i:TPOCAInt32;
      HashCode,Cell:TPOCAUInt32;
  begin
   if assigned(CurrentHash) then begin
@@ -12321,14 +12433,15 @@ var CountItems:TPOCAInt32;
      inc(CountItems,CurrentHash^.HashRecord^.Size);
     end;
    end;
-   POCAMRSWLockReadLock(@CurrentHash^.Cache.MRSWLock);
-   try
+   // Without the cache locks of the prototypes, see the version check below.
+{  POCAMRSWLockReadLock(@CurrentHash^.Cache.MRSWLock);
+   try}
     Process(CurrentHash^.Prototype);
-   finally
+{  finally
     POCAMRSWLockReadUnlock(@CurrentHash^.Cache.MRSWLock);
-   end;
+   end;}
   end else begin
-   OldEntities:=Hash^.Cache.ChainEntities;
+// OldEntities:=Hash^.Cache.ChainEntities;
    if Cachable then begin
     GetMem(Entities,CountItems*sizeof(PPOCAHashEntity));
     FillChar(Entities^,CountItems*sizeof(PPOCAHashEntity),#0);
@@ -12339,33 +12452,66 @@ var CountItems:TPOCAInt32;
     // nil for a deleted entry and for one that an entry with the same key
     // nearer to the object shadows.
 
+    // A record can grow in place while it is read here, since inserts take no
+    // lock this build holds, so every size is taken once and every position is
+    // checked against the buffer. A mismatch leaves the result unpublished, the
+    // insert behind it renews the stamp anyway.
+
     // The object's own entries sit on top, where nothing can shadow them.
     ProtoCount:=CountItems;
     OwnHashRec:=Hash^.HashRecord;
     if assigned(OwnHashRec) then begin
-     dec(ProtoCount,OwnHashRec^.Size);
-     for i:=0 to OwnHashRec^.Size-1 do begin
+     OwnCount:=OwnHashRec^.Size;
+     if OwnCount>ProtoCount then begin
+      Consistent:=false;
+      OwnCount:=ProtoCount;
+     end;
+//   dec(ProtoCount,OwnHashRec^.Size);
+     dec(ProtoCount,OwnCount);
+//   for i:=0 to OwnHashRec^.Size-1 do begin
+     for i:=0 to OwnCount-1 do begin
       if OwnHashRec^.EntityToCellIndex^[i]>=0 then begin
        Entities^[ProtoCount+i]:=@OwnHashRec^.Entities^[i];
       end;
      end;
+    end else begin
+     OwnCount:=0;
     end;
 
     // Below them follows the chain of the prototype in the very layout that a
     // prototype with a prototype of its own has built already, shadowed entries
     // left out, so that a class instance does not have to sort that out again.
+    // That chain is replaced and freed under its own cache lock, so it is read
+    // under it, which is the only cache lock taken here and taken on its own.
     Prototype:=Hash^.Prototype;
-    if (assigned(Prototype) and Prototype^.Cache.Ready) and
+    Current:=nil;
+    if assigned(Prototype) then begin
+     POCAMRSWLockReadLock(@Prototype^.Cache.MRSWLock);
+     try
+      if (Prototype^.Cache.Ready and assigned(Prototype^.Cache.ChainEntities)) and (Prototype^.Cache.ChainCount=ProtoCount) then begin
+       Move(Prototype^.Cache.ChainEntities^[0],Entities^[0],ProtoCount*sizeof(PPOCAHashEntity));
+       Current:=Prototype;
+      end;
+     finally
+      POCAMRSWLockReadUnlock(@Prototype^.Cache.MRSWLock);
+     end;
+    end;
+{   if (assigned(Prototype) and Prototype^.Cache.Ready) and
        (assigned(Prototype^.Cache.ChainEntities) and (Prototype^.Cache.ChainCount=ProtoCount)) then begin
      Move(Prototype^.Cache.ChainEntities^[0],Entities^[0],ProtoCount*sizeof(PPOCAHashEntity));
-    end else begin
+    end else begin}
+    if not assigned(Current) then begin
      Index:=ProtoCount;
      Current:=Prototype;
-     while assigned(Current) do begin
+     while assigned(Current) and Consistent do begin
       HashRec:=Current^.HashRecord;
       if assigned(HashRec) and (HashRec^.Size>0) then begin
        for i:=HashRec^.Size-1 downto 0 do begin
         dec(Index);
+        if Index<0 then begin
+         Consistent:=false;
+         break;
+        end;
         if (HashRec^.EntityToCellIndex^[i]>=0) and not IsShadowed(Prototype,Current,HashRec^.Entities^[i].Key) then begin
          Entities^[Index]:=@HashRec^.Entities^[i];
         end;
@@ -12377,8 +12523,9 @@ var CountItems:TPOCAInt32;
 
     // Then what the object's own entries shadow. The part below holds at most one
     // entry per key by now, so the search for a key ends at its first match.
-    if assigned(OwnHashRec) and (OwnHashRec^.RealSize>0) then begin
-     for i:=0 to OwnHashRec^.Size-1 do begin
+    if (assigned(OwnHashRec) and (OwnHashRec^.RealSize>0)) and Consistent then begin
+//   for i:=0 to OwnHashRec^.Size-1 do begin
+     for i:=0 to OwnCount-1 do begin
       if OwnHashRec^.EntityToCellIndex^[i]>=0 then begin
        HashCode:=POCAValueHash(OwnHashRec^.Entities^[i].Key);
        Index:=ProtoCount;
@@ -12392,7 +12539,11 @@ var CountItems:TPOCAInt32;
           if Cell<>CELL_INVALID then begin
            Entity:=HashRec^.CellToEntityIndex^[Cell];
            if Entity>=0 then begin
-            Entities^[Index+Entity]:=nil;
+            if ((Index+Entity)>=0) and ((Index+Entity)<ProtoCount) then begin
+             Entities^[Index+Entity]:=nil;
+            end else begin
+             Consistent:=false;
+            end;
             break;
            end;
           end;
@@ -12407,10 +12558,11 @@ var CountItems:TPOCAInt32;
    end else begin
     Entities:=nil;
    end;
-   TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Cache.ChainEntities),TPOCAPointer(Entities));
+   NewEntities:=Entities;
+{  TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Cache.ChainEntities),TPOCAPointer(Entities));
    if assigned(OldEntities) then begin
     FreeMem(OldEntities);
-   end;
+   end;}
   end;
  end;
 begin
@@ -12421,41 +12573,82 @@ begin
   if assigned(Hash^.Prototype) and assigned(Hash^.Prototype^.Prototype) then begin
    POCAHashRebuildCache(Hash^.Prototype);
   end;
-  POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+  // The chain is built without holding any cache lock across the levels, since
+  // those are also locked the other way round, from a prototype down to its
+  // children, and holding both at once is what used to deadlock. The hierarchy
+  // lock is held for reading instead, which keeps the prototype pointers as they
+  // are. Reading the records unlocked is safe, since a replaced record is only
+  // freed while all threads wait at a safepoint. Whether the result still holds
+  // is told by the version stamp and the chain signature, both taken before
+  // anything is read: every change to this hash or to any hash it inherits from
+  // renews that stamp before clearing the flag, and clearing the flag waits for
+  // the publication below. So either something differs by then and the result is
+  // dropped, the next read building anew, or the flag gets cleared right after
+  // the result is published.
+  Instance:=Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance;
+  POCAMRSWLockReadLock(@Instance^.Globals.HashHierarchyLock);
   try
+   Version:=Hash^.Version;
+   Signature:=ChainSignature;
+   Consistent:=true;
    if assigned(Hash^.HashRecord) then begin
     CountItems:=Hash^.HashRecord^.Size;
    end else begin
     CountItems:=0;
    end;
    Cachable:=true;
+   NewEntities:=nil;
    Process(Hash^.Prototype);
-   TPasMPInterlocked.Exchange(Hash^.Cache.ChainCount,CountItems);
-   TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),TPOCAInt32(TPOCAUInt32($ffffffff)));
+   POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+   try
+{   if assigned(Hash^.HashRecord) then begin
+     CountItems:=Hash^.HashRecord^.Size;
+    end else begin
+     CountItems:=0;
+    end;
+    Cachable:=true;
+    Process(Hash^.Prototype);}
+//  if Hash^.Version=Version then begin
+    if ((Hash^.Version=Version) and Consistent) and (ChainSignature=Signature) then begin
+     OldEntities:=Hash^.Cache.ChainEntities;
+     TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Cache.ChainEntities),TPOCAPointer(NewEntities));
+     NewEntities:=OldEntities;
+     TPasMPInterlocked.Exchange(Hash^.Cache.ChainCount,CountItems);
+     TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),TPOCAInt32(TPOCAUInt32($ffffffff)));
+    end;
+    if assigned(NewEntities) then begin
+     FreeMem(NewEntities);
+    end;
+   finally
+    POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+   end;
   finally
-   POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+   POCAMRSWLockReadUnlock(@Instance^.Globals.HashHierarchyLock);
   end;
  end;
 end;
 
+// Only called while finalizing a dying hash, that is while all threads wait at a
+// safepoint or while the instance is torn down, so it takes no lock at all. No
+// thread holds the hierarchy lock or a cache lock while waiting at a safepoint.
 procedure POCAHashClearPrototype(Hash:PPOCAHash);
 var OldPrototype,Previous,Next:PPOCAHash;
 begin
  if assigned(Hash) and assigned(Hash^.Prototype) then begin
-  POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+//POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
   try
    OldPrototype:=Hash^.Prototype;
    if assigned(OldPrototype) then begin
-    POCAMRSWLockWriteLock(@OldPrototype^.Cache.MRSWLock);
+//  POCAMRSWLockWriteLock(@OldPrototype^.Cache.MRSWLock);
     try
      Previous:=Hash^.Children.Previous;
      Next:=Hash^.Children.Next;
      if assigned(Previous) then begin
-      POCAMRSWLockWriteLock(@Previous^.Cache.MRSWLock);
+//    POCAMRSWLockWriteLock(@Previous^.Cache.MRSWLock);
      end;
      try
       if assigned(Next) and (Previous<>Next) then begin
-       POCAMRSWLockWriteLock(@Next^.Cache.MRSWLock);
+//     POCAMRSWLockWriteLock(@Next^.Cache.MRSWLock);
       end;
       try
        if assigned(Previous) then begin
@@ -12472,40 +12665,51 @@ begin
        Hash^.Children.Next:=nil;
       finally
        if assigned(Next) and (Previous<>Next) then begin
-        POCAMRSWLockWriteUnlock(@Next^.Cache.MRSWLock);
+//      POCAMRSWLockWriteUnlock(@Next^.Cache.MRSWLock);
        end;
       end;
      finally
       if assigned(Previous) then begin
-       POCAMRSWLockWriteUnlock(@Previous^.Cache.MRSWLock);
+//     POCAMRSWLockWriteUnlock(@Previous^.Cache.MRSWLock);
       end;
      end;
     finally
-     POCAMRSWLockWriteUnlock(@OldPrototype^.Cache.MRSWLock);
+//   POCAMRSWLockWriteUnlock(@OldPrototype^.Cache.MRSWLock);
     end;
    end;
    TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Prototype),nil);
    POCAHashInvalidate(Hash);
   finally
-   POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+// POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
   end;
  end;
 end;
 
+// All of the relinking happens under the hierarchy lock of the instance alone,
+// which every change to a children list takes for writing, so that neither the
+// hashes involved nor their neighbours in the lists need a lock of their own.
 function POCAHashSetPrototype(Context:PPOCAContext;const Hash:TPOCAValue;const Prototype:PPOCAHash):TPOCABool32;
 var HashPtr,HashInstance,OldPrototype,Previous,Next,First,Last:PPOCAHash;
     PrototypeValue:TPOCAValue;
+    Instance:PPOCAInstance;
 begin
  result:=POCAIsValueHash(Hash);
  if result then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   if HashInstance^.Prototype<>Prototype then begin
-   POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+   Instance:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance;
+// POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+   POCAMRSWLockWriteLock(@Instance^.Globals.HashHierarchyLock);
    try
     if assigned(Prototype) then begin
-     HashPtr:=HashInstance;
+     // A cycle comes about when the hash itself already is on the chain of its
+     // new prototype, so that chain is the one to walk. The prototypes the hash
+     // inherits from right now say nothing about it.
+//   HashPtr:=HashInstance;
+     HashPtr:=Prototype;
      while assigned(HashPtr) do begin
-      if HashPtr=Prototype then begin
+//    if HashPtr=Prototype then begin
+      if HashPtr=HashInstance then begin
        POCARuntimeError(Context,'Recursive prototype chains are not allowed');
        result:=false;
        break;
@@ -12516,16 +12720,16 @@ begin
     if result then begin
      OldPrototype:=HashInstance^.Prototype;
      if assigned(OldPrototype) then begin
-      POCAMRSWLockWriteLock(@OldPrototype^.Cache.MRSWLock);
+//    POCAMRSWLockWriteLock(@OldPrototype^.Cache.MRSWLock);
       try
        Previous:=HashInstance^.Children.Previous;
        Next:=HashInstance^.Children.Next;
        if assigned(Previous) then begin
-        POCAMRSWLockWriteLock(@Previous^.Cache.MRSWLock);
+//      POCAMRSWLockWriteLock(@Previous^.Cache.MRSWLock);
        end;
        try
         if assigned(Next) and (Previous<>Next) then begin
-         POCAMRSWLockWriteLock(@Next^.Cache.MRSWLock);
+//       POCAMRSWLockWriteLock(@Next^.Cache.MRSWLock);
         end;
         try
          if assigned(Previous) then begin
@@ -12542,16 +12746,16 @@ begin
          HashInstance^.Children.Next:=nil;
         finally
          if assigned(Next) and (Previous<>Next) then begin
-          POCAMRSWLockWriteUnlock(@Next^.Cache.MRSWLock);
+//        POCAMRSWLockWriteUnlock(@Next^.Cache.MRSWLock);
          end;
         end;
        finally
         if assigned(Previous) then begin
-         POCAMRSWLockWriteUnlock(@Previous^.Cache.MRSWLock);
+//       POCAMRSWLockWriteUnlock(@Previous^.Cache.MRSWLock);
         end;
        end;
       finally
-       POCAMRSWLockWriteUnlock(@OldPrototype^.Cache.MRSWLock);
+//     POCAMRSWLockWriteUnlock(@OldPrototype^.Cache.MRSWLock);
       end;
      end;
      TPasMPInterlocked.Exchange(TPOCAPointer(HashInstance^.Prototype),TPOCAPointer(Prototype));
@@ -12559,16 +12763,16 @@ begin
       // Record cross-generation reference (persistent hash -> new prototype)
       POCASetValueReferencePointer(PrototypeValue,Prototype);
       TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(HashInstance)),PrototypeValue);
-      POCAMRSWLockWriteLock(@Prototype^.Cache.MRSWLock);
+//    POCAMRSWLockWriteLock(@Prototype^.Cache.MRSWLock);
       try
        First:=Prototype^.Children.First;
        Last:=Prototype^.Children.Last;
        if assigned(First) then begin
-        POCAMRSWLockWriteLock(@First^.Cache.MRSWLock);
+//      POCAMRSWLockWriteLock(@First^.Cache.MRSWLock);
        end;
        try
         if assigned(Last) and (First<>Last) then begin
-         POCAMRSWLockWriteLock(@Last^.Cache.MRSWLock);
+//       POCAMRSWLockWriteLock(@Last^.Cache.MRSWLock);
         end;
         try
          if assigned(Last) then begin
@@ -12580,27 +12784,35 @@ begin
          end;
          HashInstance^.Children.Next:=nil;
          Prototype^.Children.Last:=HashInstance;
-         // Write barrier: record cross-generation reference (persistent prototype -> young child)
+         // No write barrier for the prototype, since its children list is a weak
+         // one and no reference, see MarkHashAsGray.
+{        // Write barrier: record cross-generation reference (persistent prototype -> young child)
          POCASetValueReferencePointer(PrototypeValue,HashInstance);
-         TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Prototype)),PrototypeValue);
+         TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Prototype)),PrototypeValue);}
         finally
          if assigned(Last) and (First<>Last) then begin
-          POCAMRSWLockWriteUnlock(@Last^.Cache.MRSWLock);
+//        POCAMRSWLockWriteUnlock(@Last^.Cache.MRSWLock);
          end;
         end;
        finally
         if assigned(First) then begin
-         POCAMRSWLockWriteUnlock(@First^.Cache.MRSWLock);
+//       POCAMRSWLockWriteUnlock(@First^.Cache.MRSWLock);
         end;
        end;
       finally
-       POCAMRSWLockWriteUnlock(@Prototype^.Cache.MRSWLock);
+//     POCAMRSWLockWriteUnlock(@Prototype^.Cache.MRSWLock);
       end;
      end;
-     POCAHashInvalidate(HashInstance);
+     POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+     try
+      POCAHashInvalidate(HashInstance);
+     finally
+      POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
+     end;
     end;
    finally
-    POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
+//  POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
+    POCAMRSWLockWriteUnlock(@Instance^.Globals.HashHierarchyLock);
    end;
   end;
  end;
@@ -12718,14 +12930,21 @@ begin
 end;
 
 procedure POCAHashClearConstructor(Hash:PPOCAHash);
+var Instance:PPOCAInstance;
 begin
  if assigned(Hash) and assigned(Hash^.Constructor_) then begin
-  POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+  Instance:=Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance;
+  POCAMRSWLockReadLock(@Instance^.Globals.HashHierarchyLock);
   try
-   TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Constructor_),nil);
-   POCAHashInvalidate(Hash);
+   POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+   try
+    TPasMPInterlocked.Exchange(TPOCAPointer(Hash^.Constructor_),nil);
+    POCAHashInvalidate(Hash);
+   finally
+    POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+   end;
   finally
-   POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+   POCAMRSWLockReadUnlock(@Instance^.Globals.HashHierarchyLock);
   end;
  end;
 end;
@@ -12733,22 +12952,29 @@ end;
 function POCAHashSetConstructor(Context:PPOCAContext;const Hash:TPOCAValue;const Constructor_:PPOCAObject):TPOCABool32;
 var HashInstance:PPOCAHash;
     ConstructorValue:TPOCAValue;
+    Instance:PPOCAInstance;
 begin
  result:=POCAIsValueHash(Hash);
  if result then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   if HashInstance^.Constructor_<>Constructor_ then begin
-   POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+   Instance:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance;
+   POCAMRSWLockReadLock(@Instance^.Globals.HashHierarchyLock);
    try
-    TPasMPInterlocked.Exchange(TPOCAPointer(HashInstance^.Constructor_),TPOCAPointer(Constructor_));
-    POCAHashInvalidate(HashInstance);
-    // Write barrier: notify GC about old => young pointer if needed
-    if assigned(Constructor_) then begin
-     POCASetValueReferencePointer(ConstructorValue,Constructor_);
-     TPOCAGarbageCollector.WriteBarrier(PPOCAObject(HashInstance),ConstructorValue);
+    POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+    try
+     TPasMPInterlocked.Exchange(TPOCAPointer(HashInstance^.Constructor_),TPOCAPointer(Constructor_));
+     POCAHashInvalidate(HashInstance);
+     // Write barrier: notify GC about old => young pointer if needed
+     if assigned(Constructor_) then begin
+      POCASetValueReferencePointer(ConstructorValue,Constructor_);
+      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(HashInstance),ConstructorValue);
+     end;
+    finally
+     POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
     end;
    finally
-    POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
+    POCAMRSWLockReadUnlock(@Instance^.Globals.HashHierarchyLock);
    end;
   end;
  end;
@@ -12909,8 +13135,11 @@ begin
      if (not assigned(Hashs[1]^.HashRecord)) or not assigned(Hashs[1]^.HashRecord^.Events) then begin
       POCAHashCreateEvents(Context^.Instance,Hashs[1]);
      end;
-     POCAHashLockInvalidate(Hashs[0]);
+     // Invalidated after the change, not before, so that a chain built in
+     // between cannot outlive it, see POCAHashRebuildCache.
+//   POCAHashLockInvalidate(Hashs[0]);
      TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),TPOCAPointer(Hashs[1]));
+     POCAHashLockInvalidate(Hashs[0]);
      // Remember cross-generation link (persistent hash -> events hash)
      POCASetValueReferencePointer(EventsValue,Hashs[1]);
      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hashs[0])),EventsValue);
@@ -12937,8 +13166,9 @@ begin
    end;
    try
 {$endif}  
-    POCAHashLockInvalidate(Hashs[0]);
+//  POCAHashLockInvalidate(Hashs[0]);
     TPasMPInterlocked.Exchange(TPOCAPointer(Hashs[0]^.Events),nil);
+    POCAHashLockInvalidate(Hashs[0]);
 {$ifdef POCAThreadSafeHash}
    finally
     if assigned(FirstLockHash) then begin
@@ -13390,12 +13620,17 @@ begin
    inc(i);
   end;
  end;
- POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+ POCAMRSWLockReadLock(@Instance^.Globals.HashHierarchyLock);
  try
-  POCAGarbageCollectorSwapFree(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@Hash^.HashRecord,result);
-  POCAHashInvalidate(Hash);
+  POCAMRSWLockWriteLock(@Hash^.Cache.MRSWLock);
+  try
+   POCAGarbageCollectorSwapFree(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@Hash^.HashRecord,result);
+   POCAHashInvalidate(Hash);
+  finally
+   POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+  end;
  finally
-  POCAMRSWLockWriteUnlock(@Hash^.Cache.MRSWLock);
+  POCAMRSWLockReadUnlock(@Instance^.Globals.HashHierarchyLock);
  end;
 end;
 
@@ -14863,12 +15098,17 @@ begin
     HashRec^.EntityToCellIndex^[1]:=CELL_EMPTY;
     HashRec^.EntityToCellIndex^[2]:=CELL_EMPTY;
     HashRec^.EntityToCellIndex^[3]:=CELL_EMPTY;
-    POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+    POCAMRSWLockReadLock(@HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.HashHierarchyLock);
     try
-     POCAGarbageCollectorSwapFree(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@HashInstance^.HashRecord,HashRec);
-     POCAHashInvalidate(HashInstance);
+     POCAMRSWLockWriteLock(@HashInstance^.Cache.MRSWLock);
+     try
+      POCAGarbageCollectorSwapFree(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,@HashInstance^.HashRecord,HashRec);
+      POCAHashInvalidate(HashInstance);
+     finally
+      POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
+     end;
     finally
-     POCAMRSWLockWriteUnlock(@HashInstance^.Cache.MRSWLock);
+     POCAMRSWLockReadUnlock(@HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.HashHierarchyLock);
     end;
 {$ifdef POCAThreadSafeHash}  
    finally
@@ -18946,6 +19186,7 @@ end;
 
 procedure POCAThreadDestroy(Data:TPOCAPointer);
 var DataCasted:PPOCAThreadData absolute Data;
+    Context:PPOCAContext;
 begin
  if assigned(Data) then begin
   if DataCasted^.Handle<>0 then begin
@@ -18969,11 +19210,17 @@ begin
 {$endif}
    DataCasted^.Handle:=0;
   end;
-  if assigned(DataCasted^.Context) then begin
+  // Only if the thread has not taken it out itself, see TPOCAThreadData.Context.
+  Context:=PPOCAContext(TPasMPInterlocked.Exchange(TPOCAPointer(DataCasted^.Context),nil));
+  if assigned(Context) then begin
+   Context^.ThreadData:=nil;
+   POCAContextDestroy(Context);
+  end;
+{ if assigned(DataCasted^.Context) then begin
    DataCasted^.Context^.ThreadData:=nil;
    POCAContextDestroy(DataCasted^.Context);
    DataCasted^.Context:=nil;
-  end;
+  end;}
   if assigned(DataCasted^.StartSemaphore) then begin
    POCASemaphoreDestroy(DataCasted^.StartSemaphore);
    DataCasted^.StartSemaphore:=nil;
@@ -19009,14 +19256,14 @@ begin
  result:=false;
  if assigned(Data) then begin
   DataCasted:=Data;
-  if POCAMarkValue(DataCasted^.Context^.Instance,DataCasted^.Data) then begin
+  if POCAMarkValue(DataCasted^.Instance,DataCasted^.Data) then begin
    result:=true;
   end;
-  if POCAMarkValue(DataCasted^.Context^.Instance,DataCasted^.Func) then begin
+  if POCAMarkValue(DataCasted^.Instance,DataCasted^.Func) then begin
    result:=true;
   end;
   for i:=0 to length(DataCasted^.Arguments)-1 do begin
-   if POCAMarkValue(DataCasted^.Context^.Instance,DataCasted^.Arguments[i]) then begin
+   if POCAMarkValue(DataCasted^.Instance,DataCasted^.Arguments[i]) then begin
     result:=true;
    end;
   end;
@@ -19052,6 +19299,7 @@ begin
  New(ThreadData);
  try
   FillChar(ThreadData^,sizeof(TPOCAThreadData),#0);
+  ThreadData^.Instance:=Context^.Instance;
   ThreadData^.Context:=POCAContextCreate(Context^.Instance);
   ThreadData^.Context^.ThreadData:=ThreadData;
   ThreadData^.Func:=Arguments^[0];
@@ -19186,24 +19434,37 @@ begin
  if POCAGhostGetType(This)=@POCAThreadGhost then begin
   ThreadData:=PPOCAThreadData(POCAGhostGetPointer(This));
   if not ThreadData^.Terminated then begin
+   // While blocked here, this thread has to count as waiting at a safepoint,
+   // like around every other blocking call, since the thread waited for may
+   // request a collection, which would otherwise wait for this one forever.
    if CountArguments<1 then begin
+    POCAGarbageCollectorUnlock(Context);
+    try
 {$ifdef fpc}
-    WaitForThreadTerminate(ThreadData^.Handle,0);
+     WaitForThreadTerminate(ThreadData^.Handle,0);
 {$else}
 {$ifdef win32}
-    WaitForSingleObject(ThreadData^.Handle,TPOCAUInt32(-1));
+     WaitForSingleObject(ThreadData^.Handle,TPOCAUInt32(-1));
 {$endif}
 {$endif}
+    finally
+     POCAGarbageCollectorLock(Context);
+    end;
     TPasMPInterlocked.Write(ThreadData^.Terminated,true);
    end else begin
     ms:=trunc(POCAGetNumberValue(Context,Arguments^[0]));
+    POCAGarbageCollectorUnlock(Context);
+    try
 {$ifdef fpc}
-    WaitForThreadTerminate(ThreadData^.Handle,ms);
+     WaitForThreadTerminate(ThreadData^.Handle,ms);
 {$else}
 {$ifdef win32}
-    WaitForSingleObject(ThreadData^.Handle,TPOCAUInt32(ms));
+     WaitForSingleObject(ThreadData^.Handle,TPOCAUInt32(ms));
 {$endif}
 {$endif}
+    finally
+     POCAGarbageCollectorLock(Context);
+    end;
    end;
   end;
   if ThreadData^.Terminated then begin
@@ -23698,6 +23959,7 @@ begin
  end;
 {$ifdef POCAHasJIT}
  result^.Globals.NativeCodeMemoryManager:=POCANativeCodeMemoryManagerCreate(result);
+ result^.Globals.NativeCodeLock:=POCALockCreate;
 {$endif}
  result^.SourceFiles:=TStringList.Create;
  result^.IncludeDirectories:=TStringList.Create;
@@ -23942,6 +24204,7 @@ begin
 
 {$ifdef POCAHasJIT}
    POCANativeCodeMemoryManagerDestroy(Instance^.Globals.NativeCodeMemoryManager);
+   POCALockDestroy(Instance^.Globals.NativeCodeLock);
 {$endif}
 
    POCALockDestroy(Instance^.Globals.GarbageCollector.Lock);
@@ -23977,6 +24240,26 @@ end;
 
 {$ifdef POCAHasJIT}
 function POCAGenerateNativeCode(Context:PPOCAContext;Code:PPOCACode):boolean; forward;
+
+// Generates the native code of a code object on its first call. Several threads
+// can reach that first call at the same time, so generating is serialized per
+// instance, and POCAGenerateNativeCode publishes its result only once complete,
+// which is what lets the unlocked check in front stay.
+procedure POCAEnsureNativeCode(Context:PPOCAContext;Code:PPOCACode);
+var Instance:PPOCAInstance;
+begin
+ if not assigned(Code^.NativeCode) then begin
+  Instance:=Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance;
+  POCALockEnter(Instance^.Globals.NativeCodeLock);
+  try
+   if not assigned(Code^.NativeCode) then begin
+    POCAGenerateNativeCode(Context,Code);
+   end;
+  finally
+   POCALockLeave(Instance^.Globals.NativeCodeLock);
+  end;
+ end;
+end;
 {$endif}
 
 type TPOCATokenPrecedenceRule=(prNONE,prBINARY,prREVERSE,prPREFIX,prSUFFIX);
@@ -42335,7 +42618,8 @@ begin
  end;
 {$ifdef POCAHasJIT}
  if not assigned(CodePointer^.NativeCode) then begin
-  POCAGenerateNativeCode(Context,CodePointer);
+//POCAGenerateNativeCode(Context,CodePointer);
+  POCAEnsureNativeCode(Context,CodePointer);
  end;
  if ((not assigned(CodePointer^.NativeCode)) or (length(CodePointer^.ByteCodeToNativeCodeMap)=0)) or CodePointer^.InterpretByteCodeMap[0] then begin
   exit;
@@ -42675,6 +42959,7 @@ var Fixups:TFixups;
     CodeVars:array[0..8] of TPOCAPointer;
     Operands:PPOCAInt32Array;
     v:TPOCAValue;
+    NewNativeCode:TPOCAPointer;
  procedure Add(const s:TPUCURawByteString);
  begin
   if length(s)>0 then begin
@@ -42741,16 +43026,30 @@ var Fixups:TFixups;
   Add(#$8b#$80); // mov eax,dword ptr [rax+TPOCAInstance.Globals+TPOCAGlobals.Bottleneck]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInstance(nil)^.Globals))+TPOCAPtrUInt(Pointer(@PPOCAGlobals(nil)^.Bottleneck)));
   Add(#$85#$c0); // test eax,eax
-  Add(#$74#$14); // jz +$14 (skip call sequence)
+//Add(#$74#$14); // jz +$14 (skip call sequence)
+  Add(#$74#$1c); // jz +$1c (skip call sequence, 4+8+10+2+4 bytes on either ABI)
+  // The instance itself has to be loaded, not the address of the field that
+  // holds it, and the stack realigned just as for every other runtime helper.
+  // Handing over the context instead let the thread registration table of the
+  // garbage collector land in the frame stack of the context.
 {$ifdef windows}
-  Add(#$49#$8d#$8c#$24); // lea rcx,[r12+TPOCAContext.Instance]
+  Add(#$48#$83#$ec#$28); // sub rsp,40 (32 bytes shadow space + 8 to realign rsp to 16 bytes at the call)
+//Add(#$49#$8d#$8c#$24); // lea rcx,[r12+TPOCAContext.Instance]
+  Add(#$49#$8b#$8c#$24); // mov rcx,qword ptr [r12+TPOCAContext.Instance]
 {$else}
-  Add(#$49#$8d#$bc#$24); // lea rdi,[r12+TPOCAContext.Instance]
+  Add(#$48#$83#$ec#$08); // sub rsp,8 (rsp is 8 mod 16 here, so this realigns it to 16 bytes at the call)
+//Add(#$49#$8d#$bc#$24); // lea rdi,[r12+TPOCAContext.Instance]
+  Add(#$49#$8b#$bc#$24); // mov rdi,qword ptr [r12+TPOCAContext.Instance]
 {$endif}
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAContext(nil)^.Instance)));
   Add(#$48#$b8); // mov rax,POCAGarbageCollectorDoBottleneck
   AddQWordPointer(@POCAGarbageCollectorDoBottleneck);
   Add(#$ff#$d0); // call rax
+{$ifdef windows}
+  Add(#$48#$83#$c4#$28); // add rsp,40
+{$else}
+  Add(#$48#$83#$c4#$08); // add rsp,8
+{$endif}
  end;
  procedure AddBinaryOpTypeCheck;
  begin
@@ -45726,9 +46025,13 @@ begin
   end;
 
   SetLength(CodeBuffer,CodeBufferLen);
-  Code.NativeCodeSize:=CodeBufferLen;
-  Code.NativeCode:=POCANativeCodeMemoryManagerGetMemory(Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.NativeCodeMemoryManager,Code.NativeCodeSize);
-  Move(CodeBuffer[0],Code.NativeCode^,Code.NativeCodeSize);
+  // Everything is completed on the side and published last, since other threads
+  // take an assigned NativeCode as the sign that code and map are ready to use.
+//Code.NativeCodeSize:=CodeBufferLen;
+//Code.NativeCode:=POCANativeCodeMemoryManagerGetMemory(Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.NativeCodeMemoryManager,Code.NativeCodeSize);
+//Move(CodeBuffer[0],Code.NativeCode^,Code.NativeCodeSize);
+  NewNativeCode:=POCANativeCodeMemoryManagerGetMemory(Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.NativeCodeMemoryManager,CodeBufferLen);
+  Move(CodeBuffer[0],NewNativeCode^,CodeBufferLen);
   SetLength(Code.ByteCodeToNativeCodeMap,Code.ByteCodeSize);
   for i:=0 to Code.ByteCodeSize-1 do begin
    Code.ByteCodeToNativeCodeMap[i]:=Offsets[i];
@@ -45736,21 +46039,27 @@ begin
   for i:=0 to CountFixups-1 do begin
    case FixUps[i].Kind of
     fkPTR:begin
-     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+//   TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(FixUps[i].Dest)-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[FixUps[i].Ofs]))+4));
     end;
     fkRET:begin
-     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+//   TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[RetOfs]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[FixUps[i].Ofs]))+4));
     end;
     fkOFS:begin
-     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+//   TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs]))+4));
+     TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[FixUps[i].Ofs])^):=(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[Offsets[FixUps[i].ToOfs]]))-(TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[FixUps[i].Ofs]))+4));
     end;
     fkRIPREL:begin
      // RIP-relative addressing: offset = target - (RIP + 4)
      // RIP points to the next instruction after the 4-byte offset
-     TPOCAInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=TPOCAInt32(TPOCAPtrInt(TPOCAPtrUInt(FixUps[i].Dest)-TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs+4]))));
+//   TPOCAInt32(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs])^):=TPOCAInt32(TPOCAPtrInt(TPOCAPtrUInt(FixUps[i].Dest)-TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(Code.NativeCode)^[FixUps[i].Ofs+4]))));
+     TPOCAInt32(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[FixUps[i].Ofs])^):=TPOCAInt32(TPOCAPtrInt(TPOCAPtrUInt(FixUps[i].Dest)-TPOCAPtrUInt(TPOCAPointer(@PPOCAUInt8Array(NewNativeCode)^[FixUps[i].Ofs+4]))));
     end;
    end;
   end;
+  Code.NativeCodeSize:=CodeBufferLen;
+  Code.NativeCode:=NewNativeCode;
   result:=true;
  finally
   SetLength(Fixups,0);
@@ -45867,7 +46176,8 @@ begin
  Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
 {$ifdef POCAHasJIT}
  if not assigned(Code^.NativeCode) then begin
-  POCAGenerateNativeCode(Context,Code);
+//POCAGenerateNativeCode(Context,Code);
+  POCAEnsureNativeCode(Context,Code);
  end;
 {$endif}
  Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
