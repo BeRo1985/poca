@@ -759,15 +759,20 @@ begin
 {$endif}
  Randomize;
  Arguments:=nil;
- // The options only count in front of the file name, so that everything after it
- // is left to the script.
+ // When the file is run, the options only count in front of its name, so that
+ // everything after it is left to the script. The other modes take options behind
+ // it as well, since -o reads best there.
  Mode:=mRun;
  SaveOptions:=[];
+ FileName:='';
  OutputFileName:='';
  ShowUsage:=false;
  FirstParameter:=1;
  while FirstParameter<=ParamCount do begin
   Parameter:=ParamStr(FirstParameter);
+  if (Mode=mRun) and (length(FileName)>0) then begin
+   break;
+  end;
   if Parameter='--disasm' then begin
    Mode:=mDisassemble;
   end else if Parameter='--verify' then begin
@@ -785,13 +790,16 @@ begin
    exit;
   end else if (Parameter='-h') or (Parameter='--help') then begin
    ShowUsage:=true;
+  end else if length(FileName)=0 then begin
+   FileName:=Parameter;
   end else begin
-   break;
+   // A second file name
+   ShowUsage:=true;
   end;
   inc(FirstParameter);
  end;
- // Everything but running needs exactly one file
- if ShowUsage or ((Mode<>mRun) and (ParamCount<>FirstParameter)) then begin
+ // Everything but running needs a file
+ if ShowUsage or ((Mode<>mRun) and (length(FileName)=0)) then begin
   writeln('Usage: '+ExtractFileName(ParamStr(0))+' file.poca [parameters...]');
   writeln('       '+ExtractFileName(ParamStr(0))+' -c file.poca [-o file.pbc] [--strip]');
   writeln('Options:');
@@ -811,12 +819,11 @@ begin
     InitializeForPOCAContext(Context);
     try
      POCAHashSet(Context,Instance.Globals.Namespace,POCANewUniqueString(Context,'RandomNumberGenerator'),POCANewNativeObject(Context,TRandomNumberGenerator.Create(Instance,Context,nil,nil,false)));
-     if ParamCount>=FirstParameter then begin
-      FileName:=ParamStr(FirstParameter);
-      if ParamCount>FirstParameter then begin
-       SetLength(Arguments,ParamCount-FirstParameter);
-       for i:=FirstParameter+1 to ParamCount do begin
-        Arguments[i-(FirstParameter+1)]:=POCANewString(Context,TPOCAUTF8String(ParamStr(i)));
+     if length(FileName)>0 then begin
+      if ParamCount>=FirstParameter then begin
+       SetLength(Arguments,(ParamCount-FirstParameter)+1);
+       for i:=FirstParameter to ParamCount do begin
+        Arguments[i-FirstParameter]:=POCANewString(Context,TPOCAUTF8String(ParamStr(i)));
        end;
       end;
       if not FileExists(FileName) then begin

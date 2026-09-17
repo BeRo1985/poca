@@ -2731,6 +2731,9 @@ function POCADisassembleCode(const aContext:PPOCAContext;const aCode:TPOCAValue)
 procedure POCASaveCodeToStream(const aContext:PPOCAContext;const aStream:TStream;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions=[]);
 function POCALoadCodeFromStream(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aStream:TStream;const aSourceFileName:TPOCARawByteString='<bytecode>'):TPOCAValue;
 function POCAIsByteCodeStream(const aStream:TStream):Boolean;
+function POCAIsByteCode(const aData:TPOCARawByteString):Boolean;
+function POCALoadCodeFromString(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aData:TPOCARawByteString;const aSourceFileName:TPOCARawByteString='<bytecode>'):TPOCAValue;
+function POCASaveCodeToString(const aContext:PPOCAContext;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions=[]):TPOCARawByteString;
 
 procedure InitializePOCA;
 procedure FinalizePOCA;
@@ -16673,7 +16676,13 @@ begin
    SubContext:=POCAContextSub(Context);
    try
     ModuleScope:=POCANewHash(SubContext);
-    Code:=POCABindToContext(Context,POCACompile(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
+    if POCAIsByteCode(ModuleCode) then begin
+     // A module that a loader delivers as stored bytecode. Only bytecode from
+     // trusted sources may be loaded, see POCAVerifyCode.
+     Code:=POCABindToContext(Context,POCALoadCodeFromString(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
+    end else begin
+     Code:=POCABindToContext(Context,POCACompile(Context^.Instance,SubContext,ModuleCode,ModuleFileName));
+    end;
     POCAProtect(Context,ModuleScope);
     try
      POCAHashSetString(Context,ModuleScope,'exports',POCANewHash(SubContext));
@@ -24075,6 +24084,19 @@ begin
   end;
 
   FileName:=Path+aModuleName+'.poca';
+  if FileExists(FileName) then begin
+   aModuleCode:=POCAGetFileContent(FileName);
+   aModuleFileName:=FileName;
+   if not FileAgeUTC(aModuleFileName,aModuleDateTime,true) then begin
+    aModuleDateTime:=NowUTC;
+   end;
+   result:=true;
+   exit;
+  end;
+
+  // Stored bytecode comes last, so that the source next to it stays the one that
+  // counts as long as it is there
+  FileName:=Path+aModuleName+'.pbc';
   if FileExists(FileName) then begin
    aModuleCode:=POCAGetFileContent(FileName);
    aModuleFileName:=FileName;
@@ -50943,6 +50965,43 @@ begin
           CompareMem(@Signature,@POCAByteCodeFileSignature,SizeOf(TPOCAValueDataFileHeaderSignature));
  finally
   aStream.Position:=OldPosition;
+ end;
+end;
+
+function POCAIsByteCode(const aData:TPOCARawByteString):Boolean;
+begin
+ result:=(length(aData)>=SizeOf(TPOCAValueDataFileHeaderSignature)) and
+         CompareMem(@aData[1],@POCAByteCodeFileSignature,SizeOf(TPOCAValueDataFileHeaderSignature));
+end;
+
+function POCALoadCodeFromString(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aData:TPOCARawByteString;const aSourceFileName:TPOCARawByteString):TPOCAValue;
+var Stream:TMemoryStream;
+begin
+ Stream:=TMemoryStream.Create;
+ try
+  if length(aData)>0 then begin
+   Stream.WriteBuffer(aData[1],length(aData));
+  end;
+  Stream.Seek(0,soBeginning);
+  result:=POCALoadCodeFromStream(aInstance,aContext,Stream,aSourceFileName);
+ finally
+  FreeAndNil(Stream);
+ end;
+end;
+
+function POCASaveCodeToString(const aContext:PPOCAContext;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions):TPOCARawByteString;
+var Stream:TMemoryStream;
+begin
+ Stream:=TMemoryStream.Create;
+ try
+  POCASaveCodeToStream(aContext,Stream,aCode,aOptions);
+  result:='';
+  SetLength(result,Stream.Size);
+  if Stream.Size>0 then begin
+   Move(Stream.Memory^,result[1],Stream.Size);
+  end;
+ finally
+  FreeAndNil(Stream);
  end;
 end;
 
