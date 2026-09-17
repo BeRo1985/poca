@@ -763,6 +763,10 @@ const POCAValueTypeTagMask=TPOCAPtrUInt(15);
       // site kept seeing a different closure and the slot could never settle.
       POCAInlineCacheGivenUp=TPOCAUInt32($fffffffe);
 
+      // How many chain positions a member read site keeps beyond the one of its
+      // last full lookup, see TPOCAInlineCache.ExtraChainIndices.
+      POCAInlineCacheCountExtraChainIndices=3;
+
 type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      TPOCADoubleHiLo=packed record
 {$ifdef BIG_ENDIAN}
@@ -1428,6 +1432,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      // and are never reused, so a match proves both that this is the same hash
      // and that neither it nor its prototype chain has been touched since Entity
      // was recorded, which is what makes the recorded raw pointer safe to follow.
+     TPOCAInlineCacheExtraChainIndices=array[0..POCAInlineCacheCountExtraChainIndices-1] of TPOCAUInt32;
+
      PPOCAInlineCache=^TPOCAInlineCache;
      TPOCAInlineCache=packed record
       Entity:PPOCAHashEntity;
@@ -1439,6 +1445,15 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       // through a single base pointer.
       ChainIndex:TPOCAUInt32;
       HashChainIndex:TPOCAUInt32;
+      // The chain positions of further layouts, for a member read that sees
+      // objects of several classes, where a single position would keep changing
+      // hands. They hold only what ChainIndex held before, so ChainIndex itself is
+      // never among them, and ExtraChainNext names the one to give up next. A
+      // position needs no layout to go with it: a slot of a flattened chain only
+      // ever holds the entry that a full lookup arrives at, so a matching key
+      // there is the answer, whichever layout the position came from.
+      ExtraChainIndices:TPOCAInlineCacheExtraChainIndices;
+      ExtraChainNext:TPOCAUInt32;
       // What the slot is anchored to, which differs by opcode:
       //  - a symbol lookup pins down which hashes a search would walk, so it needs
       //    both the frame's own locals (AnchorValue) and the closure whose
@@ -1847,6 +1862,27 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       Bottleneck:TPOCABool32;
       Lock:TPOCAPointer;
       Semaphore:TPOCAPointer;
+
+      // Whether this instance is used concurrently, see POCAEnableMultiThreading,
+      // and the thread that created its first context, which tells a context
+      // created from any other thread apart.
+      MultiThreaded:TPOCABool32;
+      FirstThreadID:TThreadID;
+
+      // Set for good once a hash of this instance has been given a get handler,
+      // which is what obliges a member read to look for one at all. Until then the
+      // cached paths skip that check, so that programs without one pay nothing.
+      HashGetHandlerInstalled:TPOCABool32;
+
+      // Nonzero once either MultiThreaded or HashGetHandlerInstalled is set, so
+      // that the emitted member read gets away with a single test for both.
+      InlineCacheGuard:TPOCAInt32;
+
+      // Hands out the version stamps for TPOCAHash.Version, see POCAHashNextVersion.
+      HashVersionCounter:TPOCAUInt64;
+{$ifndef cpu64}
+      HashVersionLock:TPasMPInt32;
+{$endif}
 
       SourceFiles:TPOCAValue;
 
@@ -2485,7 +2521,7 @@ function POCAContextUserIOFlush(const aContext:PPOCAContext):Boolean;
 
 function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
 
-procedure POCAEnableMultiThreading;
+procedure POCAEnableMultiThreading(const Instance:PPOCAInstance);
 
 {$ifdef POCAThreadContextTracking}
 function POCAGetCurrentThreadContext:PPOCAContext;
@@ -2611,19 +2647,7 @@ const FPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivid
       ENT_EMPTY=-1;
       ENT_DELETED=-2;
 
-// True as soon as POCA code can run on more than one thread at a time. While it
-// is false, the per object locks of arrays and hashes are skipped, so that
-// single threaded scripts pay a predictable branch instead of an atomic
-// read-modify-write on every write access.
-//
-// It is turned on automatically when POCA spawns a thread or a coroutine, and
-// when a context is created from a different thread than the very first one.
-// Hosts that hand POCA values to threads of their own without going through any
-// of those must call POCAEnableMultiThreading themselves before doing so. It is
-// a one way switch and never goes back to false.
-var POCAMultiThreaded:TPOCABool32=false;
-
-    POCAInitialized:boolean=false;
+var POCAInitialized:boolean=false;
 
     LexerKeywordTokens:TPOCALexerKeywordTokens;
     LexerKeywordTokenCharTreeRootNode:PPOCALexerKeywordTokenCharTreeNode;
@@ -5434,7 +5458,8 @@ begin
   result^.ResumeEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
   result^.YieldEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
   result^.TerminatedEvent:={$ifdef fpc}RTLEventCreate{$else}TEvent.Create(nil,false,false,''){$endif};
-  POCAEnableMultiThreading;
+  // The caller has turned on the multi threaded mode of its instance already,
+  // since this level knows no instance.
 {$ifdef fpc}
   result^.Handle:=BeginThread(POCACoroutineContextEntrypoint,result,result^.ThreadID);
 {$else}
@@ -10292,36 +10317,34 @@ begin
 {$endif}
 end;
 
-// Hands out the version stamps for TPOCAHash.Version. The counter is process
-// wide and strictly monotonic, so that a stamp is never handed out twice. That
-// is what lets a call site cache a raw entity pointer: a matching stamp rules
-// out that the pool allocator has meanwhile recycled the object memory for a
+// Hands out the version stamps for TPOCAHash.Version. The counter belongs to the
+// instance and is strictly monotonic, so that a stamp is never handed out twice
+// within it, and a call site only ever sees hashes of its own instance. That is
+// what lets a call site cache a raw entity pointer: a matching stamp rules out
+// that the pool allocator has meanwhile recycled the object memory for a
 // different hash, which a per hash counter starting over at zero could not.
-var POCAHashVersionCounter:TPOCAUInt64=0;
-{$ifndef cpu64}
-    POCAHashVersionLock:TPasMPInt32=0;
-{$endif}
-
-function POCAHashNextVersion:TPOCAUInt64; {$ifdef caninline}inline;{$endif}
+// Being per instance also keeps an instance that runs single threaded on a
+// thread of its own from racing another one on a shared counter.
+function POCAHashNextVersion(const Instance:PPOCAInstance):TPOCAUInt64; {$ifdef caninline}inline;{$endif}
 begin
- if POCAMultiThreaded then begin
+ if Instance^.Globals.MultiThreaded then begin
 {$ifdef cpu64}
-  result:=TPasMPInterlocked.Increment(POCAHashVersionCounter);
+  result:=TPasMPInterlocked.Increment(Instance^.Globals.HashVersionCounter);
 {$else}
-  // A 32-bit target has no interlocked increment for a sixty four bit value, 
+  // A 32-bit target has no interlocked increment for a sixty four bit value,
   // so the counter is advanced under a spin lock there. Stamps have to stay
   // unique whatever the target: two hashes sharing one would let a call site
   // mistake the one for the other.
-  while TPasMPInterlocked.CompareExchange(POCAHashVersionLock,TPasMPInt32(1),TPasMPInt32(0))<>TPasMPInt32(0) do begin
+  while TPasMPInterlocked.CompareExchange(Instance^.Globals.HashVersionLock,TPasMPInt32(1),TPasMPInt32(0))<>TPasMPInt32(0) do begin
    TPasMP.Yield;
   end;
-  inc(POCAHashVersionCounter);
-  result:=POCAHashVersionCounter;
-  TPasMPInterlocked.Exchange(POCAHashVersionLock,TPasMPInt32(0));
+  inc(Instance^.Globals.HashVersionCounter);
+  result:=Instance^.Globals.HashVersionCounter;
+  TPasMPInterlocked.Exchange(Instance^.Globals.HashVersionLock,TPasMPInt32(0));
 {$endif}
  end else begin
-  inc(POCAHashVersionCounter);
-  result:=POCAHashVersionCounter;
+  inc(Instance^.Globals.HashVersionCounter);
+  result:=Instance^.Globals.HashVersionCounter;
  end;
 end;
 
@@ -10331,7 +10354,7 @@ begin
  result:=POCANew(Context,pvtHASH,PPOCAObject(Hash));
  // The pool allocator recycles object memory as is, so a fresh hash would
  // otherwise inherit the stamp of its predecessor and could be mistaken for it.
- Hash^.Version:=POCAHashNextVersion;
+ Hash^.Version:=POCAHashNextVersion(Context^.Instance);
 {Hash^.HashRecord:=nil;
  Hash^.Prototype:=nil;
  Hash^.Constructor_:=nil;
@@ -10943,7 +10966,7 @@ begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
 {$ifdef POCAThreadSafeArray}
-  if POCAMultiThreaded then begin
+  if ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded then begin
    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
    try
     POCAArraySetUnlocked(ArrayInstance,i,Value);
@@ -10995,7 +11018,7 @@ begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
 {$ifdef POCAThreadSafeArray}
-  if POCAMultiThreaded then begin
+  if ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded then begin
    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
    try
     result:=POCAArrayPushUnlocked(ArrayInstance,Value);
@@ -11073,7 +11096,7 @@ begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
   WithArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(WithArrayObject));
 {$ifdef POCAThreadSafeArray}
-  if not POCAMultiThreaded then begin
+  if not ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded then begin
    FirstLockArray:=nil;
    SecondLockArray:=nil;
   end else if ArrayInstance=WithArrayInstance then begin
@@ -11144,7 +11167,7 @@ begin
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
 {$ifdef POCAThreadSafeArray}
-   Locked:=POCAMultiThreaded;
+   Locked:=ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
    if Locked then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
    end;
@@ -11191,7 +11214,7 @@ begin
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
 {$ifdef POCAThreadSafeArray}
-   Locked:=POCAMultiThreaded;
+   Locked:=ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
    if Locked then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
    end;
@@ -11285,7 +11308,7 @@ begin
  if POCAIsValueArray(ArrayObject) then begin
   ArrayInstance:=PPOCAArray(POCAGetValueReferencePointer(ArrayObject));
 {$ifdef POCAThreadSafeArray}
-  Locked:=POCAMultiThreaded;
+  Locked:=ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
   if Locked then begin
    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
   end;
@@ -11336,7 +11359,7 @@ begin
   ArrayRecord:=ArrayInstance^.ArrayRecord;
   if assigned(ArrayRecord) then begin
 {$ifdef POCAThreadSafeArray}
-   Locked:=POCAMultiThreaded;
+   Locked:=ArrayInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
    if Locked then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(ArrayInstance^.Lock);
    end;
@@ -12151,6 +12174,17 @@ end;
 
 function POCAHashResize(Instance:PPOCAInstance;Hash:PPOCAHash;Events:TPOCABool32=false):PPOCAHashRecord; forward;
 
+// Called wherever a get handler enters an events array, which are just the two
+// places below. Copying an events array needs no call, since whatever it holds
+// has entered through one of them before.
+procedure POCAHashNoteGetHandler(const Instance:PPOCAInstance);
+begin
+ if not Instance^.Globals.HashGetHandlerInstalled then begin
+  Instance^.Globals.HashGetHandlerInstalled:=true;
+  Instance^.Globals.InlineCacheGuard:=1;
+ end;
+end;
+
 function POCAHashCreateEvents(Instance:PPOCAInstance;Hash:PPOCAHash):PPOCAHashRecord;
 var HashRec:PPOCAHashRecord;
     EntityRec:PPOCAHashEntity;
@@ -12192,6 +12226,9 @@ begin
      Op:=MetaOpNamesHashMap.GetValue(POCAStringRawData(Str)^);
      if Op>=0 then begin
       result^.Events[TPOCAMetaOp(Op)]:=EntityRec^.Value;
+      if (TPOCAMetaOp(Op)=pmoGET) and POCAIsValueFunctionOrNativeCode(EntityRec^.Value) then begin
+       POCAHashNoteGetHandler(Instance);
+      end;
      end;
     end;
    end;
@@ -12214,7 +12251,7 @@ begin
   // This already runs on every structural change, so it is also the right place
   // to restamp the version. It recurses into the children, which makes the
   // stamping conservative rather than incomplete.
-  Hash^.Version:=POCAHashNextVersion;
+  Hash^.Version:=POCAHashNextVersion(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance);
   POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
   try
    TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),0);
@@ -12236,7 +12273,7 @@ begin
   // Callers reach this right after having swapped the whole hash record, which
   // moves every entity, so the stamp has to be renewed here as well and not
   // only for the children below.
-  Hash^.Version:=POCAHashNextVersion;
+  Hash^.Version:=POCAHashNextVersion(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance);
   TPasMPInterlocked.Exchange(TPOCAInt32(Hash^.Cache.Ready),0);
   Current:=Hash^.Children.First;
   while assigned(Current) do begin
@@ -12847,7 +12884,7 @@ begin
   if POCAIsValueHash(FromHash) then begin
    Hashs[1]:=PPOCAHash(POCAGetValueReferencePointer(FromHash));
 {$ifdef POCAThreadSafeHash}
-   if not POCAMultiThreaded then begin
+   if not Context^.Instance^.Globals.MultiThreaded then begin
     FirstLockHash:=nil;
     SecondLockHash:=nil;
    end else if Hashs[0]=Hashs[1] then begin
@@ -12892,7 +12929,7 @@ begin
 {$endif}
   end else if POCAIsValueNull(FromHash) then begin
 {$ifdef POCAThreadSafeHash}
-   if POCAMultiThreaded then begin
+   if Context^.Instance^.Globals.MultiThreaded then begin
     FirstLockHash:=Hashs[0];
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(FirstLockHash^.Lock);
    end else begin
@@ -13107,6 +13144,9 @@ begin
     end;
     if assigned(HashRec^.Events) then begin
      HashRec^.Events[TPOCAMetaOp(Op)]:=Value;
+     if (TPOCAMetaOp(Op)=pmoGET) and POCAIsValueFunctionOrNativeCode(Value) then begin
+      POCAHashNoteGetHandler(Instance);
+     end;
      // Ensure young handler stays alive when attached to persistent hash
      TPOCAGarbageCollector.WriteBarrier(PPOCAObject(TPOCAPointer(Hash)),Value);
     end;
@@ -13135,7 +13175,7 @@ end;
 // that which entity a key resolves to may change.
 procedure POCAHashBumpVersion(Hash:PPOCAHash); {$ifdef caninline}inline;{$endif}
 begin
- Hash^.Version:=POCAHashNextVersion;
+ Hash^.Version:=POCAHashNextVersion(Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance);
 end;
 
 // ConstantViolation reports back that an existing entry refused the write because
@@ -13444,7 +13484,7 @@ begin
  if POCAIsValueHash(Hash) then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
 {$ifdef POCAThreadSafeHash}
-  Locked:=POCAMultiThreaded;
+  Locked:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
   if Locked then begin
    TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
   end;
@@ -13489,7 +13529,7 @@ begin
   HashRec:=HashInstance^.HashRecord;
   if assigned(HashRec) then begin
 {$ifdef POCAThreadSafeHash}
-   Locked:=POCAMultiThreaded;
+   Locked:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
    if Locked then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
    end;
@@ -13663,7 +13703,7 @@ begin
      // otherwise this is an atomic read-modify-write on every cache hit. The
      // flag is captured once, so that a thread being spawned in between cannot
      // leave the lock released without ever having been taken.
-     CacheLocked:=POCAMultiThreaded;
+     CacheLocked:=Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
      if CacheLocked then begin
       POCAMRSWLockReadLock(@Hash^.Cache.MRSWLock);
      end;
@@ -13752,7 +13792,7 @@ begin
  result:=false;
 
 {$ifdef POCAThreadSafeHash}
- Locked:=POCAMultiThreaded;
+ Locked:=Hash^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
  if Locked then begin
   TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(Hash^.Lock);
  end;
@@ -13836,7 +13876,7 @@ begin
    HashRec:=HashInstance^.HashRecord;
    if assigned(HashRec) then begin
 {$ifdef POCAThreadSafeHash}
-    Locked:=POCAMultiThreaded;
+    Locked:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
     if Locked then begin
      TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
     end;
@@ -13904,7 +13944,7 @@ begin
    HashRec:=HashInstance^.HashRecord;
    if assigned(HashRec) then begin
 {$ifdef POCAThreadSafeHash}
-    Locked:=POCAMultiThreaded;
+    Locked:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
     if Locked then begin
      TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
     end;
@@ -14131,15 +14171,29 @@ begin
  end;
 end;
 
+// A get handler is asked on every read, before the storage of its hash, so a
+// remembered position must not answer a read of such a hash. This is checked on
+// each read rather than once when a chain is built, since a handler can also turn
+// up later in an events hash that is attached already, which restamps and
+// invalidates nothing on the hashes it is attached to. As long as no handler has
+// been installed in the instance at all, its flag alone settles it.
+function POCAHashHasGetHandler(const Instance:PPOCAInstance;const HashInstance:PPOCAHash):boolean; {$ifdef caninline}inline;{$endif}
+begin
+ result:=(Instance^.Globals.HashGetHandlerInstalled and (assigned(HashInstance^.Events) and assigned(HashInstance^.Events^.HashRecord))) and
+         (assigned(HashInstance^.Events^.HashRecord^.Events) and POCAIsValueFunctionOrNativeCode(HashInstance^.Events^.HashRecord^.Events^[pmoGET]));
+end;
+
 // Just the cache hit check of POCAHashGetCache, without any of the fallbacks.
 // Only valid while POCA is not used concurrently, since it does not take the
-// cache lock; callers have to check POCAMultiThreaded themselves.
+// cache lock; callers have to check Globals.MultiThreaded of the instance
+// themselves.
 function POCAHashGetCacheHit(HashInstance:PPOCAHash;const Key:TPOCAValue;var OutValue:TPOCAValue;const CacheIndex:TPOCAUInt32):boolean; {$ifdef caninline}inline;{$endif}
 var HashEntity:PPOCAHashEntity;
 begin
  result:=false;
- if ((CacheIndex<>$ffffffff) and HashInstance^.Cache.Ready) and
-    (assigned(HashInstance^.Cache.ChainEntities) and (CacheIndex<TPOCAUInt32(HashInstance^.Cache.ChainCount))) then begin
+ if (((CacheIndex<>$ffffffff) and HashInstance^.Cache.Ready) and
+     (assigned(HashInstance^.Cache.ChainEntities) and (CacheIndex<TPOCAUInt32(HashInstance^.Cache.ChainCount)))) and
+    not POCAHashHasGetHandler(HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance,HashInstance) then begin
   HashEntity:=HashInstance^.Cache.ChainEntities^[CacheIndex];
   if assigned(HashEntity) and (HashEntity^.Key.CastedInt64=Key.CastedInt64) then begin
    OutValue:=HashEntity^.Value;
@@ -14161,12 +14215,12 @@ begin
   if assigned(HashInstance) then begin
    if assigned(HashInstance^.Prototype) then begin
     if HashInstance^.Cache.Ready then begin
-     if CacheIndex<>$ffffffff then begin
+     if (CacheIndex<>$ffffffff) and not POCAHashHasGetHandler(Context^.Instance,HashInstance) then begin
       // The cache lock only matters when POCA is actually used concurrently;
       // otherwise this is an atomic read-modify-write on every cache hit. The
       // flag is captured once, so that a thread being spawned in between cannot
       // leave the lock released without ever having been taken.
-      CacheLocked:=POCAMultiThreaded;
+      CacheLocked:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
       if CacheLocked then begin
        POCAMRSWLockReadLock(@HashInstance^.Cache.MRSWLock);
       end;
@@ -14257,7 +14311,7 @@ begin
 end;
 
 function POCAHashGetInheritedCache(Context:PPOCAContext;const Hash,Key:TPOCAValue;var OutValue:TPOCAValue;var CacheIndex:TPOCAUInt32):boolean;
-var HashInstance:PPOCAHash;
+var HashInstance,Prototype:PPOCAHash;
     HashRec:PPOCAHashRecord;
     Entity,Index:TPOCAInt32;
     Cell:TPOCAUInt32;
@@ -14267,44 +14321,65 @@ begin
  if POCAIsValueHash(Hash) then begin
   HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Hash));
   if assigned(HashInstance) then begin
-   if HashInstance^.Cache.Ready then begin
-    if CacheIndex<>$ffffffff then begin
-     // The cache lock only matters when POCA is actually used concurrently;
-     // otherwise this is an atomic read-modify-write on every cache hit. The
-     // flag is captured once, so that a thread being spawned in between cannot
-     // leave the lock released without ever having been taken.
-     CacheLocked:=POCAMultiThreaded;
-     if CacheLocked then begin
-      POCAMRSWLockReadLock(@HashInstance^.Cache.MRSWLock);
-     end;
-{$ifdef POCAUseSafeMRSWLocks}
-     try
-{$endif}
-      if HashInstance^.Cache.Ready and assigned(HashInstance^.Cache.ChainEntities) then begin
-       Entity:=CacheIndex;
-       if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashInstance^.Cache.ChainCount)) and assigned(HashInstance^.Cache.ChainEntities^[Entity])) and (HashInstance^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
-        OutValue:=HashInstance^.Cache.ChainEntities^[Entity]^.Value;
-{$ifndef POCAUseSafeMRSWLocks}
-        if CacheLocked then begin
-         POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
-        end;
-{$endif}
-        result:=true;
-        exit;
-       end;
-      end;
-{$ifdef POCAUseSafeMRSWLocks}
-     finally
-{$endif}
-      if CacheLocked then begin
-       POCAMRSWLockReadUnlock(@HashInstance^.Cache.MRSWLock);
-      end;
-{$ifdef POCAUseSafeMRSWLocks}
-     end;
-{$endif}
-    end;
-   end else begin
+   if not HashInstance^.Cache.Ready then begin
     POCAHashRebuildCache(HashInstance);
+   end;
+   // The search starts at the prototype, and the chain of the prototype is what
+   // the chain of this hash begins with, in the very same layout. A position is
+   // checked against that one: the chain of this hash leaves out just the entries
+   // this hash shadows, which are the ones an inherited read is after, and its own
+   // entries must not answer such a read at all.
+   Prototype:=HashInstance^.Prototype;
+   if ((CacheIndex<>$ffffffff) and assigned(Prototype)) and not POCAHashHasGetHandler(Context^.Instance,Prototype) then begin
+    if assigned(Prototype^.Prototype) then begin
+     if Prototype^.Cache.Ready then begin
+      // The cache lock only matters when POCA is actually used concurrently;
+      // otherwise this is an atomic read-modify-write on every cache hit. The
+      // flag is captured once, so that a thread being spawned in between cannot
+      // leave the lock released without ever having been taken.
+      CacheLocked:=Prototype^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
+      if CacheLocked then begin
+       POCAMRSWLockReadLock(@Prototype^.Cache.MRSWLock);
+      end;
+{$ifdef POCAUseSafeMRSWLocks}
+      try
+{$endif}
+       if Prototype^.Cache.Ready and assigned(Prototype^.Cache.ChainEntities) then begin
+        Entity:=CacheIndex;
+        if ((TPOCAUInt32(Entity)<TPOCAUInt32(Prototype^.Cache.ChainCount)) and assigned(Prototype^.Cache.ChainEntities^[Entity])) and (Prototype^.Cache.ChainEntities^[Entity]^.Key.CastedInt64=Key.CastedInt64) then begin
+         OutValue:=Prototype^.Cache.ChainEntities^[Entity]^.Value;
+{$ifndef POCAUseSafeMRSWLocks}
+         if CacheLocked then begin
+          POCAMRSWLockReadUnlock(@Prototype^.Cache.MRSWLock);
+         end;
+{$endif}
+         result:=true;
+         exit;
+        end;
+       end;
+{$ifdef POCAUseSafeMRSWLocks}
+      finally
+{$endif}
+       if CacheLocked then begin
+        POCAMRSWLockReadUnlock(@Prototype^.Cache.MRSWLock);
+       end;
+{$ifdef POCAUseSafeMRSWLocks}
+      end;
+{$endif}
+     end;
+    end else begin
+     // A prototype without one of its own is a chain of a single level, whose
+     // positions are those of its record.
+     HashRec:=Prototype^.HashRecord;
+     if assigned(HashRec) then begin
+      Entity:=CacheIndex;
+      if ((TPOCAUInt32(Entity)<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Entity]>=0)) and (HashRec^.Entities^[Entity].Key.CastedInt64=Key.CastedInt64) then begin
+       OutValue:=HashRec^.Entities^[Entity].Value;
+       result:=true;
+       exit;
+      end;
+     end;
+    end;
    end;
    Index:=HashInstance^.Cache.ChainCount;
    HashRec:=HashInstance^.HashRecord;
@@ -14371,7 +14446,7 @@ begin
    result:=POCAHashSetEvent(Context,HashInstance^.Events^.HashRecord^.Events^[pmoSET],Hash,Key,Value);
   end else begin
 {$ifdef POCAThreadSafeHash}
-   Locked:=POCAMultiThreaded;
+   Locked:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
    if Locked then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
    end;
@@ -14436,7 +14511,7 @@ begin
    result:=POCAHashSetEvent(Context,HashInstance^.Events^.HashRecord^.Events^[pmoSET],Hash,Key,Value);
   end else begin
 {$ifdef POCAThreadSafeHash}
-   if POCAMultiThreaded then begin
+   if HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
     try
      result:=POCAHashSetCacheUnlocked(HashInstance,Key,Value,Constant,CacheIndex,ConstantViolation);
@@ -14487,7 +14562,7 @@ begin
    HashRec:=HashInstance^.HashRecord;
    if assigned(HashRec) then begin
 {$ifdef POCAThreadSafeHash}
-    Locked:=POCAMultiThreaded;
+    Locked:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
     if Locked then begin
      TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
     end;
@@ -14754,7 +14829,7 @@ begin
    // Every entry goes away here, so cached entity pointers become stale.
    POCAHashBumpVersion(HashInstance);
 {$ifdef POCAThreadSafeHash}  
-   Locked:=POCAMultiThreaded;
+   Locked:=HashInstance^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded;
    if Locked then begin
     TPasMPMultipleReaderSingleWriterSpinLock.AcquireWrite(HashInstance^.Lock);
    end;
@@ -15128,16 +15203,14 @@ begin
 
 end;
 
-// Thread that created the very first context; a context created from any other
-// thread implies that POCA is being used concurrently.
-var POCAFirstThreadID:TThreadID=TThreadID(0);
-
 function POCAContextCreate(Instance:PPOCAInstance):PPOCAContext;
 begin
- if POCAFirstThreadID=TThreadID(0) then begin
-  POCAFirstThreadID:=POCAGetCurrentThreadID;
- end else if POCAFirstThreadID<>POCAGetCurrentThreadID then begin
-  POCAEnableMultiThreading;
+ // The thread that created the very first context of this instance; a context
+ // created from any other thread implies that the instance is used concurrently.
+ if Instance^.Globals.FirstThreadID=TThreadID(0) then begin
+  Instance^.Globals.FirstThreadID:=POCAGetCurrentThreadID;
+ end else if Instance^.Globals.FirstThreadID<>POCAGetCurrentThreadID then begin
+  POCAEnableMultiThreading(Instance);
  end;
  POCALockEnter(Instance^.Globals.Lock);
  try
@@ -15347,9 +15420,20 @@ begin
  end;
 end;
 
-procedure POCAEnableMultiThreading;
+// Turns on the multi threaded mode of an instance, as soon as its code can run on
+// more than one thread at a time. Until then the per object locks of its arrays
+// and hashes are skipped, so that single threaded scripts pay a predictable
+// branch instead of an atomic read-modify-write on every write access.
+//
+// It is turned on automatically when POCA spawns a thread or a coroutine, and
+// when a context is created from a different thread than the very first one of
+// the instance. Hosts that hand values of an instance to threads of their own
+// without going through any of those must call this themselves before doing so.
+// It is a one way switch and never goes back to false.
+procedure POCAEnableMultiThreading(const Instance:PPOCAInstance);
 begin
- POCAMultiThreaded:=true;
+ Instance^.Globals.MultiThreaded:=true;
+ Instance^.Globals.InlineCacheGuard:=1;
 end;
 
 function POCAGetCurrentThreadID:TThreadID; {$ifdef caninline}inline;{$endif}
@@ -18579,6 +18663,10 @@ begin
   CoroutineData^.Context^.CoroutineData:=CoroutineData;
   CoroutineData^.Func:=Arguments^[0];
   POCATemporarySave(Context,CoroutineData^.Func);
+{$if defined(UseThreadsForCoroutines)}
+  // Such a coroutine runs on a thread of its own.
+  POCAEnableMultiThreading(Context^.Instance);
+{$ifend}
   CoroutineData^.Coroutine:=POCACoroutineCreate(@POCACoroutineGhostEntrypoint,65536,CoroutineData);
   CoroutineData^.Arguments:=nil;
   if CountArguments>1 then begin
@@ -18979,7 +19067,7 @@ begin
   TPasMPInterlocked.Write(ThreadData^.Terminated,false);
   ThreadData^.StartSemaphore:=POCASemaphoreCreate;
   TPasMPInterlocked.Write(ThreadData^.Started,false);
-  POCAEnableMultiThreading;
+  POCAEnableMultiThreading(Context^.Instance);
 {$ifdef fpc}
   ThreadData^.Handle:=BeginThread(POCAThreadProc,ThreadData,ThreadData^.ThreadID);
 {$else}
@@ -39187,6 +39275,9 @@ var TokenList:PPOCAToken;
           // position, so that level has to start out explicitly empty.
           Code^.InlineCaches^[i].ChainIndex:=$ffffffff;
           Code^.InlineCaches^[i].HashChainIndex:=$ffffffff;
+          for j:=0 to length(Code^.InlineCaches^[i].ExtraChainIndices)-1 do begin
+           Code^.InlineCaches^[i].ExtraChainIndices[j]:=$ffffffff;
+          end;
          end;
         end else begin
          Code^.InlineCaches:=nil;
@@ -40446,7 +40537,7 @@ var Func:PPOCAFunction;
     Entity:PPOCAHashEntity;
 begin
 
- if ((not POCAMultiThreaded) and (InlineCache^.Version<>0)) and
+ if ((not Context^.Instance^.Globals.MultiThreaded) and (InlineCache^.Version<>0)) and
     (Frame^.Locals.CastedUInt64=InlineCache^.AnchorValue.CastedUInt64) then begin
   if Frame^.Locals.CastedUInt64=POCAValueNullCastedUInt64 then begin
    // No locals hash in front of the chain, so the first namespace answered. Same
@@ -40474,7 +40565,7 @@ begin
  // line for nothing.
  Entity:=nil;
  NamespaceHash:=nil;
- if (not POCAMultiThreaded) and (CacheIndex<>$ffffffff) then begin
+ if (not Context^.Instance^.Globals.MultiThreaded) and (CacheIndex<>$ffffffff) then begin
   if Frame^.Locals.CastedUInt64=POCAValueNullCastedUInt64 then begin
    Func:=PPOCAFunction(POCAGetValueReferencePointer(Frame^.Func));
    if assigned(Func) then begin
@@ -40601,9 +40692,12 @@ procedure POCARunGetMemberCached(Context:PPOCAContext;const Obj,Fld:TPOCAValue;v
 var HashInstance:PPOCAHash;
     HashRec:PPOCAHashRecord;
     Entity:PPOCAHashEntity;
+    Position,Previous:TPOCAUInt32;
+    Index:TPOCAInt32;
+    Swapped:boolean;
 begin
 
- if POCAMultiThreaded or not POCAIsValueHash(Obj) then begin
+ if Context^.Instance^.Globals.MultiThreaded or not POCAIsValueHash(Obj) then begin
   // Under real concurrency the stamp and the entity would have to be read as one
   // unit, so those call sites keep taking the locked path.
   POCAGetMember(Context,Obj,Fld,OutValue,InlineCache^.ChainIndex,InlineCache^.HashChainIndex,false,true);
@@ -40612,12 +40706,91 @@ begin
 
  HashInstance:=PPOCAHash(POCAGetValueReferencePointer(Obj));
 
+ // Nothing about a receiver with a get handler may answer a read, not even a
+ // stamp, since the handler can have turned up after the stamp was recorded.
+ if POCAHashHasGetHandler(Context^.Instance,HashInstance) then begin
+  POCAGetMember(Context,Obj,Fld,OutValue,InlineCache^.ChainIndex,InlineCache^.HashChainIndex,false,true);
+  exit;
+ end;
+
  if InlineCache^.Version=HashInstance^.Version then begin
   OutValue:=InlineCache^.Entity^.Value;
   exit;
  end;
 
+ // Then the positions of all layouts this call site has seen, the one of the last
+ // full lookup first. A receiver that inherits gets its chain built right here if
+ // it has none yet, so that a fresh object of a known layout costs no lookup
+ // either. A hit also records the stamp, just as a full lookup would.
+ if assigned(HashInstance^.Prototype) then begin
+  if not HashInstance^.Cache.Ready then begin
+   POCAHashRebuildCache(HashInstance);
+  end;
+  if assigned(HashInstance^.Cache.ChainEntities) then begin
+   for Index:=-1 to length(InlineCache^.ExtraChainIndices)-1 do begin
+    if Index<0 then begin
+     Position:=InlineCache^.ChainIndex;
+    end else begin
+     Position:=InlineCache^.ExtraChainIndices[Index];
+    end;
+    if Position<TPOCAUInt32(HashInstance^.Cache.ChainCount) then begin
+     Entity:=HashInstance^.Cache.ChainEntities^[Position];
+     if assigned(Entity) and (Entity^.Key.CastedInt64=Fld.CastedInt64) then begin
+      OutValue:=Entity^.Value;
+      InlineCache^.Entity:=Entity;
+      InlineCache^.Version:=HashInstance^.Version;
+      exit;
+     end;
+    end;
+   end;
+  end;
+ end else begin
+  HashRec:=HashInstance^.HashRecord;
+  if assigned(HashRec) then begin
+   for Index:=-1 to length(InlineCache^.ExtraChainIndices)-1 do begin
+    if Index<0 then begin
+     Position:=InlineCache^.ChainIndex;
+    end else begin
+     Position:=InlineCache^.ExtraChainIndices[Index];
+    end;
+    if ((Position<TPOCAUInt32(HashRec^.Size)) and (HashRec^.EntityToCellIndex^[Position]>=0)) and
+       (HashRec^.Entities^[Position].Key.CastedInt64=Fld.CastedInt64) then begin
+     Entity:=@HashRec^.Entities^[Position];
+     OutValue:=Entity^.Value;
+     InlineCache^.Entity:=Entity;
+     InlineCache^.Version:=HashInstance^.Version;
+     exit;
+    end;
+   end;
+  end;
+ end;
+
+ Previous:=InlineCache^.ChainIndex;
+
  POCAGetMember(Context,Obj,Fld,OutValue,InlineCache^.ChainIndex,InlineCache^.HashChainIndex,false,true);
+
+ // The position that had to make way for the new one moves on to the further
+ // ones. Should the new one have been among those already, the two swap places,
+ // otherwise it replaces the one whose turn it is.
+ Position:=InlineCache^.ChainIndex;
+ if (Previous<>$ffffffff) and (Previous<>Position) then begin
+  Swapped:=false;
+  for Index:=0 to length(InlineCache^.ExtraChainIndices)-1 do begin
+   if InlineCache^.ExtraChainIndices[Index]=Position then begin
+    InlineCache^.ExtraChainIndices[Index]:=Previous;
+    Swapped:=true;
+    break;
+   end;
+  end;
+  if not Swapped then begin
+   InlineCache^.ExtraChainIndices[InlineCache^.ExtraChainNext]:=Previous;
+   if InlineCache^.ExtraChainNext<TPOCAUInt32(length(InlineCache^.ExtraChainIndices)-1) then begin
+    inc(InlineCache^.ExtraChainNext);
+   end else begin
+    InlineCache^.ExtraChainNext:=0;
+   end;
+  end;
+ end;
 
  // Only an entity out of the receiver's own storage may be recorded. A member
  // served by the global hash prototype or by a get event lives in a different
@@ -40658,7 +40831,7 @@ procedure POCARunIntrinsicResolve(Context:PPOCAContext;const Obj,Fld:TPOCAValue;
 begin
  POCAGetMember(Context,Obj,Fld,OutValue,InlineCache^.ChainIndex,InlineCache^.HashChainIndex,false,true);
  InlineCache^.Version:=0;
- if (((not POCAMultiThreaded) and POCAIsValueHash(Obj)) and
+ if (((not Context^.Instance^.Globals.MultiThreaded) and POCAIsValueHash(Obj)) and
      (Obj.CastedUInt64=Context^.Instance^.Globals.MathHash.CastedUInt64)) and
     (OutValue.CastedUInt64=Context^.Instance^.Globals.MathIntrinsics[IntrinsicID].CastedUInt64) then begin
   InlineCache^.Version:=PPOCAHash(POCAGetValueReferencePointer(Obj))^.Version;
@@ -40667,7 +40840,7 @@ end;
 
 function POCARunIntrinsicCallee(Context:PPOCAContext;const Obj,Fld:TPOCAValue;const IntrinsicID:TPOCAUInt32;const InlineCache:PPOCAInlineCache):TPOCAValue;
 begin
- if (((not POCAMultiThreaded) and (InlineCache^.Version<>0)) and (Obj.CastedUInt64=Context^.Instance^.Globals.MathHash.CastedUInt64)) and
+ if (((not Context^.Instance^.Globals.MultiThreaded) and (InlineCache^.Version<>0)) and (Obj.CastedUInt64=Context^.Instance^.Globals.MathHash.CastedUInt64)) and
     (InlineCache^.Version=PPOCAHash(POCAGetValueReferencePointer(Obj))^.Version) then begin
   // Same object, untouched since the stamp was taken, and back then the lookup
   // did yield the built in function, so it still does.
@@ -40703,7 +40876,7 @@ var HashInstance:PPOCAHash;
     Entity:TPOCAInt32;
 begin
 
- if POCAMultiThreaded or not POCAIsValueHash(Obj) then begin
+ if Context^.Instance^.Globals.MultiThreaded or not POCAIsValueHash(Obj) then begin
   POCASetMember(Context,Obj,Fld,Value,false,InlineCache^.ChainIndex,true);
   exit;
  end;
@@ -41187,7 +41360,7 @@ begin
    end;
    pvtARRAY:begin
 {$ifdef POCAThreadSafeArray}
-    if POCAMultiThreaded then begin
+    if Context^.Instance^.Globals.MultiThreaded then begin
      // Concurrent use: keep the fully locked path, which re-reads the array
      // record under the lock, since another thread may resize it meanwhile.
      POCAArraySet(Box,POCARunCheckArray(Context,Box,Key),Value);
@@ -42779,8 +42952,8 @@ var Fixups:TFixups;
  var Slow:array[0..5] of TPOCAInt32;
      Index,Done:TPOCAInt32;
  begin
-  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
-  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$48#$ba); // mov rdx,@Instance^.Globals.MultiThreaded
+  AddQWordPointer(@Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded);
   Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
   Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
 
@@ -42868,8 +43041,8 @@ var Fixups:TFixups;
   // ever recorded when the lookup really yielded it. So the member read in front
   // of this call site could be dropped entirely, which is where the bulk of the
   // work used to sit.
-  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
-  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$48#$ba); // mov rdx,@Instance^.Globals.MultiThreaded
+  AddQWordPointer(@Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded);
   Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
   Deopt[0]:=AddLocalJump(#$0f#$85); // jne deopt
 
@@ -43131,8 +43304,8 @@ var Fixups:TFixups;
  var Slow:array[0..4] of TPOCAInt32;
      Index,Namespace,HaveHash:TPOCAInt32;
  begin
-  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
-  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$48#$ba); // mov rdx,@Instance^.Globals.MultiThreaded
+  AddQWordPointer(@Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded);
   Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
   Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
 
@@ -43203,8 +43376,8 @@ var Fixups:TFixups;
      Done:array[0..1] of TPOCAInt32;
      Index:TPOCAInt32;
  begin
-  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
-  AddQWordPointer(@POCAMultiThreaded);
+  Add(#$48#$ba); // mov rdx,@Instance^.Globals.MultiThreaded
+  AddQWordPointer(@Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded);
   Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
   Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
 
@@ -43279,40 +43452,83 @@ var Fixups:TFixups;
  // cache. Every case it does not cover, a miss included, falls through to the
  // helper, which then does the full lookup and refills the slot.
  procedure AddInlineGetMember;
- var Slow:array[0..2] of TPOCAInt32;
-     Chain:array[0..6] of TPOCAInt32;
-     Done:array[0..1] of TPOCAInt32;
-     Index,Stamp:TPOCAInt32;
+ var Slow:array[0..4] of TPOCAInt32;
+     Unguarded:array[0..4] of TPOCAInt32;
+     Chain:array[0..1] of TPOCAInt32;
+     Next:array[0..2] of TPOCAInt32;
+     Done:array[0..POCAInlineCacheCountExtraChainIndices+1] of TPOCAInt32;
+     Index,Position,StampMiss,Stamp:TPOCAInt32;
  begin
   // Two ways to remember a member lookup, picked by whether the receiver has a
   // prototype. With one, the receiver is a class instance and the call site sees
-  // a new object on nearly every pass, so only the position in the flattened
-  // chain carries, being a property of the layout rather than of the object.
-  // Without one, the receiver is a namespace, a module table or a plain hash and
-  // tends to be the very same object every time, where the version stamp settles
-  // the whole lookup in a single comparison.
-  Add(#$48#$ba); // mov rdx,@POCAMultiThreaded
-  AddQWordPointer(@POCAMultiThreaded);
-  Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
-  Slow[0]:=AddLocalJump(#$0f#$85); // jne slow (stamp and entity would have to be read as one unit)
-
+  // a new object on nearly every pass, so only the positions in the flattened
+  // chain carry, one per layout the call site has seen, being a property of the
+  // layout rather than of the object. Without one, the receiver is a namespace,
+  // a module table or a plain hash and tends to be the very same object every
+  // time, where the version stamp settles the whole lookup in a single comparison.
   Add(#$48#$8b#$83); // mov rax,qword ptr [rbx+Obj]
   AddDWord(Operands^[1]*sizeof(double));
   Add(#$48#$89#$c2); // mov rdx,rax
   Add(#$48#$c1#$ea#$30); // shr rdx,48
   Add(#$81#$fa); // cmp edx,0000ffffh
   AddDWord($0000ffff);
-  Slow[1]:=AddLocalJump(#$0f#$85); // jne slow
+  Slow[0]:=AddLocalJump(#$0f#$85); // jne slow
 
   Add(#$89#$c2); // mov edx,eax
   Add(#$83#$e2#$0f); // and edx,15
   Add(#$83#$fa); // cmp edx,pvtHASH
   Add(AnsiChar(TPOCAUInt8(pvtHASH)));
-  Slow[2]:=AddLocalJump(#$0f#$85); // jne slow (only a hash receiver may be dereferenced here)
+  Slow[1]:=AddLocalJump(#$0f#$85); // jne slow (only a hash receiver may be dereferenced here)
 
   Add(#$48#$ba); // mov rdx,pointer mask (strip signal bits and type tag)
   AddQWord(TPOCAUInt64(POCAValueReferenceMask and not POCAValueTypeTagMask));
   Add(#$48#$21#$d0); // and rax,rdx
+
+  // One test covers both reasons not to trust the slot, concurrency and get
+  // handlers, as long as neither of them has come up in this instance.
+  Add(#$48#$ba); // mov rdx,@Instance^.Globals.InlineCacheGuard
+  AddQWordPointer(@Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.InlineCacheGuard);
+  Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
+  Unguarded[0]:=AddLocalJump(#$0f#$84); // je unguarded
+
+  Add(#$48#$ba); // mov rdx,@Instance^.Globals.MultiThreaded
+  AddQWordPointer(@Code^.Header.{$ifdef POCAGarbageCollectorPoolBlockInstance}PoolBlock^.{$endif}Instance^.Globals.MultiThreaded);
+  Add(#$83#$3a#$00); // cmp dword ptr [rdx],0
+  Slow[2]:=AddLocalJump(#$0f#$85); // jne slow (stamp and entity would have to be read as one unit)
+
+  // A receiver with a get handler is left to the helper entirely, since the
+  // handler has to be asked on every read. Only the handler itself sends a read
+  // there, so that a receiver with nothing but operator events keeps both paths.
+  // Its value counts as a handler by its type tag alone, the helper then decides.
+  Add(#$48#$8b#$88); // mov rcx,qword ptr [rax+TPOCAHash.Events]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Events)));
+  Add(#$48#$85#$c9); // test rcx,rcx
+  Unguarded[1]:=AddLocalJump(#$0f#$84); // jz unguarded (no events at all)
+  Add(#$48#$8b#$89); // mov rcx,qword ptr [rcx+TPOCAHash.HashRecord]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.HashRecord)));
+  Add(#$48#$85#$c9); // test rcx,rcx
+  Unguarded[2]:=AddLocalJump(#$0f#$84); // jz unguarded
+  Add(#$48#$8b#$89); // mov rcx,qword ptr [rcx+TPOCAHashRecord.Events]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHashRecord(nil)^.Events)));
+  Add(#$48#$85#$c9); // test rcx,rcx
+  Unguarded[3]:=AddLocalJump(#$0f#$84); // jz unguarded
+  Add(#$48#$8b#$89); // mov rcx,qword ptr [rcx+TPOCAHashEvents[pmoGET]]
+  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHashEvents(nil)^[pmoGET])));
+  Add(#$49#$89#$c8); // mov r8,rcx
+  Add(#$49#$c1#$e8#$30); // shr r8,48
+  Add(#$41#$81#$f8); // cmp r8d,0000ffffh
+  AddDWord($0000ffff);
+  Unguarded[4]:=AddLocalJump(#$0f#$85); // jne unguarded (a number is no handler)
+  Add(#$83#$e1#$0f); // and ecx,15
+  Add(#$83#$f9); // cmp ecx,pvtFUNCTION
+  Add(AnsiChar(TPOCAUInt8(pvtFUNCTION)));
+  Slow[3]:=AddLocalJump(#$0f#$84); // je slow
+  Add(#$83#$f9); // cmp ecx,pvtNATIVECODE
+  Add(AnsiChar(TPOCAUInt8(pvtNATIVECODE)));
+  Slow[4]:=AddLocalJump(#$0f#$84); // je slow
+  for Index:=0 to length(Unguarded)-1 do begin
+   FixLocalJump(Unguarded[Index]);
+  end;
 
   Add(#$48#$ba); // mov rdx,@Code^.InlineCaches^[Operands^[5]] (both levels live in this slot)
   AddQWordPointer(@Code^.InlineCaches^[Operands^[5]]);
@@ -43322,44 +43538,56 @@ var Fixups:TFixups;
   Add(#$00);
   Stamp:=AddLocalJump(#$0f#$84); // je version stamp path
 
-  // Chain position, for receivers that inherit.
+  // Chain positions, for receivers that inherit.
   Add(#$83#$b8); // cmp dword ptr [rax+TPOCAHash.Cache.Ready],0
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.Ready)));
   Add(#$00);
   Chain[0]:=AddLocalJump(#$0f#$84); // je stamp path (cache not built yet)
 
-  Add(#$8b#$8a); // mov ecx,dword ptr [rdx+TPOCAInlineCache.ChainIndex]
-  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.ChainIndex)));
-  Add(#$83#$f9#$ff); // cmp ecx,-1
-  Chain[1]:=AddLocalJump(#$0f#$84); // je stamp path (nothing recorded yet)
-
   Add(#$4c#$8b#$80); // mov r8,qword ptr [rax+TPOCAHash.Cache.ChainEntities]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.ChainEntities)));
   Add(#$4d#$85#$c0); // test r8,r8
-  Chain[2]:=AddLocalJump(#$0f#$84); // jz stamp path
+  Chain[1]:=AddLocalJump(#$0f#$84); // jz stamp path
 
-  Add(#$3b#$88); // cmp ecx,dword ptr [rax+TPOCAHash.Cache.ChainCount]
-  AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.ChainCount)));
-  Chain[3]:=AddLocalJump(#$0f#$83); // jae stamp path
-
-  Add(#$4d#$8b#$04#$c8); // mov r8,qword ptr [r8+rcx*8] (the recorded entity)
-  Add(#$4d#$85#$c0); // test r8,r8
-  Chain[4]:=AddLocalJump(#$0f#$84); // jz stamp path (a deleted or shadowed entry)
   Add(#$49#$b9); // mov r9,@Code^.Constants^[Operands^[2]] (the member name)
   AddQWordPointer(@Code^.Constants^[Operands^[2]]);
   Add(#$4d#$8b#$09); // mov r9,qword ptr [r9]
-  Add(#$4d#$3b#$08); // cmp r9,qword ptr [r8] (TPOCAHashEntity.Key)
-  Chain[5]:=AddLocalJump(#$0f#$85); // jne stamp path
 
-  Add(#$4d#$8b#$48#$08); // mov r9,qword ptr [r8+TPOCAHashEntity.Value]
-  Add(#$4c#$89#$8b); // mov qword ptr [rbx+Dst],r9
-  AddDWord(Operands^[0]*sizeof(double));
-  Done[0]:=AddLocalJump(#$e9); // jmp behind the miss path
+  // One probe per remembered position, the one of the last full lookup first.
+  for Position:=-1 to POCAInlineCacheCountExtraChainIndices-1 do begin
+   if Position<0 then begin
+    Add(#$8b#$8a); // mov ecx,dword ptr [rdx+TPOCAInlineCache.ChainIndex]
+    AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.ChainIndex)));
+   end else begin
+    Add(#$8b#$8a); // mov ecx,dword ptr [rdx+TPOCAInlineCache.ExtraChainIndices[Position]]
+    AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.ExtraChainIndices[Position])));
+   end;
+   Add(#$3b#$88); // cmp ecx,dword ptr [rax+TPOCAHash.Cache.ChainCount]
+   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Cache.ChainCount)));
+   Next[0]:=AddLocalJump(#$0f#$83); // jae next probe (an empty position included, being $ffffffff)
+
+   Add(#$49#$8b#$0c#$c8); // mov rcx,qword ptr [r8+rcx*8] (the entity at that position)
+   Add(#$48#$85#$c9); // test rcx,rcx
+   Next[1]:=AddLocalJump(#$0f#$84); // jz next probe (a deleted or shadowed entry)
+   Add(#$4c#$3b#$89); // cmp r9,qword ptr [rcx+TPOCAHashEntity.Key]
+   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHashEntity(nil)^.Key)));
+   Next[2]:=AddLocalJump(#$0f#$85); // jne next probe
+
+   Add(#$48#$8b#$89); // mov rcx,qword ptr [rcx+TPOCAHashEntity.Value]
+   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHashEntity(nil)^.Value)));
+   Add(#$48#$89#$8b); // mov qword ptr [rbx+Dst],rcx
+   AddDWord(Operands^[0]*sizeof(double));
+   Done[Position+1]:=AddLocalJump(#$e9); // jmp behind the miss path
+
+   for Index:=0 to length(Next)-1 do begin
+    FixLocalJump(Next[Index]);
+   end;
+  end;
 
   // Version stamp, for receivers that do not inherit, and as the fallback for
-  // those that do but whose chain position did not hold up.
+  // those that do but whose chain positions did not hold up.
   FixLocalJump(Stamp);
-  for Index:=0 to 5 do begin
+  for Index:=0 to length(Chain)-1 do begin
    FixLocalJump(Chain[Index]);
   end;
 
@@ -43367,7 +43595,7 @@ var Fixups:TFixups;
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Version)));
   Add(#$48#$3b#$88); // cmp rcx,qword ptr [rax+TPOCAHash.Version]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHash(nil)^.Version)));
-  Chain[6]:=AddLocalJump(#$0f#$85); // jne slow (a zeroed slot never matches, stamps start at one)
+  StampMiss:=AddLocalJump(#$0f#$85); // jne slow (a zeroed slot never matches, stamps start at one)
 
   Add(#$48#$8b#$8a); // mov rcx,qword ptr [rdx+TPOCAInlineCache.Entity]
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAInlineCache(nil)^.Entity)));
@@ -43375,14 +43603,14 @@ var Fixups:TFixups;
   AddDWord(TPOCAPtrUInt(Pointer(@PPOCAHashEntity(nil)^.Value)));
   Add(#$48#$89#$8b); // mov qword ptr [rbx+Dst],rcx
   AddDWord(Operands^[0]*sizeof(double));
-  Done[1]:=AddLocalJump(#$e9); // jmp behind the miss path
+  Done[length(Done)-1]:=AddLocalJump(#$e9); // jmp behind the miss path
 
-  for Index:=0 to 2 do begin
+  for Index:=0 to length(Slow)-1 do begin
    FixLocalJump(Slow[Index]);
   end;
-  FixLocalJump(Chain[6]);
+  FixLocalJump(StampMiss);
   AddCallRuntimeHelper(@POCAJITOpGETMEMBER,false,true);
-  for Index:=0 to 1 do begin
+  for Index:=0 to length(Done)-1 do begin
    FixLocalJump(Done[Index]);
   end;
  end;
