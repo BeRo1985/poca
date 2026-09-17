@@ -380,6 +380,12 @@
 // on with -dPOCAVerifyByteCodeAfterCompile and run the tests.
 {-$define POCAVerifyByteCodeAfterCompile}
 
+// Stores everything the compiler produces and hands out what loading it again
+// gives instead, which is how storing and loading bytecode is checked against
+// everything that gets compiled. Off by default; turn it on with
+// -dPOCAByteCodeRoundTripAfterCompile and run the tests.
+{-$define POCAByteCodeRoundTripAfterCompile}
+
 interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
@@ -2097,6 +2103,24 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
 
      EPOCARegExpNFACollectError=class(EPOCAError);
 
+     // Why stored bytecode could not be saved or loaded, so that a caller can for
+     // example compile the source again instead of reporting an error.
+     TPOCAByteCodeErrorReason=(pbceMALFORMED,            // The data does not follow the format
+                               pbceTRUNCATED,            // The data ends too early
+                               pbceBADSIGNATURE,         // The data is no stored bytecode at all
+                               pbceUNSUPPORTEDCONTAINER, // Container version or a chunk this build does not know
+                               pbceABIMISMATCH,          // Made for another bytecode ABI
+                               pbceFEATUREMISMATCH,      // Made by a build with other bytecode related options
+                               pbceCHECKSUMMISMATCH,     // The data is damaged
+                               pbceVERIFICATIONFAILED,   // The bytecode does not pass POCAVerifyCode
+                               pbceUNSUPPORTEDCODE);     // The code object can not be stored
+
+     EPOCAByteCodeError=class(EPOCAError)
+      public
+       Reason:TPOCAByteCodeErrorReason;
+       constructor CreateWithReason(const aReason:TPOCAByteCodeErrorReason;const aMessage:TPOCAUTF8String);
+     end;
+
      TPOCANativeObjectMethod=function(const Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32):TPOCAValue of object;
 
      PPOCANativeObjectProperty=^TPOCANativeObjectProperty;
@@ -2236,6 +2260,10 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      end;
 
      TPOCAOpcodeInfos=array[0..255] of TPOCAOpcodeInfo;
+
+     TPOCAByteCodeSaveOption=(pbsoSTRIPDEBUGINFO,   // Leaves out the line tables
+                              pbsoSTRIPSOURCEINFO); // Leaves out the source file names
+     TPOCAByteCodeSaveOptions=set of TPOCAByteCodeSaveOption;
 
 const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
       POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAUInt64(POCAValueReferenceTag) shl 32){$endif};
@@ -2677,6 +2705,10 @@ procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStrea
 
 function POCAVerifyCode(const aCode:TPOCAValue;out aError:TPOCARawByteString):Boolean;
 function POCADisassembleCode(const aContext:PPOCAContext;const aCode:TPOCAValue):TPOCARawByteString;
+
+procedure POCASaveCodeToStream(const aContext:PPOCAContext;const aStream:TStream;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions=[]);
+function POCALoadCodeFromStream(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aStream:TStream;const aSourceFileName:TPOCARawByteString='<bytecode>'):TPOCAValue;
+function POCAIsByteCodeStream(const aStream:TStream):Boolean;
 
 procedure InitializePOCA;
 procedure FinalizePOCA;
@@ -6905,6 +6937,12 @@ begin
  SourceLine:=ASourceLine;
  SourceColumn:=ASourceColumn;
  Value:=AValue;
+end;
+
+constructor EPOCAByteCodeError.CreateWithReason(const aReason:TPOCAByteCodeErrorReason;const aMessage:TPOCAUTF8String);
+begin
+ inherited Create(aMessage);
+ Reason:=aReason;
 end;
 
 function POCALockCreate:TPOCAPointer;
@@ -39820,6 +39858,9 @@ var Parser:TPOCAParser;
 {$ifdef POCAVerifyByteCodeAfterCompile}
     VerifyError:TPOCARawByteString;
 {$endif}
+{$ifdef POCAByteCodeRoundTripAfterCompile}
+    RoundTripStream:TMemoryStream;
+{$endif}
     OldFPUExceptionMask:TFPUExceptionMask;
     OldFPURoundingMode:TFPURoundingMode;
     OldFPUPrecisionMode:TFPUPrecisionMode;
@@ -39859,6 +39900,16 @@ begin
 {$ifdef POCAVerifyByteCodeAfterCompile}
    if not POCAVerifyCode(result,VerifyError) then begin
     raise EPOCAGeneralError.Create(Parser.SourceFile,-1,-1,'Internal compiler error: '+TPOCAUTF8String(VerifyError));
+   end;
+{$endif}
+{$ifdef POCAByteCodeRoundTripAfterCompile}
+   RoundTripStream:=TMemoryStream.Create;
+   try
+    POCASaveCodeToStream(Context,RoundTripStream,result);
+    RoundTripStream.Seek(0,soBeginning);
+    result:=POCALoadCodeFromStream(Instance,Context,RoundTripStream,SourceFileName);
+   finally
+    FreeAndNil(RoundTripStream);
    end;
 {$endif}
   finally
@@ -48786,6 +48837,15 @@ begin
  end;
 end;
 
+// Whether a string is the one interned for its content, see POCAInternSymbol,
+// rather than just a string with the same content.
+function POCAByteCodeIsSymbol(const aContext:PPOCAContext;const aValue:TPOCAValue):Boolean;
+var Value:TPOCAValue;
+begin
+ Value.CastedUInt64:=POCAValueNullCastedUInt64;
+ result:=POCAHashGet(aContext,aContext^.Instance^.Globals.Symbols,aValue,Value) and (Value.CastedUInt64=aValue.CastedUInt64);
+end;
+
 function POCAOpcodeOperandKind(const aInfo:PPOCAOpcodeInfo;const aIndex:TPOCAInt32):TPOCAOperandKind;
 begin
  if aIndex<(aInfo^.CountOperands+aInfo^.CountOptionalOperands) then begin
@@ -48797,17 +48857,21 @@ begin
  end;
 end;
 
-// Checks that running a code object and everything nested in it can not reach
-// outside of the memory that belongs to them, which the interpreter and the JIT
-// rely on without checking again: every instruction has to be known and complete,
-// every operand has to be in range for what it stands for, every jump has to land
-// on an instruction, and execution must not run past the end. The frame values
-// need a closer look, because the levels a frame can reach change while it runs:
-// a loop whose closures capture per iteration opens a further level on entry and
-// closes it on exit, so the levels are tracked through the control flow, taking
-// the fewest levels that can be open at an instruction. A nested code object sees
-// the levels of the frame that makes a function of it, so it is checked against
-// what all the places that do so have in common.
+// Checks the shape of a code object and everything nested in it, which the
+// interpreter and the JIT rely on without checking again: every instruction has
+// to be known and complete, every operand has to be in range for what it stands
+// for, every jump has to land on an instruction, and execution must not run past
+// the end. The frame values need a closer look, because the levels a frame can
+// reach change while it runs: a loop whose closures capture per iteration opens a
+// further level on entry and closes it on exit, so the levels are tracked through
+// the control flow, taking the fewest levels that can be open at an instruction.
+// A nested code object sees the levels of the frame that makes a function of it,
+// so it is checked against what all the places that do so have in common.
+// What is not checked are the types of the values an instruction works on, which
+// the typed instructions (the N_ ones, ARRAYEXTRACT, ARRAYINSERT, HASHCOMBINE)
+// take for granted from the compiler, nor whether a try block can reach its own
+// TRY again. Passing this is therefore no protection against bytecode made to do
+// harm, which is why only bytecode from trusted sources may be loaded.
 function POCAVerifyCode(const aCode:TPOCAValue;out aError:TPOCARawByteString):Boolean;
  function Fail(const aCodeObject:PPOCACode;const aPosition:TPOCAInt64;const aMessage:TPOCARawByteString):Boolean;
  begin
@@ -49307,12 +49371,6 @@ var Output:TPOCARawByteString;
   end;
   result:=result+'"';
  end;
- function IsSymbol(const aValue:TPOCAValue):Boolean;
- var Value:TPOCAValue;
- begin
-  Value.CastedUInt64:=POCAValueNullCastedUInt64;
-  result:=POCAHashGet(aContext,aContext^.Instance^.Globals.Symbols,aValue,Value) and (Value.CastedUInt64=aValue.CastedUInt64);
- end;
  function DescribeConstant(const aCodeObject:PPOCACode;const aIndex:TPOCAUInt32;const aPath:TPOCARawByteString):TPOCARawByteString;
  var Value:TPOCAValue;
  begin
@@ -49329,7 +49387,7 @@ var Output:TPOCARawByteString;
     end;
     pvtSTRING:begin
      result:=Quote(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^);
-     if IsSymbol(Value) then begin
+     if POCAByteCodeIsSymbol(aContext,Value) then begin
       result:=result+' symbol';
      end;
     end;
@@ -49542,6 +49600,1075 @@ begin
   AddLine('<not a code object>');
  end;
  result:=Output;
+end;
+
+// Stored bytecode, see docs/bytecode-serialization-plan.md for the format. All
+// numbers are little endian. The data is a header followed by chunks, each made
+// of a four character code, flags that are reserved and zero for now, and the
+// size of what follows. A chunk whose code starts with a capital letter has to be
+// understood by a loader, any other one may be skipped by it. Fields added to the
+// end of a chunk in a later minor container version are skipped as well.
+
+const POCAByteCodeFileSignature:TPOCAValueDataFileHeaderSignature=('P','B','C','F');
+
+      POCAByteCodeFileHeaderSize=40;
+
+      POCAByteCodeFileHeaderCheckSumOffset=32;
+
+      POCAByteCodeChunkHeaderSize=16;
+
+      POCAByteCodeChunkMETA:TPOCAValueDataFileHeaderSignature=('M','E','T','A');
+      POCAByteCodeChunkSTRS:TPOCAValueDataFileHeaderSignature=('S','T','R','S');
+      POCAByteCodeChunkSRCF:TPOCAValueDataFileHeaderSignature=('S','R','C','F');
+      POCAByteCodeChunkCODE:TPOCAValueDataFileHeaderSignature=('C','O','D','E');
+      POCAByteCodeChunkLINE:TPOCAValueDataFileHeaderSignature=('l','i','n','e');
+
+      // Flags of the header, which only tell what has been left out
+      pbhfDEBUGINFOSTRIPPED=TPOCAUInt32(1 shl 0);
+      pbhfSOURCEINFOSTRIPPED=TPOCAUInt32(1 shl 1);
+
+      // Flags of an entry of the string pool
+      pbsfSYMBOL=TPOCAUInt8(1 shl 0);
+      pbsfALL=pbsfSYMBOL;
+
+      // Kinds of constants
+      pbckNULL=0;
+      pbckNUMBER=1;
+      pbckSTRING=2;
+      pbckCODE=3;
+
+      // Flags of a code object
+      pbcfUSEFRAMEVALUES=TPOCAUInt32(1 shl 0);
+      pbcfCLASSFUNCTION=TPOCAUInt32(1 shl 1);
+      pbcfFASTFUNCTION=TPOCAUInt32(1 shl 2);
+      pbcfISEMPTY=TPOCAUInt32(1 shl 3);
+      pbcfLOCALSASTHISOBJ=TPOCAUInt32(1 shl 4);
+      pbcfNEEDARGUMENTARRAY=TPOCAUInt32(1 shl 5);
+      pbcfHASRESTARGUMENTS=TPOCAUInt32(1 shl 6);
+      pbcfHASARGUMENTLOCALS=TPOCAUInt32(1 shl 7);
+      pbcfALL=pbcfUSEFRAMEVALUES or pbcfCLASSFUNCTION or pbcfFASTFUNCTION or pbcfISEMPTY or
+              pbcfLOCALSASTHISOBJ or pbcfNEEDARGUMENTARRAY or pbcfHASRESTARGUMENTS or pbcfHASARGUMENTLOCALS;
+
+      // Source file index of a code object without one
+      pbNOSOURCEFILE=TPOCAUInt32($ffffffff);
+
+      // Far beyond anything real, which keeps every offset and size within what
+      // the loader can index with
+      POCAByteCodeMaximumPayloadSize=TPOCAUInt64($7fffffff);
+
+      // The same limit the compiler has, see NewConstant
+      POCAByteCodeMaximumConstants=$10000;
+
+      // Bounds the registers, frame values and slots a code object may claim, so
+      // that neither what is set aside for them nor its size can overflow. Real
+      // code stays far below.
+      POCAByteCodeMaximumSlots=TPOCAUInt32(1 shl 20);
+
+      // Every stored NaN turns into this one, keeping only its sign. A NaN with
+      // a payload of its own could otherwise be taken for a reference, see
+      // POCAIsValueNumber, or become one by a negation.
+      POCAByteCodeCanonicalNaN=TPOCAUInt64($7ff8000000000000);
+
+type TPOCAByteCodeBooleans=array of boolean;
+
+procedure POCAByteCodeWriteU8(const aStream:TStream;const aValue:TPOCAUInt8);
+begin
+ aStream.WriteBuffer(aValue,SizeOf(TPOCAUInt8));
+end;
+
+procedure POCAByteCodeWriteU16(const aStream:TStream;const aValue:TPOCAUInt16);
+var Bytes:array[0..1] of TPOCAUInt8;
+begin
+ Bytes[0]:=TPOCAUInt8(aValue);
+ Bytes[1]:=TPOCAUInt8(aValue shr 8);
+ aStream.WriteBuffer(Bytes,SizeOf(Bytes));
+end;
+
+procedure POCAByteCodeWriteU32(const aStream:TStream;const aValue:TPOCAUInt32);
+var Bytes:array[0..3] of TPOCAUInt8;
+begin
+ Bytes[0]:=TPOCAUInt8(aValue);
+ Bytes[1]:=TPOCAUInt8(aValue shr 8);
+ Bytes[2]:=TPOCAUInt8(aValue shr 16);
+ Bytes[3]:=TPOCAUInt8(aValue shr 24);
+ aStream.WriteBuffer(Bytes,SizeOf(Bytes));
+end;
+
+procedure POCAByteCodeWriteU64(const aStream:TStream;const aValue:TPOCAUInt64);
+begin
+ POCAByteCodeWriteU32(aStream,TPOCAUInt32(aValue));
+ POCAByteCodeWriteU32(aStream,TPOCAUInt32(aValue shr 32));
+end;
+
+procedure POCAByteCodeWriteChunk(const aStream:TStream;const aID:TPOCAValueDataFileHeaderSignature;const aData:TMemoryStream);
+begin
+ aStream.WriteBuffer(aID,SizeOf(TPOCAValueDataFileHeaderSignature));
+ POCAByteCodeWriteU32(aStream,0);
+ POCAByteCodeWriteU64(aStream,aData.Size);
+ if aData.Size>0 then begin
+  aStream.WriteBuffer(aData.Memory^,aData.Size);
+ end;
+end;
+
+function POCAByteCodeChunkName(const aID:TPOCAValueDataFileHeaderSignature):TPOCARawByteString;
+var Index:TPOCAInt32;
+begin
+ result:='"';
+ for Index:=low(aID) to high(aID) do begin
+  if aID[Index] in [#32..#126] then begin
+   result:=result+aID[Index];
+  end else begin
+   result:=result+'?';
+  end;
+ end;
+ result:=result+'"';
+end;
+
+// Which constants anything in a verified code object refers to
+function POCAByteCodeReferencedConstants(const aCode:PPOCACode):TPOCAByteCodeBooleans;
+var Referenced:TPOCAByteCodeBooleans;
+    Position,ByteCodeSize:TPOCAInt64;
+    Index,CountOperands:TPOCAInt32;
+    Info:PPOCAOpcodeInfo;
+ procedure Mark(const aIndex:TPOCAUInt32);
+ begin
+  if aIndex<aCode^.ConstantCount then begin
+   Referenced[aIndex]:=true;
+  end;
+ end;
+begin
+ Referenced:=nil;
+ SetLength(Referenced,aCode^.ConstantCount);
+ for Index:=0 to length(Referenced)-1 do begin
+  Referenced[Index]:=false;
+ end;
+ ByteCodeSize:=aCode^.ByteCodeSize;
+ Position:=0;
+ while Position<ByteCodeSize do begin
+  Info:=@POCAOpcodeInfos[aCode^.ByteCode^[Position] and $ff];
+  CountOperands:=aCode^.ByteCode^[Position] shr 8;
+  for Index:=0 to CountOperands-1 do begin
+   if POCAOpcodeOperandKind(Info,Index) in [pokCONSTANT,pokCONSTANTSTRING,pokCONSTANTCODE] then begin
+    Mark(aCode^.ByteCode^[Position+1+Index]);
+   end;
+  end;
+  inc(Position,1+CountOperands);
+ end;
+ Mark(aCode^.RestArgSym);
+ for Index:=0 to TPOCAInt32(aCode^.CountArguments)-1 do begin
+  Mark(aCode^.ArgumentSymbols^[Index]);
+ end;
+ for Index:=0 to TPOCAInt32(aCode^.CountOptionalArguments)-1 do begin
+  Mark(aCode^.OptionalArgumentSymbols^[Index]);
+  Mark(aCode^.OptionalArgumentValues^[Index]);
+ end;
+ result:=Referenced;
+end;
+
+// Writes a code object of the outermost level and everything nested in it. The
+// output only depends on the code objects, which is to say that storing the same
+// code twice gives the same bytes, also when it has run in between: the slots the
+// interpreter writes to go back to how the compiler left them, and code objects
+// that nothing refers to, which the compiler leaves behind when it generates a
+// loop a second time, are stored as null.
+procedure POCASaveCodeToStream(const aContext:PPOCAContext;const aStream:TStream;const aCode:TPOCAValue;const aOptions:TPOCAByteCodeSaveOptions);
+var Code:TPOCAValue;
+    RootCode:PPOCACode;
+    VerifyError:TPOCARawByteString;
+    CodeObjects:array of PPOCACode;
+    CountCodeObjects:TPOCAInt32;
+    CodeObjectIndices:TPOCAUInt64HashMap;
+    StringIndices:TPOCAStringHashMap;
+    Strings:array of TPOCARawByteString;
+    CountStrings:TPOCAInt32;
+    SourceFileIndices:TPOCAUInt64HashMap;
+    SourceFileNames:array of TPOCAUInt32;
+    CountSourceFiles:TPOCAInt32;
+    MetaChunk,StringChunk,SourceFileChunk,CodeChunk,LineChunk,Payload,Header:TMemoryStream;
+    Index,LineIndex,CountLineTables:TPOCAInt32;
+    CheckSum,FileFlags:TPOCAUInt32;
+ procedure Fail(const aReason:TPOCAByteCodeErrorReason;const aMessage:TPOCARawByteString);
+ begin
+  raise EPOCAByteCodeError.CreateWithReason(aReason,TPOCAUTF8String('Bytecode can not be stored: '+aMessage));
+ end;
+ function AddString(const aText:TPOCARawByteString;const aFlags:TPOCAUInt8):TPOCAUInt32;
+ var Key:TPOCARawByteString;
+     Item:PPOCAStringHashMapItem;
+ begin
+  // The flags are part of the key, since a symbol and a plain string with the
+  // same content are different things to the loader
+  Key:=AnsiChar(aFlags);
+  Key:=Key+aText;
+  Item:=StringIndices.GetKey(Key);
+  if assigned(Item) then begin
+   result:=Item^.Value;
+  end else begin
+   result:=CountStrings;
+   if CountStrings>=length(Strings) then begin
+    SetLength(Strings,(CountStrings+1)*2);
+   end;
+   Strings[CountStrings]:=Key;
+   inc(CountStrings);
+   StringIndices.NewKey(Key)^.Value:=result;
+  end;
+ end;
+ function AddSourceFile(const aSourceFile:TPOCAInt32):TPOCAUInt32;
+ var Item:PPOCAUInt64HashMapItem;
+ begin
+  if (pbsoSTRIPSOURCEINFO in aOptions) or (aSourceFile<0) or (aSourceFile>=aContext^.Instance^.SourceFiles.Count) then begin
+   result:=pbNOSOURCEFILE;
+  end else begin
+   Item:=SourceFileIndices.GetKey(TPOCAUInt64(aSourceFile));
+   if assigned(Item) then begin
+    result:=Item^.Value;
+   end else begin
+    result:=CountSourceFiles;
+    if CountSourceFiles>=length(SourceFileNames) then begin
+     SetLength(SourceFileNames,(CountSourceFiles+1)*2);
+    end;
+    SourceFileNames[CountSourceFiles]:=AddString(TPOCARawByteString(aContext^.Instance^.SourceFiles[aSourceFile]),0);
+    inc(CountSourceFiles);
+    SourceFileIndices.NewKey(TPOCAUInt64(aSourceFile))^.Value:=result;
+   end;
+  end;
+ end;
+ function CodeObjectKey(const aCodeObject:TPOCAPointer):TPOCAUInt64;
+ begin
+  result:=TPOCAUInt64(TPOCAPtrUInt(aCodeObject));
+ end;
+ // Numbers the code objects so that each one comes after the ones it refers to,
+ // which lets the loader resolve references as it goes
+ procedure CollectCodeObject(const aCodeObject:PPOCACode;const aNestingDepth:TPOCAInt32);
+ var Item:PPOCAUInt64HashMapItem;
+     Referenced:TPOCAByteCodeBooleans;
+     ConstantIndex:TPOCAInt32;
+ begin
+  Item:=CodeObjectIndices.GetKey(CodeObjectKey(aCodeObject));
+  if assigned(Item) then begin
+   if Item^.Value<0 then begin
+    Fail(pbceUNSUPPORTEDCODE,'code objects refer to each other in a cycle');
+   end;
+   exit;
+  end;
+  if aNestingDepth>=POCAByteCodeMaximumNestingDepth then begin
+   Fail(pbceUNSUPPORTEDCODE,'code objects are nested too deeply');
+  end;
+  if (aCodeObject^.CountRegisters>POCAByteCodeMaximumSlots) or
+     (TPOCAUInt32(aCodeObject^.CountFrameValues)>POCAByteCodeMaximumSlots) or
+     (aCodeObject^.CountInlineCaches>POCAByteCodeMaximumSlots) or
+     (aCodeObject^.CountRegExps>POCAByteCodeMaximumSlots) or
+     (aCodeObject^.ConstantCount>POCAByteCodeMaximumConstants) then begin
+   Fail(pbceUNSUPPORTEDCODE,'code '+POCAByteCodeDescribeCode(aCodeObject)+' is too large');
+  end;
+  // Marks it as being worked on, which is how a cycle shows
+  CodeObjectIndices.NewKey(CodeObjectKey(aCodeObject))^.Value:=-1;
+  Referenced:=POCAByteCodeReferencedConstants(aCodeObject);
+  for ConstantIndex:=0 to TPOCAInt32(aCodeObject^.ConstantCount)-1 do begin
+   if Referenced[ConstantIndex] and POCAIsValueCode(aCodeObject^.Constants^[ConstantIndex]) then begin
+    CollectCodeObject(PPOCACode(POCAGetValueReferencePointer(aCodeObject^.Constants^[ConstantIndex])),aNestingDepth+1);
+   end;
+  end;
+  if CountCodeObjects>=length(CodeObjects) then begin
+   SetLength(CodeObjects,(CountCodeObjects+1)*2);
+  end;
+  CodeObjects[CountCodeObjects]:=aCodeObject;
+  // Looked up again, since adding the nested ones may have moved the entry
+  CodeObjectIndices.GetKey(CodeObjectKey(aCodeObject))^.Value:=CountCodeObjects;
+  inc(CountCodeObjects);
+ end;
+ procedure WriteArgument(const aArgument:TPOCACodeArgument);
+ begin
+  POCAByteCodeWriteU32(CodeChunk,aArgument.Kind);
+  POCAByteCodeWriteU32(CodeChunk,TPOCAUInt32(aArgument.Level));
+  POCAByteCodeWriteU32(CodeChunk,TPOCAUInt32(aArgument.Index));
+ end;
+ procedure WriteCodeObject(const aCodeObject:PPOCACode);
+ var Referenced:TPOCAByteCodeBooleans;
+     Flags:TPOCAUInt32;
+     ConstantIndex,OperandIndex,CountOperands:TPOCAInt32;
+{$ifdef BIG_ENDIAN}
+     Word:TPOCAUInt32;
+     WordIndex:TPOCAInt32;
+{$endif}
+     Position,ByteCodeSize:TPOCAInt64;
+     Value:TPOCAValue;
+     Words:PPOCAUInt32Array;
+     Info:PPOCAOpcodeInfo;
+     StringFlags:TPOCAUInt8;
+ begin
+
+  Referenced:=POCAByteCodeReferencedConstants(aCodeObject);
+
+  POCAByteCodeWriteU32(CodeChunk,AddString(aCodeObject^.Name,0));
+  POCAByteCodeWriteU32(CodeChunk,TPOCAUInt32(aCodeObject^.Level));
+
+  Flags:=0;
+  if aCodeObject^.UseFrameValues then begin
+   Flags:=Flags or pbcfUSEFRAMEVALUES;
+  end;
+  if aCodeObject^.ClassFunction then begin
+   Flags:=Flags or pbcfCLASSFUNCTION;
+  end;
+  if aCodeObject^.FastFunction then begin
+   Flags:=Flags or pbcfFASTFUNCTION;
+  end;
+  if aCodeObject^.IsEmpty then begin
+   Flags:=Flags or pbcfISEMPTY;
+  end;
+  if aCodeObject^.LocalsAsThisObj then begin
+   Flags:=Flags or pbcfLOCALSASTHISOBJ;
+  end;
+  if aCodeObject^.NeedArgumentArray then begin
+   Flags:=Flags or pbcfNEEDARGUMENTARRAY;
+  end;
+  if aCodeObject^.HasRestArguments then begin
+   Flags:=Flags or pbcfHASRESTARGUMENTS;
+  end;
+  if aCodeObject^.HasArgumentLocals then begin
+   Flags:=Flags or pbcfHASARGUMENTLOCALS;
+  end;
+  POCAByteCodeWriteU32(CodeChunk,Flags);
+
+  POCAByteCodeWriteU32(CodeChunk,TPOCAUInt32(aCodeObject^.CountFrameValues));
+  POCAByteCodeWriteU32(CodeChunk,aCodeObject^.CountRegisters);
+  POCAByteCodeWriteU32(CodeChunk,aCodeObject^.CountInlineCaches);
+  POCAByteCodeWriteU32(CodeChunk,aCodeObject^.CountRegExps);
+  POCAByteCodeWriteU32(CodeChunk,AddSourceFile(aCodeObject^.SourceFile));
+  POCAByteCodeWriteU32(CodeChunk,aCodeObject^.RestArgSym);
+
+  POCAByteCodeWriteU32(CodeChunk,aCodeObject^.ConstantCount);
+  for ConstantIndex:=0 to TPOCAInt32(aCodeObject^.ConstantCount)-1 do begin
+   Value:=aCodeObject^.Constants^[ConstantIndex];
+   case POCAGetValueType(Value) of
+    pvtNULL:begin
+     POCAByteCodeWriteU8(CodeChunk,pbckNULL);
+    end;
+    pvtNUMBER:begin
+     POCAByteCodeWriteU8(CodeChunk,pbckNUMBER);
+     POCAByteCodeWriteU64(CodeChunk,Value.CastedUInt64);
+    end;
+    pvtSTRING:begin
+     if POCAByteCodeIsSymbol(aContext,Value) then begin
+      StringFlags:=pbsfSYMBOL;
+     end else begin
+      StringFlags:=0;
+     end;
+     POCAByteCodeWriteU8(CodeChunk,pbckSTRING);
+     POCAByteCodeWriteU32(CodeChunk,AddString(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^,StringFlags));
+    end;
+    pvtCODE:begin
+     if Referenced[ConstantIndex] then begin
+      POCAByteCodeWriteU8(CodeChunk,pbckCODE);
+      POCAByteCodeWriteU32(CodeChunk,CodeObjectIndices.GetKey(CodeObjectKey(POCAGetValueReferencePointer(Value)))^.Value);
+     end else begin
+      POCAByteCodeWriteU8(CodeChunk,pbckNULL);
+     end;
+    end;
+    else begin
+     Fail(pbceUNSUPPORTEDCODE,'constant '+POCAByteCodeIntToStr(ConstantIndex)+' of code '+POCAByteCodeDescribeCode(aCodeObject)+' is of a type that can not be stored');
+    end;
+   end;
+  end;
+
+  POCAByteCodeWriteU32(CodeChunk,aCodeObject^.CountArguments);
+  for OperandIndex:=0 to TPOCAInt32(aCodeObject^.CountArguments)-1 do begin
+   POCAByteCodeWriteU32(CodeChunk,TPOCAUInt32(aCodeObject^.ArgumentSymbols^[OperandIndex]));
+   WriteArgument(aCodeObject^.ArgumentLocals^[OperandIndex]);
+  end;
+
+  POCAByteCodeWriteU32(CodeChunk,aCodeObject^.CountOptionalArguments);
+  for OperandIndex:=0 to TPOCAInt32(aCodeObject^.CountOptionalArguments)-1 do begin
+   POCAByteCodeWriteU32(CodeChunk,TPOCAUInt32(aCodeObject^.OptionalArgumentSymbols^[OperandIndex]));
+   POCAByteCodeWriteU32(CodeChunk,TPOCAUInt32(aCodeObject^.OptionalArgumentValues^[OperandIndex]));
+   WriteArgument(aCodeObject^.OptionalArgumentLocals^[OperandIndex]);
+  end;
+
+  ByteCodeSize:=aCodeObject^.ByteCodeSize;
+  POCAByteCodeWriteU32(CodeChunk,aCodeObject^.ByteCodeSize);
+  GetMem(Words,ByteCodeSize*SizeOf(TPOCAUInt32));
+  try
+   Move(aCodeObject^.ByteCode^,Words^,ByteCodeSize*SizeOf(TPOCAUInt32));
+   // Back to how the compiler left them, see pokHASHCACHE
+   Position:=0;
+   while Position<ByteCodeSize do begin
+    Info:=@POCAOpcodeInfos[Words^[Position] and $ff];
+    CountOperands:=Words^[Position] shr 8;
+    for OperandIndex:=0 to CountOperands-1 do begin
+     if POCAOpcodeOperandKind(Info,OperandIndex)=pokHASHCACHE then begin
+      Words^[Position+1+OperandIndex]:=$ffffffff;
+     end;
+    end;
+    inc(Position,1+CountOperands);
+   end;
+{$ifdef BIG_ENDIAN}
+   for WordIndex:=0 to TPOCAInt32(ByteCodeSize)-1 do begin
+    Word:=Words^[WordIndex];
+    Words^[WordIndex]:=(Word shr 24) or ((Word shr 8) and $0000ff00) or ((Word shl 8) and $00ff0000) or (Word shl 24);
+   end;
+{$endif}
+   CodeChunk.WriteBuffer(Words^,ByteCodeSize*SizeOf(TPOCAUInt32));
+  finally
+   FreeMem(Words);
+  end;
+
+ end;
+begin
+
+ Code:=aCode;
+ if POCAIsValueFunction(Code) then begin
+  Code:=PPOCAFunction(POCAGetValueReferencePointer(Code))^.Code;
+ end;
+ if not POCAIsValueCode(Code) then begin
+  Fail(pbceUNSUPPORTEDCODE,'not a code object');
+ end;
+ RootCode:=PPOCACode(POCAGetValueReferencePointer(Code));
+ if RootCode^.Level<>0 then begin
+  Fail(pbceUNSUPPORTEDCODE,'only code of the outermost level can be stored, since nested code depends on the frame values around it');
+ end;
+ // Also makes sure that walking the bytecode below is safe
+ if not POCAVerifyCode(Code,VerifyError) then begin
+  Fail(pbceVERIFICATIONFAILED,VerifyError);
+ end;
+
+ CodeObjects:=nil;
+ CountCodeObjects:=0;
+ Strings:=nil;
+ CountStrings:=0;
+ SourceFileNames:=nil;
+ CountSourceFiles:=0;
+ CountLineTables:=0;
+
+ CodeObjectIndices:=nil;
+ StringIndices:=nil;
+ SourceFileIndices:=nil;
+ MetaChunk:=nil;
+ StringChunk:=nil;
+ SourceFileChunk:=nil;
+ CodeChunk:=nil;
+ LineChunk:=nil;
+ Payload:=nil;
+ Header:=nil;
+ try
+
+  CodeObjectIndices:=TPOCAUInt64HashMap.Create(false);
+  StringIndices:=TPOCAStringHashMap.Create(false);
+  SourceFileIndices:=TPOCAUInt64HashMap.Create(false);
+  MetaChunk:=TMemoryStream.Create;
+  StringChunk:=TMemoryStream.Create;
+  SourceFileChunk:=TMemoryStream.Create;
+  CodeChunk:=TMemoryStream.Create;
+  LineChunk:=TMemoryStream.Create;
+  Payload:=TMemoryStream.Create;
+  Header:=TMemoryStream.Create;
+
+  CollectCodeObject(RootCode,0);
+
+  begin
+   POCAByteCodeWriteU32(CodeChunk,CountCodeObjects);
+   for Index:=0 to CountCodeObjects-1 do begin
+    WriteCodeObject(CodeObjects[Index]);
+   end;
+  end;
+
+  if not (pbsoSTRIPDEBUGINFO in aOptions) then begin
+   POCAByteCodeWriteU32(LineChunk,0);
+   for Index:=0 to CountCodeObjects-1 do begin
+    if length(CodeObjects[Index]^.Lines)>0 then begin
+     POCAByteCodeWriteU32(LineChunk,Index);
+     POCAByteCodeWriteU32(LineChunk,length(CodeObjects[Index]^.Lines));
+     for LineIndex:=0 to length(CodeObjects[Index]^.Lines)-1 do begin
+      POCAByteCodeWriteU32(LineChunk,CodeObjects[Index]^.Lines[LineIndex].InstructionPointer);
+      POCAByteCodeWriteU32(LineChunk,CodeObjects[Index]^.Lines[LineIndex].Line);
+     end;
+     inc(CountLineTables);
+    end;
+   end;
+   LineChunk.Seek(0,soBeginning);
+   POCAByteCodeWriteU32(LineChunk,CountLineTables);
+   LineChunk.Seek(0,soEnd);
+  end;
+
+  begin
+   // The outermost code object comes last, see CollectCodeObject
+   POCAByteCodeWriteU32(MetaChunk,CountCodeObjects-1);
+   POCAByteCodeWriteU32(MetaChunk,AddString(POCAVersion,0));
+  end;
+
+  begin
+   POCAByteCodeWriteU32(SourceFileChunk,CountSourceFiles);
+   for Index:=0 to CountSourceFiles-1 do begin
+    POCAByteCodeWriteU32(SourceFileChunk,SourceFileNames[Index]);
+   end;
+  end;
+
+  begin
+   // Last, since everything before adds to it
+   POCAByteCodeWriteU32(StringChunk,CountStrings);
+   for Index:=0 to CountStrings-1 do begin
+    POCAByteCodeWriteU8(StringChunk,ord(Strings[Index][1]));
+    POCAByteCodeWriteU32(StringChunk,length(Strings[Index])-1);
+    if length(Strings[Index])>1 then begin
+     StringChunk.WriteBuffer(Strings[Index][2],length(Strings[Index])-1);
+    end;
+   end;
+  end;
+
+  POCAByteCodeWriteChunk(Payload,POCAByteCodeChunkMETA,MetaChunk);
+  POCAByteCodeWriteChunk(Payload,POCAByteCodeChunkSTRS,StringChunk);
+  POCAByteCodeWriteChunk(Payload,POCAByteCodeChunkSRCF,SourceFileChunk);
+  POCAByteCodeWriteChunk(Payload,POCAByteCodeChunkCODE,CodeChunk);
+  if CountLineTables>0 then begin
+   POCAByteCodeWriteChunk(Payload,POCAByteCodeChunkLINE,LineChunk);
+  end;
+
+  if TPOCAUInt64(Payload.Size)>POCAByteCodeMaximumPayloadSize then begin
+   Fail(pbceUNSUPPORTEDCODE,'the code is too large');
+  end;
+
+  FileFlags:=0;
+  if pbsoSTRIPDEBUGINFO in aOptions then begin
+   FileFlags:=FileFlags or pbhfDEBUGINFOSTRIPPED;
+  end;
+  if pbsoSTRIPSOURCEINFO in aOptions then begin
+   FileFlags:=FileFlags or pbhfSOURCEINFOSTRIPPED;
+  end;
+
+  Header.WriteBuffer(POCAByteCodeFileSignature,SizeOf(TPOCAValueDataFileHeaderSignature));
+  POCAByteCodeWriteU16(Header,POCAByteCodeContainerMajorVersion);
+  POCAByteCodeWriteU16(Header,POCAByteCodeContainerMinorVersion);
+  POCAByteCodeWriteU32(Header,POCAByteCodeABIVersion);
+  POCAByteCodeWriteU32(Header,POCAByteCodeABIFingerprint);
+  POCAByteCodeWriteU32(Header,POCAByteCodeFeatureFlags);
+  POCAByteCodeWriteU32(Header,FileFlags);
+  POCAByteCodeWriteU64(Header,Payload.Size);
+  POCAByteCodeWriteU32(Header,0); // Checksum, counted as zero
+  POCAByteCodeWriteU32(Header,0); // Reserved
+
+  CheckSum:=POCACRC32(Header.Memory^,TPOCASizeInt(Header.Size));
+  CheckSum:=POCACRC32(Payload.Memory^,TPOCASizeInt(Payload.Size),CheckSum);
+  Header.Seek(POCAByteCodeFileHeaderCheckSumOffset,soBeginning);
+  POCAByteCodeWriteU32(Header,CheckSum);
+
+  aStream.WriteBuffer(Header.Memory^,Header.Size);
+  aStream.WriteBuffer(Payload.Memory^,Payload.Size);
+
+ finally
+  FreeAndNil(Header);
+  FreeAndNil(Payload);
+  FreeAndNil(LineChunk);
+  FreeAndNil(CodeChunk);
+  FreeAndNil(SourceFileChunk);
+  FreeAndNil(StringChunk);
+  FreeAndNil(MetaChunk);
+  FreeAndNil(SourceFileIndices);
+  FreeAndNil(StringIndices);
+  FreeAndNil(CodeObjectIndices);
+ end;
+
+end;
+
+// Reads what POCASaveCodeToStream wrote and returns the outermost code object,
+// leaving the stream right behind the data. Only bytecode from trusted sources may
+// be loaded, see POCAVerifyCode: what is checked here keeps damaged data, data of
+// other builds and data that does not follow the format from getting any further,
+// but not bytecode that has been made to do harm. Still every count and index is
+// checked before it is used, so that loading itself never reads or writes out of
+// bounds, whatever the data looks like.
+function POCALoadCodeFromStream(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aStream:TStream;const aSourceFileName:TPOCARawByteString):TPOCAValue;
+type TChunk=record
+      Present:boolean;
+      Offset:TPOCAInt64;
+      Size:TPOCAInt64;
+     end;
+     TStringEntry=record
+      Flags:TPOCAUInt8;
+      Text:TPOCARawByteString;
+     end;
+var Header:array[0..POCAByteCodeFileHeaderSize-1] of TPOCAUInt8;
+    Payload:array of TPOCAUInt8;
+    PayloadSize:TPOCAUInt64;
+    Position,Limit,StreamRemaining:TPOCAInt64;
+    MetaChunk,StringChunk,SourceFileChunk,CodeChunk,LineChunk:TChunk;
+    StringEntries:array of TStringEntry;
+    SourceFileIndices:array of TPOCAInt32;
+    FallbackSourceFile:TPOCAInt32;
+    CodeValues:array of TPOCAValue;
+    CodeObjects:array of PPOCACode;
+    RootIndex,CountCodeObjects,StoredCheckSum,CheckSum:TPOCAUInt32;
+    Index:TPOCAInt32;
+    HeaderBytes:TPOCAInt64;
+    VerifyError:TPOCARawByteString;
+ procedure Fail(const aReason:TPOCAByteCodeErrorReason;const aMessage:TPOCARawByteString);
+ begin
+  raise EPOCAByteCodeError.CreateWithReason(aReason,TPOCAUTF8String('Stored bytecode rejected: '+aMessage));
+ end;
+ function ReadFromStream(var aBuffer;const aCount:TPOCAInt64):TPOCAInt64;
+ var Buffer:PPOCAUInt8Array;
+     Count:TPOCAInt32;
+ begin
+  // A stream may hand out less than asked for without being at its end
+  Buffer:=@aBuffer;
+  result:=0;
+  while result<aCount do begin
+   Count:=aStream.Read(Buffer^[result],TPOCAInt32(aCount-result));
+   if Count<=0 then begin
+    break;
+   end;
+   inc(result,Count);
+  end;
+ end;
+ function HeaderU16(const aOffset:TPOCAInt32):TPOCAUInt16;
+ begin
+  result:=TPOCAUInt16(Header[aOffset]) or (TPOCAUInt16(Header[aOffset+1]) shl 8);
+ end;
+ function HeaderU32(const aOffset:TPOCAInt32):TPOCAUInt32;
+ begin
+  result:=TPOCAUInt32(Header[aOffset]) or (TPOCAUInt32(Header[aOffset+1]) shl 8) or (TPOCAUInt32(Header[aOffset+2]) shl 16) or (TPOCAUInt32(Header[aOffset+3]) shl 24);
+ end;
+ function HeaderU64(const aOffset:TPOCAInt32):TPOCAUInt64;
+ begin
+  result:=TPOCAUInt64(HeaderU32(aOffset)) or (TPOCAUInt64(HeaderU32(aOffset+4)) shl 32);
+ end;
+ function HexOf(const aValue:TPOCAUInt32):TPOCARawByteString;
+ begin
+  result:='$'+TPOCARawByteString(IntToHex(aValue,8));
+ end;
+ procedure EnterChunk(const aChunk:TChunk);
+ begin
+  Position:=aChunk.Offset;
+  Limit:=aChunk.Offset+aChunk.Size;
+ end;
+ procedure Need(const aCount:TPOCAInt64);
+ begin
+  if (aCount<0) or (aCount>(Limit-Position)) then begin
+   Fail(pbceMALFORMED,'a chunk ends too early');
+  end;
+ end;
+ function ReadU8:TPOCAUInt8;
+ begin
+  Need(1);
+  result:=Payload[Position];
+  inc(Position);
+ end;
+ function ReadU32:TPOCAUInt32;
+ begin
+  Need(4);
+  result:=TPOCAUInt32(Payload[Position]) or (TPOCAUInt32(Payload[Position+1]) shl 8) or (TPOCAUInt32(Payload[Position+2]) shl 16) or (TPOCAUInt32(Payload[Position+3]) shl 24);
+  inc(Position,4);
+ end;
+ function ReadU64:TPOCAUInt64;
+ begin
+  result:=ReadU32;
+  result:=result or (TPOCAUInt64(ReadU32) shl 32);
+ end;
+ // A count of entries that take at least aEntrySize bytes each, checked against
+ // what is left before anything is set aside for them
+ function ReadCount(const aEntrySize:TPOCAInt64):TPOCAUInt32;
+ begin
+  result:=ReadU32;
+  Need(TPOCAInt64(result)*aEntrySize);
+ end;
+ function ReadStringIndex:TPOCAUInt32;
+ begin
+  result:=ReadU32;
+  if result>=TPOCAUInt32(length(StringEntries)) then begin
+   Fail(pbceMALFORMED,'a string index is out of range');
+  end;
+ end;
+ procedure ReadChunks;
+ var ID:TPOCAValueDataFileHeaderSignature;
+     Size:TPOCAUInt64;
+  procedure Take(var aChunk:TChunk);
+  begin
+   if aChunk.Present then begin
+    Fail(pbceMALFORMED,'chunk '+POCAByteCodeChunkName(ID)+' is present twice');
+   end;
+   aChunk.Present:=true;
+   aChunk.Offset:=Position;
+   aChunk.Size:=Size;
+  end;
+ begin
+  Position:=0;
+  Limit:=PayloadSize;
+  while Position<Limit do begin
+   Need(POCAByteCodeChunkHeaderSize);
+   Move(Payload[Position],ID,SizeOf(TPOCAValueDataFileHeaderSignature));
+   inc(Position,SizeOf(TPOCAValueDataFileHeaderSignature));
+   ReadU32; // Reserved flags
+   Size:=ReadU64;
+   if Size>TPOCAUInt64(Limit-Position) then begin
+    Fail(pbceMALFORMED,'chunk '+POCAByteCodeChunkName(ID)+' is larger than the data');
+   end;
+   if CompareMem(@ID,@POCAByteCodeChunkMETA,SizeOf(TPOCAValueDataFileHeaderSignature)) then begin
+    Take(MetaChunk);
+   end else if CompareMem(@ID,@POCAByteCodeChunkSTRS,SizeOf(TPOCAValueDataFileHeaderSignature)) then begin
+    Take(StringChunk);
+   end else if CompareMem(@ID,@POCAByteCodeChunkSRCF,SizeOf(TPOCAValueDataFileHeaderSignature)) then begin
+    Take(SourceFileChunk);
+   end else if CompareMem(@ID,@POCAByteCodeChunkCODE,SizeOf(TPOCAValueDataFileHeaderSignature)) then begin
+    Take(CodeChunk);
+   end else if CompareMem(@ID,@POCAByteCodeChunkLINE,SizeOf(TPOCAValueDataFileHeaderSignature)) then begin
+    Take(LineChunk);
+   end else if ID[0] in ['A'..'Z'] then begin
+    Fail(pbceUNSUPPORTEDCONTAINER,'chunk '+POCAByteCodeChunkName(ID)+' is not known to this build');
+   end;
+   inc(Position,Size);
+  end;
+  if not (MetaChunk.Present and StringChunk.Present and SourceFileChunk.Present and CodeChunk.Present) then begin
+   Fail(pbceMALFORMED,'a required chunk is missing');
+  end;
+ end;
+ procedure ReadStrings;
+ var StringIndex:TPOCAInt32;
+     TextLength:TPOCAUInt32;
+ begin
+  EnterChunk(StringChunk);
+  SetLength(StringEntries,ReadCount(5));
+  for StringIndex:=0 to length(StringEntries)-1 do begin
+   StringEntries[StringIndex].Flags:=ReadU8;
+   if (StringEntries[StringIndex].Flags and not pbsfALL)<>0 then begin
+    Fail(pbceMALFORMED,'a string has unknown flags');
+   end;
+   TextLength:=ReadCount(1);
+   SetLength(StringEntries[StringIndex].Text,TextLength);
+   if TextLength>0 then begin
+    Move(Payload[Position],StringEntries[StringIndex].Text[1],TextLength);
+    inc(Position,TextLength);
+   end;
+  end;
+ end;
+ procedure ReadMeta;
+ begin
+  EnterChunk(MetaChunk);
+  RootIndex:=ReadU32;
+  ReadStringIndex; // The version of POCA that wrote the data, only for the curious
+ end;
+ procedure ReadSourceFiles;
+ var SourceFileIndex:TPOCAInt32;
+ begin
+  EnterChunk(SourceFileChunk);
+  SetLength(SourceFileIndices,ReadCount(4));
+  for SourceFileIndex:=0 to length(SourceFileIndices)-1 do begin
+   SourceFileIndices[SourceFileIndex]:=POCARegisterSourceFile(aInstance,aContext,StringEntries[ReadStringIndex].Text);
+  end;
+ end;
+ function MapSourceFile(const aIndex:TPOCAUInt32):TPOCAInt32;
+ begin
+  if aIndex=pbNOSOURCEFILE then begin
+   // Errors and stack traces still need a name to show
+   if FallbackSourceFile<0 then begin
+    FallbackSourceFile:=POCARegisterSourceFile(aInstance,aContext,aSourceFileName);
+   end;
+   result:=FallbackSourceFile;
+  end else if aIndex<TPOCAUInt32(length(SourceFileIndices)) then begin
+   result:=SourceFileIndices[aIndex];
+  end else begin
+   result:=-1;
+   Fail(pbceMALFORMED,'a source file index is out of range');
+  end;
+ end;
+ procedure ReadArgument(out aArgument:TPOCACodeArgument);
+ begin
+  aArgument.Kind:=ReadU32;
+  aArgument.Level:=TPOCAInt32(ReadU32);
+  aArgument.Index:=TPOCAInt32(ReadU32);
+ end;
+ procedure ReadCodeObject(const aIndex:TPOCAUInt32);
+ var Code:PPOCACode;
+     Flags,CountInlineCaches,CountRegExps,ConstantCount,CountArguments,CountOptionalArguments,ByteCodeSize,Value32:TPOCAUInt32;
+     SubIndex:TPOCAUInt32;
+     Value:TPOCAValue;
+     Constants:PPOCAValues;
+ begin
+
+  CodeValues[aIndex]:=POCANewCode(aContext);
+  Code:=PPOCACode(POCAGetValueReferencePointer(CodeValues[aIndex]));
+  CodeObjects[aIndex]:=Code;
+
+  Code^.Name:=StringEntries[ReadStringIndex].Text;
+
+  Code^.Level:=TPOCAInt32(ReadU32);
+  if Code^.Level<0 then begin
+   Fail(pbceMALFORMED,'a code object has a negative level');
+  end;
+
+  Flags:=ReadU32;
+  if (Flags and not pbcfALL)<>0 then begin
+   Fail(pbceMALFORMED,'a code object has unknown flags');
+  end;
+  Code^.UseFrameValues:=(Flags and pbcfUSEFRAMEVALUES)<>0;
+  Code^.ClassFunction:=(Flags and pbcfCLASSFUNCTION)<>0;
+  Code^.FastFunction:=(Flags and pbcfFASTFUNCTION)<>0;
+  Code^.IsEmpty:=(Flags and pbcfISEMPTY)<>0;
+  Code^.LocalsAsThisObj:=(Flags and pbcfLOCALSASTHISOBJ)<>0;
+  Code^.NeedArgumentArray:=(Flags and pbcfNEEDARGUMENTARRAY)<>0;
+  Code^.HasRestArguments:=(Flags and pbcfHASRESTARGUMENTS)<>0;
+  Code^.HasArgumentLocals:=(Flags and pbcfHASARGUMENTLOCALS)<>0;
+
+  Code^.CountFrameValues:=TPOCAInt32(ReadU32);
+  Code^.CountRegisters:=ReadU32;
+  CountInlineCaches:=ReadU32;
+  CountRegExps:=ReadU32;
+  if (Code^.CountFrameValues<0) or
+     (TPOCAUInt32(Code^.CountFrameValues)>POCAByteCodeMaximumSlots) or
+     (Code^.CountRegisters>POCAByteCodeMaximumSlots) or
+     (CountInlineCaches>POCAByteCodeMaximumSlots) or
+     (CountRegExps>POCAByteCodeMaximumSlots) then begin
+   Fail(pbceMALFORMED,'a code object claims too many registers, frame values or slots');
+  end;
+
+  Code^.SourceFile:=MapSourceFile(ReadU32);
+  Code^.RestArgSym:=ReadU32;
+
+  begin
+   ConstantCount:=ReadCount(1);
+   if ConstantCount>POCAByteCodeMaximumConstants then begin
+    Fail(pbceMALFORMED,'a code object has too many constants');
+   end;
+   // Every slot holds a valid value before the count makes the garbage collector
+   // look at them, which it may do as soon as the next object is made below
+   GetMem(Constants,ConstantCount*SizeOf(TPOCAValue));
+   for SubIndex:=1 to ConstantCount do begin
+    Constants^[SubIndex-1].CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
+   Code^.Constants:=Constants;
+   Code^.ConstantCount:=ConstantCount;
+   for SubIndex:=1 to ConstantCount do begin
+    case ReadU8 of
+     pbckNULL:begin
+     end;
+     pbckNUMBER:begin
+      Value.CastedUInt64:=ReadU64;
+      if ((Value.CastedUInt64 and TPOCAUInt64($7ff0000000000000))=TPOCAUInt64($7ff0000000000000)) and
+         ((Value.CastedUInt64 and TPOCAUInt64($000fffffffffffff))<>0) then begin
+       Value.CastedUInt64:=(Value.CastedUInt64 and TPOCAUInt64($8000000000000000)) or POCAByteCodeCanonicalNaN;
+      end;
+      Constants^[SubIndex-1]:=Value;
+     end;
+     pbckSTRING:begin
+      Value32:=ReadStringIndex;
+      Value:=POCANewUniqueString(aContext,StringEntries[Value32].Text);
+      if (StringEntries[Value32].Flags and pbsfSYMBOL)<>0 then begin
+       Value:=POCAInternSymbol(aContext,aInstance,Value);
+      end;
+      Constants^[SubIndex-1]:=Value;
+     end;
+     pbckCODE:begin
+      Value32:=ReadU32;
+      if Value32>=aIndex then begin
+       Fail(pbceMALFORMED,'a code object refers to one that does not come before it');
+      end;
+      Constants^[SubIndex-1]:=CodeValues[Value32];
+     end;
+     else begin
+      Fail(pbceMALFORMED,'a constant is of an unknown kind');
+     end;
+    end;
+   end;
+  end;
+
+  begin
+   CountArguments:=ReadCount(16);
+   if CountArguments>0 then begin
+    GetMem(Code^.ArgumentSymbols,CountArguments*SizeOf(TPOCAInt32));
+    GetMem(Code^.ArgumentLocals,CountArguments*SizeOf(TPOCACodeArgument));
+    for SubIndex:=1 to CountArguments do begin
+     Code^.ArgumentSymbols^[SubIndex-1]:=TPOCAInt32(ReadU32);
+     ReadArgument(Code^.ArgumentLocals^[SubIndex-1]);
+    end;
+   end;
+   Code^.CountArguments:=CountArguments;
+  end;
+
+  begin
+   CountOptionalArguments:=ReadCount(20);
+   if CountOptionalArguments>0 then begin
+    GetMem(Code^.OptionalArgumentSymbols,CountOptionalArguments*SizeOf(TPOCAInt32));
+    GetMem(Code^.OptionalArgumentValues,CountOptionalArguments*SizeOf(TPOCAInt32));
+    GetMem(Code^.OptionalArgumentLocals,CountOptionalArguments*SizeOf(TPOCACodeArgument));
+    for SubIndex:=1 to CountOptionalArguments do begin
+     Code^.OptionalArgumentSymbols^[SubIndex-1]:=TPOCAInt32(ReadU32);
+     Code^.OptionalArgumentValues^[SubIndex-1]:=TPOCAInt32(ReadU32);
+     ReadArgument(Code^.OptionalArgumentLocals^[SubIndex-1]);
+    end;
+   end;
+   Code^.CountOptionalArguments:=CountOptionalArguments;
+  end;
+
+  begin
+   ByteCodeSize:=ReadCount(4);
+   if ByteCodeSize=0 then begin
+    Fail(pbceMALFORMED,'a code object has no bytecode');
+   end;
+   GetMem(Code^.ByteCode,ByteCodeSize*SizeOf(TPOCAUInt32));
+{$ifdef BIG_ENDIAN}
+   for SubIndex:=1 to ByteCodeSize do begin
+    Code^.ByteCode^[SubIndex-1]:=ReadU32;
+   end;
+{$else}
+   Move(Payload[Position],Code^.ByteCode^[0],ByteCodeSize*SizeOf(TPOCAUInt32));
+   inc(Position,ByteCodeSize*SizeOf(TPOCAUInt32));
+{$endif}
+   Code^.ByteCodeSize:=ByteCodeSize;
+  end;
+
+  // Set only now, since the garbage collector looks at the regular expression
+  // slots, which POCACodeFinalize makes
+  Code^.CountInlineCaches:=CountInlineCaches;
+  Code^.CountRegExps:=CountRegExps;
+  POCACodeFinalize(Code);
+
+ end;
+ procedure ReadLines;
+ var TableIndex,CodeIndex,CountLines,LineIndex:TPOCAUInt32;
+     Code:PPOCACode;
+ begin
+  EnterChunk(LineChunk);
+  for TableIndex:=1 to ReadCount(8) do begin
+   CodeIndex:=ReadU32;
+   if CodeIndex>=CountCodeObjects then begin
+    Fail(pbceMALFORMED,'a line table belongs to no code object');
+   end;
+   Code:=CodeObjects[CodeIndex];
+   if length(Code^.Lines)>0 then begin
+    Fail(pbceMALFORMED,'a code object has two line tables');
+   end;
+   CountLines:=ReadCount(8);
+   SetLength(Code^.Lines,CountLines);
+   for LineIndex:=1 to CountLines do begin
+    Code^.Lines[LineIndex-1].InstructionPointer:=ReadU32;
+    Code^.Lines[LineIndex-1].Line:=ReadU32;
+   end;
+  end;
+ end;
+begin
+
+ result.CastedUInt64:=POCAValueNullCastedUInt64;
+
+ FillChar(MetaChunk,SizeOf(TChunk),#0);
+ FillChar(StringChunk,SizeOf(TChunk),#0);
+ FillChar(SourceFileChunk,SizeOf(TChunk),#0);
+ FillChar(CodeChunk,SizeOf(TChunk),#0);
+ FillChar(LineChunk,SizeOf(TChunk),#0);
+ Payload:=nil;
+ StringEntries:=nil;
+ SourceFileIndices:=nil;
+ CodeValues:=nil;
+ CodeObjects:=nil;
+ FallbackSourceFile:=-1;
+ RootIndex:=0;
+
+ begin
+
+  // The header, and whether this build can make sense of what follows
+
+  FillChar(Header,SizeOf(Header),#0);
+  HeaderBytes:=ReadFromStream(Header,SizeOf(Header));
+  if (HeaderBytes<SizeOf(TPOCAValueDataFileHeaderSignature)) or
+     not CompareMem(@Header[0],@POCAByteCodeFileSignature,SizeOf(TPOCAValueDataFileHeaderSignature)) then begin
+   Fail(pbceBADSIGNATURE,'the data is no stored bytecode');
+  end;
+  if HeaderBytes<SizeOf(Header) then begin
+   Fail(pbceTRUNCATED,'the header is incomplete');
+  end;
+
+  if HeaderU16(4)<>POCAByteCodeContainerMajorVersion then begin
+   Fail(pbceUNSUPPORTEDCONTAINER,'container version '+POCAByteCodeIntToStr(HeaderU16(4))+'.'+POCAByteCodeIntToStr(HeaderU16(6))+' is not supported, this build reads version '+POCAByteCodeIntToStr(POCAByteCodeContainerMajorVersion)+'.x');
+  end;
+  if HeaderU32(8)<>POCAByteCodeABIVersion then begin
+   Fail(pbceABIMISMATCH,'made for bytecode ABI '+POCAByteCodeIntToStr(HeaderU32(8))+', but this build has ABI '+POCAByteCodeIntToStr(POCAByteCodeABIVersion)+', compile it again');
+  end;
+  if HeaderU32(12)<>POCAByteCodeABIFingerprint then begin
+   Fail(pbceABIMISMATCH,'the opcode table fingerprint '+HexOf(HeaderU32(12))+' differs from '+HexOf(POCAByteCodeABIFingerprint)+' of this build, compile it again');
+  end;
+  if HeaderU32(16)<>POCAByteCodeFeatureFlags then begin
+   Fail(pbceFEATUREMISMATCH,'made by a build with the bytecode features '+HexOf(HeaderU32(16))+', but this build has '+HexOf(POCAByteCodeFeatureFlags)+', compile it again');
+  end;
+  if HeaderU32(36)<>0 then begin
+   Fail(pbceMALFORMED,'the reserved header field is not zero');
+  end;
+
+  PayloadSize:=HeaderU64(24);
+  if PayloadSize>POCAByteCodeMaximumPayloadSize then begin
+   Fail(pbceMALFORMED,'the data is too large');
+  end;
+
+  // Where the stream knows its size, a short one is told apart before the
+  // payload is set aside for
+  try
+   StreamRemaining:=aStream.Size-aStream.Position;
+  except
+   StreamRemaining:=-1;
+  end;
+  if (StreamRemaining>=0) and (TPOCAUInt64(StreamRemaining)<PayloadSize) then begin
+   Fail(pbceTRUNCATED,'the data ends before its announced size');
+  end;
+
+  SetLength(Payload,PayloadSize);
+  if (PayloadSize>0) and (TPOCAUInt64(ReadFromStream(Payload[0],TPOCAInt64(PayloadSize)))<>PayloadSize) then begin
+   Fail(pbceTRUNCATED,'the data ends before its announced size');
+  end;
+
+  StoredCheckSum:=HeaderU32(POCAByteCodeFileHeaderCheckSumOffset);
+  FillChar(Header[POCAByteCodeFileHeaderCheckSumOffset],SizeOf(TPOCAUInt32),#0);
+  CheckSum:=POCACRC32(Header,SizeOf(Header));
+  if PayloadSize>0 then begin
+   CheckSum:=POCACRC32(Payload[0],TPOCASizeInt(PayloadSize),CheckSum);
+  end;
+  if CheckSum<>StoredCheckSum then begin
+   Fail(pbceCHECKSUMMISMATCH,'the checksum does not match, the data is damaged');
+  end;
+
+ end;
+
+ ReadChunks;
+ ReadStrings;
+ ReadMeta;
+ ReadSourceFiles;
+
+ begin
+  EnterChunk(CodeChunk);
+  // A code object takes at least 56 bytes, with a single word of bytecode
+  CountCodeObjects:=ReadCount(56);
+  if RootIndex>=CountCodeObjects then begin
+   Fail(pbceMALFORMED,'the outermost code object is missing');
+  end;
+  SetLength(CodeValues,CountCodeObjects);
+  SetLength(CodeObjects,CountCodeObjects);
+  for Index:=0 to TPOCAInt32(CountCodeObjects)-1 do begin
+   CodeValues[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+   CodeObjects[Index]:=nil;
+  end;
+  for Index:=0 to TPOCAInt32(CountCodeObjects)-1 do begin
+   ReadCodeObject(Index);
+  end;
+ end;
+
+ if LineChunk.Present then begin
+  ReadLines;
+ end;
+
+ result:=CodeValues[RootIndex];
+
+ if not POCAVerifyCode(result,VerifyError) then begin
+  Fail(pbceVERIFICATIONFAILED,VerifyError);
+ end;
+
+ POCATemporarySave(aContext,result);
+
+end;
+
+function POCAIsByteCodeStream(const aStream:TStream):Boolean;
+var Signature:TPOCAValueDataFileHeaderSignature;
+    OldPosition:TPOCAInt64;
+begin
+ OldPosition:=aStream.Position;
+ try
+  result:=(aStream.Read(Signature,SizeOf(TPOCAValueDataFileHeaderSignature))=SizeOf(TPOCAValueDataFileHeaderSignature)) and
+          CompareMem(@Signature,@POCAByteCodeFileSignature,SizeOf(TPOCAValueDataFileHeaderSignature));
+ finally
+  aStream.Position:=OldPosition;
+ end;
 end;
 
 procedure InitializePOCA;

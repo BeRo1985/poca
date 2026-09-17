@@ -243,8 +243,8 @@ end;
 procedure TestLabeledBreak;
 var Root:TPOCAValue;
 begin
- // Leaves the inner level open on the way out, which the verifier has to live
- // with, since the fewest open levels are what counts.
+ // Closes the inner level before it jumps out, see the handling of break in the
+ // code generator.
  Root:=Compile('#pragma loopclosures on'+#10+
                'var fns = [];'+#10+
                'outer: for (let i = 0; i < 3; i++) {'+#10+
