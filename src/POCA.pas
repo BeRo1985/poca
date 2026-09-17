@@ -4888,7 +4888,7 @@ end;
 
 {$if defined(Windows)}
 {$define UseFibersForCoroutines}
-{$elseif not defined(Linux)}
+{$else}
 {$define UseThreadsForCoroutines}
 {$ifend}
 

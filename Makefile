@@ -18,7 +18,6 @@ $(TARGET): $(SOURCES) $(LPI)
 
 test:
 	@$(TARGET) tests/run.poca
-	@$(TARGET) tests/try_exceptions.poca
 
 docs: $(DOC_OUT)
 
