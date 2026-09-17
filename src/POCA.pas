@@ -374,6 +374,12 @@
  {$undef POCARegisterWindows}
 {$endif}
 
+// Runs the bytecode verifier over everything the compiler produces and turns a
+// complaint into an error, which is how the opcode table of the verifier is kept
+// in step with the compiler. Off by default, since it costs compile time; turn it
+// on with -dPOCAVerifyByteCodeAfterCompile and run the tests.
+{-$define POCAVerifyByteCodeAfterCompile}
+
 interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
@@ -2187,12 +2193,74 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
      end;
      PPOCAValueDataFileHeader=^TPOCAValueDataFileHeader;
 
+     // What an operand of an instruction stands for, which is what the verifier
+     // checks it against and what the disassembler shows it as.
+     TPOCAOperandKind=(pokREGISTER,         // Register index
+                       pokREGISTEROPTIONAL, // Register index, or $ffffffff for none
+                       pokCONSTANT,         // Index of a constant of any kind
+                       pokCONSTANTSTRING,   // Index of a string constant
+                       pokCONSTANTCODE,     // Index of a code constant
+                       pokJUMP,             // Position of an instruction
+                       pokJUMPOPTIONAL,     // Position of an instruction, or $ffffffff for none
+                       pokHASHCACHE,        // Overwritten at run time, starts out as $ffffffff
+                       pokINLINECACHE,      // Index of an inline cache slot
+                       pokREGEXP,           // Index of a regular expression slot
+                       pokFRAMEVALUE,       // Index of a frame value of the current level
+                       pokOUTERLEVEL,       // Level of a frame value further out, the operand after it is its index
+                       pokOUTERVALUE,       // Index of a frame value on the level given by the operand before it
+                       pokINTRINSIC,        // Intrinsic id, see piid*
+                       pokIMMEDIATE);       // Plain number
+
+     TPOCAOpcodeFlag=(pofVALID,         // The opcode exists at all
+                      pofNOFALLTHROUGH, // Execution never goes on with the next instruction
+                      pofFRAMEVALUES,   // Works on the frame values, which the code object has to use then
+                      pofPUSHLEVEL,     // Opens a further level of frame values
+                      pofPOPLEVEL);     // Closes the level opened last by pofPUSHLEVEL
+     TPOCAOpcodeFlags=set of TPOCAOpcodeFlag;
+
+     TPOCAOpcodeOperandKinds=array[0..7] of TPOCAOperandKind;
+
+     // The operands of an instruction are CountOperands fixed ones, followed by up
+     // to CountOptionalOperands further ones, or, with Repeated, by any number of
+     // further ones of the kind Kinds[CountOperands]. Signature is the notation
+     // the table is written in, see InitializeOpcodeInfos.
+     PPOCAOpcodeInfo=^TPOCAOpcodeInfo;
+     TPOCAOpcodeInfo=record
+      Name:TPOCARawByteString;
+      Signature:TPOCARawByteString;
+      Flags:TPOCAOpcodeFlags;
+      CountOperands:TPOCAInt32;
+      CountOptionalOperands:TPOCAInt32;
+      Repeated:boolean;
+      Kinds:TPOCAOpcodeOperandKinds;
+     end;
+
+     TPOCAOpcodeInfos=array[0..255] of TPOCAOpcodeInfo;
+
 const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAPtrUInt(POCAValueReferenceSignalMask)));{$else}{$ifdef LITTLE_ENDIAN}Reference:(Ptr:nil);ReferenceTag:POCAValueReferenceTag;{$else}ReferenceTag:POCAValueReferenceTag;Reference:(Ptr:nil);{$endif}{$endif});
       POCAValueNullCastedUInt64={$ifdef cpu64}TPOCAUInt64(TPOCAPtrUInt(POCAValueReferenceSignalMask)){$else}TPOCAUInt64(TPOCAUInt64(POCAValueReferenceTag) shl 32){$endif};
 
       POCAValueDataFileHeaderSignatureValue:TPOCAValueDataFileHeaderSignature=('P','V','D','F'); // Poca Value Data File = 'PVDF'
 
       POCAValueDataFileVersion=TPOCAUInt32($00000001);
+
+      // Versions of stored bytecode, see docs/bytecode-serialization-plan.md. The
+      // minor container version grows with optional additions that an older
+      // loader can skip, the major one with anything it can not.
+      POCAByteCodeContainerMajorVersion=TPOCAUInt16(1);
+      POCAByteCodeContainerMinorVersion=TPOCAUInt16(0);
+
+      // Has to be raised with every change of opcode numbers, operand layouts or
+      // their meaning, of the kinds of constants, the intrinsic ids or the flags
+      // of a code object. POCAByteCodeABIFingerprint catches a forgotten raise
+      // after a change of the opcode table, but not a change of meaning.
+      POCAByteCodeABIVersion=TPOCAUInt32(1);
+
+      // Build options that change the bytecode itself, which a loader has to
+      // match exactly.
+      pbffCLOSURECOPYONITERATION=TPOCAUInt32(1 shl 0);
+
+      POCAByteCodeFeatureFlags=TPOCAUInt32({$ifdef POCAClosureCopyOnIteration}pbffCLOSURECOPYONITERATION{$else}0{$endif});
 
       POCATypeSizes:array[pvtNULL..pvtGHOST] of TPOCAInt32=(-1, // pvtNULL
                                                             -1, // pvtNUMBER
@@ -2270,6 +2338,13 @@ const POCAValueNull:TPOCAValue=({$ifdef cpu64}Reference:(Ptr:TPOCAPointer(TPOCAP
       POCADoubleOne:double=1.0;
 
 var POCALocaleFormatSettings:TFormatSettings;
+
+    // Filled by InitializePOCA, indexed by the low byte of an instruction.
+    POCAOpcodeInfos:TPOCAOpcodeInfos;
+
+    // Checksum over everything that makes up the bytecode ABI, see
+    // POCAByteCodeABIVersion. Computed by InitializePOCA.
+    POCAByteCodeABIFingerprint:TPOCAUInt32=0;
 
 {$ifdef POCAHasJIT}
 {$ifdef unix}
@@ -2553,6 +2628,9 @@ procedure POCASetupFrameValues(Context:PPOCAContext;Frame:PPOCAFrame;Code:PPOCAC
 function POCAInstanceCreate:PPOCAInstance;
 procedure POCAInstanceDestroy(var Instance:PPOCAInstance);
 
+procedure POCACodeFinalize(const aCode:PPOCACode);
+function POCARegisterSourceFile(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aSourceFileName:TPOCARawByteString):TPOCAInt32;
+
 function POCACompile(Instance:PPOCAInstance;Context:PPOCAContext;const Source:TPOCARawByteString;const SourceFileName:TPOCARawByteString=''):TPOCAValue;
 
 procedure POCASave(Context:PPOCAContext;Obj:TPOCAValue);
@@ -2591,10 +2669,14 @@ function POCAGetSetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue
 function POCAGetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;out aValue:TPOCAValue):Boolean;
 function POCASetValue(const aContext:PPOCAContext;const aRootValue:TPOCAValue;const aPath:TPOCARawByteString;const aValue:TPOCAValue):Boolean;
 
+function POCACRC32(const aData;const aDataSize:TPOCASizeInt;const aCRC32:TPOCAUInt32=0):TPOCAUInt32;
 function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64=-1):TPOCAUInt32;
 
 function POCALoadValueFromStream(const aContext:PPOCAContext;const aStream:TStream):TPOCAValue;
 procedure POCASaveValueToStream(const aContext:PPOCAContext;const aStream:TStream;const aValue:TPOCAValue;const aIgnoreUnsupportedValueTypes:Boolean=true);
+
+function POCAVerifyCode(const aCode:TPOCAValue;out aError:TPOCARawByteString):Boolean;
+function POCADisassembleCode(const aContext:PPOCAContext;const aCode:TPOCAValue):TPOCARawByteString;
 
 procedure InitializePOCA;
 procedure FinalizePOCA;
@@ -10102,16 +10184,17 @@ begin
   if Str^.UTF8=suISUTF8 then begin
    result:=-1;
    if (CodeUnit>0) and (CodeUnit<=Str^.DataLength) then begin
+    // The table is indexed by the zero based code unit, see POCAStringUpdate
     if assigned(Str^.UTF8CodeUnitsToCodePointsIndex) then begin
      case Str^.UTF8CodeUnitsToCodePointsIndexSize of
       1:begin
-       result:=TPOCAUInt8(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[CodeUnit])^);
+       result:=TPOCAUInt8(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[CodeUnit-1])^);
       end;
       2:begin
-       result:=TPOCAUInt16(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[CodeUnit shl 1])^);
+       result:=TPOCAUInt16(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(CodeUnit-1) shl 1])^);
       end;
       4:begin
-       result:=TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[CodeUnit shl 2])^);
+       result:=TPOCAUInt32(TPOCAPointer(@PPOCAUInt8Array(Str^.UTF8CodeUnitsToCodePointsIndex)^[(CodeUnit-1) shl 2])^);
       end;
      end;
     end else begin
@@ -10168,7 +10251,7 @@ begin
     FreeMem(Str^.UTF8CodePointsToCodeUnitsIndex);
     Str^.UTF8CodePointsToCodeUnitsIndex:=nil;
    end;
-   if assigned(Str^.UTF8CodePointsToCodeUnitsIndex) then begin
+   if assigned(Str^.UTF8CodeUnitsToCodePointsIndex) then begin
     FreeMem(Str^.UTF8CodeUnitsToCodePointsIndex);
     Str^.UTF8CodeUnitsToCodePointsIndex:=nil;
    end;
@@ -18564,7 +18647,7 @@ end;
 
 function POCARegExpFunctionFIND(Context:PPOCAContext;const This:TPOCAValue;const Arguments:PPOCAValues;const CountArguments:TPOCAInt32;const UserData:TPOCAPointer):TPOCAValue;
 var RegExp:TFLRE;
-    StartCodeUnit:TPOCAInt32;
+    StartCodeUnit,CodeUnit:TPOCAInt32;
     s:TPOCARawByteString;
 begin
  if POCAGhostGetType(This)<>@POCARegExpGhost then begin
@@ -18580,7 +18663,13 @@ begin
   RegExp:=POCAGhostGetPointer(This);
   try
    s:=POCAGetStringValue(Context,Arguments^[0]);
-   result.Num:=POCAStringUTF8GetCodePoint(Context,Arguments^[0],RegExp.Find(s,StartCodeUnit));
+   // Find returns zero when there is no match, which is no position to convert
+   CodeUnit:=RegExp.Find(s,StartCodeUnit);
+   if CodeUnit>0 then begin
+    result.Num:=POCAStringUTF8GetCodePoint(Context,Arguments^[0],CodeUnit);
+   end else begin
+    result.Num:=-1;
+   end;
   finally
    s:='';
   end;
@@ -24238,6 +24327,90 @@ begin
  end;
 end;
 
+// Builds the part of a code object that follows from its primary fields: the
+// inline cache and regular expression slots, the interpretation map of the JIT
+// and the flags derived from the arguments. The compiler and a loader of stored
+// bytecode both go through here, so that the two can not drift apart. Expects
+// ByteCodeSize, CountInlineCaches, CountRegExps and the argument fields to be
+// set already.
+procedure POCACodeFinalize(const aCode:PPOCACode);
+var Index,SubIndex:TPOCAInt32;
+begin
+ begin
+  // Allocated once and never moved afterwards, so that the JIT may bake the
+  // address of a slot straight into the emitted code.
+  if aCode^.CountInlineCaches>0 then begin
+   GetMem(aCode^.InlineCaches,aCode^.CountInlineCaches*sizeof(TPOCAInlineCache));
+   FillChar(aCode^.InlineCaches^,aCode^.CountInlineCaches*sizeof(TPOCAInlineCache),#0);
+   for Index:=0 to TPOCAInt32(aCode^.CountInlineCaches)-1 do begin
+    // A zero stamp never matches, but zero is a perfectly valid chain
+    // position, so that level has to start out explicitly empty.
+    aCode^.InlineCaches^[Index].ChainIndex:=$ffffffff;
+    aCode^.InlineCaches^[Index].HashChainIndex:=$ffffffff;
+    for SubIndex:=0 to length(aCode^.InlineCaches^[Index].ExtraChainIndices)-1 do begin
+     aCode^.InlineCaches^[Index].ExtraChainIndices[SubIndex]:=$ffffffff;
+    end;
+   end;
+  end else begin
+   aCode^.InlineCaches:=nil;
+  end;
+ end;
+{$ifdef POCAHasJIT}
+ begin
+  SetLength(aCode^.InterpretByteCodeMap,aCode^.ByteCodeSize);
+  for Index:=0 to TPOCAInt32(aCode^.ByteCodeSize)-1 do begin
+   aCode^.InterpretByteCodeMap[Index]:=true;
+  end;
+ end;
+{$endif}
+ begin
+  if aCode^.CountRegExps>0 then begin
+   GetMem(aCode^.RegExps,aCode^.CountRegExps*sizeof(TPOCAValue));
+   for Index:=0 to TPOCAInt32(aCode^.CountRegExps)-1 do begin
+//  aCode^.RegExps^[Index]:=POCAValueNull;
+    aCode^.RegExps^[Index].CastedUInt64:=POCAValueNullCastedUInt64;
+   end;
+  end;
+ end;
+ aCode^.HasArguments:=aCode^.HasRestArguments or ((aCode^.CountArguments+aCode^.CountOptionalArguments)<>0);
+ begin
+  // HasArgumentLocals is deliberately not among these: it is set for every
+  // function that takes a parameter at all, and only the path for named
+  // arguments ever looks at it, which is not a path that comes through here.
+  aCode^.SimpleCall:=(((aCode^.FastFunction and not aCode^.IsEmpty) and
+                       (not aCode^.NeedArgumentArray)) and
+                      ((not aCode^.HasRestArguments) and (aCode^.CountOptionalArguments=0))) and
+                     ((not aCode^.UseFrameValues) and not aCode^.LocalsAsThisObj);
+  if aCode^.SimpleCall then begin
+   for Index:=0 to TPOCAInt32(aCode^.CountArguments)-1 do begin
+    if aCode^.ArgumentLocals[Index].Kind<>TPOCACodeArgument.pcakREG then begin
+     aCode^.SimpleCall:=false;
+     break;
+    end;
+   end;
+  end;
+ end;
+end;
+
+// Returns the index of a source file name in the instance, adding it first if it
+// is not known yet.
+function POCARegisterSourceFile(const aInstance:PPOCAInstance;const aContext:PPOCAContext;const aSourceFileName:TPOCARawByteString):TPOCAInt32;
+var Index:TPOCAInt32;
+begin
+ result:=aInstance^.SourceFiles.IndexOf(String(aSourceFileName));
+ if result<0 then begin
+  result:=aInstance^.SourceFiles.Add(String(aSourceFileName));
+  if result=TPOCAInt32(POCAArraySize(aContext^.Instance.Globals.SourceFiles)) then begin
+   POCAArrayPush(aContext^.Instance.Globals.SourceFiles,POCANewString(aContext,aSourceFileName));
+  end else begin
+   POCAArraySetSize(aContext^.Instance.Globals.SourceFiles,aInstance^.SourceFiles.Count);
+   for Index:=0 to aInstance^.SourceFiles.Count-1 do begin
+    POCAArraySet(aContext^.Instance.Globals.SourceFiles,Index,POCANewString(aContext,TPOCARawByteString(aInstance^.SourceFiles[Index])));
+   end;
+  end;
+ end;
+end;
+
 {$ifdef POCAHasJIT}
 function POCAGenerateNativeCode(Context:PPOCAContext;Code:PPOCACode):boolean; forward;
 
@@ -24655,18 +24828,7 @@ var TokenList:PPOCAToken;
      Name:='MACRO('+Name+')';
     end;
    end;
-   j:=Instance^.SourceFiles.IndexOf(String(Name));
-   if j<0 then begin
-    j:=Instance^.SourceFiles.Add(String(Name));
-    if j=TPOCAInt32(POCAArraySize(Context^.Instance.Globals.SourceFiles)) then begin
-     POCAArrayPush(Context^.Instance.Globals.SourceFiles,POCANewString(Context,Name));
-    end else begin
-     POCAArraySetSize(Context^.Instance.Globals.SourceFiles,Instance^.SourceFiles.Count);
-     for i:=0 to Instance^.SourceFiles.Count-1 do begin
-      POCAArraySet(Context^.Instance.Globals.SourceFiles,i,POCANewString(Context,TPOCARawByteString(Instance^.SourceFiles[i])));
-     end;
-    end;
-   end;
+   j:=POCARegisterSourceFile(Instance,Context,Name);
    ParserInstance.Preprocessor.InputSources[result].Index:=j;
   end;
   procedure PushInputSource(Kind:TPOCAPreprocessorInputSourceKind;const Name,Text:TPOCARawByteString);
@@ -39209,6 +39371,11 @@ var TokenList:PPOCAToken;
          IsLocal:=true;
          Symbol:=t^.Left;
         end;
+       end else begin
+        // Anything else with a default lives in the locals, just like a var,
+        // which also keeps it from being taken for a frame value below when
+        // there are nested functions, since there is no scope symbol for it.
+        IsVar:=true;
        end;
       end;
       ptLET,ptCONST:begin
@@ -39546,48 +39713,11 @@ var TokenList:PPOCAToken;
          Code^.Constants^[i]:=POCAArrayGet(CodeGenerator^.Consts,i);
         end;
        end;
-       begin
-        // Allocated once and never moved afterwards, so that the JIT may bake the
-        // address of a slot straight into the emitted code.
-        Code^.CountInlineCaches:=CodeGenerator^.CountInlineCaches;
-        if Code^.CountInlineCaches>0 then begin
-         GetMem(Code^.InlineCaches,Code^.CountInlineCaches*sizeof(TPOCAInlineCache));
-         FillChar(Code^.InlineCaches^,Code^.CountInlineCaches*sizeof(TPOCAInlineCache),#0);
-         for i:=0 to Code^.CountInlineCaches-1 do begin
-          // A zero stamp never matches, but zero is a perfectly valid chain
-          // position, so that level has to start out explicitly empty.
-          Code^.InlineCaches^[i].ChainIndex:=$ffffffff;
-          Code^.InlineCaches^[i].HashChainIndex:=$ffffffff;
-          for j:=0 to length(Code^.InlineCaches^[i].ExtraChainIndices)-1 do begin
-           Code^.InlineCaches^[i].ExtraChainIndices[j]:=$ffffffff;
-          end;
-         end;
-        end else begin
-         Code^.InlineCaches:=nil;
-        end;
-       end;
+       Code^.CountInlineCaches:=CodeGenerator^.CountInlineCaches;
        begin
         Code^.ByteCodeSize:=CodeGenerator^.ByteCodeSize;
         GetMem(Code^.ByteCode,Code^.ByteCodeSize*sizeof(TPOCAUInt32));
         Move(CodeGenerator^.ByteCode^,Code^.ByteCode^,Code^.ByteCodeSize*sizeof(TPOCAUInt32));
-{$ifdef POCAHasJIT}
-        begin
-         SetLength(Code^.InterpretByteCodeMap,Code^.ByteCodeSize);
-         for i:=0 to Code^.ByteCodeSize-1 do begin
-          Code^.InterpretByteCodeMap[i]:=true;
-         end;
-        end;
-{$Endif}
-       end;
-       begin
-        Code^.CountRegExps:=CodeGenerator^.CountRegExps;
-        if Code^.CountRegExps>0 then begin
-         GetMem(Code^.RegExps,Code^.CountRegExps*sizeof(TPOCAValue));
-         for i:=0 to Code^.CountRegExps-1 do begin
-//        Code^.RegExps^[i]:=POCAValueNull;
-          Code^.RegExps^[i].CastedUInt64:=POCAValueNullCastedUInt64;
-         end;
-        end;
        end;
        begin
         if Code^.CountArguments>0 then begin
@@ -39608,24 +39738,8 @@ var TokenList:PPOCAToken;
        end;
       end;
       Code^.HasRestArguments:=Code^.HasRestArguments or CodeGenerator^.HasRestArguments;
-      Code^.HasArguments:=Code^.HasRestArguments or ((Code^.CountArguments+Code^.CountOptionalArguments)<>0);
-      begin
-       // HasArgumentLocals is deliberately not among these: it is set for every
-       // function that takes a parameter at all, and only the path for named
-       // arguments ever looks at it, which is not a path that comes through here.
-       Code^.SimpleCall:=(((Code^.FastFunction and not Code^.IsEmpty) and
-                           (not Code^.NeedArgumentArray)) and
-                          ((not Code^.HasRestArguments) and (Code^.CountOptionalArguments=0))) and
-                         ((not Code^.UseFrameValues) and not Code^.LocalsAsThisObj);
-       if Code^.SimpleCall then begin
-        for i:=0 to TPOCAInt32(Code^.CountArguments)-1 do begin
-         if Code^.ArgumentLocals[i].Kind<>TPOCACodeArgument.pcakREG then begin
-          Code^.SimpleCall:=false;
-          break;
-         end;
-        end;
-       end;
-      end;
+      Code^.CountRegExps:=CodeGenerator^.CountRegExps;
+      POCACodeFinalize(Code);
      end;
     end;
    finally
@@ -39703,7 +39817,9 @@ var TokenList:PPOCAToken;
   FillChar(Parser,sizeof(TPOCAParser),#0);
  end;
 var Parser:TPOCAParser;
-    i:TPOCAInt32;
+{$ifdef POCAVerifyByteCodeAfterCompile}
+    VerifyError:TPOCARawByteString;
+{$endif}
     OldFPUExceptionMask:TFPUExceptionMask;
     OldFPURoundingMode:TFPURoundingMode;
     OldFPUPrecisionMode:TFPUPrecisionMode;
@@ -39727,18 +39843,7 @@ begin
   FillChar(PreprocessorInstance,SizeOf(TPOCAPreprocessorInstance),#0);
   try
    Parser.Context:=Context;
-   Parser.SourceFile:=Instance^.SourceFiles.IndexOf(String(SourceFileName));
-   if Parser.SourceFile<0 then begin
-    Parser.SourceFile:=Instance^.SourceFiles.Add(String(SourceFileName));
-    if Parser.SourceFile=TPOCAInt32(POCAArraySize(Context^.Instance.Globals.SourceFiles)) then begin
-     POCAArrayPush(Context^.Instance.Globals.SourceFiles,POCANewString(Context,SourceFileName));
-    end else begin
-     POCAArraySetSize(Context^.Instance.Globals.SourceFiles,Instance^.SourceFiles.Count);
-     for i:=0 to Instance^.SourceFiles.Count-1 do begin
-      POCAArraySet(Context^.Instance.Globals.SourceFiles,i,POCANewString(Context,TPOCARawByteString(Instance^.SourceFiles[i])));
-     end;
-    end;
-   end;
+   Parser.SourceFile:=POCARegisterSourceFile(Instance,Context,SourceFileName);
    Parser.Tree.Token:=ptTOP;
    begin
     PreprocessorInstance.Preprocessor.InputKind:=iskFILE;
@@ -39751,6 +39856,11 @@ begin
    ProcessParser(Parser);
    result:=ProcessCodeGenerator(Parser);
    POCATemporarySave(Context,result);
+{$ifdef POCAVerifyByteCodeAfterCompile}
+   if not POCAVerifyCode(result,VerifyError) then begin
+    raise EPOCAGeneralError.Create(Parser.SourceFile,-1,-1,'Internal compiler error: '+TPOCAUTF8String(VerifyError));
+   end;
+{$endif}
   finally
    Finalize(PreprocessorInstance);
    FreeParser(Parser);
@@ -40193,7 +40303,7 @@ begin
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
-     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
+     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
       POCAArrayFastSetWithBarrier(Frame^.LocalValues,Code^.ArgumentLocals[Index].Index,Value);
      end else begin
       POCAArrayFastSetWithBarrier(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[Index].Level),Code^.ArgumentLocals[Index].Index,Value);
@@ -40246,14 +40356,14 @@ begin
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
-     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+     if Code^.OptionalArgumentLocals[Index].Level=Code^.Level then begin
       POCAArrayFastSet(Frame^.LocalValues,Code^.OptionalArgumentLocals[Index].Index,Value);
      end else begin
       POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[Index].Level),Code^.OptionalArgumentLocals[Index].Index,Value);
      end;
 {$else}
      TPOCAGarbageCollector.WriteBarrier(nil,Value); // Shade the stored value, since the target closure value array may be shared with already black closure function objects
-     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+     if Code^.OptionalArgumentLocals[Index].Level=Code^.Level then begin
       Frame^.LocalValues[Code^.OptionalArgumentLocals[Index].Index]:=Value;
      end else begin
       Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[Index].Level][Code^.OptionalArgumentLocals[Index].Index]:=Value;
@@ -40369,10 +40479,10 @@ begin
     end;
     TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
-     if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-      POCAArrayFastSet(Frame^.LocalValues,Code^.ArgumentLocals[i].Index,Value);
+     if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+      POCAArrayFastSet(Frame^.LocalValues,Code^.ArgumentLocals[Index].Index,Value);
      end else begin
-      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[i].Level),Code^.ArgumentLocals[i].Index,Value);
+      POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.ArgumentLocals[Index].Level),Code^.ArgumentLocals[Index].Index,Value);
      end;
 {$else}
      TPOCAGarbageCollector.WriteBarrier(nil,Value); // Shade the stored value, since the target closure value array may be shared with already black closure function objects
@@ -40409,14 +40519,14 @@ begin
    end;
    TPOCACodeArgument.pcakFRAMEVALUE:begin
 {$ifdef POCAClosureArrayValues}
-    if Code^.ArgumentLocals[i].Level=Code^.Level then begin
-     POCAArrayFastSet(Frame^.LocalValues,Code^.OptionalArgumentLocals[i].Index,Value);
+    if Code^.OptionalArgumentLocals[Index].Level=Code^.Level then begin
+     POCAArrayFastSet(Frame^.LocalValues,Code^.OptionalArgumentLocals[Index].Index,Value);
     end else begin
-     POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[i].Level),Code^.OptionalArgumentLocals[i].Index,Value);
+     POCAArrayFastSet(POCAArrayGet(Frame^.OuterValueLevels,Code^.OptionalArgumentLocals[Index].Level),Code^.OptionalArgumentLocals[Index].Index,Value);
     end;
 {$else}
     TPOCAGarbageCollector.WriteBarrier(nil,Value); // Shade the stored value, since the target closure value array may be shared with already black closure function objects
-    if Code^.ArgumentLocals[Index].Level=Code^.Level then begin
+    if Code^.OptionalArgumentLocals[Index].Level=Code^.Level then begin
      Frame^.LocalValues[Code^.OptionalArgumentLocals[Index].Index]:=Value;
     end else begin
      Frame^.OuterValueLevels[Code^.OptionalArgumentLocals[Index].Level][Code^.OptionalArgumentLocals[Index].Index]:=Value;
@@ -47248,8 +47358,10 @@ begin
     if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoREGEXPEQ) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
-    end else if POCAGhostGetType(Code^.RegExps^[Operands^[2]])=@POCARegExpGhost then begin
-     Registers^[Operands^[0]]:=POCARegExpFunctionTEST(Context,POCAValueNull,@Registers^[Operands^[1]],2,nil);
+    end else if POCAGhostGetType(Registers^[Operands^[2]])=@POCARegExpGhost then begin
+     // The right operand is the regular expression, the left one what it is
+     // matched against.
+     Registers^[Operands^[0]]:=POCARegExpFunctionTEST(Context,Registers^[Operands^[2]],@Registers^[Operands^[1]],1,nil);
     end else begin
      Registers^[Operands^[0]].Num:=0;
     end;
@@ -47258,8 +47370,8 @@ begin
     if POCARunHashEventBinaryOp(Context,Frame,Operands,pmoREGEXPNEQ) then begin
      Code:=PPOCACode(POCAGetValueReferencePointer(PPOCAFunction(POCAGetValueReferencePointer(Frame.Func))^.Code));
      Registers:={$ifdef POCARegisterWindows}Frame^.RegisterWindow{$else}@Frame^.Registers[0]{$endif};
-    end else if POCAGhostGetType(Code^.RegExps^[Operands^[2]])=@POCARegExpGhost then begin
-     Registers^[Operands^[0]].Num:=ord(POCARegExpFunctionTEST(Context,POCAValueNull,@Registers^[Operands^[1]],2,nil).Num=0) and 1;
+    end else if POCAGhostGetType(Registers^[Operands^[2]])=@POCARegExpGhost then begin
+     Registers^[Operands^[0]].Num:=ord(POCARegExpFunctionTEST(Context,Registers^[Operands^[2]],@Registers^[Operands^[1]],1,nil).Num=0) and 1;
     end else begin
      Registers^[Operands^[0]].Num:=0;
     end;
@@ -48217,9 +48329,8 @@ begin
  result:=POCAGetSetValue(aContext,aRootValue,aPath,Value,true);
 end;
 
-function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64):TPOCAUInt32;
 // CRC32 checksum - IEEE 802.3 polynomial
-const CRC32Table:array[TPOCAUInt8] of TPOCAUInt32=
+const POCACRC32Table:array[TPOCAUInt8] of TPOCAUInt32=
        (
         $00000000,$77073096,$ee0e612c,$990951ba,$076dc419,$706af48f,$e963a535,$9e6495a3,
         $0edb8832,$79dcb8a4,$e0d5e91e,$97d2d988,$09b64c2b,$7eb17cbd,$e7b82d07,$90bf1d91,
@@ -48254,6 +48365,20 @@ const CRC32Table:array[TPOCAUInt8] of TPOCAUInt32=
         $bdbdf21c,$cabac28a,$53b39330,$24b4a3a6,$bad03605,$cdd70693,$54de5729,$23d967bf,
         $b3667a2e,$c4614ab8,$5d681b02,$2a6f2b94,$b40bbe37,$c30c8ea1,$5a05df1b,$2d02ef8d
        );
+
+function POCACRC32(const aData;const aDataSize:TPOCASizeInt;const aCRC32:TPOCAUInt32):TPOCAUInt32;
+var Index:TPOCASizeInt;
+    Data:PPOCAUInt8Array;
+begin
+ result:=not aCRC32;
+ Data:=@aData;
+ for Index:=0 to aDataSize-1 do begin
+  result:=POCACRC32Table[TPOCAUInt8(result xor Data^[Index])] xor (result shr 8);
+ end;
+ result:=not result;
+end;
+
+function POCAStreamChecksum(const aStream:TStream;const aFromPosition,aUntilPosition:TPOCAInt64;const aCheckSumPosition:TPOCAInt64):TPOCAUInt32;
 var OldPosition,ReadBytes,ToReadBytes,Index,CurrentPosition,Position:TPOCAPtrInt;
     Buffer:PPOCAUInt8Array;
     ByteValue:TPOCAUInt8;
@@ -48292,12 +48417,12 @@ begin
        end else begin
         ByteValue:=Buffer^[Index];
        end;
-       result:=CRC32Table[TPOCAUInt8(result xor ByteValue)] xor (result shr 8);
+       result:=POCACRC32Table[TPOCAUInt8(result xor ByteValue)] xor (result shr 8);
       end;
      end else begin
       // Fast path: no checksum position or no overlap
       for Index:=0 to ReadBytes-1 do begin
-       result:=CRC32Table[TPOCAUInt8(result xor Buffer^[Index])] xor (result shr 8);
+       result:=POCACRC32Table[TPOCAUInt8(result xor Buffer^[Index])] xor (result shr 8);
       end;
      end;
      inc(CurrentPosition,ReadBytes);
@@ -48643,6 +48768,782 @@ begin
 
 end;
 
+type TPOCAByteCodeLevelSizes=array of TPOCAInt32;
+
+const POCAByteCodeMaximumNestingDepth=1024;
+
+function POCAByteCodeIntToStr(const aValue:TPOCAInt64):TPOCARawByteString;
+begin
+ result:=TPOCARawByteString(IntToStr(aValue));
+end;
+
+function POCAByteCodeDescribeCode(const aCode:PPOCACode):TPOCARawByteString;
+begin
+ if length(aCode^.Name)>0 then begin
+  result:='"'+aCode^.Name+'"';
+ end else begin
+  result:='<anonymous>';
+ end;
+end;
+
+function POCAOpcodeOperandKind(const aInfo:PPOCAOpcodeInfo;const aIndex:TPOCAInt32):TPOCAOperandKind;
+begin
+ if aIndex<(aInfo^.CountOperands+aInfo^.CountOptionalOperands) then begin
+  result:=aInfo^.Kinds[aIndex];
+ end else if aInfo^.Repeated then begin
+  result:=aInfo^.Kinds[aInfo^.CountOperands];
+ end else begin
+  result:=pokIMMEDIATE;
+ end;
+end;
+
+// Checks that running a code object and everything nested in it can not reach
+// outside of the memory that belongs to them, which the interpreter and the JIT
+// rely on without checking again: every instruction has to be known and complete,
+// every operand has to be in range for what it stands for, every jump has to land
+// on an instruction, and execution must not run past the end. The frame values
+// need a closer look, because the levels a frame can reach change while it runs:
+// a loop whose closures capture per iteration opens a further level on entry and
+// closes it on exit, so the levels are tracked through the control flow, taking
+// the fewest levels that can be open at an instruction. A nested code object sees
+// the levels of the frame that makes a function of it, so it is checked against
+// what all the places that do so have in common.
+function POCAVerifyCode(const aCode:TPOCAValue;out aError:TPOCARawByteString):Boolean;
+ function Fail(const aCodeObject:PPOCACode;const aPosition:TPOCAInt64;const aMessage:TPOCARawByteString):Boolean;
+ begin
+  aError:='Bytecode verification of code '+POCAByteCodeDescribeCode(aCodeObject)+' failed';
+  if aPosition>=0 then begin
+   aError:=aError+' at '+POCAByteCodeIntToStr(aPosition);
+   if pofVALID in POCAOpcodeInfos[aCodeObject^.ByteCode^[aPosition] and $ff].Flags then begin
+    aError:=aError+' ('+POCAOpcodeInfos[aCodeObject^.ByteCode^[aPosition] and $ff].Name+')';
+   end;
+  end;
+  aError:=aError+': '+aMessage;
+  result:=false;
+ end;
+ function VerifyCodeObject(const aCodeObject:PPOCACode;const aLevelSizes:TPOCAByteCodeLevelSizes;const aNestingDepth:TPOCAInt32):Boolean;
+ var InstructionStarts:array of boolean;
+     Depths,WorkList:array of TPOCAInt32;
+     ChildLevelSizes:array of TPOCAByteCodeLevelSizes;
+     ChildBound:array of boolean;
+     CountWorkList,Opcode,CountOperands,OperandIndex,Depth,NewDepth,Size,Index,LevelIndex:TPOCAInt32;
+     ByteCodeSize,Position,NextPosition:TPOCAInt64;
+     Operands:PPOCAUInt32Array;
+     Info:PPOCAOpcodeInfo;
+     Value:TPOCAUInt32;
+     Child:PPOCACode;
+  function BadOperand(const aMessage:TPOCARawByteString):Boolean;
+  begin
+   result:=Fail(aCodeObject,Position,'operand '+POCAByteCodeIntToStr(OperandIndex)+' '+aMessage);
+  end;
+  function CheckConstant(const aIndex:TPOCAUInt32;const aValueType:TPOCAInt32;const aWhat:TPOCARawByteString):Boolean;
+  begin
+   if aIndex>=aCodeObject^.ConstantCount then begin
+    result:=Fail(aCodeObject,-1,aWhat+' names constant '+POCAByteCodeIntToStr(aIndex)+', but there are only '+POCAByteCodeIntToStr(aCodeObject^.ConstantCount));
+   end else if (aValueType>=0) and (POCAGetValueType(aCodeObject^.Constants^[aIndex])<>aValueType) then begin
+    result:=Fail(aCodeObject,-1,aWhat+' names constant '+POCAByteCodeIntToStr(aIndex)+', which is of the wrong type');
+   end else begin
+    result:=true;
+   end;
+  end;
+  // The size of a level of frame values as a frame of this code object sees it
+  // with aDepth levels of its own opened, or -1 if the frame has no such level.
+  function LevelSize(const aLevel:TPOCAUInt32;const aDepth:TPOCAInt32):TPOCAInt32;
+  begin
+   if aLevel<TPOCAUInt32(aCodeObject^.Level) then begin
+    result:=aLevelSizes[aLevel];
+   end else if TPOCAInt64(aLevel)<(TPOCAInt64(aCodeObject^.Level)+aDepth) then begin
+    result:=aCodeObject^.CountFrameValues;
+   end else begin
+    result:=-1;
+   end;
+  end;
+  // Notes that a frame of this code object with aDepth levels of its own opened
+  // makes a function of the code constant, see POCABindFunction.
+  procedure BindChild(const aIndex:TPOCAUInt32;const aDepth:TPOCAInt32);
+  var Sizes:TPOCAByteCodeLevelSizes;
+      LevelIndex,Count:TPOCAInt32;
+  begin
+   Sizes:=nil;
+   SetLength(Sizes,aCodeObject^.Level+aDepth+1);
+   for LevelIndex:=0 to length(Sizes)-1 do begin
+    Sizes[LevelIndex]:=LevelSize(LevelIndex,aDepth+1);
+   end;
+   if ChildBound[aIndex] then begin
+    Count:=length(ChildLevelSizes[aIndex]);
+    if Count>length(Sizes) then begin
+     Count:=length(Sizes);
+    end;
+    SetLength(ChildLevelSizes[aIndex],Count);
+    for LevelIndex:=0 to Count-1 do begin
+     if ChildLevelSizes[aIndex][LevelIndex]>Sizes[LevelIndex] then begin
+      ChildLevelSizes[aIndex][LevelIndex]:=Sizes[LevelIndex];
+     end;
+    end;
+   end else begin
+    ChildBound[aIndex]:=true;
+    ChildLevelSizes[aIndex]:=Sizes;
+   end;
+  end;
+  // A code constant that is loaded into a register as it is can be made a
+  // function of by any frame whatsoever, see POCASetupArguments, so nothing
+  // is known about the levels it would see.
+  procedure BindChildAnywhere(const aIndex:TPOCAUInt32);
+  begin
+   ChildBound[aIndex]:=true;
+   ChildLevelSizes[aIndex]:=nil;
+  end;
+  function CheckArgument(const aArgument:TPOCACodeArgument;const aWhat:TPOCARawByteString):Boolean;
+  var ArgumentSize:TPOCAInt32;
+  begin
+   result:=true;
+   case aArgument.Kind of
+    TPOCACodeArgument.pcakVAR:begin
+    end;
+    TPOCACodeArgument.pcakREG:begin
+     if (aArgument.Index<0) or (TPOCAUInt32(aArgument.Index)>=aCodeObject^.CountRegisters) then begin
+      result:=Fail(aCodeObject,-1,aWhat+' is stored in register '+POCAByteCodeIntToStr(aArgument.Index)+', but there are only '+POCAByteCodeIntToStr(aCodeObject^.CountRegisters));
+     end;
+    end;
+    TPOCACodeArgument.pcakFRAMEVALUE:begin
+     if not aCodeObject^.UseFrameValues then begin
+      result:=Fail(aCodeObject,-1,aWhat+' is stored in a frame value, but the code object uses none');
+     end else if (aArgument.Level<0) or (aArgument.Level>aCodeObject^.Level) then begin
+      result:=Fail(aCodeObject,-1,aWhat+' is stored on frame value level '+POCAByteCodeIntToStr(aArgument.Level)+', which is not available');
+     end else begin
+      if aArgument.Level=aCodeObject^.Level then begin
+       ArgumentSize:=aCodeObject^.CountFrameValues;
+      end else begin
+       ArgumentSize:=aLevelSizes[aArgument.Level];
+      end;
+      if (aArgument.Index<0) or (aArgument.Index>=ArgumentSize) then begin
+       result:=Fail(aCodeObject,-1,aWhat+' is stored in frame value '+POCAByteCodeIntToStr(aArgument.Index)+' of level '+POCAByteCodeIntToStr(aArgument.Level)+', which has only '+POCAByteCodeIntToStr(ArgumentSize));
+      end;
+     end;
+    end;
+    else begin
+     result:=Fail(aCodeObject,-1,aWhat+' has the unknown kind '+POCAByteCodeIntToStr(aArgument.Kind));
+    end;
+   end;
+  end;
+  procedure Visit(const aPosition:TPOCAInt64;const aDepth:TPOCAInt32);
+  begin
+   if (Depths[aPosition]<0) or (aDepth<Depths[aPosition]) then begin
+    Depths[aPosition]:=aDepth;
+    if CountWorkList>=length(WorkList) then begin
+     SetLength(WorkList,(CountWorkList+1)*2);
+    end;
+    WorkList[CountWorkList]:=TPOCAInt32(aPosition);
+    inc(CountWorkList);
+   end;
+  end;
+ begin
+
+  result:=false;
+
+  begin
+
+   // The shape of the code object itself
+
+   if aNestingDepth>=POCAByteCodeMaximumNestingDepth then begin
+    Fail(aCodeObject,-1,'code objects are nested too deeply');
+    exit;
+   end;
+
+   if (aCodeObject^.ByteCodeSize=0) or not assigned(aCodeObject^.ByteCode) then begin
+    Fail(aCodeObject,-1,'there is no bytecode');
+    exit;
+   end;
+
+   // A frame takes as many levels of frame values from its function as the
+   // level of its code object says, see POCASetupFrameValues.
+   if (aCodeObject^.Level<0) or (aCodeObject^.Level>length(aLevelSizes)) then begin
+    Fail(aCodeObject,-1,'its level '+POCAByteCodeIntToStr(aCodeObject^.Level)+' does not fit the '+POCAByteCodeIntToStr(length(aLevelSizes))+' levels of frame values it can be given');
+    exit;
+   end;
+
+   if aCodeObject^.CountFrameValues<0 then begin
+    Fail(aCodeObject,-1,'negative count of frame values');
+    exit;
+   end;
+
+   if ((aCodeObject^.ConstantCount>0) and not assigned(aCodeObject^.Constants)) or
+      ((aCodeObject^.CountInlineCaches>0) and not assigned(aCodeObject^.InlineCaches)) or
+      ((aCodeObject^.CountRegExps>0) and not assigned(aCodeObject^.RegExps)) or
+      ((aCodeObject^.CountArguments>0) and not (assigned(aCodeObject^.ArgumentSymbols) and assigned(aCodeObject^.ArgumentLocals))) or
+      ((aCodeObject^.CountOptionalArguments>0) and not (assigned(aCodeObject^.OptionalArgumentSymbols) and assigned(aCodeObject^.OptionalArgumentLocals) and assigned(aCodeObject^.OptionalArgumentValues))) then begin
+    Fail(aCodeObject,-1,'a table announced by its count is missing');
+    exit;
+   end;
+
+  end;
+
+  ByteCodeSize:=aCodeObject^.ByteCodeSize;
+
+  begin
+
+   // Where the instructions are, which also makes sure that every one of them is
+   // known and complete
+
+   InstructionStarts:=nil;
+   SetLength(InstructionStarts,ByteCodeSize);
+   FillChar(InstructionStarts[0],ByteCodeSize*SizeOf(boolean),#0);
+
+   Position:=0;
+   while Position<ByteCodeSize do begin
+    Opcode:=aCodeObject^.ByteCode^[Position] and $ff;
+    CountOperands:=aCodeObject^.ByteCode^[Position] shr 8;
+    Info:=@POCAOpcodeInfos[Opcode];
+    if not (pofVALID in Info^.Flags) then begin
+     Fail(aCodeObject,Position,'unknown opcode '+POCAByteCodeIntToStr(Opcode));
+     exit;
+    end;
+    if (CountOperands<Info^.CountOperands) or
+       ((not Info^.Repeated) and (CountOperands>(Info^.CountOperands+Info^.CountOptionalOperands))) then begin
+     Fail(aCodeObject,Position,'wrong count of operands '+POCAByteCodeIntToStr(CountOperands));
+     exit;
+    end;
+    if (Position+1+CountOperands)>ByteCodeSize then begin
+     Fail(aCodeObject,Position,'the instruction is cut off by the end of the bytecode');
+     exit;
+    end;
+    InstructionStarts[Position]:=true;
+    inc(Position,1+CountOperands);
+   end;
+
+  end;
+
+  ChildLevelSizes:=nil;
+  SetLength(ChildLevelSizes,aCodeObject^.ConstantCount);
+  ChildBound:=nil;
+  SetLength(ChildBound,aCodeObject^.ConstantCount);
+  for Index:=0 to TPOCAInt32(aCodeObject^.ConstantCount)-1 do begin
+   ChildBound[Index]:=false;
+  end;
+
+  begin
+
+   // What does not depend on the path taken to an instruction
+
+   Position:=0;
+   while Position<ByteCodeSize do begin
+    Opcode:=aCodeObject^.ByteCode^[Position] and $ff;
+    CountOperands:=aCodeObject^.ByteCode^[Position] shr 8;
+    Info:=@POCAOpcodeInfos[Opcode];
+    Operands:=@aCodeObject^.ByteCode^[Position+1];
+    if (pofFRAMEVALUES in Info^.Flags) and not aCodeObject^.UseFrameValues then begin
+     Fail(aCodeObject,Position,'frame values are used, but the code object sets none up');
+     exit;
+    end;
+    for OperandIndex:=0 to CountOperands-1 do begin
+     Value:=Operands^[OperandIndex];
+     case POCAOpcodeOperandKind(Info,OperandIndex) of
+      pokREGISTER,pokREGISTEROPTIONAL:begin
+       if (Value>=aCodeObject^.CountRegisters) and ((Value<>$ffffffff) or (POCAOpcodeOperandKind(Info,OperandIndex)=pokREGISTER)) then begin
+        BadOperand('names register '+POCAByteCodeIntToStr(Value)+', but there are only '+POCAByteCodeIntToStr(aCodeObject^.CountRegisters));
+        exit;
+       end;
+      end;
+      pokCONSTANT:begin
+       if Value>=aCodeObject^.ConstantCount then begin
+        BadOperand('names constant '+POCAByteCodeIntToStr(Value)+', but there are only '+POCAByteCodeIntToStr(aCodeObject^.ConstantCount));
+        exit;
+       end;
+       if POCAIsValueCode(aCodeObject^.Constants^[Value]) then begin
+        BindChildAnywhere(Value);
+       end;
+      end;
+      pokCONSTANTSTRING,pokCONSTANTCODE:begin
+       if (Value>=aCodeObject^.ConstantCount) or
+          ((POCAOpcodeOperandKind(Info,OperandIndex)=pokCONSTANTSTRING) and not POCAIsValueString(aCodeObject^.Constants^[Value])) or
+          ((POCAOpcodeOperandKind(Info,OperandIndex)=pokCONSTANTCODE) and not POCAIsValueCode(aCodeObject^.Constants^[Value])) then begin
+        BadOperand('names constant '+POCAByteCodeIntToStr(Value)+', which is missing or of the wrong type');
+        exit;
+       end;
+      end;
+      pokJUMP,pokJUMPOPTIONAL:begin
+       if ((Value>=ByteCodeSize) or not InstructionStarts[Value]) and ((Value<>$ffffffff) or (POCAOpcodeOperandKind(Info,OperandIndex)=pokJUMP)) then begin
+        BadOperand('jumps to '+POCAByteCodeIntToStr(Value)+', where no instruction starts');
+        exit;
+       end;
+      end;
+      pokHASHCACHE,pokIMMEDIATE:begin
+      end;
+      pokINLINECACHE:begin
+       if Value>=aCodeObject^.CountInlineCaches then begin
+        BadOperand('names inline cache slot '+POCAByteCodeIntToStr(Value)+', but there are only '+POCAByteCodeIntToStr(aCodeObject^.CountInlineCaches));
+        exit;
+       end;
+      end;
+      pokREGEXP:begin
+       if Value>=aCodeObject^.CountRegExps then begin
+        BadOperand('names regular expression slot '+POCAByteCodeIntToStr(Value)+', but there are only '+POCAByteCodeIntToStr(aCodeObject^.CountRegExps));
+        exit;
+       end;
+      end;
+      pokFRAMEVALUE:begin
+       if Value>=TPOCAUInt32(aCodeObject^.CountFrameValues) then begin
+        BadOperand('names frame value '+POCAByteCodeIntToStr(Value)+', but there are only '+POCAByteCodeIntToStr(aCodeObject^.CountFrameValues));
+        exit;
+       end;
+      end;
+      pokOUTERLEVEL,pokOUTERVALUE:begin
+       // Depends on the levels open at the instruction, see below
+      end;
+      pokINTRINSIC:begin
+       if Value>=piidCOUNT then begin
+        BadOperand('names the unknown intrinsic '+POCAByteCodeIntToStr(Value));
+        exit;
+       end;
+      end;
+     end;
+    end;
+    inc(Position,1+CountOperands);
+   end;
+
+  end;
+
+  begin
+
+   // The levels of frame values open along the control flow, which is followed
+   // from the first instruction on, so that unreachable instructions do not
+   // count. The fewest levels open on any path is what an instruction can rely
+   // on, and a count only ever goes down when it is revisited, so this ends.
+
+   Depths:=nil;
+   SetLength(Depths,ByteCodeSize);
+   for Index:=0 to TPOCAInt32(ByteCodeSize)-1 do begin
+    Depths[Index]:=-1;
+   end;
+   WorkList:=nil;
+   CountWorkList:=0;
+   Visit(0,0);
+
+   while CountWorkList>0 do begin
+    dec(CountWorkList);
+    Position:=WorkList[CountWorkList];
+    Depth:=Depths[Position];
+    Opcode:=aCodeObject^.ByteCode^[Position] and $ff;
+    CountOperands:=aCodeObject^.ByteCode^[Position] shr 8;
+    Info:=@POCAOpcodeInfos[Opcode];
+    Operands:=@aCodeObject^.ByteCode^[Position+1];
+    NewDepth:=Depth;
+    if pofPUSHLEVEL in Info^.Flags then begin
+     inc(NewDepth);
+    end else if pofPOPLEVEL in Info^.Flags then begin
+     if Depth<1 then begin
+      Fail(aCodeObject,Position,'closes a level of frame values that may not be open');
+      exit;
+     end;
+     dec(NewDepth);
+    end;
+    for OperandIndex:=0 to CountOperands-1 do begin
+     Value:=Operands^[OperandIndex];
+     case POCAOpcodeOperandKind(Info,OperandIndex) of
+      pokOUTERLEVEL:begin
+       // Only instructions that open no level have these, so Depth is right
+       Size:=LevelSize(Value,Depth);
+       if Size<0 then begin
+        BadOperand('names level '+POCAByteCodeIntToStr(Value)+' of frame values, which may not be available there');
+        exit;
+       end;
+       if Operands^[OperandIndex+1]>=TPOCAUInt32(Size) then begin
+        BadOperand('names level '+POCAByteCodeIntToStr(Value)+' of frame values, which has no frame value '+POCAByteCodeIntToStr(Operands^[OperandIndex+1]));
+        exit;
+       end;
+      end;
+      pokCONSTANTCODE:begin
+       BindChild(Value,Depth);
+      end;
+      pokJUMP,pokJUMPOPTIONAL:begin
+       if Value<>$ffffffff then begin
+        Visit(Value,NewDepth);
+       end;
+      end;
+      else begin
+      end;
+     end;
+    end;
+    if not (pofNOFALLTHROUGH in Info^.Flags) then begin
+     NextPosition:=Position+1+CountOperands;
+     if NextPosition>=ByteCodeSize then begin
+      Fail(aCodeObject,Position,'execution runs past the end of the bytecode');
+      exit;
+     end;
+     Visit(NextPosition,NewDepth);
+    end;
+   end;
+
+  end;
+
+  begin
+
+   // The arguments, see POCASetupArguments
+
+   if not CheckConstant(aCodeObject^.RestArgSym,pvtSTRING,'the rest arguments symbol') then begin
+    exit;
+   end;
+
+   for Index:=0 to TPOCAInt32(aCodeObject^.CountArguments)-1 do begin
+    if not (CheckConstant(aCodeObject^.ArgumentSymbols^[Index],pvtSTRING,'argument '+POCAByteCodeIntToStr(Index)) and
+            CheckArgument(aCodeObject^.ArgumentLocals^[Index],'argument '+POCAByteCodeIntToStr(Index))) then begin
+     exit;
+    end;
+   end;
+
+   for Index:=0 to TPOCAInt32(aCodeObject^.CountOptionalArguments)-1 do begin
+    if not (CheckConstant(aCodeObject^.OptionalArgumentSymbols^[Index],pvtSTRING,'optional argument '+POCAByteCodeIntToStr(Index)) and
+            CheckConstant(aCodeObject^.OptionalArgumentValues^[Index],-1,'the default of optional argument '+POCAByteCodeIntToStr(Index)) and
+            CheckArgument(aCodeObject^.OptionalArgumentLocals^[Index],'optional argument '+POCAByteCodeIntToStr(Index))) then begin
+     exit;
+    end;
+{   if aCodeObject^.OptionalArgumentLocals^[Index].Kind=TPOCACodeArgument.pcakFRAMEVALUE then begin
+     // POCASetupArguments picks between the own level and the ones further out
+     // by the entry of ArgumentLocals rather than OptionalArgumentLocals here,
+     // so that entry has to exist and to lead to the own level.
+     if (Index>=TPOCAInt32(aCodeObject^.CountArguments)) or
+        (aCodeObject^.ArgumentLocals^[Index].Level<>aCodeObject^.Level) or
+        (aCodeObject^.OptionalArgumentLocals^[Index].Level<>aCodeObject^.Level) then begin
+      Fail(aCodeObject,-1,'optional argument '+POCAByteCodeIntToStr(Index)+' is stored in a frame value, which the arguments before it do not match');
+      exit;
+     end;
+    end;}
+    // A function as default is made in the frame being set up
+    if POCAIsValueCode(aCodeObject^.Constants^[aCodeObject^.OptionalArgumentValues^[Index]]) then begin
+     BindChild(aCodeObject^.OptionalArgumentValues^[Index],0);
+    end;
+   end;
+
+  end;
+
+  // The nested code objects, which is where BindChild comes in
+  for Index:=0 to TPOCAInt32(aCodeObject^.ConstantCount)-1 do begin
+   if POCAIsValueCode(aCodeObject^.Constants^[Index]) then begin
+    Child:=PPOCACode(POCAGetValueReferencePointer(aCodeObject^.Constants^[Index]));
+    if not ChildBound[Index] then begin
+     // Nothing refers to it, so it never runs, which happens when the compiler
+     // generates a loop a second time and leaves the functions of the first
+     // attempt behind. What levels it would see is unknown then, and only its
+     // shape can be checked.
+     SetLength(ChildLevelSizes[Index],Max(0,Child^.Level));
+     for LevelIndex:=0 to length(ChildLevelSizes[Index])-1 do begin
+      ChildLevelSizes[Index][LevelIndex]:=High(TPOCAInt32);
+     end;
+    end;
+    if not VerifyCodeObject(Child,ChildLevelSizes[Index],aNestingDepth+1) then begin
+     exit;
+    end;
+   end;
+  end;
+
+  result:=true;
+
+ end;
+var Code:TPOCAValue;
+begin
+ aError:='';
+ Code:=aCode;
+ if POCAIsValueFunction(Code) then begin
+  Code:=PPOCAFunction(POCAGetValueReferencePointer(Code))^.Code;
+ end;
+ if POCAIsValueCode(Code) then begin
+  // A function made of the outermost code object has no levels of frame values
+  // to hand over, see POCABindToContext.
+  result:=VerifyCodeObject(PPOCACode(POCAGetValueReferencePointer(Code)),nil,0);
+ end else begin
+  aError:='Bytecode verification failed: not a code object';
+  result:=false;
+ end;
+end;
+
+// Renders a code object and everything nested in it as text, for looking at what
+// the compiler made of something. Nested code objects are named by the path of
+// constants that leads to them from the outermost one.
+function POCADisassembleCode(const aContext:PPOCAContext;const aCode:TPOCAValue):TPOCARawByteString;
+var Output:TPOCARawByteString;
+ procedure AddLine(const aLine:TPOCARawByteString);
+ begin
+  Output:=Output+aLine+#10;
+ end;
+ function PadRight(const aText:TPOCARawByteString;const aWidth:TPOCAInt32):TPOCARawByteString;
+ begin
+  result:=aText;
+  while length(result)<aWidth do begin
+   result:=result+' ';
+  end;
+ end;
+ function PadLeft(const aText:TPOCARawByteString;const aWidth:TPOCAInt32):TPOCARawByteString;
+ begin
+  result:=aText;
+  while length(result)<aWidth do begin
+   result:=' '+result;
+  end;
+ end;
+ function Quote(const aText:TPOCARawByteString):TPOCARawByteString;
+ var Index:TPOCAInt32;
+ begin
+  result:='"';
+  for Index:=1 to length(aText) do begin
+   case aText[Index] of
+    '"','\':begin
+     result:=result+'\'+aText[Index];
+    end;
+    #10:begin
+     result:=result+'\n';
+    end;
+    #13:begin
+     result:=result+'\r';
+    end;
+    #9:begin
+     result:=result+'\t';
+    end;
+    #0..#8,#11,#12,#14..#31,#127:begin
+     result:=result+'\x'+TPOCARawByteString(IntToHex(ord(aText[Index]),2));
+    end;
+    else begin
+     result:=result+aText[Index];
+    end;
+   end;
+  end;
+  result:=result+'"';
+ end;
+ function IsSymbol(const aValue:TPOCAValue):Boolean;
+ var Value:TPOCAValue;
+ begin
+  Value.CastedUInt64:=POCAValueNullCastedUInt64;
+  result:=POCAHashGet(aContext,aContext^.Instance^.Globals.Symbols,aValue,Value) and (Value.CastedUInt64=aValue.CastedUInt64);
+ end;
+ function DescribeConstant(const aCodeObject:PPOCACode;const aIndex:TPOCAUInt32;const aPath:TPOCARawByteString):TPOCARawByteString;
+ var Value:TPOCAValue;
+ begin
+  if aIndex>=aCodeObject^.ConstantCount then begin
+   result:='<invalid>';
+  end else begin
+   Value:=aCodeObject^.Constants^[aIndex];
+   case POCAGetValueType(Value) of
+    pvtNULL:begin
+     result:='null';
+    end;
+    pvtNUMBER:begin
+     result:=POCAGetStringValue(aContext,Value);
+    end;
+    pvtSTRING:begin
+     result:=Quote(POCAStringRawData(PPOCAString(POCAGetValueReferencePointer(Value)))^);
+     if IsSymbol(Value) then begin
+      result:=result+' symbol';
+     end;
+    end;
+    pvtCODE:begin
+     result:='code '+aPath+'/k'+POCAByteCodeIntToStr(aIndex)+' '+POCAByteCodeDescribeCode(PPOCACode(POCAGetValueReferencePointer(Value)));
+    end;
+    else begin
+     result:='<value of type '+POCAByteCodeIntToStr(POCAGetValueType(Value))+'>';
+    end;
+   end;
+  end;
+ end;
+ function DescribeArgument(const aArgument:TPOCACodeArgument):TPOCARawByteString;
+ begin
+  case aArgument.Kind of
+   TPOCACodeArgument.pcakVAR:begin
+    result:='locals';
+   end;
+   TPOCACodeArgument.pcakREG:begin
+    result:='r'+POCAByteCodeIntToStr(aArgument.Index);
+   end;
+   TPOCACodeArgument.pcakFRAMEVALUE:begin
+    result:='L'+POCAByteCodeIntToStr(aArgument.Level)+' v'+POCAByteCodeIntToStr(aArgument.Index);
+   end;
+   else begin
+    result:='<unknown kind '+POCAByteCodeIntToStr(aArgument.Kind)+'>';
+   end;
+  end;
+ end;
+ procedure DisassembleCodeObject(const aCodeObject:PPOCACode;const aPath:TPOCARawByteString;const aNestingDepth:TPOCAInt32);
+ var LineOfPosition:array of TPOCAInt32;
+     ByteCodeSize,Position,NextPosition:TPOCAInt64;
+     Opcode,CountOperands,OperandIndex,Index:TPOCAInt32;
+     Info:PPOCAOpcodeInfo;
+     Operands:PPOCAUInt32Array;
+     Value:TPOCAUInt32;
+     Text:TPOCARawByteString;
+  procedure AddFlag(const aFlag:Boolean;const aName:TPOCARawByteString);
+  begin
+   if aFlag then begin
+    if length(Text)>0 then begin
+     Text:=Text+', ';
+    end;
+    Text:=Text+aName;
+   end;
+  end;
+ begin
+
+  AddLine('code '+aPath+' '+POCAByteCodeDescribeCode(aCodeObject));
+  AddLine('  level '+POCAByteCodeIntToStr(aCodeObject^.Level)+
+          ', registers '+POCAByteCodeIntToStr(aCodeObject^.CountRegisters)+
+          ', frame values '+POCAByteCodeIntToStr(aCodeObject^.CountFrameValues)+
+          ', inline caches '+POCAByteCodeIntToStr(aCodeObject^.CountInlineCaches)+
+          ', regexps '+POCAByteCodeIntToStr(aCodeObject^.CountRegExps));
+
+  Text:='';
+  AddFlag(aCodeObject^.FastFunction,'fast');
+  AddFlag(aCodeObject^.ClassFunction,'class');
+  AddFlag(aCodeObject^.LocalsAsThisObj,'locals-as-this');
+  AddFlag(aCodeObject^.UseFrameValues,'frame-values');
+  AddFlag(aCodeObject^.IsEmpty,'empty');
+  AddFlag(aCodeObject^.NeedArgumentArray,'argument-array');
+  AddFlag(aCodeObject^.HasArguments,'arguments');
+  AddFlag(aCodeObject^.HasRestArguments,'rest-arguments');
+  AddFlag(aCodeObject^.HasArgumentLocals,'argument-locals');
+  AddFlag(aCodeObject^.SimpleCall,'simple-call');
+  if length(Text)>0 then begin
+   AddLine('  flags '+Text);
+  end;
+
+  if (aCodeObject^.SourceFile>=0) and (TPOCAUInt32(aCodeObject^.SourceFile)<POCAArraySize(aContext^.Instance^.Globals.SourceFiles)) then begin
+   AddLine('  source '+Quote(POCAGetStringValue(aContext,POCAArrayGet(aContext^.Instance^.Globals.SourceFiles,aCodeObject^.SourceFile))));
+  end;
+
+  for Index:=0 to TPOCAInt32(aCodeObject^.CountArguments)-1 do begin
+   AddLine('  argument '+POCAByteCodeIntToStr(Index)+' '+
+           DescribeConstant(aCodeObject,aCodeObject^.ArgumentSymbols^[Index],aPath)+' in '+
+           DescribeArgument(aCodeObject^.ArgumentLocals^[Index]));
+  end;
+  for Index:=0 to TPOCAInt32(aCodeObject^.CountOptionalArguments)-1 do begin
+   AddLine('  optional argument '+POCAByteCodeIntToStr(Index)+' '+
+           DescribeConstant(aCodeObject,aCodeObject^.OptionalArgumentSymbols^[Index],aPath)+' = '+
+           DescribeConstant(aCodeObject,aCodeObject^.OptionalArgumentValues^[Index],aPath)+' in '+
+           DescribeArgument(aCodeObject^.OptionalArgumentLocals^[Index]));
+  end;
+  if aCodeObject^.HasRestArguments then begin
+   AddLine('  rest arguments '+DescribeConstant(aCodeObject,aCodeObject^.RestArgSym,aPath));
+  end;
+
+  if aCodeObject^.ConstantCount>0 then begin
+   AddLine('  constants');
+   for Index:=0 to TPOCAInt32(aCodeObject^.ConstantCount)-1 do begin
+    AddLine('    '+PadRight('k'+POCAByteCodeIntToStr(Index),6)+' '+DescribeConstant(aCodeObject,Index,aPath));
+   end;
+  end;
+
+  ByteCodeSize:=aCodeObject^.ByteCodeSize;
+
+  // The line table is not ordered, since the compiler may generate a loop twice,
+  // and the entry added last for a position is the one that holds.
+  LineOfPosition:=nil;
+  SetLength(LineOfPosition,ByteCodeSize);
+  for Index:=0 to TPOCAInt32(ByteCodeSize)-1 do begin
+   LineOfPosition[Index]:=-1;
+  end;
+  for Index:=0 to length(aCodeObject^.Lines)-1 do begin
+   if aCodeObject^.Lines[Index].InstructionPointer<ByteCodeSize then begin
+    LineOfPosition[aCodeObject^.Lines[Index].InstructionPointer]:=aCodeObject^.Lines[Index].Line;
+   end;
+  end;
+
+  AddLine('  bytecode');
+  Position:=0;
+  while Position<ByteCodeSize do begin
+   if LineOfPosition[Position]>=0 then begin
+    AddLine('    ; line '+POCAByteCodeIntToStr(LineOfPosition[Position]));
+   end;
+   Opcode:=aCodeObject^.ByteCode^[Position] and $ff;
+   CountOperands:=aCodeObject^.ByteCode^[Position] shr 8;
+   Info:=@POCAOpcodeInfos[Opcode];
+   NextPosition:=Position+1+CountOperands;
+   if (not (pofVALID in Info^.Flags)) or (NextPosition>ByteCodeSize) then begin
+    AddLine('    '+PadLeft(POCAByteCodeIntToStr(Position),6)+'  <invalid instruction $'+TPOCARawByteString(IntToHex(aCodeObject^.ByteCode^[Position],8))+'>');
+    break;
+   end;
+   Operands:=@aCodeObject^.ByteCode^[Position+1];
+   Text:='';
+   for OperandIndex:=0 to CountOperands-1 do begin
+    Value:=Operands^[OperandIndex];
+    if OperandIndex>0 then begin
+     Text:=Text+', ';
+    end;
+    case POCAOpcodeOperandKind(Info,OperandIndex) of
+     pokREGISTER:begin
+      Text:=Text+'r'+POCAByteCodeIntToStr(Value);
+     end;
+     pokREGISTEROPTIONAL:begin
+      if Value=$ffffffff then begin
+       Text:=Text+'-';
+      end else begin
+       Text:=Text+'r'+POCAByteCodeIntToStr(Value);
+      end;
+     end;
+     pokCONSTANT,pokCONSTANTSTRING,pokCONSTANTCODE:begin
+      Text:=Text+'k'+POCAByteCodeIntToStr(Value)+' '+DescribeConstant(aCodeObject,Value,aPath);
+     end;
+     pokJUMP:begin
+      Text:=Text+'@'+POCAByteCodeIntToStr(Value);
+     end;
+     pokJUMPOPTIONAL:begin
+      if Value=$ffffffff then begin
+       Text:=Text+'-';
+      end else begin
+       Text:=Text+'@'+POCAByteCodeIntToStr(Value);
+      end;
+     end;
+     pokHASHCACHE:begin
+      // Changes at run time, so it is not worth showing
+      Text:=Text+'hc';
+     end;
+     pokINLINECACHE:begin
+      Text:=Text+'ic'+POCAByteCodeIntToStr(Value);
+     end;
+     pokREGEXP:begin
+      Text:=Text+'rx'+POCAByteCodeIntToStr(Value);
+     end;
+     pokFRAMEVALUE,pokOUTERVALUE:begin
+      Text:=Text+'v'+POCAByteCodeIntToStr(Value);
+     end;
+     pokOUTERLEVEL:begin
+      Text:=Text+'L'+POCAByteCodeIntToStr(Value);
+     end;
+     pokINTRINSIC:begin
+      if Value<piidCOUNT then begin
+       Text:=Text+POCAIntrinsicNames[Value];
+      end else begin
+       Text:=Text+'<intrinsic '+POCAByteCodeIntToStr(Value)+'>';
+      end;
+     end;
+     else {pokIMMEDIATE:}begin
+      Text:=Text+POCAByteCodeIntToStr(TPOCAInt32(Value));
+     end;
+    end;
+   end;
+   AddLine('    '+PadLeft(POCAByteCodeIntToStr(Position),6)+'  '+PadRight(Info^.Name,20)+' '+Text);
+   Position:=NextPosition;
+  end;
+
+  AddLine('');
+
+  if aNestingDepth<POCAByteCodeMaximumNestingDepth then begin
+   for Index:=0 to TPOCAInt32(aCodeObject^.ConstantCount)-1 do begin
+    if POCAIsValueCode(aCodeObject^.Constants^[Index]) then begin
+     DisassembleCodeObject(PPOCACode(POCAGetValueReferencePointer(aCodeObject^.Constants^[Index])),aPath+'/k'+POCAByteCodeIntToStr(Index),aNestingDepth+1);
+    end;
+   end;
+  end;
+
+ end;
+var Code:TPOCAValue;
+begin
+ Output:='';
+ Code:=aCode;
+ if POCAIsValueFunction(Code) then begin
+  Code:=PPOCAFunction(POCAGetValueReferencePointer(Code))^.Code;
+ end;
+ if POCAIsValueCode(Code) then begin
+  DisassembleCodeObject(PPOCACode(POCAGetValueReferencePointer(Code)),'#0',0);
+ end else begin
+  AddLine('<not a code object>');
+ end;
+ result:=Output;
+end;
+
 procedure InitializePOCA;
 const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright (C) 2011-2023, Benjamin ''BeRo'' Rosseaux - benjamin@rosseaux.com - http://www.rosseaux.com ';
       FPUExceptionMask:TFPUExceptionMask=[exInvalidOp,exDenormalized,exZeroDivide,exOverflow,exUnderflow,exPrecision];
@@ -48844,6 +49745,362 @@ const POCASignature:TPOCAUTF8String=' POCA - Version '+POCAVersion+' - Copyright
    end;
   end;
  end;
+ // The operands of every opcode, as the interpreter reads them. A signature has
+ // one letter per operand:
+ //  R register                     r register or none
+ //  C constant of any kind         S string constant        F code constant
+ //  J jump target                  j jump target or none
+ //  H hash cache slot, overwritten at run time
+ //  I inline cache slot            X regular expression slot
+ //  V frame value of the own level
+ //  L level of a frame value further out, O the index of the frame value there
+ //  N intrinsic id                 M plain number
+ // Operands between a '[' and a ']' at the end are optional, and a '*' makes any
+ // number of further operands of the kind of the letter before it follow.
+ // Keep this in step with the interpreter; building with
+ // POCAVerifyByteCodeAfterCompile checks it against everything that gets
+ // compiled.
+ procedure InitializeOpcodeInfos;
+ var Opcode:TPOCAInt32;
+     Fingerprint:TPOCAUInt32;
+  procedure Define(const aOpcode:TPOCAInt32;const aName,aSignature:TPOCARawByteString;const aFlags:TPOCAOpcodeFlags=[]);
+  var Info:PPOCAOpcodeInfo;
+      Index,CountKinds:TPOCAInt32;
+      Optional:boolean;
+      Kind:TPOCAOperandKind;
+   procedure BadSignature;
+   begin
+    raise Exception.Create('Bad operand signature "'+String(aSignature)+'" of opcode '+String(aName));
+   end;
+  begin
+   Info:=@POCAOpcodeInfos[aOpcode];
+   if pofVALID in Info^.Flags then begin
+    raise Exception.Create('Opcode '+IntToStr(aOpcode)+' is defined twice');
+   end;
+   Info^.Name:=aName;
+   Info^.Signature:=aSignature;
+   Info^.Flags:=aFlags+[pofVALID];
+   Info^.CountOperands:=0;
+   Info^.CountOptionalOperands:=0;
+   Info^.Repeated:=false;
+   CountKinds:=0;
+   Optional:=false;
+   for Index:=1 to length(aSignature) do begin
+    case aSignature[Index] of
+     '[':begin
+      if Optional then begin
+       BadSignature;
+      end;
+      Optional:=true;
+      continue;
+     end;
+     ']':begin
+      if (not Optional) or (Index<>length(aSignature)) then begin
+       BadSignature;
+      end;
+      continue;
+     end;
+     '*':begin
+      // The letter before it stands for the repeated operands, not a fixed one
+      if Optional or Info^.Repeated or (Info^.CountOperands=0) then begin
+       BadSignature;
+      end;
+      dec(Info^.CountOperands);
+      Info^.Repeated:=true;
+      continue;
+     end;
+     'R':begin
+      Kind:=pokREGISTER;
+     end;
+     'r':begin
+      Kind:=pokREGISTEROPTIONAL;
+     end;
+     'C':begin
+      Kind:=pokCONSTANT;
+     end;
+     'S':begin
+      Kind:=pokCONSTANTSTRING;
+     end;
+     'F':begin
+      Kind:=pokCONSTANTCODE;
+     end;
+     'J':begin
+      Kind:=pokJUMP;
+     end;
+     'j':begin
+      Kind:=pokJUMPOPTIONAL;
+     end;
+     'H':begin
+      Kind:=pokHASHCACHE;
+     end;
+     'I':begin
+      Kind:=pokINLINECACHE;
+     end;
+     'X':begin
+      Kind:=pokREGEXP;
+     end;
+     'V':begin
+      Kind:=pokFRAMEVALUE;
+     end;
+     'L':begin
+      Kind:=pokOUTERLEVEL;
+     end;
+     'O':begin
+      Kind:=pokOUTERVALUE;
+     end;
+     'N':begin
+      Kind:=pokINTRINSIC;
+     end;
+     'M':begin
+      Kind:=pokIMMEDIATE;
+     end;
+     else begin
+      Kind:=pokIMMEDIATE;
+      BadSignature;
+     end;
+    end;
+    if Info^.Repeated or (CountKinds>high(Info^.Kinds)) then begin
+     BadSignature;
+    end;
+    Info^.Kinds[CountKinds]:=Kind;
+    inc(CountKinds);
+    if Optional then begin
+     inc(Info^.CountOptionalOperands);
+    end else begin
+     inc(Info^.CountOperands);
+    end;
+   end;
+   // The verifier reads the index right behind a level, so both have to be
+   // fixed operands.
+   for Index:=0 to CountKinds-1 do begin
+    if ((Info^.Kinds[Index]=pokOUTERLEVEL) and ((Index+1)>=Info^.CountOperands)) or
+       ((Info^.Kinds[Index]=pokOUTERVALUE) and ((Index=0) or (Info^.Kinds[Index-1]<>pokOUTERLEVEL))) or
+       ((Info^.Kinds[Index]=pokOUTERLEVEL) and (Info^.Kinds[Index+1]<>pokOUTERVALUE)) then begin
+     BadSignature;
+    end;
+   end;
+  end;
+  procedure AddToFingerprint(const aText:TPOCARawByteString);
+  begin
+   if length(aText)>0 then begin
+    Fingerprint:=POCACRC32(aText[1],length(aText),Fingerprint);
+   end;
+  end;
+  function FlagBits(const aFlags:TPOCAOpcodeFlags):TPOCAInt32;
+  var Flag:TPOCAOpcodeFlag;
+  begin
+   result:=0;
+   for Flag:=low(TPOCAOpcodeFlag) to high(TPOCAOpcodeFlag) do begin
+    if Flag in aFlags then begin
+     result:=result or (1 shl ord(Flag));
+    end;
+   end;
+  end;
+ begin
+  for Opcode:=low(POCAOpcodeInfos) to high(POCAOpcodeInfos) do begin
+   POCAOpcodeInfos[Opcode].Name:='';
+   POCAOpcodeInfos[Opcode].Signature:='';
+   POCAOpcodeInfos[Opcode].Flags:=[];
+   POCAOpcodeInfos[Opcode].CountOperands:=0;
+   POCAOpcodeInfos[Opcode].CountOptionalOperands:=0;
+   POCAOpcodeInfos[Opcode].Repeated:=false;
+  end;
+  Define(popNOP,'NOP','');
+  Define(popADD,'ADD','RRR');
+  Define(popSUB,'SUB','RRR');
+  Define(popMUL,'MUL','RRR');
+  Define(popDIV,'DIV','RRR');
+  Define(popNEG,'NEG','RR');
+  Define(popNOT,'NOT','RR');
+  Define(popCAT,'CAT','RRR');
+  Define(popLT,'LT','RRR');
+  Define(popLTEQ,'LTEQ','RRR');
+  Define(popGT,'GT','RRR');
+  Define(popGTEQ,'GTEQ','RRR');
+  Define(popEQ,'EQ','RRR');
+  Define(popNEQ,'NEQ','RRR');
+  Define(popCMP,'CMP','RRR');
+  Define(popSEQ,'SEQ','RRR');
+  Define(popSNEQ,'SNEQ','RRR');
+  Define(popEACH,'EACH','RRRRJ');
+  Define(popJMP,'JMP','J[R]',[pofNOFALLTHROUGH]);
+  Define(popJMPLOOP,'JMPLOOP','J',[pofNOFALLTHROUGH]);
+  Define(popJIFTRUE,'JIFTRUE','JR');
+  Define(popJIFFALSE,'JIFFALSE','JR');
+  Define(popJIFTRUELOOP,'JIFTRUELOOP','JR');
+  Define(popJIFFALSELOOP,'JIFFALSELOOP','JR');
+  Define(popFCALL,'FCALL','RRR*');
+  Define(popMCALL,'MCALL','RRRR*');
+  Define(popRETURN,'RETURN','R',[pofNOFALLTHROUGH]);
+  Define(popLOADCODE,'LOADCODE','RF');
+  Define(popLOADCONST,'LOADCONST','RC');
+  Define(popLOADONE,'LOADONE','R');
+  Define(popLOADZERO,'LOADZERO','R');
+  Define(popLOADINT32,'LOADINT32','RM');
+  Define(popLOADNULL,'LOADNULL','R');
+  Define(popLOADTHAT,'LOADTHAT','R');
+  Define(popLOADTHIS,'LOADTHIS','R');
+  Define(popLOADSELF,'LOADSELF','R');
+  Define(popLOADLOCAL,'LOADLOCAL','R');
+  Define(popCOPY,'COPY','RR');
+  Define(popARRAYINSERT,'ARRAYINSERT','RRR');
+  Define(popARRAYEXTRACT,'ARRAYEXTRACT','RRR');
+  Define(popINSERT,'INSERT','RRR');
+  Define(popEXTRACT,'EXTRACT','RRR');
+  Define(popGETLENGTH,'GETLENGTH','RRSHH');
+  Define(popGETMEMBER,'GETMEMBER','RRSHHI');
+  Define(popSETMEMBER,'SETMEMBER','RSRHI');
+  Define(popGETLOCAL,'GETLOCAL','RSHI');
+  Define(popSETLOCAL,'SETLOCAL','SRH');
+  Define(popGETLOCALVALUE,'GETLOCALVALUE','RV',[pofFRAMEVALUES]);
+  Define(popSETLOCALVALUE,'SETLOCALVALUE','VR',[pofFRAMEVALUES]);
+  Define(popGETOUTERVALUE,'GETOUTERVALUE','RLO',[pofFRAMEVALUES]);
+  Define(popSETOUTERVALUE,'SETOUTERVALUE','LOR',[pofFRAMEVALUES]);
+  Define(popNEWARRAY,'NEWARRAY','R');
+  Define(popARRAYPUSH,'ARRAYPUSH','RR');
+  Define(popARRAYRANGEPUSH,'ARRAYRANGEPUSH','RRR');
+  Define(popNEWHASH,'NEWHASH','R');
+  Define(popHASHAPPEND,'HASHAPPEND','RRR');
+  Define(popSETSYM,'SETSYM','SRH');
+  Define(popINDEX,'INDEX','RRRJ');
+  Define(popFCALLH,'FCALLH','RRR');
+  Define(popMCALLH,'MCALLH','RRRR');
+  Define(popUNPACK,'UNPACK','RR*');
+  Define(popSLICE,'SLICE','RRR');
+  Define(popSLICE2,'SLICE2','RRRR');
+  Define(popSLICE3,'SLICE3','RRRR');
+  // Runs the blocks itself and goes on at the end position, see POCARunTry
+  Define(popTRY,'TRY','RrjjjJ',[pofNOFALLTHROUGH]);
+  Define(popTRYBLOCKEND,'TRYBLOCKEND','R',[pofNOFALLTHROUGH]);
+  Define(popTHROW,'THROW','R',[pofNOFALLTHROUGH]);
+  Define(popDEC,'DEC','RR');
+  Define(popINC,'INC','RR');
+  Define(popBAND,'BAND','RRR');
+  Define(popBXOR,'BXOR','RRR');
+  Define(popBOR,'BOR','RRR');
+  Define(popBNOT,'BNOT','RR');
+  Define(popBSHL,'BSHL','RRR');
+  Define(popBSHR,'BSHR','RRR');
+  Define(popBUSHR,'BUSHR','RRR');
+  Define(popMOD,'MOD','RRR');
+  Define(popPOW,'POW','RRR');
+  Define(popINHERITEDGETMEMBER,'INHERITEDGETMEMBER','RRSHH');
+  Define(popKEY,'KEY','RRRRJ');
+  Define(popIN,'IN','RRR');
+  Define(popINRANGE,'INRANGE','RRRR');
+  Define(popFTAILCALL,'FTAILCALL','RRR*');
+  Define(popMTAILCALL,'MTAILCALL','RRRR*');
+  Define(popFTAILCALLH,'FTAILCALLH','RRR');
+  Define(popMTAILCALLH,'MTAILCALLH','RRRR');
+  Define(popINSTANCEOF,'INSTANCEOF','RRR');
+  Define(popBREAKPOINT,'BREAKPOINT','');
+  Define(popNUM,'NUM','RR');
+  Define(popN_NOT,'N_NOT','RR');
+  Define(popN_ADD,'N_ADD','RRR');
+  Define(popN_SUB,'N_SUB','RRR');
+  Define(popN_MUL,'N_MUL','RRR');
+  Define(popN_DIV,'N_DIV','RRR');
+  Define(popN_NEG,'N_NEG','RR');
+  Define(popN_LT,'N_LT','RRR');
+  Define(popN_LTEQ,'N_LTEQ','RRR');
+  Define(popN_GT,'N_GT','RRR');
+  Define(popN_GTEQ,'N_GTEQ','RRR');
+  Define(popN_EQ,'N_EQ','RRR');
+  Define(popN_NEQ,'N_NEQ','RRR');
+  Define(popN_CMP,'N_CMP','RRR');
+  Define(popN_DEC,'N_DEC','RR');
+  Define(popN_INC,'N_INC','RR');
+  Define(popN_BAND,'N_BAND','RRR');
+  Define(popN_BXOR,'N_BXOR','RRR');
+  Define(popN_BOR,'N_BOR','RRR');
+  Define(popN_BNOT,'N_BNOT','RR');
+  Define(popN_BSHL,'N_BSHL','RRR');
+  Define(popN_BSHR,'N_BSHR','RRR');
+  Define(popN_BUSHR,'N_BUSHR','RRR');
+  Define(popN_MOD,'N_MOD','RRR');
+  Define(popN_POW,'N_POW','RRR');
+  Define(popN_INRANGE,'N_INRANGE','RRRR');
+  Define(popN_JIFTRUE,'N_JIFTRUE','JR[R]');
+  Define(popN_JIFFALSE,'N_JIFFALSE','JR[R]');
+  Define(popN_JIFTRUELOOP,'N_JIFTRUELOOP','JR[R]');
+  Define(popN_JIFFALSELOOP,'N_JIFFALSELOOP','JR[R]');
+  Define(popN_JIFLT,'N_JIFLT','JRR');
+  Define(popN_JIFLTEQ,'N_JIFLTEQ','JRR');
+  Define(popN_JIFGT,'N_JIFGT','JRR');
+  Define(popN_JIFGTEQ,'N_JIFGTEQ','JRR');
+  Define(popN_JIFEQ,'N_JIFEQ','JRR');
+  Define(popN_JIFNEQ,'N_JIFNEQ','JRR');
+  Define(popN_JIFLTLOOP,'N_JIFLTLOOP','JRR');
+  Define(popN_JIFLTEQLOOP,'N_JIFLTEQLOOP','JRR');
+  Define(popN_JIFGTLOOP,'N_JIFGTLOOP','JRR');
+  Define(popN_JIFGTEQLOOP,'N_JIFGTEQLOOP','JRR');
+  Define(popN_JIFEQLOOP,'N_JIFEQLOOP','JRR');
+  Define(popN_JIFNEQLOOP,'N_JIFNEQLOOP','JRR');
+  Define(popUPDATESTRING,'UPDATESTRING','R');
+  Define(popREGEXP,'REGEXP','RXR');
+  Define(popREGEXPEQ,'REGEXPEQ','RRR');
+  Define(popREGEXPNEQ,'REGEXPNEQ','RRR');
+  Define(popSQRT,'SQRT','RR');
+  Define(popN_SQRT,'N_SQRT','RR');
+  Define(popGETPROTOTYPE,'GETPROTOTYPE','RR');
+  Define(popSETPROTOTYPE,'SETPROTOTYPE','RR');
+  Define(popGETCONSTRUCTOR,'GETCONSTRUCTOR','RR');
+  Define(popSETCONSTRUCTOR,'SETCONSTRUCTOR','RR');
+  Define(popDELETE,'DELETE','RRS');
+  Define(popDELETEEX,'DELETEEX','RRR');
+  Define(popDEFINED,'DEFINED','RRS');
+  Define(popDEFINEDEX,'DEFINEDEX','RRR');
+  Define(popLOADGLOBAL,'LOADGLOBAL','R');
+  Define(popLOADBASECLASS,'LOADBASECLASS','R');
+  Define(popGETHASHKIND,'GETHASHKIND','RR');
+  Define(popSETHASHKIND,'SETHASHKIND','RR');
+  Define(popTYPEOF,'TYPEOF','RR');
+  Define(popIDOF,'IDOF','RR');
+  Define(popGHOSTTYPEOF,'GHOSTTYPEOF','RR');
+  Define(popELVIS,'ELVIS','RRR');
+  Define(popIS,'IS','RRR');
+  Define(popJIFNULL,'JIFNULL','JR');
+  Define(popJIFNOTNULL,'JIFNOTNULL','JR');
+  Define(popSAFEINSERT,'SAFEINSERT','RRR');
+  Define(popSAFEEXTRACT,'SAFEEXTRACT','RRR');
+  Define(popSAFEGETMEMBER,'SAFEGETMEMBER','RRSHH');
+  Define(popSAFESETMEMBER,'SAFESETMEMBER','RSRH');
+  Define(popSETCONSTLOCAL,'SETCONSTLOCAL','SRH');
+  Define(popFCALLA,'FCALLA','RRR');
+  Define(popMCALLA,'MCALLA','RRRR');
+  Define(popFTAILCALLA,'FTAILCALLA','RRR');
+  Define(popMTAILCALLA,'MTAILCALLA','RRRR');
+  Define(popARRAYCOMBINE,'ARRAYCOMBINE','RR');
+  Define(popHASHCOMBINE,'HASHCOMBINE','RR');
+  Define(popDEBUGGER,'DEBUGGER','');
+{$ifdef POCAClosureCopyOnIteration}
+  Define(popCLONELOCALVALUES,'CLONELOCALVALUES','',[pofFRAMEVALUES]);
+  Define(popPUSHLOCALVALUELEVEL,'PUSHLOCALVALUELEVEL','',[pofFRAMEVALUES,pofPUSHLEVEL]);
+  Define(popPOPLOCALVALUELEVEL,'POPLOCALVALUELEVEL','',[pofFRAMEVALUES,pofPOPLEVEL]);
+{$endif}
+  Define(popMCALLINTRINSIC,'MCALLINTRINSIC','RRRRNSI');
+  Define(popN_POSTINC,'N_POSTINC','RR');
+  Define(popN_POSTDEC,'N_POSTDEC','RR');
+  begin
+   Fingerprint:=0;
+   AddToFingerprint('POCA bytecode ABI '+POCAByteCodeIntToStr(POCAByteCodeABIVersion)+
+                    ' features '+POCAByteCodeIntToStr(POCAByteCodeFeatureFlags)+
+                    ' opcodes '+POCAByteCodeIntToStr(popCOUNT)+
+                    ' intrinsics '+POCAByteCodeIntToStr(piidCOUNT)+
+                    ' arguments '+POCAByteCodeIntToStr(TPOCACodeArgument.pcakVAR)+
+                                  ','+POCAByteCodeIntToStr(TPOCACodeArgument.pcakREG)+
+                                  ','+POCAByteCodeIntToStr(TPOCACodeArgument.pcakFRAMEVALUE)+';');
+   for Opcode:=low(POCAOpcodeInfos) to high(POCAOpcodeInfos) do begin
+    if pofVALID in POCAOpcodeInfos[Opcode].Flags then begin
+     AddToFingerprint(POCAByteCodeIntToStr(Opcode)+'='+
+                      POCAOpcodeInfos[Opcode].Name+'('+
+                      POCAOpcodeInfos[Opcode].Signature+')'+
+                      POCAByteCodeIntToStr(FlagBits(POCAOpcodeInfos[Opcode].Flags))+';');
+    end;
+   end;
+   POCAByteCodeABIFingerprint:=Fingerprint;
+  end;
+ end;
 var OldFPUExceptionMask:TFPUExceptionMask;
     OldFPURoundingMode:TFPURoundingMode;
     OldFPUPrecisionMode:TFPUPrecisionMode;
@@ -48866,6 +50123,7 @@ begin
   InitializeTokens;
   InitializeKeywords;
   InitializeMetaOpNames;
+  InitializeOpcodeInfos;
 {$ifdef POCAThreadContextTracking}
   InitializeThreadContextTracking;
 {$endif}

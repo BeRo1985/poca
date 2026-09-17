@@ -107,6 +107,43 @@ const s = 'The needle in the haystack in a barn besides an inn.';
         );
       }
 
+    ],
+
+    // test matches right at the start position, which failed for every start
+    // position but the first one
+    test_test_start_position: [
+      () => Test.assertEqual(/a/.test('abc'), 1),
+      () => Test.assertEqual(/a/.test('abc', 0), 1),
+      () => Test.assertEqual(/b/.test('abc', 1), 1),
+      () => Test.assertEqual(/c/.test('abc', 2), 1),
+      () => Test.assertEqual(/bc/.test('abc', 1), 1),
+      () => Test.assertEqual(/b/.test('abc'), 0),
+      () => Test.assertEqual(/a/.test('abc', 1), 0),
+      () => Test.assertEqual(/c/.test('abc', 1), 0),
+      () => Test.assertEqual(/b/.test('äbc', 1), 1)
+    ],
+
+    // Positions in strings with multi byte characters were off by one, and no
+    // match came out as the length of the string
+    test_utf8_positions: [
+      () => Test.assertEqual(/b/.find('äbc'), 1),
+      () => Test.assertEqual(/b/.find('äbc', 1), 1),
+      () => Test.assertEqual(/c/.find('äbäc'), 3),
+      () => Test.assertEqual(/x/.find('äbc'), -1),
+      () => Test.assertEqual(/x/.find('abc'), -1),
+      () => Test.assertEqual(/b/.exec('äbc')[0][0][0], 1),
+      () => Test.assertEqual(/(ä)(b)/.exec('xäb')[0][1][0], 1),
+      () => Test.assertEqual(/(ä)(b)/.exec('xäb')[0][2][0], 2)
+    ],
+
+    // Start positions outside of the string used to be read from
+    test_start_position_out_of_range: [
+      () => Test.assertEqual(/b/.find('abc', -100000000), -1),
+      () => Test.assertEqual(/b/.find('abc', 100000000), -1),
+      () => Test.assertEqual(/b/.find('äbc', -5), -1),
+      () => Test.assertEqual(/b/.test('abc', -5), 0),
+      () => Test.assertEqual(/b/.test('abc', 10), 0),
+      () => Test.assertEqual(/x*/.test('abc', 3), 1)
     ]
 
   };

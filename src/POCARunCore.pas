@@ -734,6 +734,7 @@ procedure MainProc;
 {$ifdef Windows}
 //const CP_UTF16=1200;
 {$endif}
+type TMode=(mRun,mDisassemble,mVerify);
 var Instance:PPOCAInstance;
     Context:PPOCAContext;
     Code:TPOCAValue;
@@ -741,7 +742,9 @@ var Instance:PPOCAInstance;
     ExitCode:TPOCAInt32;
     FileName:string;
     Arguments:array of TPOCAValue;
-    i:longint;
+    i,FirstParameter:longint;
+    Mode:TMode;
+    VerifyError:TPOCARawByteString;
 begin
  ExitCode:=0;
 {$ifdef Windows}
@@ -753,8 +756,23 @@ begin
 {$endif}
  Randomize;
  Arguments:=nil;
- if FindCmdLineSwitch('h',true) then begin
+ // The options for looking at the bytecode only count in front of the file name,
+ // so that everything after it is left to the script.
+ Mode:=mRun;
+ FirstParameter:=1;
+ if ParamCount>0 then begin
+  if ParamStr(1)='--disasm' then begin
+   Mode:=mDisassemble;
+   FirstParameter:=2;
+  end else if ParamStr(1)='--verify' then begin
+   Mode:=mVerify;
+   FirstParameter:=2;
+  end;
+ end;
+ if FindCmdLineSwitch('h',true) or ((Mode<>mRun) and (ParamCount<>FirstParameter)) then begin
   writeln('Usage: '+ExtractFileName(ParamStr(0))+' file.poca [parameters...]');
+  writeln('       '+ExtractFileName(ParamStr(0))+' --disasm file.poca   (print the bytecode without running it)');
+  writeln('       '+ExtractFileName(ParamStr(0))+' --verify file.poca   (check the bytecode without running it)');
  end else begin
   Instance:=POCAInstanceCreate;
   try
@@ -763,12 +781,12 @@ begin
     InitializeForPOCAContext(Context);
     try
      POCAHashSet(Context,Instance.Globals.Namespace,POCANewUniqueString(Context,'RandomNumberGenerator'),POCANewNativeObject(Context,TRandomNumberGenerator.Create(Instance,Context,nil,nil,false)));
-     if ParamCount>0 then begin
-      FileName:=ParamStr(1);
-      if ParamCount>1 then begin
-       SetLength(Arguments,ParamCount-1);
-       for i:=2 to ParamCount do begin
-        Arguments[i-2]:=POCANewString(Context,TPOCAUTF8String(ParamStr(i)));
+     if ParamCount>=FirstParameter then begin
+      FileName:=ParamStr(FirstParameter);
+      if ParamCount>FirstParameter then begin
+       SetLength(Arguments,ParamCount-FirstParameter);
+       for i:=FirstParameter+1 to ParamCount do begin
+        Arguments[i-(FirstParameter+1)]:=POCANewString(Context,TPOCAUTF8String(ParamStr(i)));
        end;
       end;
       if not FileExists(FileName) then begin
@@ -778,9 +796,24 @@ begin
      end else begin
       Code:=POCACompile(Instance,Context,REPLCode,'<REPL>');
      end;
-     ResultValue:=POCACall(Context,Code,@Arguments[0],length(Arguments),POCAValueNull,Instance^.Globals.Namespace);
-     if POCAIsValueNumber(ResultValue) then begin
-      ExitCode:=trunc(POCAGetNumberValue(Context,ResultValue));
+     case Mode of
+      mDisassemble:begin
+       write(POCADisassembleCode(Context,Code));
+      end;
+      mVerify:begin
+       if POCAVerifyCode(Code,VerifyError) then begin
+        writeln('OK');
+       end else begin
+        writeln(VerifyError);
+        ExitCode:=1;
+       end;
+      end;
+      else begin
+       ResultValue:=POCACall(Context,Code,@Arguments[0],length(Arguments),POCAValueNull,Instance^.Globals.Namespace);
+       if POCAIsValueNumber(ResultValue) then begin
+        ExitCode:=trunc(POCAGetNumberValue(Context,ResultValue));
+       end;
+      end;
      end;
     finally
      FinalizeForPOCAContext(Context);

@@ -18,6 +18,28 @@
         Test.assertEqual(h.a, 5);
       }
     ],
+
+    // Used to read a regular expression slot with a register number and to pass
+    // no regular expression at all. Like RegExp.test, the operator matches from
+    // the start of the string on, and ^...$ is what makes it cover all of it.
+    regexp_match_operator: [
+      () => Test.assertEqual('abc' =~= /abc/, 1),
+      () => Test.assertEqual('abc' =~= /a/, 1),
+      () => Test.assertEqual('abcd' =~= /abc/, 1),
+      () => Test.assertEqual('abc' =~= /b/, 0),
+      () => Test.assertEqual('abc' =~= /x/, 0),
+      () => Test.assertEqual('abc' =~= /^abc$/, 1),
+      () => Test.assertEqual('abcd' =~= /^abc$/, 0),
+      () => Test.assertEqual('abc' !~= /abc/, 0),
+      () => Test.assertEqual('abc' !~= /b/, 1),
+      () => Test.assertEqual('abc' !~= /x/, 1),
+      () => {
+        let s = 'abc', r = /ab/;
+        Test.assertEqual(s =~= r, 1);
+        Test.assertEqual(s !~= r, 0);
+      },
+      () => Test.assertEqual('abc' =~= 'abc', 0)
+    ],
   }
 
 })();

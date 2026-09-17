@@ -1,0 +1,49 @@
+(function() {
+
+  return {
+    // A plain argument with a default in a function with nested functions was
+    // neither a frame value nor made the function keep its locals
+    optional_argument_captured: [
+      () => {
+        function f(a = 1) { return function() { return a; }; }
+        Test.assertEqual(f()(), 1);
+        Test.assertEqual(f(5)(), 5);
+      },
+      () => {
+        let f = function(var a = 1) { return () => a; };
+        Test.assertEqual(f()(), 1);
+        Test.assertEqual(f(5)(), 5);
+      },
+      () => {
+        function f(a = 1) { return function() { return a; }; }
+        Test.assertEqual(f(a: 7)(), 7);
+      }
+    ],
+
+    // A let argument with a default in a function with nested functions was put
+    // into a frame value depending on the entry of the argument before it
+    optional_let_argument_captured: [
+      () => {
+        function f(x, let a = 1) { return () => x + a; }
+        Test.assertEqual(f(1)(), 2);
+        Test.assertEqual(f(1, 5)(), 6);
+      },
+      () => {
+        function g(let a = 1) { return () => a; }
+        Test.assertEqual(g()(), 1);
+        Test.assertEqual(g(7)(), 7);
+      },
+      () => {
+        function k(var x, let a = 1) { return () => a; }
+        Test.assertEqual(k(0)(), 1);
+        Test.assertEqual(k(0, 9)(), 9);
+      },
+      () => {
+        function m(var x, let a = 1) { return () => a; }
+        Test.assertEqual(m(x: 0, a: 4)(), 4);
+        Test.assertEqual(m(x: 0)(), 1);
+      }
+    ],
+  }
+
+})();
