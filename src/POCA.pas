@@ -390,7 +390,7 @@ interface
 
 uses {$ifdef unix}dynlibs,BaseUnix,Unix,UnixType,termio,dl,{$ifdef linux}pthreads,{$endif}{$else}Windows,{$endif}SysUtils,Classes,{$ifdef DelphiXE2AndUp}IOUtils,{$endif}DateUtils,Math,Variants,TypInfo{$ifdef POCA_HAS_EXTENDED_RTTI},Rtti{$endif}{$ifndef fpc},SyncObjs{$endif},FLRE,PasDblStrUtils,PUCU,PasJSON,PasMP;
 
-const POCAVersion='2026-07-13-00-59-0000';
+const POCAVersion='2026-10-11-17-02-0000';
 
       POCA_MAX_RECURSION=1024;
 
@@ -1657,8 +1657,8 @@ type PPOCADoubleHiLo=^TPOCADoubleHiLo;
       ElementSize:TPOCASizeInt;               // Size of each element (must be >= SizeOf(Pointer))
       BlockElementCount:TPOCASizeInt;         // Number of elements per block
       FirstBlock:PPOCADataPoolBlock;          // Linked list of allocated blocks (for cleanup)
-      TotalAllocated:TPOCASizeInt;            // Total elements allocated across all blocks
-      TotalFree:TPOCASizeInt;                 // Current count of free elements (approximate, for stats)
+      TotalAllocated:{$ifdef cpu64}TPOCAInt64{$else}TPOCAInt32{$endif}; // Total elements allocated across all blocks
+      TotalFree:{$ifdef cpu64}TPOCAInt64{$else}TPOCAInt32{$endif};      // Current count of free elements (approximate, for stats)
      end;
      PPOCADataPool=^TPOCADataPool;
 
